@@ -1,17 +1,25 @@
-"""The Home page as a file system: drives, places, pinned folders and network, without touching the disks."""
+"""The Home page as a file system: drives, places, pinned folders and network, without touching the disks.
+The made-up computer is built with os.path so the same tests hold on Windows and Linux."""
+import os
+
 import pytest
 
 from dossier.core.home import (ADD_NETWORK, HOME_URL, HomeFileSystem, HomeProvider, RouterFileSystem, build_entries,
                                is_home, is_shortcut_kind, place_folders, removable_from_home)
 from dossier.core.vfs import LocalFileSystem, NotWritable
 
-VOLUMES = [("C:\\", "Windows", "fixed"), ("D:\\", "", "removable"), ("Z:\\", "\\\\server\\media", "network")]
-EXISTING = {"C:\\Users\\me", "C:\\Users\\me\\Documents", "C:\\Users\\me\\Downloads", "C:\\Users\\me\\OneDrive",
-            "D:\\pinned", "C:\\Users\\me\\Dropbox"}
+J = os.path.join
+BASE = os.path.abspath(os.sep)
+C_ROOT, D_ROOT, Z_ROOT = J(BASE, "c"), J(BASE, "d"), J(BASE, "z")
+ME = J(C_ROOT, "Users", "me")
+SHARE = "//server/media"
+VOLUMES = [(C_ROOT, "Windows", "fixed"), (D_ROOT, "", "removable"), (Z_ROOT, SHARE, "network")]
+PINNED, GONE = J(D_ROOT, "pinned"), J(D_ROOT, "gone")
+EXISTING = {ME, J(ME, "Documents"), J(ME, "Downloads"), J(ME, "OneDrive"), PINNED, J(ME, "Dropbox")}
 
 
 def provider(**kw):
-    base = dict(volumes=lambda: VOLUMES, home=lambda: "C:\\Users\\me", exists=lambda p: p in EXISTING,
+    base = dict(volumes=lambda: VOLUMES, home=lambda: ME, exists=lambda p: p in EXISTING,
                 environ={}, pins=lambda: [], network=lambda: [])
     base.update(kw)
     return HomeProvider(**base)
@@ -22,11 +30,11 @@ def kinds(entries):
 
 
 def test_is_home_recognises_the_page_and_nothing_else():
-    assert is_home("home://") and is_home("home:") and not is_home("home://#drives") and not is_home("C:\\")
+    assert is_home("home://") and is_home("home:") and not is_home("home://#drives") and not is_home(C_ROOT)
 
 
 def test_sections_come_in_order_with_headers():
-    entries = build_entries(provider(pins=lambda: ["D:\\pinned"], network=lambda: ["\\\\nas\\share"]))
+    entries = build_entries(provider(pins=lambda: [PINNED], network=lambda: ["//nas/share"]))
     assert [e.name for e in entries if e.kind == "header"] == ["Local drives", "Places", "Pinned folders", "Network"]
     assert kinds(entries)[0] == "header" and entries[-1].kind == "action" and entries[-1].path == ADD_NETWORK
 
@@ -34,11 +42,10 @@ def test_sections_come_in_order_with_headers():
 def test_local_drives_are_listed_with_labels_and_kinds_and_network_drives_go_to_the_network_section():
     entries = build_entries(provider())
     drives = [e for e in entries if e.kind in ("fixed", "removable")]
-    assert [e.path for e in drives] == ["C:\\", "D:\\"]
-    assert drives[0].name.startswith("C:") and "Windows" in drives[0].name
-    assert all(e.is_dir for e in drives)
+    assert [e.path for e in drives] == [C_ROOT, D_ROOT]
+    assert "Windows" in drives[0].name and all(e.is_dir for e in drives)
     net = [e for e in entries if e.kind == "network"]
-    assert len(net) == 1 and net[0].path == "Z:\\" and net[0].detail == "\\\\server\\media"
+    assert len(net) == 1 and net[0].path == Z_ROOT and net[0].detail == SHARE
     first_network_header = next(i for i, e in enumerate(entries) if e.kind == "header" and e.name == "Network")
     assert entries.index(net[0]) > first_network_header
 
@@ -46,19 +53,20 @@ def test_local_drives_are_listed_with_labels_and_kinds_and_network_drives_go_to_
 def test_places_list_only_folders_that_exist_and_cloud_folders_are_found_once():
     names = [t for t, _ in place_folders(provider())]
     assert names == ["Home", "Documents", "Downloads", "OneDrive", "Dropbox"]
-    via_env = place_folders(provider(environ={"OneDrive": "C:\\Users\\me\\OneDrive"}))
+    via_env = place_folders(provider(environ={"OneDrive": J(ME, "OneDrive")}))
     assert [t for t, _ in via_env].count("OneDrive") == 1                       # the same folder is not listed twice
-    elsewhere = place_folders(provider(environ={"OneDrive": "E:\\Cloud"}, exists=lambda p: p in EXISTING | {"E:\\Cloud"}))
-    assert ("OneDrive", "E:\\Cloud") in elsewhere
+    cloud = J(BASE, "e", "Cloud")
+    elsewhere = place_folders(provider(environ={"OneDrive": cloud}, exists=lambda p: p in EXISTING | {cloud}))
+    assert ("OneDrive", cloud) in elsewhere
 
 
 def test_pinned_folders_and_saved_network_locations_appear_and_a_missing_pin_says_so():
-    entries = build_entries(provider(pins=lambda: ["D:\\pinned", "D:\\gone"], network=lambda: ["\\\\nas\\share"]))
+    entries = build_entries(provider(pins=lambda: [PINNED, GONE], network=lambda: ["//nas/share"]))
     pins = [e for e in entries if e.kind == "pin"]
     assert [e.name for e in pins] == ["pinned", "gone"]
-    assert pins[0].detail == "D:\\pinned" and "not found" in pins[1].detail
+    assert pins[0].detail == PINNED and "not found" in pins[1].detail
     loc = [e for e in entries if e.kind == "netloc"]
-    assert loc[0].name == "\\\\nas\\share" and loc[0].path == "\\\\nas\\share"
+    assert loc[0].name == "//nas/share" and loc[0].path == "//nas/share"
 
 
 def test_there_is_no_pinned_section_when_nothing_is_pinned():
@@ -77,7 +85,7 @@ def test_listing_the_page_never_asks_the_disks_anything():
     asked = []
     p = provider(exists=lambda path: asked.append(path) or False)
     build_entries(p)
-    assert all(a.startswith("C:\\Users\\me") for a in asked)                    # only the user's folders were checked
+    assert all(a.startswith(ME) for a in asked)                                 # only the user's folders were checked
 
 
 # the file systems ---------------------------------------------------------------------------------------------------
