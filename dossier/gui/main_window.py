@@ -241,6 +241,11 @@ class MainWindow(QMainWindow):
             limit_group.addAction(act)
             limit_menu.addAction(act)
             self.limit_actions[mb] = act
+        self.act_verify = QAction("Verify Copies After Copying", self)
+        self.act_verify.setCheckable(True)
+        self.act_verify.setChecked(str(self.settings.value("copy/verify", "false")).lower() == "true")
+        self.act_verify.toggled.connect(lambda on: self.settings.setValue("copy/verify", "true" if on else "false"))
+        view.addAction(self.act_verify)
         self.act_ask_error = QAction("Ask When a File Cannot Be Copied", self)
         self.act_ask_error.setCheckable(True)
         self.act_ask_error.setChecked(str(self.settings.value("copy/ask_on_error", "false")).lower() == "true")
@@ -986,7 +991,7 @@ class MainWindow(QMainWindow):
             limit = int(float(self.settings.value("copy/limit_mb", 0) or 0) * 1024 * 1024) or None
         except (TypeError, ValueError):
             limit = None
-        options = ExecOptions(limit_bps=limit)
+        options = ExecOptions(limit_bps=limit, verify=str(self.settings.value("copy/verify", "false")).lower() == "true")
         if str(self.settings.value("copy/ask_on_error", "false")).lower() == "true":
             skip_all = []
 

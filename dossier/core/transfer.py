@@ -6,6 +6,7 @@ a cancelled or failed copy never leaves a half-written target and never damages 
 from __future__ import annotations
 
 import errno
+import os
 from typing import Optional
 
 from . import fastcopy
@@ -99,3 +100,58 @@ def _finish(dst_fs: FileSystem, part: str, dst: str, info, overwrite: bool, canc
     except NotWritable:
         pass
     dst_fs.rename(part, dst, overwrite=overwrite)
+
+
+class VerifyFailed(OSError):
+    """The copy does not match the original."""
+
+
+def _read_exact(stream, n: int) -> bytes:
+    """``n`` bytes unless the stream ends first (a stream may hand out less than asked)."""
+    parts, have = [], 0
+    while have < n:
+        chunk = stream.read(n - have)
+        if not chunk:
+            break
+        parts.append(chunk)
+        have += len(chunk)
+    return parts[0] if len(parts) == 1 else b"".join(parts)
+
+
+def verify_copy(src_fs: FileSystem, src: str, dst_fs: FileSystem, dst: str, *,
+                progress=None, cancel: Optional[CancelToken] = None, chunk_size: int = 1 << 20) -> None:
+    """Read both files again and compare them byte for byte. ``progress(bytes_checked)`` is called per chunk.
+    Raises ``VerifyFailed`` at the first difference. A copy that was just written may be answered from the
+    system's file cache, so this proves the data that was written, and that it can be read back, but it does
+    not by itself prove the device holds it: ``flush_file`` is what pushes the data out to the device."""
+    done = 0
+    with src_fs.open_read(src) as a, dst_fs.open_read(dst) as b:
+        while True:
+            check(cancel)
+            x = _read_exact(a, chunk_size)
+            y = _read_exact(b, chunk_size)
+            if x != y:
+                at = next((i for i in range(min(len(x), len(y))) if x[i] != y[i]), min(len(x), len(y)))
+                raise VerifyFailed(f"the copy differs from the original at byte {done + at:,}")
+            done += len(x)
+            if progress:
+                progress(done)
+            if len(x) < chunk_size:
+                return
+
+
+def flush_file(path: str) -> None:
+    """Ask the operating system to write a file's data to the device now (``fsync``). Files that cannot be
+    opened for it (read-only, special) are skipped: there is nothing of ours left in the cache to push."""
+    from .platform import longpath
+    try:
+        fd = os.open(longpath(path), os.O_RDWR | getattr(os, "O_BINARY", 0))
+    except (PermissionError, IsADirectoryError):
+        return
+    try:
+        os.fsync(fd)
+    except OSError as e:
+        if e.errno not in (errno.EINVAL, errno.EBADF, errno.ENOTSUP):
+            raise
+    finally:
+        os.close(fd)

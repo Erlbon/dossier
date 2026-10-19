@@ -23,9 +23,9 @@ from enum import Enum
 from typing import Callable, Iterable, Optional, Sequence
 
 from .drives import drive_of, list_drives
-from .platform import IS_WINDOWS, path_key, strip_longpath
+from .platform import IS_WINDOWS, has_scheme, path_key, strip_longpath
 from .progress import Cancelled, CancelToken, ProgressFn, SpeedLimit, check
-from .transfer import copy_file, move_item as _move_item
+from .transfer import copy_file, flush_file, move_item as _move_item, verify_copy
 from .undo_log import Step, UndoAction, UndoLog
 from .vfs import Entry, FileSystem, NotWritable, sort_entries
 
@@ -420,6 +420,8 @@ class ExecOptions:
     retries: int = 3                      # extra tries for a locked file (the virus scanner has it for a moment)
     retry_delay: float = 0.25             # first wait; doubles each try
     limit_bps: Optional[int] = None       # copy speed limit in bytes per second, for all workers together
+    verify: bool = False                  # read every copy back and compare it with the original (C6)
+    flush: Optional[bool] = None          # push the data to the device at the end: None = only for removable and network targets
     native_copy: bool = True              # large local files go through the operating system's own copy (C5)
     on_error: Optional[Callable] = None   # (op, error text) -> "retry" | "skip" | "abort", after the retries ran out
 
@@ -442,6 +444,16 @@ def is_transient(error: OSError) -> bool:
             or error.errno in _BUSY_ERRNOS)
 
 
+def target_kind(plan: Plan) -> str:
+    """What the files are copied to: fixed, removable, network, optical (fixed when it cannot be told)."""
+    try:
+        dest = next((op.dst for op in plan.ops if op.kind is Kind.COPY), "")
+        drive = drive_of(dest, list_drives()) if dest else None
+        return drive.kind if drive else "fixed"
+    except Exception:                          # the drive list must never stop a copy
+        return "fixed"
+
+
 def choose_workers(fs: FileSystem, plan: Plan, small_count: int, options: ExecOptions) -> int:
     """How many files to copy at once. The cost of a small file is mostly waiting (the virus scanner, the
     file system), so several at once is much faster on a normal disk; on a USB stick, a network share or an
@@ -453,13 +465,7 @@ def choose_workers(fs: FileSystem, plan: Plan, small_count: int, options: ExecOp
     cpus = os.cpu_count() or 4
     if fs.scheme:                              # a virtual or remote system: a few connections, never a flood
         return min(4, cpus)
-    kind = "fixed"
-    try:
-        dest = next((op.dst for op in plan.ops if op.kind is Kind.COPY), "")
-        drive = drive_of(dest, list_drives()) if dest else None
-        kind = drive.kind if drive else "fixed"
-    except Exception:                          # the drive list must never stop a copy
-        pass
+    kind = target_kind(plan)
     if kind in ("removable", "network"):
         return 2
     if kind == "optical":
@@ -510,7 +516,13 @@ def execute(
     if not plan.executable:
         raise PlanNotReady("; ".join(plan.blocking) or "the plan has unresolved conflicts or nothing to do")
     opts = options or ExecOptions()
-    done = _Progress(progress, plan.total_work)
+    copies_all = [op for op in plan.ops if op.kind is Kind.COPY]
+    local_target = fs.scheme == "" and all(not has_scheme(op.dst) for op in copies_all)
+    want_flush = opts.flush if opts.flush is not None else target_kind(plan) in ("removable", "network")
+    want_flush = bool(want_flush and local_target and copies_all)
+    verify_extra = sum(max(op.size, 1) for op in copies_all) if opts.verify else 0     # reading back is work too
+    flush_share = max(len(copies_all), plan.total_work // 50) if want_flush else 0        # the last 2 percent of the bar
+    done = _Progress(progress, plan.total_work + verify_extra + flush_share)
     outcomes: dict = {}                              # plan index -> (OpResult, [Step])
     trash_lock = threading.Lock()                    # the recycle bin is asked one item at a time
     ask_lock = threading.Lock()                      # so is the user
@@ -532,14 +544,17 @@ def execute(
     def run_one(i: int, op: Op) -> None:
         if (cancel is not None and cancel.cancelled) or stop.is_set():
             return                                   # never started: it has no result
-        unit = max(op.size, 1) if op.kind is Kind.COPY else 1
-        sub = (lambda d, _t: done.partial(i, min(d, unit))) if progress else None
+        size_unit = max(op.size, 1) if op.kind is Kind.COPY else 1
+        unit = size_unit * (2 if opts.verify and op.kind is Kind.COPY else 1)
+        sub = (lambda d, _t: done.partial(i, min(d, size_unit))) if progress else None
+        sub_verify = (lambda d: done.partial(i, size_unit + min(d, size_unit))) if progress else None
         attempts, tries = 0, 0
         while True:
             steps: list = []
             attempts += 1
             try:
-                _run_op(op, fs, steps, sub, cancel, safe_trasher, limit, opts.native_copy)
+                _run_op(op, fs, steps, sub, cancel, safe_trasher, limit, opts.native_copy,
+                        sub_verify if opts.verify else False)
                 outcome = OpResult(op, "done", attempts=attempts)
                 done.finish(i, unit)
                 break
@@ -590,6 +605,8 @@ def execute(
                 run_one(i, op)
         for i, op in big + others:
             run_one(i, op)
+        if want_flush and not stop.is_set() and not (cancel is not None and cancel.cancelled):
+            _flush_pass(outcomes, done, flush_share, cancel)
     finally:
         result = Result()
         steps_in_order: list = []
@@ -609,8 +626,24 @@ def execute(
     return result
 
 
+def _flush_pass(outcomes: dict, done: _Progress, share: int, cancel) -> None:
+    """Push every copied file to the device, so "done" means the data is there and not only in the cache. A file
+    that cannot be flushed is reported as failed; the bar moves one step per file inside its last 2 percent."""
+    copied = [(i, o) for i, (o, _s) in sorted(outcomes.items()) if o.status == "done" and o.op.kind is Kind.COPY]
+    each = max(1, share // max(1, len(copied)))
+    for n, (i, outcome) in enumerate(copied):
+        if cancel is not None and cancel.cancelled:
+            return
+        try:
+            flush_file(outcome.op.dst)
+        except OSError as e:
+            outcomes[i] = (OpResult(outcome.op, "failed", f"copied, but could not be flushed to the device: {e}",
+                                    attempts=outcome.attempts), outcomes[i][1])
+        done.finish(-1 - n, each)
+
+
 def _run_op(op: Op, fs: FileSystem, steps: list, progress, cancel, trasher: Trasher, throttle=None,
-            native: bool = True) -> None:
+            native: bool = True, verify=False) -> None:
     if op.kind is Kind.MKDIR:
         existing = _stat(fs, op.dst)
         if existing is None:
@@ -629,6 +662,15 @@ def _run_op(op: Op, fs: FileSystem, steps: list, progress, cancel, trasher: Tras
         trasher(op.dst)                       # the old target goes to the bin first: nothing is lost
     if op.kind is Kind.COPY:
         copy_file(fs, op.src, fs, op.dst, progress=progress, cancel=cancel, throttle=throttle, native=native)
+        if verify is not False:
+            try:
+                verify_copy(fs, op.src, fs, op.dst, progress=verify, cancel=cancel)
+            except BaseException:
+                try:
+                    fs.remove(op.dst)                 # a copy that does not match the original is not kept
+                except OSError:
+                    pass
+                raise
         made = fs.stat(op.dst)
         steps.append(Step("created_file", op.dst, size=made.size, mtime=made.mtime))
     else:                                     # MOVE or RENAME
