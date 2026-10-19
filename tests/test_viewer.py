@@ -312,7 +312,7 @@ def test_menus_view_has_modes_and_notes_while_settings_has_the_choices(commander
     assert titles == ["Files", "Mark", "View", "Commands", "Settings"]
     menus = {a.text().replace("&", ""): a.menu() for a in win.menuBar().actions()}
     view = [a.text() for a in menus["View"].actions() if not a.isSeparator()]
-    assert view == ["Details", "Folder Notes", "Refresh", "Tabs"]
+    assert view == ["Details", "Folder Notes", "Home Page", "Refresh", "Tabs"]
     settings = [a.text() for a in menus["Settings"].actions()]
     assert settings == ["Color Scheme", "Icon Set", "Drive Selector"]
 

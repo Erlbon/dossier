@@ -16,8 +16,9 @@ from PyQt6.QtWidgets import (QApplication, QHBoxLayout, QLabel, QMainWindow, QMe
                              QToolButton, QVBoxLayout, QWidget)
 
 from ..core.ops import (Plan, Resolution, check_name, plan_copy, plan_delete, plan_move, plan_rename)
+from ..core.home import ADD_NETWORK, HomeFileSystem, HomeProvider, RouterFileSystem, removable_from_home
 from ..core.commandline import Placeholders, expand, run_command
-from ..core.platform import IS_WINDOWS, is_elevated, machine_name
+from ..core.platform import IS_WINDOWS, is_elevated, machine_name, path_key
 from ..core.selection import SelectionStore
 from ..core.textedit import BinaryFile, EncodingProblem, FileTooLarge, load_document
 from ..core.terminals import (UnsafeArgument, builtin_profiles, default_launcher, default_profile, detect,
@@ -50,6 +51,9 @@ class MainWindow(QMainWindow):
         self._which = which or shutil.which
         self.dialogs = dialogs or Dialogs(self)
         self.settings = self._open_settings(settings_path)
+        self.home_provider = HomeProvider(pins=lambda: self._saved_list("home/pins"),
+                                          network=lambda: self._saved_list("home/network"))
+        self.fs = RouterFileSystem(self.fs, HomeFileSystem(self.home_provider))     # home:// and the disk as one
         icon_set.set_user_dir(os.path.join(os.path.dirname(self.settings.fileName()), "icon-sets"))
         icon_set.use(str(self.settings.value("view/icon_set", icon_set.DEFAULT_SET)))
         self.theme = ThemeManager(QApplication.instance(), str(self.settings.value("view/scheme", "auto")))
@@ -106,6 +110,7 @@ class MainWindow(QMainWindow):
             panel.folder_changed.connect(lambda _p: self._update_prompt())
             panel.folder_changed.connect(lambda _p: self._update_title())
             panel.message.connect(self._say)
+            panel.home_action.connect(self._home_action)
         self.selection.subscribe(lambda _s: self._update_status())
         self.theme.changed.connect(self._on_theme_changed)
 
@@ -171,6 +176,7 @@ class MainWindow(QMainWindow):
         self.act_notes.setChecked(str(self.settings.value("view/notes", "true")).lower() != "false")
         self.act_notes.toggled.connect(self.set_notes_visible)
         view_menu.addAction(self.act_notes)
+        view_menu.addAction(self._action("Home Page", "Alt+Home", lambda: self.active.go_home()))
         view_menu.addAction(self._action("Refresh", "Ctrl+R", self.refresh))
         tabs_menu = view_menu.addMenu("Tabs")
         for text, keys, slot in (("New Tab", "Ctrl+T", lambda: self.active.new_tab()),
@@ -181,6 +187,10 @@ class MainWindow(QMainWindow):
             tabs_menu.addAction(self._action(text, keys, slot))
         commands = bar.addMenu("&Commands")
         for a in (self._action("Undo", "Ctrl+Z", self.undo), self._action("Swap Panels", "Ctrl+U", self.swap_panels)):
+            commands.addAction(a)
+        commands.addSeparator()
+        for a in (self._action("Pin Folder to Home Page", "Ctrl+D", self.pin_folder),
+                  self._action("Add Network Location...", None, self.add_network_location)):
             commands.addAction(a)
         commands.addSeparator()
         for a in (self._action("Terminal Here", "Ctrl+Shift+T", self.open_terminal),
@@ -322,6 +332,8 @@ class MainWindow(QMainWindow):
 
     def view_file(self) -> None:
         """F3: view the marked files (or the one under the cursor), stepping through them in one window."""
+        if self._home_blocked("View"):
+            return
         paths = []
         for p in self.active.targets():
             try:
@@ -340,6 +352,8 @@ class MainWindow(QMainWindow):
 
     def edit_file(self, path: Optional[str] = None, show_replace: bool = False) -> None:
         """F4: open one file in the notepad. A file that is already open is brought forward, not opened twice."""
+        if path is None and self._home_blocked("Edit"):
+            return
         if path is None:
             targets = [p for p in self.active.targets()]
             files = []
@@ -491,6 +505,8 @@ class MainWindow(QMainWindow):
         text = self.cmdline.text().strip()
         if not text:
             return
+        if self._home_blocked("Command"):
+            return
         if self.profile is None:
             self.dialogs.info("Command", "No command interpreter was found.")
             return
@@ -554,8 +570,81 @@ class MainWindow(QMainWindow):
             return
         self._say(("Administrator terminal" if admin else "Terminal") + f" opened in {panel.path}")
 
+    # the Home page -------------------------------------------------------------------------------------
+    def _saved_list(self, key: str) -> list:
+        value = self.settings.value(key, [])
+        return [str(v) for v in (value if isinstance(value, list) else [value]) if v]
+
+    def _save_list(self, key: str, items: list) -> None:
+        self.settings.setValue(key, items)
+        for panel in (self.left, self.right):
+            if panel.is_home:
+                panel.refresh()
+
+    def _home_blocked(self, what: str) -> bool:
+        """True (after saying why) when the active panel shows the Home page: its entries are shortcuts, not files."""
+        if self.active.is_home:
+            self.dialogs.info(what, "The Home page lists shortcuts, not files. Open a folder first.")
+            return True
+        return False
+
+    def _home_action(self, path: str) -> None:
+        if path == ADD_NETWORK:
+            self.add_network_location()
+
+    def pin_folder(self) -> None:
+        """Pin the active panel's folder to the Home page."""
+        if self.active.is_home or not self.active.path:
+            self.dialogs.info("Pin", "Open the folder you want to pin first.")
+            return
+        path = self.active.path
+        pins = self._saved_list("home/pins")
+        if any(path_key(p) == path_key(path) for p in pins):
+            self._say(f"{path} is already on the Home page")
+            return
+        self._save_list("home/pins", pins + [path])
+        self._say(f"Pinned {path} to the Home page")
+
+    def add_network_location(self) -> None:
+        """Save the address of a network folder on the Home page. Nothing is contacted: the address is only
+        stored, and opened when the user opens it."""
+        text = self.dialogs.ask_text("Add Network Location", "Address, for example \\\\server\\share:")
+        if not text or not text.strip():
+            return
+        address = text.strip()
+        if IS_WINDOWS and address.startswith("//"):
+            address = address.replace("/", "\\")
+        if "://" in address:
+            self.dialogs.info("Add Network Location", "Only addresses that open as a folder can be saved for now, "
+                              "such as \\\\server\\share. Servers (SFTP, WebDAV, FTP) are planned.")
+            return
+        saved = self._saved_list("home/network")
+        if any(path_key(a) == path_key(address) for a in saved):
+            self._say(f"{address} is already on the Home page")
+            return
+        self._save_list("home/network", saved + [address])
+        self._say(f"Saved {address} on the Home page")
+
+    def remove_from_home(self) -> None:
+        """Take a pinned folder or a saved network location off the Home page. The folder itself is not touched."""
+        row = self.active.table.currentIndex().row()
+        entry = self.active.model.entry_at(row)
+        if entry is None or not removable_from_home(entry.kind):
+            self.dialogs.info("Remove", "Only pinned folders and saved network locations can be removed "
+                              "from the Home page.")
+            return
+        if not self.dialogs.confirm("Remove from the Home page",
+                                    f"Remove {entry.name} from the Home page?\n\nThe folder itself is not touched.",
+                                    "Remove"):
+            return
+        key = "home/pins" if entry.kind == "pin" else "home/network"
+        self._save_list(key, [p for p in self._saved_list(key) if path_key(p) != path_key(entry.path)])
+        self._say(f"Removed {entry.name} from the Home page")
+
     # marks -------------------------------------------------------------------------------
     def toggle_mark(self) -> None:
+        if self.active.is_home:
+            return                                   # entries of the Home page are shortcuts: nothing to mark
         entry = self.active.current_entry()
         if entry is None:
             return
@@ -570,9 +659,13 @@ class MainWindow(QMainWindow):
         return [m.entry_at(r).path for r in range(m.entry_count()) if not m.is_up_row(r)]
 
     def select_all(self) -> None:
+        if self.active.is_home:
+            return
         self.selection.add(self._entry_paths())
 
     def invert_selection(self) -> None:
+        if self.active.is_home:
+            return
         self.selection.invert(self._entry_paths())
 
     def _update_status(self) -> None:
@@ -629,6 +722,8 @@ class MainWindow(QMainWindow):
         return plan
 
     def _transfer(self, move: bool) -> None:
+        if self._home_blocked("Move" if move else "Copy"):
+            return
         sources = self.active.targets()
         if not sources or self.busy:
             return
@@ -646,6 +741,8 @@ class MainWindow(QMainWindow):
         self._transfer(move=True)
 
     def rename(self) -> None:
+        if self._home_blocked("Rename"):
+            return
         entry = self.active.current_entry()
         if entry is None or self.busy:
             return
@@ -662,6 +759,9 @@ class MainWindow(QMainWindow):
             self._run(plan, select=new)
 
     def new_folder(self) -> None:
+        if self.active.is_home:
+            self.add_network_location()              # on the Home page F7 adds an entry instead of a folder
+            return
         name = self.dialogs.ask_text("New Folder", "Folder name:")
         if not name:
             return
@@ -684,6 +784,9 @@ class MainWindow(QMainWindow):
             self.other.refresh()
 
     def delete(self, permanent: bool = False) -> None:
+        if self.active.is_home:
+            self.remove_from_home()                  # only shortcuts can go, and only from the page, never the folder
+            return
         sources = self.active.targets()
         if not sources or self.busy:
             return

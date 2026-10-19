@@ -121,3 +121,12 @@ H1 is worth doing early: it is the Home page the owner asked for, needs no serve
 - **Taildrop (optional extra):** "Send to device" on a selection through `tailscale file cp`, and a "received files" place. Cheap because the command does the work, but it is a convenience, not core.
 - **Tailscale SSH:** a server using it can be reached without key setup; whether SFTP works over it depends on the server version and policy, so verify before promising it.
 - **Limits:** read-only use of the CLI (never log in, log out or change settings from Dossier: that is a system setting); the CLI path differs per system; all of it is optional.
+
+## 8. Status (2026-10-19)
+
+H0 and H1 are built and tested.
+
+- **H0a:** `FileSystem` has `join`, `basename`, `dirname`, `parent`, `is_root`, `sep` and `case_sensitive`; the planner, undo log, notes finder, selection and the window code use them and no longer call `os.path` on item paths. `MemoryFileSystem` (forward-slash paths, case sensitive) runs the same planner and undo tests as the disk.
+- **H0b:** a panel lists a folder on a worker thread. One that answers within 150 ms (every local folder) appears at once; a slow one leaves the window alive, keeps the old folder, says what is being opened, and Esc cancels. A late or failed answer cannot change the wrong folder.
+- **H1:** the Home page (`home://`, the root of every panel): local drives with free space filled in the background, the user's places (home, Desktop, Documents, Downloads, Pictures, Music, Videos, OneDrive, Dropbox, Google Drive when they exist), pinned folders (Ctrl+D) and a network section (mapped drives, saved network locations, "Add a network location..."). Reached with the Home button, Alt+Home, Backspace above a drive root, or by typing `home`. Delete removes only a pin or saved location, never a folder; file commands on the page explain that these are shortcuts.
+- **Still to do:** H2 (browse the shares of a host, button only), H3 onwards (servers). Saved network locations are stored as typed and opened as folders; a server address is explained, not saved.

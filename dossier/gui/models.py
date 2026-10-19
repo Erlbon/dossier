@@ -4,18 +4,21 @@ under a repository's file list)."""
 from __future__ import annotations
 
 import os
+from dataclasses import replace as dc_replace
 from datetime import datetime
 from typing import Optional
 
 from PyQt6.QtCore import QAbstractTableModel, QModelIndex, Qt
 from PyQt6.QtGui import QBrush, QColor, QFont
 
-from ..core.filetypes import icon_name
+from ..core.filetypes import DRIVE_ICONS, icon_name
+from ..core.home import HOME_URL, TYPE_NAMES
 from ..core.selection import SelectionStore
 from ..core.vfs import Entry, FileSystem, natural_key
 from . import icon_set, theme
 
 COLUMNS = ("Name", "Size", "Date")
+HOME_COLUMNS = ("Name", "Type", "Details")
 ENTRY_ROLE = Qt.ItemDataRole.UserRole
 SORT_ROLE = Qt.ItemDataRole.UserRole + 1
 
@@ -45,6 +48,30 @@ class FolderModel(QAbstractTableModel):
         self._has_note = False
         self._sort_col = 0
         self._sort_order = Qt.SortOrder.AscendingOrder
+
+    @property
+    def is_home(self) -> bool:
+        return self.path == HOME_URL
+
+    def entry_kind(self, row: int) -> str:
+        e = self.entry_at(row)
+        return e.kind if e else ""
+
+    def first_selectable_row(self) -> int:
+        """The first row the cursor can stand on (the Home page starts with a header it cannot)."""
+        for r in range(self.entry_count()):
+            if self.entry_kind(r) != "header":
+                return r
+        return -1
+
+    def update_detail(self, path: str, detail: str) -> None:
+        """Fill in the third column of one Home entry (free space arrives after the page is shown)."""
+        for i, e in enumerate(self._rows):
+            if e.path == path and e.kind not in ("header", "action"):
+                self._rows[i] = dc_replace(e, detail=detail)
+                row = i + (1 if self._up else 0)
+                self.dataChanged.emit(self.index(row, 0), self.index(row, len(HOME_COLUMNS) - 1))
+                return
 
     # content -----------------------------------------------------------------------
     def set_folder(self, path: str) -> None:
@@ -95,6 +122,8 @@ class FolderModel(QAbstractTableModel):
     # sorting -----------------------------------------------------------------------
     def sort(self, column: int, order: Qt.SortOrder = Qt.SortOrder.AscendingOrder) -> None:
         self._sort_col, self._sort_order = column, order
+        if self.is_home:
+            return                                   # the Home page keeps its own order: sections, not a sorted list
         self.layoutAboutToBeChanged.emit()
         before = {(idx.row(), idx.column()): idx for idx in self.persistentIndexList()}
         old_paths = {r: (self.entry_at(r).path if self.entry_at(r) else None) for r, _c in before}
@@ -107,6 +136,8 @@ class FolderModel(QAbstractTableModel):
         self.layoutChanged.emit()
 
     def _resort(self) -> None:
+        if self.is_home:
+            return
         keys = {0: lambda e: natural_key(e.name), 1: lambda e: (e.size, natural_key(e.name)),
                 2: lambda e: (e.mtime, natural_key(e.name))}
         reverse = self._sort_order == Qt.SortOrder.DescendingOrder
@@ -123,16 +154,18 @@ class FolderModel(QAbstractTableModel):
 
     def headerData(self, section, orientation, role=Qt.ItemDataRole.DisplayRole):
         if orientation == Qt.Orientation.Horizontal and role == Qt.ItemDataRole.DisplayRole:
-            return COLUMNS[section]
+            return (HOME_COLUMNS if self.is_home else COLUMNS)[section]
         return None
 
     def flags(self, index: QModelIndex):
         if self._has_note and index.row() == self.note_row:
             return Qt.ItemFlag.NoItemFlags
+        if self.is_home and self.entry_kind(index.row()) == "header":
+            return Qt.ItemFlag.NoItemFlags           # a section title: the cursor skips it
         return Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable
 
     def is_marked(self, entry: Entry) -> bool:
-        return entry.name != ".." and entry.path in self.selection
+        return not self.is_home and entry.name != ".." and entry.path in self.selection
 
     def data(self, index: QModelIndex, role=Qt.ItemDataRole.DisplayRole):
         if not index.isValid() or (self._has_note and index.row() == self.note_row):
@@ -141,6 +174,8 @@ class FolderModel(QAbstractTableModel):
         if entry is None:
             return None
         col = index.column()
+        if self.is_home:
+            return self._home_data(entry, col, role)
         if role == Qt.ItemDataRole.DisplayRole:
             if col == 0:
                 return entry.name
@@ -161,6 +196,41 @@ class FolderModel(QAbstractTableModel):
             return font
         if role == ENTRY_ROLE:
             return entry
+        return None
+
+    def _home_data(self, entry: Entry, col: int, role):
+        t = theme.current()
+        if role == Qt.ItemDataRole.DisplayRole:
+            return entry.name if col == 0 else (TYPE_NAMES.get(entry.kind, "") if col == 1 else entry.detail)
+        if role == Qt.ItemDataRole.DecorationRole and col == 0:
+            return self._home_icon(entry)
+        if role == Qt.ItemDataRole.FontRole:
+            font = QFont()
+            font.setBold(entry.kind in ("header", "action") or col == 0)      # section titles, actions and names
+            return font
+        if role == Qt.ItemDataRole.ForegroundRole:
+            if entry.kind == "header":
+                return QBrush(QColor(t["accent"]))
+            if col == 2:
+                return QBrush(QColor(t["dim"]))
+        if role == ENTRY_ROLE:
+            return entry
+        return None
+
+    def _home_icon(self, entry: Entry):
+        t = theme.current()
+        if entry.kind == "header":
+            return None
+        if entry.kind in DRIVE_ICONS:
+            return icon_set.icon(DRIVE_ICONS[entry.kind], t["dim"])
+        if entry.kind == "place":
+            return icon_set.icon("home" if entry.name == "Home" else "folder", t["accent"])
+        if entry.kind == "pin":
+            return icon_set.icon("folder", t["accent"])
+        if entry.kind == "netloc":
+            return icon_set.icon("network", t["dim"])
+        if entry.kind == "action":
+            return icon_set.icon("folder-plus", t["accent"])
         return None
 
     def _icon(self, entry: Entry, is_up: bool):

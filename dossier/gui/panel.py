@@ -17,6 +17,7 @@ from ..core.notes import compose_markdown, find_notes
 from ..core.selection import SelectionStore
 from ..core.vfs import Entry, FileSystem
 from ..core.drives import drive_of, usage_async
+from ..core.home import HOME_URL, is_home
 from ..core.platform import has_scheme, path_key
 from . import icon_set, theme
 from .drive_bar import DriveBar
@@ -220,6 +221,7 @@ class Panel(QFrame):
     current_changed = pyqtSignal(object)  # the item under the cursor changed
     activated = pyqtSignal(object)        # the user focused this panel
     message = pyqtSignal(str)
+    home_action = pyqtSignal(str)         # an action entry of the Home page was opened (its path says which)
 
     def __init__(self, fs: FileSystem, selection: SelectionStore, parent=None, dispatch=None) -> None:
         super().__init__(parent)
@@ -268,6 +270,14 @@ class Panel(QFrame):
         self.free = QLabel()
         bar = QHBoxLayout()
         bar.setContentsMargins(4, 2, 4, 2)
+        self.home_button = QToolButton()
+        self.home_button.setObjectName("homebtn")
+        self.home_button.setAutoRaise(True)
+        self.home_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.home_button.setIconSize(QSize(16, 16))
+        self.home_button.setToolTip("The Home page: drives, places, network (Alt+Home)")
+        self.home_button.clicked.connect(self.go_home)
+        bar.addWidget(self.home_button)
         bar.addWidget(self.drive_bar.chip)
         bar.addWidget(self.address, 1)
         bar.addWidget(self.free)
@@ -358,7 +368,8 @@ class Panel(QFrame):
                 f"#pathbarbox QLabel{{color:{on_accent};}}"
                 f"#pathbarbox QToolButton{{color:{on_accent};border:1px solid {on_accent};border-radius:6px;"
                 f"padding:1px 6px;background:transparent;font-weight:bold;}}"
-                f"#pathbarbox QToolButton::menu-indicator{{image:none;}}")
+                f"#pathbarbox QToolButton::menu-indicator{{image:none;}}"
+                f"#pathbarbox QToolButton#homebtn{{border:none;padding:1px 3px;}}")
         else:
             self.bar.setStyleSheet("")
         palette = QPalette(QApplication.palette())
@@ -369,6 +380,7 @@ class Panel(QFrame):
         self.table.setPalette(palette)
         self.table.viewport().setPalette(palette)   # the viewport keeps an old copy otherwise (white rows in dark)
         self.drive_bar.set_chip_color(on_accent if active else None)
+        self.home_button.setIcon(icon_set.icon("home", on_accent if active else t["fg"]))
 
     def restyle(self) -> None:
         """The colour scheme changed: redraw the active mark, the marked rows and the note."""
@@ -449,19 +461,50 @@ class Panel(QFrame):
             self.table.viewport().unsetCursor()
             self._finish_listing(listing, path, select)
 
+    def _apply_columns(self) -> None:
+        """The Home page has its own three columns (name, type, details); folders have name, size, date."""
+        home = self.is_home
+        if home == getattr(self, "_columns_for_home", None):
+            return
+        self._columns_for_home = home
+        for i, w in enumerate((300, 130, 260) if home else (260, 70, 130)):
+            self.table.setColumnWidth(i, w)
+        self.table.horizontalHeader().setSortIndicatorShown(not home)
+
+    def _fill_home_usage(self, entries: list) -> None:
+        """Free space of the drives, asked on background threads: a dead network drive only delays its own row."""
+        if self._dispatch is None:
+            return
+        paths = [e.path for e in entries if e.kind in ("fixed", "removable", "optical", "other", "network")]
+
+        def ready(p: str, usage) -> None:
+            def show() -> None:
+                if self.is_home and usage:
+                    self.model.update_detail(p, f"{human_size(usage[1])} free of {human_size(usage[0])}")
+            self._dispatch(show)
+
+        usage_async(paths, ready)
+
     def _finish_listing(self, listing: "_Listing", path: str, select: str) -> bool:
         if listing.error is not None:
             e = listing.error
             self.message.emit(f"Cannot open {path}: {getattr(e, 'strerror', None) or e}")
             return False
         self.model.set_entries(path, listing.entries)
+        self._apply_columns()
         self.address.setText(path)
         self.drive_bar.set_current_path(path)
         self._update_free(path)
         self._load_note(path)
         row = self.model.row_of(select) if select else -1
+        if row < 0 and self.is_home and select:                # coming up from a drive or a folder: land on it
+            row = next((r for r in range(self.model.entry_count())
+                        if self.model.entry_at(r).path.rstrip("\\/") == select.rstrip("\\/")), -1)
         if row < 0 and self.model.entry_count():
-            row = 1 if self.model.is_up_row(0) and self.model.entry_count() > 1 else 0
+            row = (self.model.first_selectable_row() if self.is_home
+                   else 1 if self.model.is_up_row(0) and self.model.entry_count() > 1 else 0)
+        if self.is_home:
+            self._fill_home_usage(listing.entries)
         if row >= 0:
             self.table.setCurrentIndex(self.model.index(row, 0))
         self.table.scrollToTop() if not select else self.table.scrollTo(self.table.currentIndex())
@@ -508,6 +551,8 @@ class Panel(QFrame):
                 self._close_buttons.pop(tid, None)
 
     def _tab_label(self, path: str) -> str:
+        if is_home(path):
+            return "Home"
         return self.fs.basename(path.rstrip("\\/")) or path or "..."
 
     def _index_of_tab(self, tid: Optional[int]) -> int:
@@ -616,10 +661,20 @@ class Panel(QFrame):
         keep = self.current_name()
         self.set_folder(self.path, select=keep)
 
+    def go_home(self) -> None:
+        if not self.is_home:
+            self.set_folder(HOME_URL, select=self.path)
+
+    @property
+    def is_home(self) -> bool:
+        return self.model.is_home
+
     def go_up(self) -> None:
         if self.model.is_up_row(0):
             came_from = self.fs.basename(self.path.rstrip("\\/"))
             self.set_folder(self.model.entry_at(0).path, select=came_from)
+        elif not self.is_home and self.path:
+            self.set_folder(HOME_URL, select=self.path)      # above a drive root is the Home page
 
     def open_current(self, new_tab: bool = False) -> None:
         row = self.table.currentIndex().row()
@@ -628,6 +683,10 @@ class Panel(QFrame):
             return
         if self.model.is_up_row(row):
             self.go_up()
+        elif entry.kind == "header":
+            return
+        elif entry.kind == "action":
+            self.home_action.emit(entry.path)
         elif entry.is_dir and new_tab:
             self.new_tab(entry.path)
         elif entry.is_dir:
@@ -637,6 +696,8 @@ class Panel(QFrame):
 
     def _address_entered(self) -> None:
         text = self.address.text().strip()
+        if text.lower() in ("home", "home:", "home:/", "home://"):
+            text = HOME_URL
         typed = text if has_scheme(text) else os.path.normpath(os.path.expanduser(text))
         if text and not self.set_folder(typed):
             self.address.setText(self.path)
@@ -645,7 +706,7 @@ class Panel(QFrame):
     def _update_free(self, path: str) -> None:
         """Free space comes from a background thread: a dead network share must not freeze the window."""
         self.free.setText("")
-        if self._dispatch is None:
+        if self._dispatch is None or is_home(path):
             return
 
         def ready(p: str, usage) -> None:
@@ -676,7 +737,7 @@ class Panel(QFrame):
         self._load_note(self.path)
 
     def _load_note(self, path: str) -> None:
-        text = compose_markdown(find_notes(self.fs, path)) if self.notes_enabled else ""
+        text = compose_markdown(find_notes(self.fs, path)) if self.notes_enabled and not is_home(path) else ""
         self.model.set_has_note(bool(text))
         if not text:
             self.note.hide()
@@ -711,6 +772,8 @@ class Panel(QFrame):
     # acting on items (S4) ----------------------------------------------------------------
     def targets(self) -> list:
         """The marked items, else the item under the cursor."""
+        if self.is_home:
+            return []                                        # the Home page lists shortcuts, not files
         marked = self.selection.paths()
         if marked:
             return marked

@@ -27,6 +27,8 @@ class Entry:
     size: int = 0
     mtime: float = 0.0
     is_link: bool = False
+    kind: str = ""       # for a virtual listing such as the Home page: drive, place, pin, network, action, header
+    detail: str = ""     # the text for the third column of such a listing (free space, an address)
 
 
 class FileSystem(ABC):
