@@ -5,7 +5,8 @@ description = "Multi-window file manager with a shared selection, Markdown notes
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "GPL-3.0-or-later" }
-dependencies = []
+dependencies = ["send2trash>=1.8"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]   # bare `pytest` finds the package without an install

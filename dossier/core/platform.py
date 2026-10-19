@@ -30,9 +30,26 @@ def decode_name(name: str | bytes) -> str:
     listing never fails on one odd file.
     """
     if isinstance(name, bytes):
-        name = os.fsdecode(name)
-    # os.fsdecode keeps undecodable bytes as lone surrogates; those cannot be displayed.
-    return "".join(REPLACEMENT if "\udc80" <= ch <= "\udcff" else ch for ch in name)
+        try:
+            name = os.fsdecode(name)
+        except UnicodeDecodeError:  # Windows: the file system encoding has no escape for bad bytes
+            name = name.decode("utf-8", errors="replace")
+    # Undecodable bytes (Linux) and unpaired UTF-16 halves (NTFS) are lone surrogates; they cannot be displayed.
+    return "".join(REPLACEMENT if "\ud800" <= ch <= "\udfff" else ch for ch in name)
+
+
+_REPARSE_POINT = 0x400  # FILE_ATTRIBUTE_REPARSE_POINT
+
+
+def is_link_like(st_mode_is_link: bool, attributes: int | None = None) -> bool:
+    """True for symlinks and, on Windows, junctions and other reparse points.
+
+    Walking into these can loop forever (a junction pointing at its own parent), so callers
+    treat them as leaves. ``attributes`` is ``st_file_attributes`` where the system has it.
+    """
+    if st_mode_is_link:
+        return True
+    return IS_WINDOWS and attributes is not None and bool(attributes & _REPARSE_POINT)
 
 
 def is_hidden(name: str, attributes: int | None = None) -> bool:

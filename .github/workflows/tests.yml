@@ -12,6 +12,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [windows-latest, ubuntu-latest]
+        python: ["3.10", "3.12"]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     env:
@@ -21,7 +22,7 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python }}
           cache: pip
 
       # Needed once the GUI shell exists; harmless for the Qt-free core.
@@ -36,5 +37,8 @@ jobs:
       - name: Install dependencies
         run: python -m pip install -r requirements.txt
 
+      - name: Syntax check
+        run: python -m compileall -q dossier tests
+
       - name: Run tests
-        run: python -m pytest -q
+        run: pytest -q

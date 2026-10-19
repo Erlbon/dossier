@@ -6,9 +6,12 @@ the same set.
 """
 from __future__ import annotations
 
+import logging
 from typing import Callable, Iterable
 
 from .platform import path_key
+
+log = logging.getLogger(__name__)
 
 Observer = Callable[["SelectionStore"], None]
 
@@ -27,7 +30,10 @@ class SelectionStore:
 
     def _changed(self) -> None:
         for fn in list(self._observers):
-            fn(self)
+            try:
+                fn(self)
+            except Exception:  # one broken observer must not silence the others
+                log.exception("selection observer failed")
 
     # reading --------------------------------------------------------------
     def __len__(self) -> int:
@@ -83,15 +89,20 @@ class SelectionStore:
         universe_map = {path_key(p): p for p in universe}
         kept = {k: v for k, v in self._items.items() if k not in universe_map}
         flipped = {k: v for k, v in universe_map.items() if k not in self._items}
-        self._items = {**kept, **flipped}
-        self._changed()
+        new = {**kept, **flipped}
+        if new != self._items:
+            self._items = new
+            self._changed()
 
     # named selections (S6) -----------------------------------------------
     def save(self, name: str) -> None:
         self._saved[name] = dict(self._items)
 
     def recall(self, name: str, combine: bool = False) -> None:
-        saved = self._saved[name]
+        try:
+            saved = self._saved[name]
+        except KeyError:
+            raise KeyError(f"no saved selection named {name!r}") from None
         if combine:
             self._items = {**self._items, **saved}
         else:

@@ -7,11 +7,12 @@ from __future__ import annotations
 
 import os
 import re
+import stat
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import BinaryIO, Iterator
 
-from .platform import decode_name, path_key
+from .platform import decode_name, is_link_like, path_key
 
 
 @dataclass(frozen=True)
@@ -50,14 +51,20 @@ class LocalFileSystem(FileSystem):
         return out
 
     def stat(self, path: str) -> Entry:
-        st = os.stat(path)
+        lst = os.lstat(path)
+        is_link = is_link_like(stat.S_ISLNK(lst.st_mode), getattr(lst, "st_file_attributes", None))
+        try:
+            st = os.stat(path) if is_link else lst   # a link shows what it points at
+        except OSError:                              # broken link
+            st = lst
+        is_dir = stat.S_ISDIR(st.st_mode)
         return Entry(
             name=decode_name(os.path.basename(path) or path),
             path=path,
-            is_dir=os.path.isdir(path),
-            size=st.st_size,
+            is_dir=is_dir,
+            size=0 if is_dir else st.st_size,
             mtime=st.st_mtime,
-            is_link=os.path.islink(path),
+            is_link=is_link,
         )
 
     def open_read(self, path: str) -> BinaryIO:
@@ -74,13 +81,17 @@ class LocalFileSystem(FileSystem):
             is_dir = de.is_dir()
         except OSError:
             is_dir = False
+        try:
+            attrs = getattr(de.stat(follow_symlinks=False), "st_file_attributes", None)
+        except OSError:
+            attrs = None
         return Entry(
             name=decode_name(de.name),
             path=de.path,
             is_dir=is_dir,
-            size=size,
+            size=0 if is_dir else size,
             mtime=mtime,
-            is_link=de.is_symlink(),
+            is_link=is_link_like(de.is_symlink(), attrs),
         )
 
 
@@ -100,11 +111,25 @@ def sort_entries(entries: list[Entry]) -> list[Entry]:
 
 
 def walk(fs: FileSystem, path: str) -> Iterator[Entry]:
-    """Every item below ``path``, depth first."""
-    for e in sort_entries(fs.list(path)):
+    """Every item below ``path``, depth first.
+
+    Links and junctions are listed but not entered. A subfolder that cannot be read is
+    skipped (its own entry is still yielded); a root that cannot be read raises.
+    """
+    yield from _walk(fs, path, root=True)
+
+
+def _walk(fs: FileSystem, path: str, root: bool) -> Iterator[Entry]:
+    try:
+        entries = sort_entries(fs.list(path))
+    except OSError:
+        if root:
+            raise
+        return
+    for e in entries:
         yield e
         if e.is_dir and not e.is_link:
-            yield from walk(fs, e.path)
+            yield from _walk(fs, e.path, root=False)
 
 
 __all__ = ["Entry", "FileSystem", "LocalFileSystem", "natural_key", "sort_entries", "walk", "path_key"]
