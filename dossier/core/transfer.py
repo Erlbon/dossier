@@ -5,12 +5,29 @@ a cancelled or failed copy never leaves a half-written target and never damages 
 """
 from __future__ import annotations
 
+import errno
 from typing import Optional
 
 from .progress import CancelToken, ProgressFn, check
 from .vfs import FileSystem, NotWritable
 
 PART_SUFFIX = ".dossier-part"
+
+
+def move_item(fs: FileSystem, src: str, dst: str, is_dir: bool, cancel: Optional[CancelToken] = None) -> None:
+    """Rename in place; across drives a file is copied, verified by size, then removed."""
+    try:
+        fs.rename(src, dst)
+    except OSError as e:
+        if isinstance(e, FileExistsError) or e.errno != errno.EXDEV:
+            raise
+        if is_dir:
+            raise OSError("moving a folder to another drive is not supported yet; nothing was changed") from e
+        copy_file(fs, src, fs, dst, cancel=cancel)
+        if fs.stat(dst).size != fs.stat(src).size:
+            fs.remove(dst)
+            raise OSError("the copy does not match the original; the original was kept") from e
+        fs.remove(src)
 
 
 def copy_file(
