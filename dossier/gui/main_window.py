@@ -18,7 +18,8 @@ from PyQt6.QtWidgets import (QApplication, QHBoxLayout, QLabel, QMainWindow, QMe
 from ..core.ops import (Plan, Resolution, check_name, plan_copy, plan_delete, plan_move, plan_rename)
 from ..core.home import ADD_NETWORK, HomeFileSystem, HomeProvider, RouterFileSystem, removable_from_home
 from ..core.commandline import Placeholders, expand, run_command
-from ..core.platform import IS_WINDOWS, is_elevated, machine_name, path_key
+from ..core import zipfs
+from ..core.platform import IS_WINDOWS, has_scheme, is_elevated, machine_name, path_key
 from ..core.selection import SelectionStore
 from ..core.textedit import BinaryFile, EncodingProblem, FileTooLarge, load_document
 from ..core.terminals import (UnsafeArgument, builtin_profiles, default_launcher, default_profile, detect,
@@ -346,9 +347,9 @@ class MainWindow(QMainWindow):
         for p in self.active.targets():
             try:
                 if not self.fs.stat(p).is_dir:
-                    paths.append(p)
-            except OSError:
-                pass
+                    paths.append(p if not has_scheme(p) else zipfs.local_copy(self.fs, p))   # the viewer reads real files
+            except OSError as e:
+                self.dialogs.info("View", f"Cannot read {self.fs.basename(p)}: {e.strerror or e}")
         if not paths:
             self.dialogs.info("View", "Select a file to view.")
             return
@@ -375,6 +376,9 @@ class MainWindow(QMainWindow):
                 self.dialogs.info("Edit", "Select one file to edit.")
                 return
             path = files[0]
+        if has_scheme(path):
+            self.dialogs.info("Edit", "Items inside an archive are read-only. Copy the file out to edit it.")
+            return
         for w in self.editors:
             if os.path.normcase(w.doc.path) == os.path.normcase(path):
                 w.raise_()
@@ -816,6 +820,9 @@ class MainWindow(QMainWindow):
     def new_folder(self) -> None:
         if self.active.is_home:
             self.add_network_location()              # on the Home page F7 adds an entry instead of a folder
+            return
+        if not self.fs.is_writable(self.active.path):
+            self.dialogs.info("New Folder", "This folder is read-only (an archive cannot be changed yet).")
             return
         name = self.dialogs.ask_text("New Folder", "Folder name:")
         if not name:

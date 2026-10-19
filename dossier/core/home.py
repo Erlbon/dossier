@@ -17,6 +17,7 @@ from typing import Callable, Optional
 
 from .platform import home_dir, list_volumes
 from .vfs import Entry, FileSystem, NotWritable
+from .zipfs import ZipFileSystem
 
 HOME_URL = "home://"
 HEADER_PREFIX = "home://#"
@@ -145,11 +146,17 @@ class RouterFileSystem(FileSystem):
     def __init__(self, local: FileSystem, home: HomeFileSystem) -> None:
         self.local = local
         self.home = home
+        self.zip = ZipFileSystem()
         self.sep = local.sep
         self.case_sensitive = local.case_sensitive
 
     def fs_for(self, path: str) -> FileSystem:
-        return self.home if path.startswith("home:") else self.local
+        if path.startswith("home:"):
+            return self.home
+        return self.zip if path.startswith("zip:") else self.local
+
+    def is_writable(self, path: str) -> bool:
+        return self.fs_for(path).is_writable(path)
 
     # path functions go to the system the path belongs to
     @property

@@ -13,6 +13,7 @@ from PyQt6.QtWidgets import (QAbstractItemView, QApplication, QFrame, QHBoxLayou
                              QTabBar, QToolButton,
                              QTableView, QTextBrowser, QVBoxLayout, QWidget)
 
+from ..core import zipfs
 from ..core.notes import compose_markdown, find_notes
 from ..core.selection import SelectionStore
 from ..core.vfs import Entry, FileSystem
@@ -702,6 +703,13 @@ class Panel(QFrame):
             self.new_tab(entry.path)
         elif entry.is_dir:
             self.set_folder(entry.path)
+        elif not has_scheme(entry.path) and zipfs.is_archive(entry.path):
+            self.set_folder(zipfs.archive_root(entry.path))          # a zip opens like a folder
+        elif has_scheme(entry.path):
+            try:
+                QDesktopServices.openUrl(QUrl.fromLocalFile(zipfs.local_copy(self.fs, entry.path)))
+            except OSError as e:
+                self.message.emit(f"Cannot open {entry.name}: {e.strerror or e}")
         else:
             QDesktopServices.openUrl(QUrl.fromLocalFile(entry.path))
 

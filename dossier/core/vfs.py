@@ -39,6 +39,10 @@ class FileSystem(ABC):
     sep = "/"                # the separator of its paths
     case_sensitive = True
 
+    def is_writable(self, path: str) -> bool:
+        """Whether items can be created, changed or removed at ``path``. A router answers per path."""
+        return self.writable
+
     # Path functions. Code that handles an item's path must use these and never ``os.path``: a path of a
     # remote or virtual system (``sftp://host/a/b``) uses forward slashes on every platform. The defaults
     # are for a virtual system; the local one overrides them with ``os.path``.

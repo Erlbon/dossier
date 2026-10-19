@@ -217,6 +217,13 @@ def _check_destination(fs: FileSystem, dest_dir: str, blocking: list) -> None:
     d = _stat(fs, dest_dir)
     if d is None or not d.is_dir:
         blocking.append(f"the destination folder does not exist: {dest_dir}")
+    elif not fs.is_writable(dest_dir):
+        blocking.append("this folder is read-only (items inside an archive cannot be added or changed yet)")
+
+
+def _check_sources_writable(fs: FileSystem, sources: Sequence[str], what: str, blocking: list) -> None:
+    if any(not fs.is_writable(s) for s in sources):
+        blocking.append(f"cannot {what} items inside an archive (read-only); copy them out instead")
 
 
 def plan_copy(fs: FileSystem, sources: Sequence[str], dest_dir: str, *, flatten: bool = False) -> Plan:
@@ -258,6 +265,7 @@ def plan_move(fs: FileSystem, sources: Sequence[str], dest_dir: str) -> Plan:
     skipped: list = []
     taken: set = set()
     _check_destination(fs, dest_dir, blocking)
+    _check_sources_writable(fs, sources, "move", blocking)
     for src in sources:
         e = _stat(fs, src)
         dst = fs.join(dest_dir, fs.basename(src))
@@ -283,6 +291,7 @@ def plan_rename_many(fs: FileSystem, pairs: Sequence[tuple]) -> Plan:
     blocking: list = []
     skipped: list = []
     taken: set = set()
+    _check_sources_writable(fs, [p for p, _n in pairs], "rename", blocking)
     for src, new_name in pairs:
         why = check_name(new_name)
         e = _stat(fs, src)
@@ -315,6 +324,8 @@ def plan_delete(fs: FileSystem, sources: Sequence[str], *, to_trash: bool = True
     ops: list = []
     warnings: list = []
     skipped: list = []
+    blocking: list = []
+    _check_sources_writable(fs, sources, "delete", blocking)
     for src in sources:
         e = _stat(fs, src)
         if e is None:
@@ -324,7 +335,7 @@ def plan_delete(fs: FileSystem, sources: Sequence[str], *, to_trash: bool = True
             ops.append(Op(Kind.DELETE, src, is_dir=e.is_dir, size=e.size, src_mtime=e.mtime, to_trash=to_trash))
     if ops and not to_trash:
         warnings.append("these items will be deleted permanently and cannot be brought back")
-    return Plan("Delete" if not to_trash else "Delete to the recycle bin", tuple(ops), tuple(warnings), (), tuple(skipped))
+    return Plan("Delete" if not to_trash else "Delete to the recycle bin", tuple(ops), tuple(warnings), tuple(blocking), tuple(skipped))
 
 
 # executing -----------------------------------------------------------------------------------
