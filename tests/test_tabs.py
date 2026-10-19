@@ -304,7 +304,7 @@ def test_tabs_have_rounded_top_corners_and_a_visible_gap_between_them(world):
         r = p.tabs.tab_outline(i)
         # rounding: the outline is missing exactly at the corner, but is there on the top edge and down the side
         c = theme.tab_colors()
-        edge = c["inactive_line"] if i == 0 else c["active_line"]
+        edge = c["inactive_line"] if i == 0 else c["active_fill"]      # the current tab of the active panel: frame gold
         assert not close_to(img, int(r.left()), int(r.top()), edge, spread=0), i
         assert close_to(img, int(r.left()) + 30, int(r.top()), edge, spread=1), i
         assert close_to(img, int(r.left()), int(r.top()) + 14, edge, spread=1), i
@@ -323,9 +323,11 @@ def test_every_tab_has_a_thin_outline(world):
     t = theme.current()
     cur, other = p.tabs.tab_outline(1), p.tabs.tab_outline(0)
     c = theme.tab_colors()
-    assert close_to(img, int(cur.left()), int(cur.bottom()) - 6, c["active_line"])      # every tab has a thin outline
-    assert close_to(img, int(other.left()), int(other.bottom()) - 6, c["inactive_line"])
-    assert not close_to(img, int(other.left()), int(other.bottom()) - 6, c["active_line"], tolerance=6)
+    assert close_to(img, int(cur.left()), int(cur.bottom()) - 6, c["active_fill"])      # the frame's gold, 2 pixels
+    assert close_to(img, int(other.left()), int(other.bottom()) - 6, c["inactive_line"])   # the others: a thin line
+    y = int(cur.bottom()) - 6
+    assert close_to(img, int(cur.left()) + 1, y, c["active_fill"], spread=0)             # 2 pixels wide
+    assert not close_to(img, int(other.left()) + 1, y, c["active_fill"], tolerance=6, spread=0)   # 1 pixel wide
 
 
 def test_the_close_cross_of_the_current_tab_is_brighter_than_the_others(world):
@@ -350,3 +352,58 @@ def test_the_tabs_rest_directly_on_the_panel_and_the_frame_has_no_top_edge(world
     assert "border-top:none" in p.styleSheet().replace(" ", "")
     t = theme.current()
     assert t["accent"] in p.styleSheet() and "transparent" in win.right.styleSheet()
+
+
+def test_no_strip_between_the_tabs_and_the_box_even_when_the_row_is_taller_than_the_tabs(world):
+    from PyQt6.QtCore import QPoint
+    win, *_ = world
+    p = win.left
+    p.new_tab_button.setFixedHeight(p.tabs.height() + 24)          # a taller + button, or a bigger font
+    QApplication.processEvents()
+    p.tab_row.layout().activate()
+    tabs_bottom = p.tabs.mapTo(p, QPoint(0, 0)).y() + p.tabs.height()
+    assert tabs_bottom == p.body.mapTo(p, QPoint(0, 0)).y()         # the tabs end exactly where the box begins
+
+
+def test_the_first_tab_lines_up_with_the_left_edge_of_the_box_below(world):
+    from PyQt6.QtCore import QPoint
+    win, left, *_ = world
+    p = win.left
+    p.new_tab(str(left / "alpha"))
+    p.tabs.setCurrentIndex(0)                                        # scrolls the tab bar back to its start
+    first_left = p.tabs.mapTo(p, QPoint(0, 0)).x() + p.tabs.tab_outline(0).left()
+    assert first_left == p.body.mapTo(p, QPoint(0, 0)).x()
+    gap = p.tabs.tab_outline(1).left() - p.tabs.tab_outline(0).right()
+    assert gap == 4                                                  # the space between tabs is unchanged
+
+
+def test_the_current_tab_of_the_active_panel_continues_the_frame_line_exactly(world):
+    from PyQt6.QtGui import QColor
+    from dossier.gui import theme
+    win, left, *_ = world
+    p = win.left
+    p.set_active(True)
+    p.tabs.setCurrentIndex(0)
+    p.tabs.resize(600, p.tabs.height())
+    img = p.tabs.grab().toImage()
+    t = theme.current()
+    r = p.tabs.tab_outline(0)
+    y = int(r.bottom()) - 6
+    # the side of the tab is the frame's 2 pixels of the same gold, at the same x as the box's own border
+    assert img.pixelColor(int(r.left()), y).name() == QColor(t["accent"]).name()
+    assert img.pixelColor(int(r.left()) + 1, y).name() == QColor(t["accent"]).name()
+    frame_x = p.body.mapTo(p, p.body.rect().topLeft()).x()
+    assert int(p.tabs.mapTo(p, p.tabs.rect().topLeft()).x() + r.left()) == frame_x
+    assert "border:2pxsolid" + t["accent"] in p.styleSheet().replace(" ", "")          # the same colour and width
+
+
+def test_an_inactive_panels_current_tab_keeps_the_thin_darker_outline(world):
+    from PyQt6.QtGui import QColor
+    from dossier.gui import theme
+    win, *_ = world
+    p = win.right
+    p.set_active(False)
+    img = p.tabs.grab().toImage()
+    c = theme.tab_colors()
+    r = p.tabs.tab_outline(0)
+    assert QColor(img.pixelColor(int(r.left()), int(r.bottom()) - 6)).name() == QColor(c["active_line"]).name()

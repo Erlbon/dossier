@@ -151,6 +151,7 @@ class PanelTabBar(QTabBar):
         self.setDrawBase(False)
         self.setMouseTracking(True)
         self._hover = -1
+        self.panel_active = False        # set by the panel: the current tab then continues the gold frame below it
 
     def tabSizeHint(self, index: int) -> QSize:
         hint = super().tabSizeHint(index)
@@ -169,15 +170,20 @@ class PanelTabBar(QTabBar):
         super().leaveEvent(event)
 
     def tab_outline(self, index: int) -> QRectF:
-        return QRectF(self.tabRect(index).adjusted(2, 4, -2, 0))      # the gap between tabs is the two margins
+        # The gap between two tabs is the right margin of one plus the left margin of the next. The first tab has no
+        # left margin: its edge lines up with the left edge of the box below it.
+        return QRectF(self.tabRect(index).adjusted(0 if index == 0 else 2, 4, -2, 0))
 
     def paintEvent(self, event) -> None:
         c = theme.tab_colors()
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        width = 1.0                                       # a thin outline on every tab
         for i in range(self.count()):
             selected = i == self.currentIndex()
+            # a thin outline on every tab; the current tab of the active panel uses the frame's own 2 pixels and
+            # colour, so its sides run on into the border of the box below without a step
+            continues_frame = selected and self.panel_active
+            width = 2.0 if continues_frame else 1.0
             r = self.tab_outline(i).adjusted(width / 2, width / 2, -width / 2, 0)   # the line sits on whole pixels
             path = QPainterPath()                        # open at the bottom: the tab grows out of the bar below
             path.moveTo(r.left(), r.bottom())
@@ -190,7 +196,8 @@ class PanelTabBar(QTabBar):
             fill.closeSubpath()
             p.fillPath(fill, QColor(c["active_fill"] if selected else c["hover_fill"] if i == self._hover
                                     else c["inactive_fill"]))
-            p.setPen(QPen(QColor(c["active_line"] if selected else c["inactive_line"]), width))
+            line = c["active_fill"] if continues_frame else c["active_line"] if selected else c["inactive_line"]
+            p.setPen(QPen(QColor(line), width))
             p.drawPath(path)
             text_rect = r.adjusted(12, 0, -26, 0)           # room for the close cross on the right
             font = p.font()
@@ -256,8 +263,10 @@ class Panel(QFrame):
         tab_row = QHBoxLayout()
         tab_row.setContentsMargins(0, 0, 0, 0)
         tab_row.setSpacing(0)
-        tab_row.addWidget(self.tabs)
-        tab_row.addWidget(self.new_tab_button)
+        # Aligned to the bottom: if the + button (or the font) makes the row taller than the tabs, the extra
+        # height goes above the tabs, never as a strip between the tabs and the box below.
+        tab_row.addWidget(self.tabs, 0, Qt.AlignmentFlag.AlignBottom)
+        tab_row.addWidget(self.new_tab_button, 0, Qt.AlignmentFlag.AlignBottom)
         tab_row.addStretch(1)
         self.tab_row = QWidget()
         self.tab_row.setObjectName("tabrow")
@@ -381,6 +390,8 @@ class Panel(QFrame):
         self.table.viewport().setPalette(palette)   # the viewport keeps an old copy otherwise (white rows in dark)
         self.drive_bar.set_chip_color(on_accent if active else None)
         self.home_button.setIcon(icon_set.icon("home", on_accent if active else t["fg"]))
+        self.tabs.panel_active = active
+        self.tabs.update()
 
     def restyle(self) -> None:
         """The colour scheme changed: redraw the active mark, the marked rows and the note."""
