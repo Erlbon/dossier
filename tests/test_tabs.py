@@ -409,3 +409,28 @@ def test_an_inactive_panels_current_tab_keeps_the_thin_darker_outline(world):
     c = theme.tab_colors()
     r = p.tabs.tab_outline(0)
     assert QColor(img.pixelColor(int(r.left()), int(r.bottom()) - 6)).name() == QColor(c["active_line"]).name()
+
+
+def test_the_current_tab_has_no_faint_row_at_its_foot_at_a_fractional_display_scale(world):
+    """At 175 percent the tab bar's last device row is only partly inside the widget; a tab shape that ended
+    there blended with the background and showed as a thin dark line between the tab and the address bar."""
+    from PyQt6.QtGui import QColor, QImage, QPainter
+    from dossier.gui import theme
+    win, *_ = world
+    p = win.left
+    p.set_active(True)
+    p.tabs.setCurrentIndex(0)
+    ratio = 1.75
+    p.tabs.resize(400, 37)
+    img = QImage(int(400 * ratio), int(37 * ratio) + 1, QImage.Format.Format_ARGB32)
+    img.setDevicePixelRatio(ratio)
+    img.fill(0)
+    painter = QPainter(img)
+    p.tabs.render(painter)
+    painter.end()
+    r = p.tabs.tab_outline(0)
+    x = int((r.left() + r.width() / 2) * ratio)
+    last_row = int(37 * ratio)                                   # the device row that is only partly inside
+    got = img.pixelColor(x, last_row)
+    want = QColor(theme.tab_colors()["active_fill"])
+    assert (got.red(), got.green(), got.blue()) == (want.red(), want.green(), want.blue()) and got.alpha() == 255

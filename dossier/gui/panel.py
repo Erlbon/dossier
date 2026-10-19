@@ -189,13 +189,17 @@ class PanelTabBar(QTabBar):
             continues_frame = selected and self.panel_active
             width = 2.0 if continues_frame else 1.0
             r = self.tab_outline(i).adjusted(width / 2, width / 2, -width / 2, 0)   # the line sits on whole pixels
-            path = QPainterPath()                        # open at the bottom: the tab grows out of the bar below
-            path.moveTo(r.left(), r.bottom())
+            # open at the bottom: the tab grows out of the bar below. It runs past the widget's edge so the clip,
+            # not the shape, ends it: at a fractional display scale the last device row is only partly inside
+            # the widget and a shape ending there would blend with the background and show as a faint line
+            bottom = r.bottom() + 2
+            path = QPainterPath()
+            path.moveTo(r.left(), bottom)
             path.lineTo(r.left(), r.top() + self.RADIUS)
             path.quadTo(r.left(), r.top(), r.left() + self.RADIUS, r.top())
             path.lineTo(r.right() - self.RADIUS, r.top())
             path.quadTo(r.right(), r.top(), r.right(), r.top() + self.RADIUS)
-            path.lineTo(r.right(), r.bottom())
+            path.lineTo(r.right(), bottom)
             fill = QPainterPath(path)
             fill.closeSubpath()
             p.fillPath(fill, QColor(c["active_fill"] if selected else c["hover_fill"] if i == self._hover
