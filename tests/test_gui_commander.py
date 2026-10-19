@@ -29,6 +29,9 @@ class FakeDialogs:
         self.conflict_answer = Resolution.SKIP
         self.confirm_answer = True
         self.outputs = []
+        self.save_answer = "discard"
+        self.disk_answer = "overwrite"
+        self.save_path = None
 
     def info(self, title, text):
         self.infos.append((title, text))
@@ -36,6 +39,15 @@ class FakeDialogs:
     def confirm(self, title, text, ok_label="OK"):
         self.confirms.append((title, text))
         return self.confirm_answer
+
+    def ask_save(self, name):
+        return self.save_answer
+
+    def ask_changed_on_disk(self, name):
+        return self.disk_answer
+
+    def ask_save_path(self, default):
+        return self.save_path
 
     def show_output(self, title, text):
         self.outputs.append((title, text))
@@ -349,7 +361,7 @@ def test_alt_f1_opens_the_drive_list_of_the_left_panel(world):
 
 def test_f_key_bar_only_offers_working_commands(world):
     win, *_ = world
-    assert [b.text() for b in win._fkey_buttons] == ["F2 Rename", "F3 View", "F5 Copy", "F6 Move", "F7 Folder", "F8 Delete"]
+    assert [b.text() for b in win._fkey_buttons] == ["F2 Rename", "F3 View", "F4 Edit", "F5 Copy", "F6 Move", "F7 Folder", "F8 Delete"]
 
 
 def test_the_active_panel_is_obvious_in_three_ways(world):

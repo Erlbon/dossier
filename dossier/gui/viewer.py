@@ -8,7 +8,7 @@ from __future__ import annotations
 import os
 from typing import Optional
 
-from PyQt6.QtCore import QSize, Qt, QTimer
+from PyQt6.QtCore import QSize, Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QAction, QKeySequence
 from PyQt6.QtWidgets import (QCheckBox, QComboBox, QInputDialog, QLabel, QLineEdit, QMainWindow, QPushButton,
                              QToolBar, QWidget)
@@ -23,6 +23,8 @@ from .qt_bridge import QtDispatcher
 
 
 class TextViewerWindow(QMainWindow):
+    edit_requested = pyqtSignal(str, bool)       # path, open the replace bar too
+
     def __init__(self, paths: list, index: int = 0, dispatch=None, parent=None) -> None:
         super().__init__(parent)
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
@@ -93,7 +95,15 @@ class TextViewerWindow(QMainWindow):
         self._timer.setInterval(1000)
         self._timer.timeout.connect(self._poll)
 
-        for keys, slot in ((["Esc"], self._escape), (["F3"], self.close), (["Ctrl+F"], self._focus_find),
+        edit = QPushButton("Edit (F4)")
+        edit.setFlat(True)
+        edit.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        edit.setIcon(icon_set.icon("file-code", theme.current()["fg"]))
+        edit.setToolTip("Open this file in the notepad: Ctrl+H there finds and replaces")
+        edit.clicked.connect(lambda: self._edit(False))
+        bar.addWidget(edit)
+        for keys, slot in ((["F4"], lambda: self._edit(False)), (["Ctrl+H"], lambda: self._edit(True)),
+                           (["Esc"], self._escape), (["F3"], self.close), (["Ctrl+F"], self._focus_find),
                            (["Ctrl+G"], self.ask_goto), (["Ctrl+PgDown"], lambda: self.step(1)),
                            (["Ctrl+PgUp"], lambda: self.step(-1)), (["Shift+Return"], lambda: self.find(forward=False))):
             act = QAction(self)
@@ -102,6 +112,11 @@ class TextViewerWindow(QMainWindow):
             self.addAction(act)
 
         self.load(max(0, min(index, len(self.paths) - 1)))
+
+    def _edit(self, replace: bool) -> None:
+        """The viewer reads; the notepad changes. Hand this file over (Ctrl+H opens its replace bar)."""
+        if self.source is not None:
+            self.edit_requested.emit(self.source.path, replace)
 
     def _escape(self) -> None:
         """Esc first clears a selection or a found match, and only then closes the window."""

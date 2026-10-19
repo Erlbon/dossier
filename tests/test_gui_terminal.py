@@ -284,6 +284,7 @@ def test_running_with_administrator_rights_is_visible_in_the_title(app, tmp_path
     win = MainWindow(settings_path=str(tmp_path / "s.ini"), start=(str(tmp_path), str(tmp_path)),
                      dialogs=FakeDialogs(), terminal_launcher=Recorder())
     try:
-        assert win.windowTitle() == "Dossier (Administrator)"
+        from dossier.core.platform import machine_name
+        assert win.windowTitle() == f"Dossier {machine_name()} (Administrator)"
     finally:
         win.close()

@@ -17,8 +17,9 @@ from PyQt6.QtWidgets import (QApplication, QComboBox, QHBoxLayout, QLabel, QMain
 
 from ..core.ops import (Plan, Resolution, check_name, plan_copy, plan_delete, plan_move, plan_rename)
 from ..core.commandline import Placeholders, expand, run_command
-from ..core.platform import IS_WINDOWS, is_elevated
+from ..core.platform import IS_WINDOWS, is_elevated, machine_name
 from ..core.selection import SelectionStore
+from ..core.textedit import BinaryFile, EncodingProblem, FileTooLarge, load_document
 from ..core.terminals import (UnsafeArgument, builtin_profiles, default_launcher, default_profile, detect,
                               session_launch)
 from ..core.undo_log import Step, UndoAction, UndoLog
@@ -64,6 +65,7 @@ class MainWindow(QMainWindow):
         self.busy = False
         self._job: Optional[Job] = None
         self.viewers: list = []
+        self.editors: list = []
 
         self.left = Panel(self.fs, self.selection, dispatch=self.dispatcher)
         self.right = Panel(self.fs, self.selection, dispatch=self.dispatcher)
@@ -103,7 +105,6 @@ class MainWindow(QMainWindow):
             panel.backspace_hook = self._backspace_edits_command
             panel.folder_changed.connect(lambda _p: self._update_prompt())
             panel.folder_changed.connect(lambda _p: self._update_title())
-            panel.current_changed.connect(lambda p: self._update_title() if p is self.active else None)
             panel.message.connect(self._say)
         self.selection.subscribe(lambda _s: self._update_status())
         self.theme.changed.connect(self._on_theme_changed)
@@ -136,6 +137,7 @@ class MainWindow(QMainWindow):
         bar = self.menuBar()
         files = bar.addMenu("&Files")
         self.act_view = self._action("View", "F3", self.view_file)
+        self.act_edit = self._action("Edit", "F4", self.edit_file)
         self.act_rename = self._action("Rename", "F2", self.rename)
         self.act_copy = self._action("Copy to Other Panel", "F5", self.copy)
         self.act_move = self._action("Move to Other Panel", "F6", self.move)
@@ -143,7 +145,7 @@ class MainWindow(QMainWindow):
         self.act_delete = self._action("Delete", ["F8", "Delete"], self.delete)
         self.act_delete_perm = self._action("Delete Permanently", "Shift+F8", lambda: self.delete(permanent=True))
         quit_ = self._action("Quit", "Ctrl+Q", self.close)
-        for a in (self.act_view, self.act_rename, self.act_copy, self.act_move, self.act_mkdir, self.act_delete,
+        for a in (self.act_view, self.act_edit, self.act_rename, self.act_copy, self.act_move, self.act_mkdir, self.act_delete,
                   self.act_delete_perm):
             files.addAction(a)
         files.addSeparator()
@@ -229,6 +231,7 @@ class MainWindow(QMainWindow):
         self._fkey_icons = []
         for label, icon_name_, slot in (("F2 Rename", "pencil", lambda: self.rename()),
                                         ("F3 View", "file-text", lambda: self.view_file()),
+                                        ("F4 Edit", "file-code", lambda: self.edit_file()),
                                         ("F5 Copy", "copy", lambda: self.copy()),
                                         ("F6 Move", "arrows-right-left", lambda: self.move()),
                                         ("F7 Folder", "folder-plus", lambda: self.new_folder()),
@@ -335,7 +338,51 @@ class MainWindow(QMainWindow):
             return
         win = TextViewerWindow(paths, 0, dispatch=self.dispatcher)
         self.viewers.append(win)
+        win.edit_requested.connect(lambda p, replace: self.edit_file(p, replace))
         win.destroyed.connect(lambda _o=None, w=win: self.viewers.remove(w) if w in self.viewers else None)
+        win.show()
+
+    def edit_file(self, path: Optional[str] = None, show_replace: bool = False) -> None:
+        """F4: open one file in the notepad. A file that is already open is brought forward, not opened twice."""
+        if path is None:
+            targets = [p for p in self.active.targets()]
+            files = []
+            for p in targets:
+                try:
+                    if not self.fs.stat(p).is_dir:
+                        files.append(p)
+                except OSError:
+                    pass
+            if len(files) != 1:
+                self.dialogs.info("Edit", "Select one file to edit.")
+                return
+            path = files[0]
+        for w in self.editors:
+            if os.path.normcase(w.doc.path) == os.path.normcase(path):
+                w.raise_()
+                w.activateWindow()
+                if show_replace:
+                    w.bar.show_replace()
+                return
+        try:
+            from .notepad import NotepadWindow
+            doc = load_document(path)
+        except ImportError:
+            self.dialogs.info("Edit", "The editor needs the PyQt6-QScintilla package: pip install PyQt6-QScintilla")
+            return
+        except FileTooLarge as e:
+            self.dialogs.info("Edit", f"{e}. Use View (F3) to read it, or an external editor to change it.")
+            return
+        except BinaryFile:
+            self.dialogs.info("Edit", "This looks like a binary file, not text. Use View (F3).")
+            return
+        except (OSError, EncodingProblem) as e:
+            self.dialogs.info("Edit", f"The file could not be opened: {getattr(e, 'strerror', None) or e}")
+            return
+        win = NotepadWindow(doc, self.dialogs, show_replace=show_replace)
+        self.editors.append(win)
+        win.closed.connect(lambda w: self.editors.remove(w) if w in self.editors else None)
+        win.saved.connect(lambda _p: self.refresh())
         win.show()
 
     def set_drive_style(self, style: str) -> None:
@@ -426,10 +473,9 @@ class MainWindow(QMainWindow):
             f"QPushButton{{background:{t['danger']};color:{t['bg']};font-weight:bold;}}" if on else "")
 
     def _update_title(self) -> None:
-        """'Dossier, Subject <the item under the cursor>': the window names what you are looking at."""
-        subject = self.active.current_name() if hasattr(self, "active") else ""
-        self.setWindowTitle("Dossier" + (f", Subject {subject}" if subject else "")
-                            + (" (Administrator)" if self.elevated else ""))
+        """The file manager is titled 'Dossier <machine name>', so several computers' windows are told apart.
+        (Viewer and notepad windows are titled 'Dossier, Subject <file name>'.)"""
+        self.setWindowTitle(f"Dossier {machine_name()}" + (" (Administrator)" if self.elevated else ""))
 
     def _update_prompt(self) -> None:
         text = self.active.path
@@ -748,6 +794,10 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event) -> None:
         for v in list(self.viewers):
             v.close()
+        for ed in list(self.editors):
+            if not ed.close():                       # the user cancelled a save question: stay open
+                event.ignore()
+                return
         if self._job is not None:
             self._job.cancel()
         self.settings.setValue("window/geometry", self.saveGeometry())

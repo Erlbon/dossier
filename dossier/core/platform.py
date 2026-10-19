@@ -170,6 +170,15 @@ def list_volumes() -> list:
     return _windows_volumes() if IS_WINDOWS else _posix_volumes()
 
 
+def machine_name() -> str:
+    """This computer's name, for the file manager's title."""
+    import socket
+    try:
+        return socket.gethostname() or "this computer"
+    except OSError:
+        return "this computer"
+
+
 def is_elevated() -> bool:
     """True when this process runs with administrator (Windows) or root rights."""
     if IS_WINDOWS:

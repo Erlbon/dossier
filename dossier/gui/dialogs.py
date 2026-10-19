@@ -5,7 +5,7 @@ from typing import Callable, Optional
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFontDatabase
-from PyQt6.QtWidgets import (QDialog, QInputDialog, QMessageBox, QPlainTextEdit, QProgressDialog, QPushButton,
+from PyQt6.QtWidgets import (QDialog, QFileDialog, QInputDialog, QMessageBox, QPlainTextEdit, QProgressDialog, QPushButton,
                              QVBoxLayout, QWidget)
 
 from ..core.ops import Resolution
@@ -53,6 +53,30 @@ class Dialogs:
         box.setDefaultButton(ok)
         box.exec()
         return box.clickedButton() is ok
+
+    def ask_save(self, name: str) -> str:
+        """Unsaved changes on closing: ``save``, ``discard`` or ``cancel``."""
+        box = QMessageBox(QMessageBox.Icon.Question, "Unsaved changes", f"Save the changes to {name}?", parent=self.parent)
+        save = box.addButton("Save", QMessageBox.ButtonRole.AcceptRole)
+        discard = box.addButton("Discard changes", QMessageBox.ButtonRole.DestructiveRole)
+        box.addButton(QMessageBox.StandardButton.Cancel)
+        box.setDefaultButton(save)
+        box.exec()
+        return "save" if box.clickedButton() is save else "discard" if box.clickedButton() is discard else "cancel"
+
+    def ask_changed_on_disk(self, name: str) -> Optional[str]:
+        """The file changed under the editor: ``overwrite`` it, ``reload`` it, or None to cancel."""
+        box = QMessageBox(QMessageBox.Icon.Warning, "File changed", f"{name} was changed by another program after "
+                          "you opened it.", parent=self.parent)
+        over = box.addButton("Overwrite with my version", QMessageBox.ButtonRole.DestructiveRole)
+        reload_ = box.addButton("Reload from disk", QMessageBox.ButtonRole.AcceptRole)
+        box.addButton(QMessageBox.StandardButton.Cancel)
+        box.exec()
+        return "overwrite" if box.clickedButton() is over else "reload" if box.clickedButton() is reload_ else None
+
+    def ask_save_path(self, default: str) -> Optional[str]:
+        path, _filter = QFileDialog.getSaveFileName(self.parent, "Save As", default)
+        return path or None
 
     def show_output(self, title: str, text: str) -> None:
         """The captured output of a command, in a resizable read-only box."""

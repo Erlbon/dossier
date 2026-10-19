@@ -207,32 +207,22 @@ def test_tabs_and_the_active_tab_are_restored(world, app):
 
 
 # the window title ------------------------------------------------------------------------------------------------------
-def test_the_title_names_the_item_under_the_cursor(world):
+def test_the_file_manager_is_titled_with_the_machine_name_and_the_title_stays_put(world):
+    from dossier.core.platform import machine_name
     win, left, *_ = world
-    win.left.table.setCurrentIndex(win.left.model.index(win.left.model.row_of("a.txt"), 0))
-    assert win.windowTitle() == "Dossier, Subject a.txt"
-    win.left.table.setCurrentIndex(win.left.model.index(win.left.model.row_of("b.txt"), 0))
-    assert win.windowTitle() == "Dossier, Subject b.txt"
-    win.left.table.setCurrentIndex(win.left.model.index(0, 0))               # the .. row has no subject
-    assert win.windowTitle() == "Dossier"
-
-
-def test_the_title_follows_the_active_panel(world):
-    win, left, right, _t = world
+    assert win.windowTitle() == f"Dossier {machine_name()}"
     win.left.table.setCurrentIndex(win.left.model.index(win.left.model.row_of("a.txt"), 0))
     key(win, Qt.Key.Key_Tab)
-    assert win.windowTitle() == "Dossier, Subject gamma"                      # the right panel's cursor
-    key(win, Qt.Key.Key_Tab)
-    assert win.windowTitle() == "Dossier, Subject a.txt"
+    win.left.new_tab()
+    assert win.windowTitle() == f"Dossier {machine_name()}"           # the cursor and the tabs do not rename it
 
 
-def test_the_administrator_mark_follows_the_subject(app, tmp_path, monkeypatch):
+def test_the_administrator_mark_follows_the_machine_name(app, tmp_path, monkeypatch):
     import dossier.gui.main_window as mw
-    (tmp_path / "x.txt").write_text("x")
+    from dossier.core.platform import machine_name
     monkeypatch.setattr(mw, "is_elevated", lambda: True)
     win = MainWindow(settings_path=str(tmp_path / "s.ini"), start=(str(tmp_path), str(tmp_path)), dialogs=FakeDialogs())
     try:
-        win.left.table.setCurrentIndex(win.left.model.index(win.left.model.row_of("x.txt"), 0))
-        assert win.windowTitle() == "Dossier, Subject x.txt (Administrator)"
+        assert win.windowTitle() == f"Dossier {machine_name()} (Administrator)"
     finally:
         win.close()

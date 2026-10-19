@@ -55,6 +55,13 @@ def _template(spec: FindSpec, pattern: "re.Pattern", replacement: str):
     return lambda m: m.expand(replacement)
 
 
+def validate(spec: FindSpec, replacement: str = "") -> None:
+    """Raise ``PatternError`` if the search or the replacement cannot be used; the find bar calls this while
+    the user types, so a mistake shows at once."""
+    pat = compile_spec(spec)
+    _template(spec, pat, replacement)
+
+
 def find_next(text: str, spec: FindSpec, start: int = 0, *, forward: bool = True, wrap: bool = True) -> Optional[tuple]:
     """``(begin, end)`` of the next match at or after ``start``, or of the previous one that begins before it."""
     pat = compile_spec(spec)
@@ -91,29 +98,46 @@ def count(text: str, spec: FindSpec) -> int:
     return len(find_all(text, spec, limit=10**9))
 
 
-def replace_all(text: str, spec: FindSpec, replacement: str, *, region: Optional[tuple] = None,
-                cancel: Optional[CancelToken] = None) -> tuple:
-    """``(new_text, number_of_replacements)``. ``region=(begin, end)`` limits it to the selection. Empty
-    matches are left alone (a pattern like ``x*`` never inserts text between every character)."""
+def replacements(text: str, spec: FindSpec, replacement: str, *, region: Optional[tuple] = None,
+                 cancel: Optional[CancelToken] = None) -> list:
+    """What a replace-all would do, as ``(begin, end, new_text)`` for every non-empty match, so an editor
+    can apply the changes one by one inside a single undo step. Empty matches are left alone (a pattern
+    like ``x*`` never inserts text between every character)."""
     pat = compile_spec(spec)
     expand = _template(spec, pat, replacement)
     begin, end = region if region else (0, len(text))
-    pieces: list = []
-    pos = begin
-    n = 0
+    out: list = []
     for i, m in enumerate(pat.finditer(text, begin, end)):
         if i % 1000 == 0:
             check(cancel)
-        if m.end() == m.start():
-            continue
-        pieces.append(text[pos:m.start()])
-        pieces.append(expand(m))
-        pos = m.end()
-        n += 1
-    if n == 0:
+        if m.end() > m.start():
+            out.append((m.start(), m.end(), expand(m)))
+    return out
+
+
+def replace_all(text: str, spec: FindSpec, replacement: str, *, region: Optional[tuple] = None,
+                cancel: Optional[CancelToken] = None) -> tuple:
+    """``(new_text, number_of_replacements)``. ``region=(begin, end)`` limits it to the selection."""
+    changes = replacements(text, spec, replacement, region=region, cancel=cancel)
+    if not changes:
         return text, 0
-    pieces.append(text[pos:end])
-    return text[:begin] + "".join(pieces) + text[end:], n
+    pieces: list = []
+    pos = 0
+    for b, e, new in changes:
+        pieces.append(text[pos:b])
+        pieces.append(new)
+        pos = e
+    pieces.append(text[pos:])
+    return "".join(pieces), len(changes)
+
+
+def expand_at(text: str, spec: FindSpec, replacement: str, begin: int, end: int) -> Optional[str]:
+    """The replacement for the text between ``begin`` and ``end`` if exactly that text is a match (the
+    current selection in an editor), else None."""
+    pat = compile_spec(spec)
+    expand = _template(spec, pat, replacement)
+    m = pat.fullmatch(text, begin, end)
+    return expand(m) if m and m.end() > m.start() else None
 
 
 def replace_one(text: str, spec: FindSpec, replacement: str, start: int = 0) -> Optional[tuple]:
