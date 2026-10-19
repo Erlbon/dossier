@@ -31,6 +31,7 @@ class ProgressBox:
         self._dlg = QProgressDialog(title, "Cancel", 0, 1000, parent)
         self._dlg.setWindowTitle(title)
         self._dlg.setMinimumDuration(400)
+        self._dlg.setMinimumWidth(440)             # the text changes all the time: keep the box from jumping in size
         self._dlg.setAutoClose(False)
         self._dlg.setAutoReset(False)
         self._dlg.setLabelText(title)
@@ -42,22 +43,35 @@ class ProgressBox:
         self._title = title
         self._meter = RateMeter()
 
+    detail = ""                  # the item being worked on, set by the window
+    plan_bytes = None            # the bytes the plan moves; the bar's own total also counts reading back and flushing
+
     def update(self, done: int, total: int) -> None:
         if total > 0:
             self._dlg.setValue(min(1000, int(1000 * done / total)))
-        if total >= BYTES_SHOWN:                       # a count of items has no speed worth showing
-            self._meter.add(done)
-            self._dlg.setLabelText(self.status_text(done, total))
+        nominal = self.plan_bytes or total
+        if total > 0 and nominal >= BYTES_SHOWN:       # a count of items has no speed worth showing
+            got = int(nominal * min(done, total) / total) if self.plan_bytes else done
+            self._meter.add(got)
+            self._dlg.setLabelText(self.status_text(got, nominal))
+        elif self.detail:
+            self._dlg.setLabelText(self._title + chr(10) + self.detail)
 
     def status_text(self, done: int, total: int) -> str:
+        """What the box says: the item, the size done of the whole and what remains, then speed and time left."""
+        dot = "  " + chr(0xB7) + "  "
+        lines = [self._title]
+        if self.detail:
+            lines.append(self.detail)
+        lines.append(dot.join([f"{_size(done)} of {_size(total)}", f"{_size(max(0, total - done))} remaining"]))
         rate = self._meter.speed()
-        parts = [f"{_size(done)} of {_size(total)}"]
         if rate > 0:
-            parts.append(f"{_size(rate)}/s")
+            parts = [f"{_size(rate)}/s"]
             left = human_duration(self._meter.seconds_left(done, total))
             if left:
                 parts.append(f"{left} left")
-        return self._title + chr(10) + ("  " + chr(0xB7) + "  ").join(parts)
+            lines.append(dot.join(parts))
+        return chr(10).join(lines)
 
     def close(self) -> None:
         self._dlg.canceled.disconnect()

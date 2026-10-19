@@ -17,7 +17,8 @@ from .vfs import FileSystem, NotWritable
 PART_SUFFIX = ".dossier-part"
 
 
-def move_item(fs: FileSystem, src: str, dst: str, is_dir: bool, cancel: Optional[CancelToken] = None) -> None:
+def move_item(fs: FileSystem, src: str, dst: str, is_dir: bool, cancel: Optional[CancelToken] = None, *,
+              progress: Optional[ProgressFn] = None, throttle=None) -> None:
     """Rename in place; across drives a file is copied, verified by size, then removed."""
     try:
         fs.rename(src, dst)
@@ -26,7 +27,7 @@ def move_item(fs: FileSystem, src: str, dst: str, is_dir: bool, cancel: Optional
             raise
         if is_dir:
             raise OSError("moving a folder to another drive is not supported yet; nothing was changed") from e
-        copy_file(fs, src, fs, dst, cancel=cancel)
+        copy_file(fs, src, fs, dst, cancel=cancel, progress=progress, throttle=throttle)
         if fs.stat(dst).size != fs.stat(src).size:
             fs.remove(dst)
             raise OSError("the copy does not match the original; the original was kept") from e

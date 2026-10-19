@@ -16,7 +16,7 @@ from PyQt6.QtGui import QAction, QActionGroup, QKeySequence
 from PyQt6.QtWidgets import (QApplication, QHBoxLayout, QLabel, QMainWindow, QMenu, QPushButton, QSplitter,
                              QToolButton, QVBoxLayout, QWidget)
 
-from ..core.ops import (ExecOptions, Plan, Resolution, check_name, plan_copy, plan_delete, plan_move, plan_rename)
+from ..core.ops import (ExecOptions, Kind, Plan, Resolution, check_name, plan_copy, plan_delete, plan_move, plan_rename)
 from ..core.home import ADD_NETWORK, HomeFileSystem, HomeProvider, RouterFileSystem, removable_from_home
 from ..core.commandline import Placeholders, expand, run_command
 from ..core import patterns, zipfs
@@ -965,9 +965,18 @@ class MainWindow(QMainWindow):
         holder: dict = {}
         shown: dict = {}
 
+        current: dict = {}
+        plan_bytes = sum(op.size for op in plan.ops
+                         if op.kind is Kind.COPY or (op.kind is Kind.MOVE and not op.is_dir))
+
+        def on_item(op, number: int, count: int) -> None:       # a worker thread: only stores the text
+            current["text"] = f"{self.fs.basename(op.src or op.dst)}  ({number} of {count})"
+
         def progress(done: int, total: int) -> None:
             if "box" not in shown:
                 shown["box"] = self.dialogs.make_progress(plan.title, lambda: holder["job"].cancel() if "job" in holder else None)
+                shown["box"].plan_bytes = plan_bytes
+            shown["box"].detail = current.get("text", "")
             shown["box"].update(done, total)
 
         def finished(job: Job) -> None:
@@ -984,7 +993,7 @@ class MainWindow(QMainWindow):
             self.other.refresh()
 
         job = run_plan_job(self.runner, plan, self.fs, selection=self.selection, undo_log=self.undo_log,
-                           on_progress=progress, on_done=finished, options=self._exec_options(),
+                           on_progress=progress, on_done=finished, options=self._exec_options(on_item),
                            **({} if self.trasher is None else {"trasher": self.trasher}))
         holder["job"] = job
         if self.paused:
@@ -1018,13 +1027,13 @@ class MainWindow(QMainWindow):
         self.queue_label.setText((" " + chr(0xB7) + " ").join(parts))
         self.queue_label.setVisible(bool(parts))
 
-    def _exec_options(self) -> ExecOptions:
+    def _exec_options(self, on_item=None) -> ExecOptions:
         """The copy settings: the speed limit and whether a failing file asks what to do."""
         try:
             limit = int(float(self.settings.value("copy/limit_mb", 0) or 0) * 1024 * 1024) or None
         except (TypeError, ValueError):
             limit = None
-        options = ExecOptions(limit_bps=limit, verify=str(self.settings.value("copy/verify", "false")).lower() == "true")
+        options = ExecOptions(limit_bps=limit, on_item=on_item, verify=str(self.settings.value("copy/verify", "false")).lower() == "true")
         if str(self.settings.value("copy/ask_on_error", "false")).lower() == "true":
             skip_all = []
 

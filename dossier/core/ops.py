@@ -82,8 +82,10 @@ class Plan:
 
     @property
     def total_work(self) -> int:
-        """Progress denominator: bytes for copies, one unit for every other step."""
-        return sum(max(op.size, 1) if op.kind is Kind.COPY else 1 for op in self.ops)
+        """Progress denominator: bytes for copies and for moved files (a move to another drive copies them), one unit
+        for every other step."""
+        return sum(max(op.size, 1) if op.kind is Kind.COPY or (op.kind is Kind.MOVE and not op.is_dir) else 1
+                   for op in self.ops)
 
     def resolve(self, resolution: Resolution, fs: FileSystem, only: Optional[Iterable[int]] = None) -> "Plan":
         """Settle conflicts (all of them, or the listed step numbers). Returns a new plan."""
@@ -423,6 +425,7 @@ class ExecOptions:
     verify: bool = False                  # read every copy back and compare it with the original (C6)
     flush: Optional[bool] = None          # push the data to the device at the end: None = only for removable and network targets
     native_copy: bool = True              # large local files go through the operating system's own copy (C5)
+    on_item: Optional[Callable] = None    # (op, number started, number of steps): which item is being worked on
     on_error: Optional[Callable] = None   # (op, error text) -> "retry" | "skip" | "abort", after the retries ran out
 
 
@@ -527,6 +530,8 @@ def execute(
     trash_lock = threading.Lock()                    # the recycle bin is asked one item at a time
     ask_lock = threading.Lock()                      # so is the user
     stop = threading.Event()                         # set when the user chose to abort
+    started, started_lock = [0], threading.Lock()
+    visible_steps = sum(1 for op in plan.ops if op.kind is not Kind.MKDIR)
     limit = SpeedLimit(opts.limit_bps) if opts.limit_bps else None
     pause = time.sleep if opts.retry_delay else (lambda _s: None)
 
@@ -544,7 +549,13 @@ def execute(
     def run_one(i: int, op: Op) -> None:
         if (cancel is not None and cancel.cancelled) or stop.is_set():
             return                                   # never started: it has no result
-        size_unit = max(op.size, 1) if op.kind is Kind.COPY else 1
+        counts_bytes = op.kind is Kind.COPY or (op.kind is Kind.MOVE and not op.is_dir)
+        if opts.on_item is not None and op.kind is not Kind.MKDIR:
+            with started_lock:
+                started[0] += 1
+                number = started[0]
+            opts.on_item(op, number, visible_steps)
+        size_unit = max(op.size, 1) if counts_bytes else 1
         unit = size_unit * (2 if opts.verify and op.kind is Kind.COPY else 1)
         sub = (lambda d, _t: done.partial(i, min(d, size_unit))) if progress else None
         sub_verify = (lambda d: done.partial(i, size_unit + min(d, size_unit))) if progress else None
@@ -674,5 +685,5 @@ def _run_op(op: Op, fs: FileSystem, steps: list, progress, cancel, trasher: Tras
         made = fs.stat(op.dst)
         steps.append(Step("created_file", op.dst, size=made.size, mtime=made.mtime))
     else:                                     # MOVE or RENAME
-        _move_item(fs, op.src, op.dst, op.is_dir, cancel)
+        _move_item(fs, op.src, op.dst, op.is_dir, cancel, progress=progress, throttle=throttle)
         steps.append(Step("moved", op.src, op.dst))

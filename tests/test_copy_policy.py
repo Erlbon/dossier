@@ -269,3 +269,71 @@ def test_the_window_passes_the_copy_settings_to_the_run(tmp_path):
         assert options.limit_bps == 5 * 1024 * 1024 and options.on_error is not None
     finally:
         win.close()
+
+
+# progress that does not leave the user wondering ---------------------------------------------------------------
+class OtherDrive(MemoryFileSystem):
+    """A rename that cannot cross to another drive, as between two disks: the move has to copy."""
+
+    def rename(self, src, dst, *, overwrite=False):
+        if self.basename(src).endswith(".dossier-part"):
+            return super().rename(src, dst, overwrite=overwrite)
+        raise OSError(errno.EXDEV, "cross-device link")
+
+
+def test_a_move_to_another_drive_reports_bytes_so_speed_and_remaining_can_be_shown():
+    from dossier.core.ops import plan_move
+    fs = OtherDrive()
+    fs.makedirs("mem://dst")
+    fs.put("mem://src/big.bin", b"x" * 3_000_000)
+    plan = plan_move(fs, ["mem://src/big.bin"], "mem://dst")
+    assert plan.total_work == 3_000_000                               # bytes, not one unit
+    seen = []
+    res = execute(plan, fs, progress=lambda d, t: seen.append((d, t)))
+    assert not res.failed and len(seen) > 2 and seen[-1][0] == seen[-1][1] == 3_000_000
+    assert fs.stat("mem://dst/big.bin").size == 3_000_000
+
+
+def test_on_item_names_each_step_in_order_and_counts_them():
+    fs, plan = world()
+    names = []
+    execute(plan, fs, options=ExecOptions(workers=1, on_item=lambda op, n, count: names.append((op.src.rsplit("/", 1)[1], n, count))))
+    assert names == [("a.txt", 1, 3), ("b.txt", 2, 3), ("c.txt", 3, 3)]      # the folder that is made is not a step
+
+
+def test_the_box_says_the_item_the_sizes_done_and_remaining_the_speed_and_the_time_left():
+    pytest.importorskip("PyQt6")
+    import os
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PyQt6.QtWidgets import QApplication
+    from dossier.gui import dialogs
+    app = QApplication.instance() or QApplication([])
+    box = dialogs.ProgressBox(None, "Copy", lambda: None)
+    clock = Clock()
+    box._meter = RateMeter(clock=clock)
+    box.plan_bytes = 400 * 1024 * 1024
+    box.detail = "holiday.mkv  (2 of 5)"
+    total = 800 * 1024 * 1024                        # the bar's own total also counts reading the copy back
+    for second in range(6):
+        clock.t = 100.0 + second
+        box.update(second * 40 * 1024 * 1024, total)
+    text = box._dlg.labelText()
+    lines = text.split(chr(10))
+    assert lines[0] == "Copy" and lines[1] == "holiday.mkv  (2 of 5)"
+    assert "100 MB of 400 MB" in lines[2] and "300 MB remaining" in lines[2]       # real bytes, not the bar's total
+    assert "20 MB/s" in lines[3] and "15 s left" in lines[3]
+    box.close()
+
+
+def test_the_box_shows_the_item_even_when_the_job_is_not_bytes():
+    pytest.importorskip("PyQt6")
+    import os
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PyQt6.QtWidgets import QApplication
+    from dossier.gui import dialogs
+    app = QApplication.instance() or QApplication([])
+    box = dialogs.ProgressBox(None, "Delete", lambda: None)
+    box.detail = "old.log  (3 of 40)"
+    box.update(3, 40)
+    assert box._dlg.labelText() == "Delete" + chr(10) + "old.log  (3 of 40)"
+    box.close()
