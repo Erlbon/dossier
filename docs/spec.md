@@ -234,3 +234,7 @@ Two rules follow from O11 and O12. Sorting, rename-by-pattern, conflict handling
 7. Metadata read, then write for the first chosen format.
 8. WebDAV, then OPDS and Subsonic.
 9. MCP server over the finished core.
+
+## 16. Health checkers (planned, not in 0.1)
+
+A family of read-only checkers reports problems in files and folders (hygiene, integrity, media, library structure, duplicates, bit rot); fixes are ordinary plans with undo. Scope, contract, catalogue and build waves are in `docs/checkers-plan.md`. Decisions H1-H6 there are open.
