@@ -144,8 +144,9 @@ class Panel(QWidget):
         return self.model.path
 
     def set_active(self, active: bool) -> None:
+        # Only the address bar shows which panel is active. The list keeps the normal system colours in
+        # both panels (the inactive one is never dimmed: that made it unreadable on dark themes).
         self.bar.setStyleSheet("#pathbarbox{background:rgba(217,160,91,90);}" if active else "")
-        self.table.setStyleSheet("" if active else "QTableView{color:palette(dark);}")
 
     def current_entry(self) -> Optional[Entry]:
         row = self.table.currentIndex().row()

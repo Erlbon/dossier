@@ -266,6 +266,14 @@ def test_session_is_restored(world, app):
         again.close()
 
 
+def test_the_inactive_panel_is_never_dimmed(world):
+    win, *_ = world
+    assert win.left.table.styleSheet() == "" and win.right.table.styleSheet() == ""
+    key(win, Qt.Key.Key_Tab)
+    assert win.left.table.styleSheet() == "" and win.right.table.styleSheet() == ""
+    assert win.right.bar.styleSheet() != "" and win.left.bar.styleSheet() == ""
+
+
 def test_f_key_bar_only_offers_working_commands(world):
     win, *_ = world
     assert [b.text() for b in win._fkey_buttons] == ["F2 Rename", "F5 Copy", "F6 Move", "F7 Folder", "F8 Delete"]
