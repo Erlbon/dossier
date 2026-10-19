@@ -229,7 +229,7 @@ class NotepadWindow(QMainWindow):
         self._update_title()
 
     def _update_title(self) -> None:
-        self.setWindowTitle(f"Dossier, Subject {os.path.basename(self.doc.path)}"
+        self.setWindowTitle(f"Dossier, Subject - {os.path.basename(self.doc.path)}"
                             + ("*" if self.is_modified() else ""))
 
     def _update_position(self, *_a) -> None:

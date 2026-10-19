@@ -59,7 +59,7 @@ def test_offsets_round_trip_including_characters_outside_the_basic_plane():
 def test_the_notepad_shows_the_file_and_names_its_subject(pad):
     win, _d, p = pad("one\ntwo\n")
     assert win.editor.text() == "one\ntwo\n"
-    assert win.windowTitle() == "Dossier, Subject f.txt"
+    assert win.windowTitle() == "Dossier, Subject - f.txt"
     assert win.encoding.currentText() == "utf-8" and win.eol.currentData() == "\n"
 
 
@@ -67,10 +67,10 @@ def test_an_edit_marks_the_title_and_save_keeps_encoding_bom_and_line_breaks(pad
     win, _d, p = pad(b"\xef\xbb\xbfcaf\xc3\xa9\r\nline2\r\n")
     assert win.eol.currentData() == "\r\n"
     win.editor.insertAt("X", 0, 0)
-    assert win.windowTitle() == "Dossier, Subject f.txt*"
+    assert win.windowTitle() == "Dossier, Subject - f.txt*"
     assert win.save()
     assert p.read_bytes() == b"\xef\xbb\xbfXcaf\xc3\xa9\r\nline2\r\n"
-    assert win.windowTitle() == "Dossier, Subject f.txt"
+    assert win.windowTitle() == "Dossier, Subject - f.txt"
 
 
 def test_save_refuses_when_the_file_changed_and_offers_a_choice(pad):
@@ -125,7 +125,7 @@ def test_save_as_writes_a_new_file_and_closing_asks_about_unsaved_changes(pad, t
     dialogs.save_path = str(target)
     win.editor.insertAt("new ", 0, 0)
     assert win.save_as() and target.read_bytes() == b"new data\n" and p.read_bytes() == b"data\n"
-    assert win.windowTitle() == "Dossier, Subject copy.txt"
+    assert win.windowTitle() == "Dossier, Subject - copy.txt"
     win.editor.insertAt("more ", 0, 0)
     dialogs.save_answer = "cancel"
     assert not win.close() and win.isVisible()

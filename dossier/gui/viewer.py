@@ -138,7 +138,7 @@ class TextViewerWindow(QMainWindow):
             self.source = None
         self.view.set_source(None)
         path = self.paths[index]
-        self.setWindowTitle(f"Dossier, Subject {os.path.basename(path)}"
+        self.setWindowTitle(f"Dossier, Subject - {os.path.basename(path)}"
                             + (f" ({index + 1} of {len(self.paths)})" if len(self.paths) > 1 else ""))
         try:
             self.source = TextSource(path, AUTO if self.encoding.currentIndex() == 0 else self.encoding.currentText())

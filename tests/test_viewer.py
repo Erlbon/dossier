@@ -71,7 +71,7 @@ def test_the_viewer_shows_the_file_and_its_line_count(viewer):
     assert win.source.line_count == 500 and win.view.total == 500
     assert "Line 1 of 500" in win.position.text()
     assert "utf-8" in win.status.text()
-    assert win.windowTitle() == "Dossier, Subject a.txt"
+    assert win.windowTitle() == "Dossier, Subject - a.txt"
 
 
 def test_scrolling_and_goto(viewer):

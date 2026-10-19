@@ -474,7 +474,7 @@ class MainWindow(QMainWindow):
 
     def _update_title(self) -> None:
         """The file manager is titled 'Dossier <machine name>', so several computers' windows are told apart.
-        (Viewer and notepad windows are titled 'Dossier, Subject <file name>'.)"""
+        (Viewer and notepad windows are titled 'Dossier, Subject - <file name>'.)"""
         self.setWindowTitle(f"Dossier {machine_name()}" + (" (Administrator)" if self.elevated else ""))
 
     def _update_prompt(self) -> None:
