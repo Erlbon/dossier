@@ -209,37 +209,69 @@ def test_a_remote_folder_has_no_terminal(world, monkeypatch):
     assert not rec.launches and dialogs.infos and "this computer" in dialogs.infos[-1][1]
 
 
-def test_the_buttons_and_menu_entries_exist(world):
-    win, *_ = world
-    assert win.term_button.text() == "Terminal" and win.admin_button.text() == "Administrator Terminal"
+def test_every_installed_interpreter_has_its_own_visible_button_on_a_separate_line(world):
+    win, _d, rec, left, *_ = world
+    installed = [p for p, path in win.profiles if path]
+    assert installed and set(win.terminal_buttons) == {p.id for p in installed}
+    assert win.terminal_bar.isVisible() and win.terminal_bar is not win.cmdline.parentWidget()
+    for p in installed:
+        win.terminal_buttons[p.id].click()
+        assert rec.launches[-1].cwd == str(left)
+    assert len(rec.launches) == len(installed)
     commands = {a.text().replace("&", ""): a.menu() for a in win.menuBar().actions()}["Commands"]
     texts = [a.text() for a in commands.actions() if not a.isSeparator()]
     assert "Terminal Here" in texts and "Administrator Terminal Here" in texts
-    win.term_menu.aboutToShow.emit()
-    assert win.term_menu.actions()
 
 
-def test_the_interpreter_choice_is_listed_saved_and_restored(world, app):
+def test_an_interpreter_that_is_not_installed_gets_no_button(app, tmp_path):
+    only = {"cmd.exe": "C:/x/cmd.exe", "sh": "/bin/sh"}
+    win = MainWindow(settings_path=str(tmp_path / "s.ini"), start=(str(tmp_path), str(tmp_path)),
+                     dialogs=FakeDialogs(), terminal_launcher=Recorder(), which=lambda n: only.get(n))
+    try:
+        assert set(win.terminal_buttons) <= {"cmd", "login-shell"} and win.terminal_buttons
+    finally:
+        win.close()
+
+
+def test_the_administrator_switch_elevates_the_next_terminal_only_and_looks_dangerous(world):
+    win, _d, rec, *_ = world
+    first = next(iter(win.terminal_buttons.values()))
+    assert not win.admin_toggle.isChecked() and win.admin_toggle.styleSheet() == ""
+    win.admin_toggle.setChecked(True)
+    assert win.admin_toggle.styleSheet() != ""
+    first.click()
+    if IS_WINDOWS:
+        assert rec.launches[-1].elevate
+    else:
+        assert rec.launches[-1].argv[-2:] == ["sudo", "-s"]
+    assert not win.admin_toggle.isChecked()           # one terminal only
+    first.click()
+    assert not rec.launches[-1].elevate
+
+
+def test_the_command_line_interpreter_is_chosen_next_to_the_line_and_remembered(world, app):
     win, _d, rec, left, right, tmp = world
-    available = [p.id for p, path in win.profiles if path]
-    assert available and set(win.profile_actions) == {p.id for p, _ in win.profiles}
-    pick = available[-1]
-    win.profile_actions[pick].trigger()
+    ids = [win.interpreter.itemData(i) for i in range(win.interpreter.count())]
+    assert ids and win.interpreter.currentData() == win.profile.id
+    pick = ids[-1]
+    win.interpreter.setCurrentIndex(ids.index(pick))
     assert win.profile.id == pick
+    titles = [a.text() for a in {a.text().replace("&", ""): a.menu() for a in win.menuBar().actions()}["Settings"].actions()]
+    assert "Command Interpreter" not in titles          # it is not hidden in the settings
     win.close()
     again = MainWindow(settings_path=str(tmp / "s.ini"), dialogs=FakeDialogs(), terminal_launcher=Recorder())
     try:
-        assert again.profile.id == pick and again.profile_actions[pick].isChecked()
+        assert again.profile.id == pick and again.interpreter.currentData() == pick
     finally:
         again.close()
 
 
-def test_a_missing_interpreter_is_listed_but_cannot_be_chosen(app, tmp_path):
+def test_without_any_interpreter_the_row_is_hidden_and_the_command_line_explains(app, tmp_path):
     win = MainWindow(settings_path=str(tmp_path / "s.ini"), start=(str(tmp_path), str(tmp_path)),
                      dialogs=FakeDialogs(), terminal_launcher=Recorder(), which=lambda n: None)
     try:
-        assert win.profile is None
-        assert all(not a.isEnabled() for a in win.profile_actions.values())
+        win.show()
+        assert win.profile is None and not win.terminal_buttons and not win.terminal_bar.isVisible()
         win.cmdline.setText("echo hi")
         win.run_command_line()
         assert win.dialogs.infos and "interpreter" in win.dialogs.infos[-1][1]

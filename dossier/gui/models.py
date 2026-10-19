@@ -93,7 +93,14 @@ class FolderModel(QAbstractTableModel):
     def sort(self, column: int, order: Qt.SortOrder = Qt.SortOrder.AscendingOrder) -> None:
         self._sort_col, self._sort_order = column, order
         self.layoutAboutToBeChanged.emit()
+        before = {(idx.row(), idx.column()): idx for idx in self.persistentIndexList()}
+        old_paths = {r: (self.entry_at(r).path if self.entry_at(r) else None) for r, _c in before}
         self._resort()
+        new_row = {self.entry_at(r).path: r for r in range(self.entry_count())}
+        for (r, c), idx in before.items():
+            path = old_paths.get(r)
+            if path in new_row:                       # the cursor stays on the same item, not the same row
+                self.changePersistentIndex(idx, self.index(new_row[path], c))
         self.layoutChanged.emit()
 
     def _resort(self) -> None:

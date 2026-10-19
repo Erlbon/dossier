@@ -71,7 +71,7 @@ def test_the_viewer_shows_the_file_and_its_line_count(viewer):
     assert win.source.line_count == 500 and win.view.total == 500
     assert "Line 1 of 500" in win.position.text()
     assert "utf-8" in win.status.text()
-    assert win.windowTitle().startswith("a.txt")
+    assert win.windowTitle() == "Dossier, Subject a.txt"
 
 
 def test_scrolling_and_goto(viewer):
@@ -312,9 +312,9 @@ def test_menus_view_has_modes_and_notes_while_settings_has_the_choices(commander
     assert titles == ["Files", "Mark", "View", "Commands", "Settings"]
     menus = {a.text().replace("&", ""): a.menu() for a in win.menuBar().actions()}
     view = [a.text() for a in menus["View"].actions() if not a.isSeparator()]
-    assert view == ["Details", "Folder Notes", "Refresh"]
+    assert view == ["Details", "Folder Notes", "Refresh", "Tabs"]
     settings = [a.text() for a in menus["Settings"].actions()]
-    assert settings == ["Color Scheme", "Icon Set", "Drive Selector", "Command Interpreter"]
+    assert settings == ["Color Scheme", "Icon Set", "Drive Selector"]
 
 
 def test_folder_notes_can_be_switched_off_and_the_choice_is_kept(commander, tmp_path):

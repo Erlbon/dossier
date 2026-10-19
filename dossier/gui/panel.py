@@ -3,11 +3,13 @@ row of the listing (scroll down past the files to read it, like a README under a
 from __future__ import annotations
 
 import os
+from dataclasses import dataclass
 from typing import Optional
 
 from PyQt6.QtCore import QModelIndex, QSize, Qt, QUrl, pyqtSignal
 from PyQt6.QtGui import QColor, QDesktopServices, QPalette
 from PyQt6.QtWidgets import (QAbstractItemView, QApplication, QFrame, QHBoxLayout, QHeaderView, QLabel, QLineEdit,
+                             QTabBar, QToolButton,
                              QTableView, QTextBrowser, QVBoxLayout, QWidget)
 
 from ..core.notes import compose_markdown, find_notes
@@ -55,6 +57,14 @@ class PanelTable(QTableView):
     go_up = pyqtSignal()
     focused = pyqtSignal()
     type_text = pyqtSignal(str)      # a printable key: it starts (or continues) a command
+    activate_in_tab = pyqtSignal()   # Ctrl+Enter: open the folder in a new tab
+    middle_clicked = pyqtSignal(int)  # middle click on a row: open that folder in a background tab
+
+    def mouseReleaseEvent(self, event) -> None:
+        if event.button() == Qt.MouseButton.MiddleButton:
+            self.middle_clicked.emit(self.indexAt(event.position().toPoint()).row())
+            return
+        super().mouseReleaseEvent(event)
 
     def keyPressEvent(self, event) -> None:
         key = event.key()
@@ -66,6 +76,8 @@ class PanelTable(QTableView):
             self.mark_toggle.emit()
         elif key == Qt.Key.Key_Space:
             self.space.emit()
+        elif key in (Qt.Key.Key_Return, Qt.Key.Key_Enter) and mods & Qt.KeyboardModifier.ControlModifier:
+            self.activate_in_tab.emit()
         elif key in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
             self.activate.emit()
         elif key == Qt.Key.Key_Backspace:
@@ -88,8 +100,38 @@ class PanelTable(QTableView):
         return False   # Tab belongs to the commander, not to widget focus
 
 
+@dataclass
+class TabState:
+    """What a folder tab remembers while another tab is shown."""
+    path: str = ""
+    current: str = ""            # the item under the cursor
+    sort_col: int = 0
+    sort_desc: bool = False
+    scroll: int = 0
+
+
+class PanelTabBar(QTabBar):
+    middle_clicked = pyqtSignal(int)     # a tab was middle-clicked: close it
+    new_requested = pyqtSignal()         # double-click on the empty part of the bar
+
+    def mouseReleaseEvent(self, event) -> None:
+        if event.button() == Qt.MouseButton.MiddleButton:
+            i = self.tabAt(event.position().toPoint())
+            if i >= 0:
+                self.middle_clicked.emit(i)
+                return
+        super().mouseReleaseEvent(event)
+
+    def mouseDoubleClickEvent(self, event) -> None:
+        if self.tabAt(event.position().toPoint()) < 0:
+            self.new_requested.emit()
+        else:
+            super().mouseDoubleClickEvent(event)
+
+
 class Panel(QFrame):
     folder_changed = pyqtSignal(object)   # the panel
+    current_changed = pyqtSignal(object)  # the item under the cursor changed
     activated = pyqtSignal(object)        # the user focused this panel
     message = pyqtSignal(str)
 
@@ -102,6 +144,31 @@ class Panel(QFrame):
         self.notes_enabled = True
         self.model = FolderModel(fs, selection, self)
         self.setObjectName("panel")
+
+        self._tabs: dict = {}          # tab id -> TabState
+        self._tab_seq = 0
+        self._current_tab_id: Optional[int] = None
+        self.tabs = PanelTabBar()
+        self.tabs.setDocumentMode(True)
+        self.tabs.setTabsClosable(True)
+        self.tabs.setMovable(True)
+        self.tabs.setExpanding(False)
+        self.tabs.setElideMode(Qt.TextElideMode.ElideRight)
+        self.tabs.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.new_tab_button = QToolButton()
+        self.new_tab_button.setText("+")
+        self.new_tab_button.setToolTip("New tab (Ctrl+T)")
+        self.new_tab_button.setAutoRaise(True)
+        self.new_tab_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        tab_row = QHBoxLayout()
+        tab_row.setContentsMargins(0, 0, 0, 0)
+        tab_row.setSpacing(0)
+        tab_row.addWidget(self.tabs)
+        tab_row.addWidget(self.new_tab_button)
+        tab_row.addStretch(1)
+        self.tab_row = QWidget()
+        self.tab_row.setObjectName("tabrow")
+        self.tab_row.setLayout(tab_row)
 
         self.drive_bar = DriveBar(dispatch, self)
         self.drive_bar.chosen.connect(self._drive_chosen)
@@ -143,6 +210,7 @@ class Panel(QFrame):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
+        layout.addWidget(self.tab_row)
         layout.addWidget(self.drive_bar.strip)
         layout.addWidget(self.bar)
         layout.addWidget(self.table, 1)
@@ -158,8 +226,17 @@ class Panel(QFrame):
         self.table.verticalScrollBar().rangeChanged.connect(lambda _a, _b: self._position_note())
         self.table.horizontalHeader().sectionResized.connect(lambda *_a: self._position_note())
         self.selection.subscribe(lambda _s: self.model.refresh_marks())
+        self.table.selectionModel().currentRowChanged.connect(lambda *_a: self.current_changed.emit(self))
+        self.table.activate_in_tab.connect(lambda: self.open_current(new_tab=True))
+        self.table.middle_clicked.connect(self._middle_click_row)
+        self.tabs.currentChanged.connect(self._tab_switched)
+        self.tabs.tabCloseRequested.connect(self.close_tab)
+        self.tabs.middle_clicked.connect(self.close_tab)
+        self.tabs.new_requested.connect(lambda: self.new_tab())
+        self.new_tab_button.clicked.connect(lambda: self.new_tab())
+        self._add_tab_entry("")                  # the first tab; set_folder gives it its folder
         self._active = False
-        self.set_active(False)
+        self.restyle()
 
     # state ---------------------------------------------------------------------------
     @property
@@ -197,6 +274,13 @@ class Panel(QFrame):
         """The colour scheme changed: redraw the active mark, the marked rows and the note."""
         self.set_active(self._active)
         self.drive_bar.restyle()
+        t = theme.current()
+        self.tab_row.setStyleSheet(
+            f"#tabrow{{background:{t['card']};}}"
+            f"QTabBar::tab{{background:{t['card']};color:{t['dim']};padding:3px 10px;border:1px solid {t['line']};"
+            f"border-bottom:none;margin-right:1px;min-width:60px;max-width:180px;}}"
+            f"QTabBar::tab:selected{{background:{t['bg']};color:{t['fg']};border-top:2px solid {t['accent']};}}"
+            f"QToolButton{{color:{t['fg']};font-weight:bold;padding:0 8px;}}")
         self.model.refresh_marks()
         if self.model.note_row >= 0:
             self._load_note(self.path)
@@ -229,8 +313,121 @@ class Panel(QFrame):
         if row >= 0:
             self.table.setCurrentIndex(self.model.index(row, 0))
         self.table.scrollToTop() if not select else self.table.scrollTo(self.table.currentIndex())
+        self._label_current_tab(path)
         self.folder_changed.emit(self)
         return True
+
+    # tabs: each panel has its own, every tab is one folder ----------------------------------------------
+    def _add_tab_entry(self, path: str, after: Optional[int] = None) -> int:
+        self._tab_seq += 1
+        tid = self._tab_seq
+        self._tabs[tid] = TabState(path=path)
+        index = self.tabs.count() if after is None else after + 1
+        # the new tab must not start a switch by itself (a state to load that does not exist yet)
+        blocked = self.tabs.blockSignals(True)
+        index = self.tabs.insertTab(index, self._tab_label(path))
+        self.tabs.setTabData(index, tid)
+        self.tabs.setTabToolTip(index, path)
+        if self._current_tab_id is None:
+            self._current_tab_id = tid
+            self.tabs.setCurrentIndex(index)
+        self.tabs.blockSignals(blocked)
+        return index
+
+    @staticmethod
+    def _tab_label(path: str) -> str:
+        return os.path.basename(path.rstrip("\\/")) or path or "..."
+
+    def _index_of_tab(self, tid: Optional[int]) -> int:
+        return next((i for i in range(self.tabs.count()) if self.tabs.tabData(i) == tid), -1)
+
+    def _label_current_tab(self, path: str) -> None:
+        i = self._index_of_tab(self._current_tab_id)
+        if i >= 0:
+            self.tabs.setTabText(i, self._tab_label(path))
+            self.tabs.setTabToolTip(i, path)
+            self._tabs[self._current_tab_id].path = path
+
+    def _save_tab_state(self) -> None:
+        st = self._tabs.get(self._current_tab_id)
+        if st is None:
+            return
+        header = self.table.horizontalHeader()
+        st.path = self.path or st.path
+        st.current = self.current_name()
+        st.sort_col = header.sortIndicatorSection()
+        st.sort_desc = header.sortIndicatorOrder() == Qt.SortOrder.DescendingOrder
+        st.scroll = self.table.verticalScrollBar().value()
+
+    def new_tab(self, path: Optional[str] = None, activate: bool = True) -> None:
+        """A new tab, by default a copy of the current folder, next to the current tab."""
+        self._save_tab_state()
+        where = self.path if path is None else path
+        index = self._add_tab_entry(where, after=self.tabs.currentIndex())
+        if activate:
+            self.tabs.setCurrentIndex(index)         # runs _tab_switched
+
+    def _tab_switched(self, index: int) -> None:
+        if index < 0:
+            return
+        tid = self.tabs.tabData(index)
+        if tid == self._current_tab_id:
+            return                                   # the same tab, only its number changed
+        self._save_tab_state()                       # no-op when the tab we leave was just closed
+        self._current_tab_id = tid
+        st = self._tabs[tid]
+        order = Qt.SortOrder.DescendingOrder if st.sort_desc else Qt.SortOrder.AscendingOrder
+        self.table.sortByColumn(st.sort_col, order)
+        path = st.path
+        while path and not self.set_folder(path, select=st.current):     # a folder that is gone: nearest parent
+            parent = os.path.dirname(path.rstrip("\\/"))
+            if not parent or parent == path:
+                break
+            path = parent
+        self.table.verticalScrollBar().setValue(st.scroll)
+
+    def close_tab(self, index: int) -> None:
+        if self.tabs.count() <= 1 or index < 0 or index >= self.tabs.count():
+            return                                   # the last tab stays: a panel always shows a folder
+        tid = self.tabs.tabData(index)
+        self._tabs.pop(tid, None)
+        self.tabs.removeTab(index)                   # when it was the current tab, the neighbour is shown
+
+    def next_tab(self, step: int = 1) -> None:
+        if self.tabs.count() > 1:
+            self.tabs.setCurrentIndex((self.tabs.currentIndex() + step) % self.tabs.count())
+
+    def _middle_click_row(self, row: int) -> None:
+        entry = self.model.entry_at(row)
+        if entry is not None and entry.is_dir and not self.model.is_up_row(row):
+            self.new_tab(entry.path, activate=False)
+
+    def tab_paths(self) -> list:
+        self._save_tab_state()
+        return [self._tabs[self.tabs.tabData(i)].path for i in range(self.tabs.count())]
+
+    def restore_tabs(self, paths: list, active: int = 0) -> None:
+        """Replace the tabs by one tab per path (the saved session). Paths that cannot be opened are kept as
+        tabs and fall back to their nearest parent when shown."""
+        paths = [p for p in paths if p] or [self.path]
+        while self.tabs.count() > 1:
+            self.close_tab(self.tabs.count() - 1)
+        first = self._tabs[self._current_tab_id]
+        first.path = paths[0]
+        for p in paths[1:]:
+            self._add_tab_entry(p)
+        self.tabs.setCurrentIndex(0)
+        st = first
+        while not self.set_folder(st.path):
+            parent = os.path.dirname(st.path.rstrip("\\/"))
+            if not parent or parent == st.path:
+                break
+            st.path = parent
+        for i in range(self.tabs.count()):
+            self.tabs.setTabText(i, self._tab_label(self._tabs[self.tabs.tabData(i)].path))
+            self.tabs.setTabToolTip(i, self._tabs[self.tabs.tabData(i)].path)
+        if 0 < active < self.tabs.count():
+            self.tabs.setCurrentIndex(active)
 
     def _enter(self) -> None:
         if not (self.enter_hook and self.enter_hook()):
@@ -249,13 +446,15 @@ class Panel(QFrame):
             came_from = os.path.basename(self.path.rstrip("\\/"))
             self.set_folder(self.model.entry_at(0).path, select=came_from)
 
-    def open_current(self) -> None:
+    def open_current(self, new_tab: bool = False) -> None:
         row = self.table.currentIndex().row()
         entry = self.model.entry_at(row)
         if entry is None:
             return
         if self.model.is_up_row(row):
             self.go_up()
+        elif entry.is_dir and new_tab:
+            self.new_tab(entry.path)
         elif entry.is_dir:
             self.set_folder(entry.path)
         else:

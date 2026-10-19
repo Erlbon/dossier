@@ -12,8 +12,8 @@ from typing import Optional
 
 from PyQt6.QtCore import QSettings, QSize, QStandardPaths, Qt
 from PyQt6.QtGui import QAction, QActionGroup, QKeySequence
-from PyQt6.QtWidgets import (QApplication, QHBoxLayout, QLabel, QMainWindow, QMenu, QPushButton, QSplitter,
-                             QToolButton, QVBoxLayout, QWidget)
+from PyQt6.QtWidgets import (QApplication, QComboBox, QHBoxLayout, QLabel, QMainWindow, QPushButton, QSplitter,
+                             QVBoxLayout, QWidget)
 
 from ..core.ops import (Plan, Resolution, check_name, plan_copy, plan_delete, plan_move, plan_rename)
 from ..core.commandline import Placeholders, expand, run_command
@@ -42,7 +42,7 @@ class MainWindow(QMainWindow):
                  dialogs=None, trasher=None, terminal_launcher=None, which=None) -> None:
         super().__init__()
         self.elevated = is_elevated()
-        self.setWindowTitle("Dossier (Administrator)" if self.elevated else "Dossier")
+        self.setWindowTitle("Dossier")
         self.fs = fs or LocalFileSystem()
         self.trasher = trasher
         self.launch_terminal = terminal_launcher or default_launcher      # tests pass a recorder: no windows, no UAC
@@ -102,6 +102,8 @@ class MainWindow(QMainWindow):
             panel.enter_hook = self._enter_runs_command
             panel.backspace_hook = self._backspace_edits_command
             panel.folder_changed.connect(lambda _p: self._update_prompt())
+            panel.folder_changed.connect(lambda _p: self._update_title())
+            panel.current_changed.connect(lambda p: self._update_title() if p is self.active else None)
             panel.message.connect(self._say)
         self.selection.subscribe(lambda _s: self._update_status())
         self.theme.changed.connect(self._on_theme_changed)
@@ -168,6 +170,13 @@ class MainWindow(QMainWindow):
         self.act_notes.toggled.connect(self.set_notes_visible)
         view_menu.addAction(self.act_notes)
         view_menu.addAction(self._action("Refresh", "Ctrl+R", self.refresh))
+        tabs_menu = view_menu.addMenu("Tabs")
+        for text, keys, slot in (("New Tab", "Ctrl+T", lambda: self.active.new_tab()),
+                                 ("Close Tab", "Ctrl+W", lambda: self.active.close_tab(self.active.tabs.currentIndex())),
+                                 ("Next Tab", "Ctrl+Tab", lambda: self.active.next_tab(1)),
+                                 ("Previous Tab", "Ctrl+Shift+Tab", lambda: self.active.next_tab(-1)),
+                                 ("Open Folder in New Tab", "Ctrl+Return", lambda: self.active.open_current(True))):
+            tabs_menu.addAction(self._action(text, keys, slot))
         commands = bar.addMenu("&Commands")
         for a in (self._action("Undo", "Ctrl+Z", self.undo), self._action("Swap Panels", "Ctrl+U", self.swap_panels)):
             commands.addAction(a)
@@ -210,12 +219,6 @@ class MainWindow(QMainWindow):
             self.drive_style_actions[key] = act
         self._action("Drives of Left Panel", "Alt+F1", lambda: self.left.open_drive_menu())
         self._action("Drives of Right Panel", "Alt+F2", lambda: self.right.open_drive_menu())
-        self.profile_menu = view.addMenu("Command Interpreter")
-        self.profile_group = QActionGroup(self)
-        self.profile_group.setExclusive(True)
-        self.profile_actions = {}
-        self.profile_menu.aboutToShow.connect(self._rebuild_profile_menu)
-        self._rebuild_profile_menu()
 
     def _build_fkey_bar(self) -> QWidget:
         bar = QWidget()
@@ -249,6 +252,7 @@ class MainWindow(QMainWindow):
     def _on_theme_changed(self) -> None:
         icon_set.clear_cache()
         self._apply_fkey_icons()
+        self._style_admin_toggle(self.admin_toggle.isChecked())
         for p in (self.left, self.right):
             p.restyle()
 
@@ -263,6 +267,7 @@ class MainWindow(QMainWindow):
         self.right.set_active(panel is self.right)
         if hasattr(self, "prompt"):
             self._update_prompt()
+        self._update_title()
 
     def switch_panel(self) -> None:
         target = self.other          # taken once: focusing it already makes it the active panel
@@ -294,29 +299,14 @@ class MainWindow(QMainWindow):
             self.icon_menu.addAction(act)
             self.icon_set_actions[s.id] = act
 
-    def _rebuild_profile_menu(self) -> None:
-        for act in list(self.profile_actions.values()):
-            self.profile_group.removeAction(act)
-            self.profile_menu.removeAction(act)
-            act.deleteLater()
-        self.profile_actions = {}
-        for p, path in self.profiles:
-            act = QAction(p.title if path else f"{p.title} (not found)", self)
-            act.setCheckable(True)
-            act.setEnabled(bool(path))
-            act.setChecked(self.profile is not None and p.id == self.profile.id)
-            act.setToolTip(path or "This interpreter was not found on this computer")
-            act.triggered.connect(lambda _c=False, prof=p: self.set_profile(prof.id))
-            self.profile_group.addAction(act)
-            self.profile_menu.addAction(act)
-            self.profile_actions[p.id] = act
-
     def set_profile(self, profile_id: str) -> None:
         for p, path in self.profiles:
             if p.id == profile_id and path:
                 self.profile = p
                 self.settings.setValue("terminal/profile", profile_id)
-                self.profile_actions[profile_id].setChecked(True)
+                i = self.interpreter.findData(profile_id)
+                if i >= 0 and i != self.interpreter.currentIndex():
+                    self.interpreter.setCurrentIndex(i)
                 return
 
     def set_icon_set(self, set_id: str) -> None:
@@ -373,6 +363,39 @@ class MainWindow(QMainWindow):
         return default_profile(self.profiles)
 
     def _build_command_row(self) -> QWidget:
+        """Two lines under the panels: the terminal buttons (one visible button per interpreter found, and
+        an Administrator switch), then the command line with the interpreter it uses."""
+        box = QWidget()
+        outer = QVBoxLayout(box)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+
+        self.terminal_bar = QWidget()
+        bar = QHBoxLayout(self.terminal_bar)
+        bar.setContentsMargins(6, 3, 6, 0)
+        bar.setSpacing(6)
+        bar.addWidget(QLabel("Open a terminal here:"))
+        self.terminal_buttons = {}
+        for p, path in self.profiles:
+            if not path:
+                continue                     # an interpreter that is not installed has no button
+            b = QPushButton(p.title)
+            b.setToolTip(f"Open {p.title} in this panel's folder\n{path}")
+            b.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+            b.clicked.connect(lambda _c=False, prof=p: self.open_terminal(profile=prof))
+            bar.addWidget(b)
+            self.terminal_buttons[p.id] = b
+        bar.addStretch(1)
+        self.admin_toggle = QPushButton("As Administrator")
+        self.admin_toggle.setCheckable(True)
+        self.admin_toggle.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.admin_toggle.setToolTip("The next terminal opens with administrator rights: the system asks for "
+                                     "permission. The switch turns itself off afterwards.")
+        self.admin_toggle.toggled.connect(self._style_admin_toggle)
+        bar.addWidget(self.admin_toggle)
+        self.terminal_bar.setVisible(bool(self.terminal_buttons))
+        outer.addWidget(self.terminal_bar)
+
         row = QWidget()
         lay = QHBoxLayout(row)
         lay.setContentsMargins(6, 3, 6, 3)
@@ -382,30 +405,31 @@ class MainWindow(QMainWindow):
         self.cmdline.returnPressed.connect(self.run_command_line)
         self.cmdline.escape_pressed.connect(lambda: self.active.table.setFocus())
         self.cmdline.tab_pressed.connect(lambda: self.active.table.setFocus())
-        self.term_button = QToolButton()
-        self.term_button.setText("Terminal")
-        self.term_button.setToolTip("Open a terminal in this panel's folder (Ctrl+Shift+T)")
-        self.term_button.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup)
-        self.term_button.clicked.connect(lambda: self.open_terminal())
-        self.term_menu = QMenu(self.term_button)
-        self.term_menu.aboutToShow.connect(self._fill_terminal_menu)
-        self.term_button.setMenu(self.term_menu)
-        self.admin_button = QPushButton("Administrator Terminal")
-        self.admin_button.setToolTip("Open an elevated terminal in this folder: the system asks for permission")
-        self.admin_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        self.admin_button.clicked.connect(lambda: self.open_terminal(admin=True))
+        self.interpreter = QComboBox()
+        self.interpreter.setToolTip("The interpreter that runs what you type here")
+        self.interpreter.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        for p, path in self.profiles:
+            if path:
+                self.interpreter.addItem(p.title, p.id)
+        if self.profile is not None:
+            self.interpreter.setCurrentIndex(max(0, self.interpreter.findData(self.profile.id)))
+        self.interpreter.currentIndexChanged.connect(lambda _i: self.set_profile(self.interpreter.currentData()))
+        lay.addWidget(self.interpreter)
         lay.addWidget(self.prompt)
         lay.addWidget(self.cmdline, 1)
-        lay.addWidget(self.term_button)
-        lay.addWidget(self.admin_button)
-        return row
+        outer.addWidget(row)
+        return box
 
-    def _fill_terminal_menu(self) -> None:
-        self.term_menu.clear()
-        for p, path in self.profiles:
-            act = self.term_menu.addAction(p.title if path else f"{p.title} (not found)")
-            act.setEnabled(bool(path))
-            act.triggered.connect(lambda _c=False, prof=p: self.open_terminal(profile=prof))
+    def _style_admin_toggle(self, on: bool) -> None:
+        t = theme.current()
+        self.admin_toggle.setStyleSheet(
+            f"QPushButton{{background:{t['danger']};color:{t['bg']};font-weight:bold;}}" if on else "")
+
+    def _update_title(self) -> None:
+        """'Dossier, Subject <the item under the cursor>': the window names what you are looking at."""
+        subject = self.active.current_name() if hasattr(self, "active") else ""
+        self.setWindowTitle("Dossier" + (f", Subject {subject}" if subject else "")
+                            + (" (Administrator)" if self.elevated else ""))
 
     def _update_prompt(self) -> None:
         text = self.active.path
@@ -474,10 +498,14 @@ class MainWindow(QMainWindow):
         self.cmd_runner.submit("Command", lambda progress, cancel: run_command(profile, command, cwd),
                                on_done=finished)
 
-    def open_terminal(self, admin: bool = False, profile=None, other: bool = False) -> None:
-        """Open an interactive session in the panel's folder. Administrator means the system's own
-        permission prompt (Windows) or ``sudo -s`` typed inside the terminal: Dossier never sees a
-        password and never raises its own rights."""
+    def open_terminal(self, admin: Optional[bool] = None, profile=None, other: bool = False) -> None:
+        """Open an interactive session in the panel's folder. Administrator (the explicit argument, or the
+        switch on the terminal row) means the system's own permission prompt (Windows) or ``sudo -s`` typed
+        inside the terminal: Dossier never sees a password and never raises its own rights. The switch
+        turns itself off after a launch so the next terminal is a normal one."""
+        if admin is None:
+            admin = self.admin_toggle.isChecked()
+        self.admin_toggle.setChecked(False)
         profile = profile or self.profile
         panel = self.other if other else self.active
         if profile is None:
@@ -703,9 +731,13 @@ class MainWindow(QMainWindow):
         else:
             self.resize(1100, 640)
         for panel, given, key in ((self.left, start[0], "left"), (self.right, start[1], "right")):
+            saved = self.settings.value(f"panel/{key}_tabs", [])
+            saved = [str(p) for p in (saved if isinstance(saved, list) else [saved]) if p]
             path = given or self.settings.value(f"panel/{key}", home) or home
             if not panel.set_folder(path):
                 panel.set_folder(home)
+            if saved and not given:                   # the saved tabs, unless the caller asked for a folder
+                panel.restore_tabs(saved, int(self.settings.value(f"panel/{key}_tab", 0) or 0))
             state = self.settings.value(f"panel/{key}_header")
             if state is not None:
                 panel.table.horizontalHeader().restoreState(state)
@@ -722,6 +754,9 @@ class MainWindow(QMainWindow):
         self.settings.setValue("window/split", self.split.sizes())
         self.settings.setValue("panel/left", self.left.path)
         self.settings.setValue("panel/right", self.right.path)
+        for key, panel in (("left", self.left), ("right", self.right)):
+            self.settings.setValue(f"panel/{key}_tabs", panel.tab_paths())
+            self.settings.setValue(f"panel/{key}_tab", panel.tabs.currentIndex())
         self.settings.setValue("panel/left_header", self.left.table.horizontalHeader().saveState())
         self.settings.setValue("panel/right_header", self.right.table.horizontalHeader().saveState())
         self.settings.sync()
