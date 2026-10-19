@@ -8,6 +8,8 @@ from __future__ import annotations
 import errno
 from typing import Optional
 
+from . import fastcopy
+from .platform import has_scheme
 from .progress import CancelToken, ProgressFn, check
 from .vfs import FileSystem, NotWritable
 
@@ -41,6 +43,7 @@ def copy_file(
     overwrite: bool = False,
     chunk_size: int = 1 << 20,
     throttle=None,
+    native: bool = True,
 ) -> None:
     check(cancel)
     if not overwrite:
@@ -57,6 +60,10 @@ def copy_file(
     part = dst + PART_SUFFIX
     done = 0
     try:
+        if native and throttle is None and total >= fastcopy.FAST_MIN and _plain_local(src_fs, src) and _plain_local(dst_fs, dst):
+            if fastcopy.fast_copy(src, part, total, progress, cancel):       # the system's own copy, in the kernel
+                _finish(dst_fs, part, dst, info, overwrite, cancel)
+                return
         with src_fs.open_read(src) as r, dst_fs.open_write(part) as w:
             while True:
                 check(cancel)
@@ -71,15 +78,24 @@ def copy_file(
                     progress(done, total)
         if done == 0 and progress:
             progress(0, total)
-        check(cancel)
-        try:
-            dst_fs.set_mtime(part, info.mtime)
-        except NotWritable:
-            pass
-        dst_fs.rename(part, dst, overwrite=overwrite)
+        _finish(dst_fs, part, dst, info, overwrite, cancel)
     except BaseException:
         try:
             dst_fs.remove(part)
         except OSError:
             pass
         raise
+
+
+def _plain_local(fs: FileSystem, path: str) -> bool:
+    """A path on the real disk, which the operating system can copy by itself."""
+    return fs.scheme == "" and not has_scheme(path) and fs.writable
+
+
+def _finish(dst_fs: FileSystem, part: str, dst: str, info, overwrite: bool, cancel) -> None:
+    check(cancel)
+    try:
+        dst_fs.set_mtime(part, info.mtime)
+    except NotWritable:
+        pass
+    dst_fs.rename(part, dst, overwrite=overwrite)

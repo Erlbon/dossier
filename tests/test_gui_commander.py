@@ -378,3 +378,14 @@ def test_the_active_panel_is_obvious_in_three_ways(world):
     key(win, Qt.Key.Key_Tab)
     assert t["accent"] in win.right.styleSheet() and "transparent" in win.left.styleSheet()
     assert win.right.table.palette().color(QPalette.ColorRole.Highlight) == QColor(t["cursor_bg"])
+
+
+def test_the_window_border_call_is_harmless_and_follows_the_theme(world, monkeypatch):
+    win, *_ = world
+    calls = []
+    import dossier.gui.main_window as mw
+    monkeypatch.setattr(mw, "set_window_border", lambda hwnd, color: calls.append(color) or True)
+    win.set_scheme("dark")
+    win.set_scheme("light")
+    from dossier.gui import theme
+    assert calls and calls[-1] == theme.current()["card"]

@@ -420,6 +420,7 @@ class ExecOptions:
     retries: int = 3                      # extra tries for a locked file (the virus scanner has it for a moment)
     retry_delay: float = 0.25             # first wait; doubles each try
     limit_bps: Optional[int] = None       # copy speed limit in bytes per second, for all workers together
+    native_copy: bool = True              # large local files go through the operating system's own copy (C5)
     on_error: Optional[Callable] = None   # (op, error text) -> "retry" | "skip" | "abort", after the retries ran out
 
 
@@ -538,7 +539,7 @@ def execute(
             steps: list = []
             attempts += 1
             try:
-                _run_op(op, fs, steps, sub, cancel, safe_trasher, limit)
+                _run_op(op, fs, steps, sub, cancel, safe_trasher, limit, opts.native_copy)
                 outcome = OpResult(op, "done", attempts=attempts)
                 done.finish(i, unit)
                 break
@@ -608,7 +609,8 @@ def execute(
     return result
 
 
-def _run_op(op: Op, fs: FileSystem, steps: list, progress, cancel, trasher: Trasher, throttle=None) -> None:
+def _run_op(op: Op, fs: FileSystem, steps: list, progress, cancel, trasher: Trasher, throttle=None,
+            native: bool = True) -> None:
     if op.kind is Kind.MKDIR:
         existing = _stat(fs, op.dst)
         if existing is None:
@@ -626,7 +628,7 @@ def _run_op(op: Op, fs: FileSystem, steps: list, progress, cancel, trasher: Tras
     if op.overwrite and _stat(fs, op.dst) is not None:
         trasher(op.dst)                       # the old target goes to the bin first: nothing is lost
     if op.kind is Kind.COPY:
-        copy_file(fs, op.src, fs, op.dst, progress=progress, cancel=cancel, throttle=throttle)
+        copy_file(fs, op.src, fs, op.dst, progress=progress, cancel=cancel, throttle=throttle, native=native)
         made = fs.stat(op.dst)
         steps.append(Step("created_file", op.dst, size=made.size, mtime=made.mtime))
     else:                                     # MOVE or RENAME

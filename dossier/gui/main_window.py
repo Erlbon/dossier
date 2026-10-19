@@ -20,7 +20,7 @@ from ..core.ops import (ExecOptions, Plan, Resolution, check_name, plan_copy, pl
 from ..core.home import ADD_NETWORK, HomeFileSystem, HomeProvider, RouterFileSystem, removable_from_home
 from ..core.commandline import Placeholders, expand, run_command
 from ..core import zipfs
-from ..core.platform import IS_WINDOWS, has_scheme, is_elevated, machine_name, path_key
+from ..core.platform import IS_WINDOWS, has_scheme, is_elevated, machine_name, path_key, set_window_border
 from ..core.selection import SelectionStore
 from ..core.textedit import BinaryFile, EncodingProblem, FileTooLarge, load_document
 from ..core.terminals import (UnsafeArgument, builtin_profiles, default_launcher, default_profile, detect,
@@ -298,7 +298,18 @@ class MainWindow(QMainWindow):
         for b, name in zip(self._fkey_buttons, self._fkey_icons):
             b.setIcon(icon_set.icon(name, color))
 
+    def _tint_window_border(self) -> None:
+        """The thin border Windows 11 draws round the window takes the window colour, so it does not show as a
+        grey line beside the panels."""
+        if self.isVisible():
+            set_window_border(int(self.winId()), theme.current()["card"])
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        self._tint_window_border()
+
     def _on_theme_changed(self) -> None:
+        self._tint_window_border()
         icon_set.clear_cache()
         self._apply_fkey_icons()
         self._style_terminal_button()
