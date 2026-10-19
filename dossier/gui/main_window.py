@@ -9,7 +9,7 @@ from __future__ import annotations
 import os
 from typing import Optional
 
-from PyQt6.QtCore import QSettings, QStandardPaths, Qt
+from PyQt6.QtCore import QSettings, QSize, QStandardPaths, Qt
 from PyQt6.QtGui import QAction, QActionGroup, QKeySequence
 from PyQt6.QtWidgets import (QApplication, QHBoxLayout, QLabel, QMainWindow, QPushButton, QSplitter, QVBoxLayout,
                              QWidget)
@@ -21,6 +21,7 @@ from ..core.undo_log import Step, UndoAction, UndoLog
 from ..core.vfs import FileSystem, LocalFileSystem
 from ..core.worker import Job, JobRunner, JobState, run_plan_job
 from .dialogs import Dialogs
+from . import icon_set, theme
 from .models import human_size
 from .panel import Panel
 from .qt_bridge import QtDispatcher
@@ -81,7 +82,7 @@ class MainWindow(QMainWindow):
             panel.table.mark_toggle.connect(self.toggle_mark)
             panel.message.connect(self._say)
         self.selection.subscribe(lambda _s: self._update_status())
-        self.theme.changed.connect(lambda: [p.restyle() for p in (self.left, self.right)])
+        self.theme.changed.connect(self._on_theme_changed)
 
         self._restore(start)
         self.set_drive_style(str(self.settings.value("view/drive_selector", "menu")))
@@ -165,16 +166,33 @@ class MainWindow(QMainWindow):
         row.setContentsMargins(0, 0, 0, 0)
         row.setSpacing(0)
         self._fkey_buttons = []
-        for label, slot in (("F2 Rename", lambda: self.rename()), ("F5 Copy", lambda: self.copy()),
-                            ("F6 Move", lambda: self.move()), ("F7 Folder", lambda: self.new_folder()),
-                            ("F8 Delete", lambda: self.delete())):
+        self._fkey_icons = []
+        for label, icon_name_, slot in (("F2 Rename", "pencil", lambda: self.rename()),
+                                        ("F5 Copy", "copy", lambda: self.copy()),
+                                        ("F6 Move", "arrows-right-left", lambda: self.move()),
+                                        ("F7 Folder", "folder-plus", lambda: self.new_folder()),
+                                        ("F8 Delete", "trash", lambda: self.delete())):
             b = QPushButton(label)
             b.setFlat(True)
+            b.setIconSize(QSize(16, 16))
             b.setFocusPolicy(Qt.FocusPolicy.NoFocus)
             b.clicked.connect(lambda _c=False, s=slot: s())
             row.addWidget(b, 1)
             self._fkey_buttons.append(b)
+            self._fkey_icons.append(icon_name_)
+        self._apply_fkey_icons()
         return bar
+
+    def _apply_fkey_icons(self) -> None:
+        color = theme.current()["fg"]
+        for b, name in zip(self._fkey_buttons, self._fkey_icons):
+            b.setIcon(icon_set.icon(name, color))
+
+    def _on_theme_changed(self) -> None:
+        icon_set.clear_cache()
+        self._apply_fkey_icons()
+        for p in (self.left, self.right):
+            p.restyle()
 
     # panels ----------------------------------------------------------------------------
     @property

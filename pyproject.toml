@@ -16,3 +16,6 @@ dossier = "dossier.gui.app:main"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]   # bare `pytest` finds the package without an install
+
+[tool.setuptools.package-data]
+dossier = ["gui/icons/*.svg", "gui/icons/*.txt"]

@@ -10,9 +10,10 @@ from typing import Optional
 from PyQt6.QtCore import QAbstractTableModel, QModelIndex, Qt
 from PyQt6.QtGui import QBrush, QColor, QFont
 
+from ..core.filetypes import icon_name
 from ..core.selection import SelectionStore
 from ..core.vfs import Entry, FileSystem, natural_key
-from . import theme
+from . import icon_set, theme
 
 COLUMNS = ("Name", "Size", "Date")
 ENTRY_ROLE = Qt.ItemDataRole.UserRole
@@ -138,6 +139,8 @@ class FolderModel(QAbstractTableModel):
             if col == 1:
                 return "DIR" if entry.is_dir else human_size(entry.size)
             return datetime.fromtimestamp(entry.mtime).strftime("%Y-%m-%d %H:%M") if entry.mtime else ""
+        if role == Qt.ItemDataRole.DecorationRole and col == 0:
+            return self._icon(entry, self.is_up_row(index.row()))
         if role == Qt.ItemDataRole.TextAlignmentRole and col == 1:
             return int(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         if role == Qt.ItemDataRole.ForegroundRole and self.is_marked(entry):
@@ -149,6 +152,13 @@ class FolderModel(QAbstractTableModel):
         if role == ENTRY_ROLE:
             return entry
         return None
+
+    def _icon(self, entry: Entry, is_up: bool):
+        """Gold for marked items and folders, the quiet text colour for the rest."""
+        t = theme.current()
+        name = icon_name(entry.name, is_dir=entry.is_dir, is_link=entry.is_link, is_up=is_up)
+        color = t["marked"] if self.is_marked(entry) else (t["accent"] if entry.is_dir and not is_up else t["dim"])
+        return icon_set.icon(name, color)
 
     def refresh_marks(self) -> None:
         if self.entry_count():

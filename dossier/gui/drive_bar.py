@@ -15,7 +15,8 @@ from PyQt6.QtCore import QObject, QPoint, Qt, pyqtSignal
 from PyQt6.QtWidgets import QHBoxLayout, QMenu, QPushButton, QToolButton, QWidget
 
 from ..core.drives import Drive, drive_of, list_drives, usage_async
-from . import theme
+from ..core.filetypes import DRIVE_ICONS
+from . import icon_set, theme
 from .models import human_size
 
 STYLES = ("menu", "strip")
@@ -31,6 +32,7 @@ class DriveBar(QObject):
         self.current: Optional[Drive] = None
         self.style = "menu"
         self._free: dict = {}
+        self._chip_color: Optional[str] = None
 
         self.strip = QWidget()
         self.strip.setObjectName("drivestrip")
@@ -41,6 +43,7 @@ class DriveBar(QObject):
         self.chip = QToolButton()
         self.chip.setObjectName("drivechip")
         self.chip.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        self.chip.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
         self.chip.setToolTip("Change drive (Alt+F1 left panel, Alt+F2 right panel)")
         self.menu = QMenu(self.chip)
         self.menu.aboutToShow.connect(self.reload)
@@ -64,6 +67,8 @@ class DriveBar(QObject):
             f"color:{t['dim']};background:transparent;}}"
             f"#drivestrip QPushButton:checked{{background:{t['accent']};color:{t['accent_fg']};"
             f"border-color:{t['accent']};font-weight:bold;}}")
+        self._rebuild_menu()
+        self._refresh_current()
 
     # content ------------------------------------------------------------------------------
     def reload(self) -> None:
@@ -90,7 +95,8 @@ class DriveBar(QObject):
         self.menu.clear()
         self._menu_actions: dict = {}
         for d in self.drives:
-            act = self.menu.addAction(self._menu_text(d))
+            act = self.menu.addAction(icon_set.icon(DRIVE_ICONS.get(d.kind, 'database'), theme.current()['fg']),
+                                      self._menu_text(d))
             act.triggered.connect(lambda _c=False, drive=d: self.chosen.emit(drive))
             self._menu_actions[d.path] = act
 
@@ -117,11 +123,24 @@ class DriveBar(QObject):
         self.current = drive_of(path, self.drives)
         self._refresh_current()
 
+    def set_chip_color(self, color: Optional[str]) -> None:
+        """The chip sits on the address bar, which is solid gold when its panel is active."""
+        self._chip_color = color
+        self._refresh_current()
+
     def _refresh_current(self) -> None:
         cur = self.current
+        t = theme.current()
         self.chip.setText(cur.name if cur else "Drive")
-        for p, b in self._strip_buttons.items():
-            b.setChecked(cur is not None and cur.path == p)
+        kind = DRIVE_ICONS.get(cur.kind, "database") if cur else "device-desktop"
+        self.chip.setIcon(icon_set.icon(kind, self._chip_color or t["dim"]))
+        for d in self.drives:
+            b = self._strip_buttons.get(d.path)
+            if b is None:
+                continue
+            on = cur is not None and cur.path == d.path
+            b.setChecked(on)
+            b.setIcon(icon_set.icon(DRIVE_ICONS.get(d.kind, "database"), t["accent_fg"] if on else t["dim"]))
 
     def open_menu(self) -> None:
         """Open the drive list (Alt+F1 / Alt+F2), under whichever look is shown."""

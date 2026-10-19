@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 from typing import Optional
 
-from PyQt6.QtCore import QModelIndex, Qt, QUrl, pyqtSignal
+from PyQt6.QtCore import QModelIndex, QSize, Qt, QUrl, pyqtSignal
 from PyQt6.QtGui import QColor, QDesktopServices, QPalette
 from PyQt6.QtWidgets import (QAbstractItemView, QApplication, QFrame, QHBoxLayout, QHeaderView, QLabel, QLineEdit,
                              QTableView, QTextBrowser, QVBoxLayout, QWidget)
@@ -124,6 +124,7 @@ class Panel(QFrame):
         self.table.setColumnWidth(2, 130)
         header.setStretchLastSection(True)
         self.table.setVerticalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
+        self.table.setIconSize(QSize(16, 16))
 
         self.note = NoteView(self.table.viewport())
         self.note.hide()
@@ -176,6 +177,8 @@ class Panel(QFrame):
                 palette.setColor(group, QPalette.ColorRole.Highlight, QColor(t["line"]))
                 palette.setColor(group, QPalette.ColorRole.HighlightedText, QColor(t["fg"]))
         self.table.setPalette(palette)
+        self.table.viewport().setPalette(palette)   # the viewport keeps an old copy otherwise (white rows in dark)
+        self.drive_bar.set_chip_color(on_accent if active else None)
 
     def restyle(self) -> None:
         """The colour scheme changed: redraw the active mark, the marked rows and the note."""
