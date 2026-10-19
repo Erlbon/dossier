@@ -14,6 +14,8 @@ The README says what this is; `docs/spec.md` says what it must do (requirement i
 ## Decided (the user, 2026-10-19, after the review in `docs/review-and-plan.md`)
 - **Windows:** separate top-level windows with native chrome, not an MDI workspace.
 - **CORRECTION 2026-10-19 (the user): Dossier IS a dual-pane, orthodox (Norton Commander style) file commander.** Two panels side by side, F-key bar, command line, copy/move to the other panel, Tab switches panel, one shared selection. Commander mode (W4) is the CORE of 0.1, not a later extra. My first window mockups (single Explorer-style tree+list window) missed this and are void. Arrange modes (W3) and virtual desktops (W5) stay later. No Ctrl+Alt shortcuts.
+- **Folder note behaves like a git repository's README (the user, 2026-10-19):** it sits BELOW the file listing inside the same panel scroll, as the last item of the list. You scroll down past the files to read it; it is NOT a pinned pane at the bottom of the window. No note, no row.
+- **Faux Explorer view mode:** the user is open to adding one later as an extra mode; the dual-pane commander is what the app is for.
 - **Version 0.1 scope:** as in section 5 of `docs/review-and-plan.md` (tree+list windows, shared selection, copy/move/delete/rename with plan and undo, folder note, text viewer, session restore). Everything else waits for a week of real use.
 - **pluteus reuse:** pluteus will be made public soon, so its MIT code may be reused with the notice kept; promote shared pieces to `redactor_common` where sensible.
 - **Name:** keep Dossier; ship via GitHub releases (exe, tarball), not PyPI. Domain and trademark check still to do.

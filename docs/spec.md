@@ -215,6 +215,7 @@ Two rules follow from O11 and O12. Sorting, rename-by-pattern, conflict handling
 - 2026-10-19: the name is Dossier. Kept after the review; distributed through GitHub releases, not PyPI. Domain check still to do.
 - 2026-10-19: windows are separate top-level windows with native chrome (not MDI). W3 arrangement modes, W4 commander mode and W5 virtual desktops move to Later.
 - 2026-10-19: version 0.1 scope is fixed in `docs/review-and-plan.md` section 5.
+- 2026-10-19: the folder note (N1) is the last row of the panel's list and scrolls with it, like a README under a repository's file list; it is not a pinned pane. A faux Explorer view mode (single pane with tree) may come later as an extra; the dual-pane commander stays the core.
 - 2026-10-19 (correction by the owner): Dossier is a dual-pane orthodox commander. W4 commander mode is the core of 0.1, not Later; D2 in the review is reversed.
 
 **Open questions**
