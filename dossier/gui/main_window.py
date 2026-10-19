@@ -184,8 +184,7 @@ class MainWindow(QMainWindow):
             commands.addAction(a)
         commands.addSeparator()
         for a in (self._action("Terminal Here", "Ctrl+Shift+T", self.open_terminal),
-                  self._action("Administrator Terminal Here", None, lambda: self.open_terminal(admin=True)),
-                  self._action("Terminal in the Other Panel's Folder", None, lambda: self.open_terminal(other=True))):
+                  self._action("Administrator Terminal Here", None, lambda: self.open_terminal(admin=True))):
             commands.addAction(a)
         view = bar.addMenu("&Settings")
         scheme_menu = view.addMenu("Color Scheme")
@@ -408,7 +407,7 @@ class MainWindow(QMainWindow):
 
     def _build_command_row(self) -> QWidget:
         """One line under the panels: the prompt, the command line, and one Terminal button. The button opens a
-        terminal in this folder; a right-click on it offers the administrator terminal and the other choices."""
+        terminal in this folder; a right-click on it offers the administrator terminal and the interpreter."""
         row = QWidget()
         lay = QHBoxLayout(row)
         lay.setContentsMargins(6, 3, 6, 3)
@@ -423,7 +422,7 @@ class MainWindow(QMainWindow):
         self.term_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.term_button.setIconSize(QSize(18, 18))
         self.term_button.setToolTip("Open a terminal in this folder (Ctrl+Shift+T). "
-                                    "Right-click: administrator, other folder, interpreter.")
+                                    "Right-click: administrator, interpreter.")
         self.term_button.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.term_button.clicked.connect(lambda: self.open_terminal())
         self.term_button.customContextMenuRequested.connect(
@@ -441,8 +440,6 @@ class MainWindow(QMainWindow):
         """The right-click menu of the Terminal button."""
         menu = QMenu(self)
         menu.addAction("Open as Administrator").triggered.connect(lambda _c=False: self.open_terminal(admin=True))
-        menu.addAction("Open in the Other Panel's Folder").triggered.connect(
-            lambda _c=False: self.open_terminal(other=True))
         sub = menu.addMenu("Interpreter")
         group = QActionGroup(menu)
         group.setExclusive(True)
@@ -536,12 +533,12 @@ class MainWindow(QMainWindow):
                                lambda progress, cancel: run_command(profile, command, cwd, on_finish=ended_later),
                                on_done=finished)
 
-    def open_terminal(self, admin: bool = False, profile=None, other: bool = False) -> None:
+    def open_terminal(self, admin: bool = False, profile=None) -> None:
         """Open an interactive session in the panel's folder. Administrator (the right-click menu of the
         Terminal button) means the system's own permission prompt (Windows) or ``sudo -s`` typed inside the
         terminal: Dossier never sees a password and never raises its own rights."""
         profile = profile or self.profile
-        panel = self.other if other else self.active
+        panel = self.active                          # for the other panel's folder: switch to it (Tab), then open
         if profile is None:
             self.dialogs.info("Terminal", "No command interpreter was found.")
             return

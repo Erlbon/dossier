@@ -182,11 +182,12 @@ def test_an_unknown_command_reports_instead_of_hanging(world):
 
 
 # terminals --------------------------------------------------------------------------------------------------------------------
-def test_terminal_opens_in_the_active_panels_folder_and_the_other_panels_on_request(world):
+def test_terminal_opens_in_the_active_panels_folder_so_switching_panels_picks_the_other_one(world):
     win, _d, rec, left, right, _t = world
     win.open_terminal()
     assert rec.launches[-1].cwd == str(left) and not rec.launches[-1].elevate
-    win.open_terminal(other=True)
+    key(win, Qt.Key.Key_Tab)                                   # the other panel's folder: switch, then open
+    win.open_terminal()
     assert rec.launches[-1].cwd == str(right)
     assert "Terminal opened" in win.status.text()
 
@@ -228,18 +229,18 @@ def test_there_is_one_plain_terminal_button_next_to_the_command_line(world):
     assert "Terminal Here" in texts and "Administrator Terminal Here" in texts
 
 
-def test_right_click_offers_administrator_the_other_folder_and_the_interpreter(world):
+def test_right_click_offers_only_administrator_and_the_interpreter(world):
     win, _d, rec, left, right, _t = world
     menu = win.build_terminal_menu()
     texts = [a.text() for a in menu.actions()]
-    assert texts[:2] == ["Open as Administrator", "Open in the Other Panel's Folder"] and "Interpreter" in texts
+    assert texts == ["Open as Administrator", "Interpreter"]    # nothing else: no per-folder or per-case entries
     menu.actions()[0].trigger()
     if IS_WINDOWS:
         assert rec.launches[-1].elevate and rec.launches[-1].cwd == str(left)
     else:
         assert rec.launches[-1].argv[-2:] == ["sudo", "-s"]
-    menu.actions()[1].trigger()
-    assert rec.launches[-1].cwd == str(right) and not rec.launches[-1].elevate
+    commands = {a.text().replace("&", ""): a.menu() for a in win.menuBar().actions()}["Commands"]
+    assert not any("Other Panel" in a.text() for a in commands.actions())
 
 
 def test_a_right_click_event_asks_for_the_menu_and_a_left_click_does_not(world, monkeypatch):
