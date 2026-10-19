@@ -28,6 +28,7 @@ class FakeDialogs:
         self.texts = []
         self.conflict_answer = Resolution.SKIP
         self.confirm_answer = True
+        self.outputs = []
 
     def info(self, title, text):
         self.infos.append((title, text))
@@ -35,6 +36,9 @@ class FakeDialogs:
     def confirm(self, title, text, ok_label="OK"):
         self.confirms.append((title, text))
         return self.confirm_answer
+
+    def show_output(self, title, text):
+        self.outputs.append((title, text))
 
     def ask_text(self, title, label, default=""):
         return self.texts.pop(0) if self.texts else None

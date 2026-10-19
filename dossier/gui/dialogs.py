@@ -3,7 +3,10 @@ from __future__ import annotations
 
 from typing import Callable, Optional
 
-from PyQt6.QtWidgets import QInputDialog, QMessageBox, QProgressDialog, QWidget
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QFontDatabase
+from PyQt6.QtWidgets import (QDialog, QInputDialog, QMessageBox, QPlainTextEdit, QProgressDialog, QPushButton,
+                             QVBoxLayout, QWidget)
 
 from ..core.ops import Resolution
 
@@ -50,6 +53,21 @@ class Dialogs:
         box.setDefaultButton(ok)
         box.exec()
         return box.clickedButton() is ok
+
+    def show_output(self, title: str, text: str) -> None:
+        """The captured output of a command, in a resizable read-only box."""
+        dlg = QDialog(self.parent)
+        dlg.setWindowTitle(title)
+        dlg.resize(760, 420)
+        edit = QPlainTextEdit(text)
+        edit.setReadOnly(True)
+        edit.setFont(QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont))
+        close = QPushButton("Close")
+        close.clicked.connect(dlg.accept)
+        layout = QVBoxLayout(dlg)
+        layout.addWidget(edit)
+        layout.addWidget(close, 0, Qt.AlignmentFlag.AlignRight)
+        dlg.exec()
 
     def ask_text(self, title: str, label: str, default: str = "") -> Optional[str]:
         text, ok = QInputDialog.getText(self.parent, title, label, text=default)

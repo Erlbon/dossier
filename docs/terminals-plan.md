@@ -59,3 +59,7 @@ Profiles from a custom template are code the user wrote. A profile is never impo
 | A2 | Shortcut for "Terminal here" | `Ctrl+Shift+T` (never Ctrl+Alt; AltGr on Norwegian keyboards) |
 | A3 | One shared profile for command line and terminal, or two settings? | One, with a checkbox to split |
 | A4 | Windows Terminal as the default host when installed? | Yes |
+
+## 6. Status (2026-10-19)
+
+T1, T2, T3 and T5 are built and tested (profiles, per-profile quoting verified against real PowerShell and cmd, command line with placeholders, Terminal and Administrator Terminal buttons, elevated-Dossier title). T4 is partly done: the interpreter is chosen under Settings > Command Interpreter; the full Settings > Terminal page (host choice, custom template with a preview of the exact command) is still to do. Not yet verified: the real UAC prompt (only the call to the system is tested, with a stand-in) and a real Windows Terminal launch.

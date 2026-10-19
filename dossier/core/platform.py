@@ -170,6 +170,17 @@ def list_volumes() -> list:
     return _windows_volumes() if IS_WINDOWS else _posix_volumes()
 
 
+def is_elevated() -> bool:
+    """True when this process runs with administrator (Windows) or root rights."""
+    if IS_WINDOWS:
+        import ctypes
+        try:
+            return bool(ctypes.windll.shell32.IsUserAnAdmin())
+        except (AttributeError, OSError):
+            return False
+    return hasattr(os, "geteuid") and os.geteuid() == 0
+
+
 def quote_arg(arg: str) -> str:
     """One argument, quoted for the shell the command line uses (cmd on Windows, sh elsewhere)."""
     if IS_WINDOWS:

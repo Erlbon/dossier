@@ -49,17 +49,23 @@ class NoteView(QTextBrowser):
 
 class PanelTable(QTableView):
     switch_panel = pyqtSignal()
-    mark_toggle = pyqtSignal()
+    mark_toggle = pyqtSignal()       # Insert
+    space = pyqtSignal()             # Space: marks, or types a space into a command being written
     activate = pyqtSignal()
     go_up = pyqtSignal()
     focused = pyqtSignal()
+    type_text = pyqtSignal(str)      # a printable key: it starts (or continues) a command
 
     def keyPressEvent(self, event) -> None:
         key = event.key()
+        mods = event.modifiers()
+        text = event.text()
         if key in (Qt.Key.Key_Tab, Qt.Key.Key_Backtab):
             self.switch_panel.emit()
-        elif key in (Qt.Key.Key_Space, Qt.Key.Key_Insert):
+        elif key == Qt.Key.Key_Insert:
             self.mark_toggle.emit()
+        elif key == Qt.Key.Key_Space:
+            self.space.emit()
         elif key in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
             self.activate.emit()
         elif key == Qt.Key.Key_Backspace:
@@ -67,6 +73,10 @@ class PanelTable(QTableView):
         elif key == Qt.Key.Key_Down and self.currentIndex().row() >= self.model().entry_count() - 1:
             bar = self.verticalScrollBar()          # past the last file: reveal the note
             bar.setValue(min(bar.value() + bar.pageStep() // 2, bar.maximum()))
+        elif (text and text.isprintable() and not (mods & (Qt.KeyboardModifier.ControlModifier
+                                                           | Qt.KeyboardModifier.AltModifier
+                                                           | Qt.KeyboardModifier.MetaModifier))):
+            self.type_text.emit(text)
         else:
             super().keyPressEvent(event)
 
@@ -138,8 +148,10 @@ class Panel(QFrame):
         layout.addWidget(self.table, 1)
 
         self.address.returnPressed.connect(self._address_entered)
-        self.table.activate.connect(self.open_current)
-        self.table.go_up.connect(self.go_up)
+        self.enter_hook = None         # set by the window: Enter runs a command being written, if there is one
+        self.backspace_hook = None     # likewise Backspace edits that command instead of going up
+        self.table.activate.connect(self._enter)
+        self.table.go_up.connect(self._backspace)
         self.table.doubleClicked.connect(lambda _i: self.open_current())
         self.table.focused.connect(lambda: self.activated.emit(self))
         self.table.verticalScrollBar().valueChanged.connect(lambda _v: self._position_note())
@@ -219,6 +231,14 @@ class Panel(QFrame):
         self.table.scrollToTop() if not select else self.table.scrollTo(self.table.currentIndex())
         self.folder_changed.emit(self)
         return True
+
+    def _enter(self) -> None:
+        if not (self.enter_hook and self.enter_hook()):
+            self.open_current()
+
+    def _backspace(self) -> None:
+        if not (self.backspace_hook and self.backspace_hook()):
+            self.go_up()
 
     def refresh(self) -> None:
         keep = self.current_name()

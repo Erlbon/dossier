@@ -314,7 +314,7 @@ def test_menus_view_has_modes_and_notes_while_settings_has_the_choices(commander
     view = [a.text() for a in menus["View"].actions() if not a.isSeparator()]
     assert view == ["Details", "Folder Notes", "Refresh"]
     settings = [a.text() for a in menus["Settings"].actions()]
-    assert settings == ["Color Scheme", "Icon Set", "Drive Selector"]
+    assert settings == ["Color Scheme", "Icon Set", "Drive Selector", "Command Interpreter"]
 
 
 def test_folder_notes_can_be_switched_off_and_the_choice_is_kept(commander, tmp_path):
