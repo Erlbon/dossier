@@ -293,6 +293,56 @@ def test_color_scheme_menu_switches_persists_and_restyles(world):
         again.close()
 
 
+def test_drive_selector_defaults_to_the_dropdown_and_switches_to_the_strip(world):
+    win, _d, _l, _r, tmp = world
+    for panel in (win.left, win.right):
+        assert panel.drive_bar.style == "menu"
+        assert panel.drive_bar.chip.isVisible() and not panel.drive_bar.strip.isVisible()
+    win.set_drive_style("strip")
+    for panel in (win.left, win.right):
+        assert panel.drive_bar.strip.isVisible() and not panel.drive_bar.chip.isVisible()
+    win.close()
+    again = MainWindow(settings_path=str(tmp / "s.ini"), dialogs=FakeDialogs())
+    again.show()
+    try:
+        assert again.left.drive_bar.style == "strip" and again.drive_style_actions["strip"].isChecked()
+    finally:
+        again.close()
+
+
+def test_drive_list_marks_the_current_drive_and_lists_home(world):
+    win, _d, left, *_ = world
+    bar = win.left.drive_bar
+    assert bar.current is not None and os.path.normcase(str(left)).startswith(os.path.normcase(bar.current.path))
+    assert bar.chip.text() == bar.current.name
+    names_ = [a.text().split("\t")[0] for a in bar.menu.actions()]
+    assert any(n.startswith("Home") for n in names_)
+    win.set_drive_style("strip")
+    assert bar._strip_buttons[bar.current.path].isChecked()
+
+
+def test_choosing_a_drive_goes_to_its_root_and_back_to_the_remembered_folder(world):
+    win, _d, left, *_ = world
+    bar = win.left.drive_bar
+    home = next(d for d in bar.drives if d.kind == "home")
+    (left / "deep").mkdir()
+    win.left.set_folder(str(left / "deep"))
+    here = bar.current
+    bar.chosen.emit(home)
+    assert win.left.path == home.path
+    if here is not None:
+        bar.chosen.emit(here)                               # back where this panel last was on that drive
+        assert win.left.path == str(left / "deep")
+
+
+def test_alt_f1_opens_the_drive_list_of_the_left_panel(world):
+    win, *_ = world
+    win.left.open_drive_menu()
+    QApplication.processEvents()
+    assert win.left.drive_bar.menu.isVisible()
+    win.left.drive_bar.menu.close()
+
+
 def test_f_key_bar_only_offers_working_commands(world):
     win, *_ = world
     assert [b.text() for b in win._fkey_buttons] == ["F2 Rename", "F5 Copy", "F6 Move", "F7 Folder", "F8 Delete"]

@@ -96,6 +96,84 @@ def is_link_like(st_mode_is_link: bool, attributes: int | None = None) -> bool:
     return IS_WINDOWS and attributes is not None and bool(attributes & _REPARSE_POINT)
 
 
+_PSEUDO_FS = {
+    "proc", "sysfs", "tmpfs", "devtmpfs", "devpts", "cgroup", "cgroup2", "overlay", "squashfs", "autofs",
+    "securityfs", "debugfs", "tracefs", "configfs", "fusectl", "mqueue", "hugetlbfs", "pstore", "bpf",
+    "binfmt_misc", "ramfs", "efivarfs", "nsfs", "rpc_pipefs", "fuse.gvfsd-fuse", "fuse.portal",
+}
+_NETWORK_FS = ("nfs", "nfs4", "cifs", "smbfs", "smb3", "fuse.sshfs", "fuse.rclone", "davfs", "9p")
+_SKIP_MOUNT_PREFIXES = ("/boot", "/snap", "/var/lib", "/proc", "/sys", "/dev", "/run/user", "/run/snapd")
+
+
+def _windows_volumes() -> list:
+    import ctypes
+    from ctypes import wintypes
+
+    kernel32 = ctypes.windll.kernel32
+    kinds = {2: "removable", 3: "fixed", 4: "network", 5: "optical", 6: "fixed"}
+    old_mode = kernel32.SetErrorMode(1)   # SEM_FAILCRITICALERRORS: no "insert a disk" pop-ups
+    try:
+        mask = kernel32.GetLogicalDrives()
+        out = []
+        for i in range(26):
+            if not mask & (1 << i):
+                continue
+            root = f"{chr(65 + i)}:\\"
+            kind = kinds.get(kernel32.GetDriveTypeW(root), "other")
+            label = ""
+            if kind in ("fixed", "removable"):   # never ask a network share: it can hang for seconds
+                buf = ctypes.create_unicode_buffer(261)
+                if kernel32.GetVolumeInformationW(wintypes.LPCWSTR(root), buf, 261, None, None, None, None, 0):
+                    label = buf.value
+            elif kind == "network":
+                buf = ctypes.create_unicode_buffer(1024)
+                size = wintypes.DWORD(1024)
+                if ctypes.windll.mpr.WNetGetConnectionW(f"{chr(65 + i)}:", buf, ctypes.byref(size)) == 0:
+                    label = buf.value
+            out.append((root, label, kind))
+        return out
+    finally:
+        kernel32.SetErrorMode(old_mode)
+
+
+def _posix_volumes() -> list:
+    out = []
+    seen = set()
+    try:
+        with open("/proc/mounts", encoding="utf-8", errors="replace") as f:
+            lines = f.read().splitlines()
+    except OSError:
+        lines = []
+    for line in lines:
+        parts = line.split()
+        if len(parts) < 3:
+            continue
+        device, mount, fstype = parts[0], parts[1].replace("\\040", " "), parts[2]
+        if fstype in _PSEUDO_FS or mount in seen:
+            continue
+        network = fstype.startswith(_NETWORK_FS)
+        if not (device.startswith("/dev/") or network) or (mount != "/" and mount.startswith(_SKIP_MOUNT_PREFIXES)):
+            continue
+        seen.add(mount)
+        kind = "network" if network else ("removable" if mount.startswith(("/media", "/run/media", "/Volumes")) else "fixed")
+        out.append((mount, "System" if mount == "/" else os.path.basename(mount), kind))
+    if not out and IS_MACOS:
+        for name in sorted(os.listdir("/Volumes")) if os.path.isdir("/Volumes") else []:
+            out.append((os.path.join("/Volumes", name), name, "fixed"))
+    return out or [("/", "System", "fixed")]
+
+
+def list_volumes() -> list:
+    """The mounted volumes as ``(root, label, kind)``; kind is fixed, removable, network, optical or other.
+    Drive letters on Windows, mount points elsewhere (O3). Never touches the disk space of a share, so it
+    cannot hang on a dead network drive."""
+    return _windows_volumes() if IS_WINDOWS else _posix_volumes()
+
+
+def home_dir() -> str:
+    return os.path.expanduser("~")
+
+
 def is_hidden(name: str, attributes: int | None = None) -> bool:
     """Hidden by the dot on Linux; on Windows by the hidden attribute (O9)."""
     if IS_WINDOWS and attributes is not None:

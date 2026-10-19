@@ -3,7 +3,6 @@ row of the listing (scroll down past the files to read it, like a README under a
 from __future__ import annotations
 
 import os
-import shutil
 from typing import Optional
 
 from PyQt6.QtCore import QModelIndex, Qt, QUrl, pyqtSignal
@@ -14,7 +13,9 @@ from PyQt6.QtWidgets import (QAbstractItemView, QApplication, QFrame, QHBoxLayou
 from ..core.notes import compose_markdown, find_notes
 from ..core.selection import SelectionStore
 from ..core.vfs import Entry, FileSystem
+from ..core.drives import drive_of, usage_async
 from . import theme
+from .drive_bar import DriveBar
 from .models import FolderModel, human_size
 
 SAFE_SCHEMES = ("http", "https", "mailto")
@@ -82,18 +83,23 @@ class Panel(QFrame):
     activated = pyqtSignal(object)        # the user focused this panel
     message = pyqtSignal(str)
 
-    def __init__(self, fs: FileSystem, selection: SelectionStore, parent=None) -> None:
+    def __init__(self, fs: FileSystem, selection: SelectionStore, parent=None, dispatch=None) -> None:
         super().__init__(parent)
         self.fs = fs
         self.selection = selection
+        self._dispatch = dispatch
+        self._last: dict = {}          # drive root -> the folder this panel was in on that drive
         self.model = FolderModel(fs, selection, self)
         self.setObjectName("panel")
 
+        self.drive_bar = DriveBar(dispatch, self)
+        self.drive_bar.chosen.connect(self._drive_chosen)
         self.address = QLineEdit()
         self.address.setObjectName("pathbar")
         self.free = QLabel()
         bar = QHBoxLayout()
         bar.setContentsMargins(4, 2, 4, 2)
+        bar.addWidget(self.drive_bar.chip)
         bar.addWidget(self.address, 1)
         bar.addWidget(self.free)
         self.bar = QWidget()
@@ -125,6 +131,7 @@ class Panel(QFrame):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
+        layout.addWidget(self.drive_bar.strip)
         layout.addWidget(self.bar)
         layout.addWidget(self.table, 1)
 
@@ -157,7 +164,10 @@ class Panel(QFrame):
             self.bar.setStyleSheet(
                 f"#pathbarbox{{background:{accent};}}"
                 f"#pathbarbox QLineEdit{{background:transparent;color:{on_accent};border:none;font-weight:bold;}}"
-                f"#pathbarbox QLabel{{color:{on_accent};}}")
+                f"#pathbarbox QLabel{{color:{on_accent};}}"
+                f"#pathbarbox QToolButton{{color:{on_accent};border:1px solid {on_accent};border-radius:6px;"
+                f"padding:1px 6px;background:transparent;font-weight:bold;}}"
+                f"#pathbarbox QToolButton::menu-indicator{{image:none;}}")
         else:
             self.bar.setStyleSheet("")
         palette = QPalette(QApplication.palette())
@@ -170,6 +180,7 @@ class Panel(QFrame):
     def restyle(self) -> None:
         """The colour scheme changed: redraw the active mark, the marked rows and the note."""
         self.set_active(self._active)
+        self.drive_bar.restyle()
         self.model.refresh_marks()
         if self.model.note_row >= 0:
             self._load_note(self.path)
@@ -193,6 +204,7 @@ class Panel(QFrame):
             self.message.emit(f"Cannot open {path}: {e.strerror or e}")
             return False
         self.address.setText(path)
+        self.drive_bar.set_current_path(path)
         self._update_free(path)
         self._load_note(path)
         row = self.model.row_of(select) if select else -1
@@ -232,10 +244,32 @@ class Panel(QFrame):
         self.table.setFocus()
 
     def _update_free(self, path: str) -> None:
-        try:
-            self.free.setText(f"{human_size(shutil.disk_usage(path).free)} free")
-        except OSError:
-            self.free.setText("")
+        """Free space comes from a background thread: a dead network share must not freeze the window."""
+        self.free.setText("")
+        if self._dispatch is None:
+            return
+
+        def ready(p: str, usage) -> None:
+            def show() -> None:
+                if p == self.path:
+                    self.free.setText(f"{human_size(usage[1])} free" if usage else "")
+            self._dispatch(show)
+
+        usage_async([path], ready)
+
+    def _drive_chosen(self, drive) -> None:
+        """Go to a drive: back to where this panel last was on it, else its root."""
+        here = drive_of(self.path, self.drive_bar.drives)
+        if here is not None and (drive.kind == "home" or here.path != drive.path):
+            self._last[here.path] = self.path          # remember where we were when leaving a drive
+        target = self._last.get(drive.path, drive.path)
+        if drive.kind != "home" and os.path.normcase(target) == os.path.normcase(self.path):
+            target = drive.path                          # clicking the drive you are in toggles to its root
+        if not self.set_folder(target) and target != drive.path:
+            self.set_folder(drive.path)
+
+    def open_drive_menu(self) -> None:
+        self.drive_bar.open_menu()
 
     # the note -------------------------------------------------------------------------
     def _load_note(self, path: str) -> None:

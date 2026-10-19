@@ -48,8 +48,8 @@ class MainWindow(QMainWindow):
         self.busy = False
         self._job: Optional[Job] = None
 
-        self.left = Panel(self.fs, self.selection)
-        self.right = Panel(self.fs, self.selection)
+        self.left = Panel(self.fs, self.selection, dispatch=self.dispatcher)
+        self.right = Panel(self.fs, self.selection, dispatch=self.dispatcher)
         self.active = self.left
         self.split = QSplitter(Qt.Orientation.Horizontal)
         self.split.addWidget(self.left)
@@ -84,6 +84,7 @@ class MainWindow(QMainWindow):
         self.theme.changed.connect(lambda: [p.restyle() for p in (self.left, self.right)])
 
         self._restore(start)
+        self.set_drive_style(str(self.settings.value("view/drive_selector", "menu")))
         self._set_active(self.left)
         self.left.table.setFocus()
         self._update_status()
@@ -137,6 +138,21 @@ class MainWindow(QMainWindow):
             group.addAction(act)
             scheme_menu.addAction(act)
             self.scheme_actions[key] = act
+        drive_menu = view.addMenu("Drive Selector")
+        drive_group = QActionGroup(self)
+        drive_group.setExclusive(True)
+        self.drive_style_actions = {}
+        wanted = str(self.settings.value("view/drive_selector", "menu"))
+        for key, label in (("menu", "Dropdown in the Address Bar"), ("strip", "Button Strip Above the Panel")):
+            act = QAction(label, self)
+            act.setCheckable(True)
+            act.setChecked(wanted == key)
+            act.triggered.connect(lambda _c=False, k=key: self.set_drive_style(k))
+            drive_group.addAction(act)
+            drive_menu.addAction(act)
+            self.drive_style_actions[key] = act
+        self._action("Drives of Left Panel", "Alt+F1", lambda: self.left.open_drive_menu())
+        self._action("Drives of Right Panel", "Alt+F2", lambda: self.right.open_drive_menu())
         commands = bar.addMenu("&Commands")
         for a in (self._action("Undo", "Ctrl+Z", self.undo),
                   self._action("Refresh", "Ctrl+R", self.refresh),
@@ -183,6 +199,14 @@ class MainWindow(QMainWindow):
     def refresh(self) -> None:
         self.left.refresh()
         self.right.refresh()
+
+    def set_drive_style(self, style: str) -> None:
+        if style not in self.drive_style_actions:
+            return
+        for panel in (self.left, self.right):
+            panel.drive_bar.set_style(style)
+        self.settings.setValue("view/drive_selector", style)
+        self.drive_style_actions[style].setChecked(True)
 
     def set_scheme(self, scheme: str) -> None:
         self.theme.set_scheme(scheme)
