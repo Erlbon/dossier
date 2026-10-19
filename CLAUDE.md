@@ -45,6 +45,7 @@ The function list follows The Next Tool (Ebdac Software GmbH, discontinued 2007)
 
 ## Open items
 - Icon sets are swappable (View > Icon Set, user sets in the settings folder `icon-sets`). Tabler and Lucide draw the ebook and comic glyphs the other way round (Tabler `book` is open, Lucide `book` is closed): a set's manifest `map` fixes that per set; a Preferences page for per-file-type icon overrides is a possible later step (user, 2026-10-19).
+- Later idea (user, 2026-10-19): a mix-and-match icon set, "developer's choice": each icon picked from whichever set draws it best (e.g. Tabler files, Lucide drives). Fits the manifest format if a `map` value may name another set (`lucide:hard-drive.svg`); not built, mind the rule that a set can never point outside its own folder when doing it (only built-in set ids).
 - Push access to `redactor_common` for promoting shared modules.
 - Which metadata format comes first (EPUB, CBZ, MP3, video).
 - Remote sources read-only until phase 2 is stable?
