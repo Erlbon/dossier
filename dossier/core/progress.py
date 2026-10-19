@@ -18,21 +18,39 @@ class Cancelled(Exception):
 
 
 class CancelToken:
-    """Thread-safe flag a worker polls between small units of work."""
+    """Thread-safe flag a worker polls between small units of work. It can also be paused: ``check`` then
+    waits until it is resumed (or cancelled), so every long loop that already checks for cancel pauses too."""
 
     def __init__(self) -> None:
         self._event = threading.Event()
+        self._running = threading.Event()
+        self._running.set()
 
     def cancel(self) -> None:
         self._event.set()
+        self._running.set()                   # a paused worker wakes up and sees the cancel
 
     @property
     def cancelled(self) -> bool:
         return self._event.is_set()
 
+    def pause(self) -> None:
+        self._running.clear()
+
+    def resume(self) -> None:
+        self._running.set()
+
+    @property
+    def paused(self) -> bool:
+        return not self._running.is_set() and not self._event.is_set()
+
     def check(self) -> None:
         if self._event.is_set():
             raise Cancelled()
+        if not self._running.is_set():
+            self._running.wait()
+            if self._event.is_set():
+                raise Cancelled()
 
 
 def check(token: Optional[CancelToken]) -> None:

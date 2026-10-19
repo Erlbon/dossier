@@ -72,6 +72,8 @@ class MainWindow(QMainWindow):
         self.profile = self._chosen_profile()
         self.windows_terminal = self._which("wt.exe") if IS_WINDOWS else None
         self.busy = False
+        self.paused = False
+        self._jobs: list = []                      # running first, then the ones waiting
         self._job: Optional[Job] = None
         self.viewers: list = []
         self.editors: list = []
@@ -90,7 +92,10 @@ class MainWindow(QMainWindow):
         self.hint.setEnabled(False)
         status_row = QHBoxLayout()
         status_row.setContentsMargins(8, 2, 8, 2)
+        self.queue_label = QLabel()
+        self.queue_label.hide()
         status_row.addWidget(self.status, 1)
+        status_row.addWidget(self.queue_label)
         status_row.addWidget(self.hint)
 
         central = QWidget()
@@ -197,6 +202,10 @@ class MainWindow(QMainWindow):
         for a in (self._action("Copy Files to Clipboard", "Ctrl+C", self.clip_copy),
                   self._action("Cut Files to Clipboard", "Ctrl+X", self.clip_cut),
                   self._action("Paste Files Here", "Ctrl+V", self.clip_paste)):
+            commands.addAction(a)
+        commands.addSeparator()
+        for a in (self._action("Pause or Resume Operations", "Ctrl+Shift+P", self.toggle_pause),
+                  self._action("Cancel Waiting Operations", None, self.cancel_waiting)):
             commands.addAction(a)
         commands.addSeparator()
         for a in (self._action("Pin Folder to Home Page", "Ctrl+D", self.pin_folder),
@@ -756,8 +765,8 @@ class MainWindow(QMainWindow):
         if self._home_blocked("Move" if move else "Copy"):
             return
         sources = self.active.targets()
-        if not sources or self.busy:
-            return
+        if not sources:
+            return                                   # a busy window queues the operation
         dest = self.other.path
         plan = (plan_move if move else plan_copy)(self.fs, sources, dest)
         plan = self._settle(plan)
@@ -794,8 +803,6 @@ class MainWindow(QMainWindow):
         sources, cut = file_clipboard.get()
         if not sources:
             self._say("The clipboard holds no files")
-            return
-        if self.busy:
             return
         dest = self.active.path
         def there(path: str) -> bool:
@@ -869,7 +876,7 @@ class MainWindow(QMainWindow):
             self.remove_from_home()                  # only shortcuts can go, and only from the page, never the folder
             return
         sources = self.active.targets()
-        if not sources or self.busy:
+        if not sources:
             return
         plan = plan_delete(self.fs, sources, to_trash=not permanent)
         if plan.blocking or not plan.ops:
@@ -903,24 +910,64 @@ class MainWindow(QMainWindow):
 
     # running a plan -----------------------------------------------------------------------------
     def _run(self, plan: Plan, *, unmark: Optional[list] = None, select: str = "") -> None:
+        """Queue a plan. Plans run one after the other (one disk is never fought over); the progress box of a
+        plan appears when it starts, and a queued plan waits until the ones before it are done."""
         self.busy = True
         holder: dict = {}
-        box = self.dialogs.make_progress(plan.title, lambda: holder["job"].cancel() if "job" in holder else None)
+        shown: dict = {}
+
+        def progress(done: int, total: int) -> None:
+            if "box" not in shown:
+                shown["box"] = self.dialogs.make_progress(plan.title, lambda: holder["job"].cancel() if "job" in holder else None)
+            shown["box"].update(done, total)
 
         def finished(job: Job) -> None:
-            box.close()
-            self.busy = False
-            self._job = None
+            if "box" in shown:
+                shown["box"].close()
+            if job in self._jobs:
+                self._jobs.remove(job)
+            self.busy = bool(self._jobs)
+            self._job = self._jobs[0] if self._jobs else None
+            self._update_queue_label()
             self._report(job, unmark)
             keep = select or self.active.current_name()
             self.active.set_folder(self.active.path, select=keep)
             self.other.refresh()
 
         job = run_plan_job(self.runner, plan, self.fs, selection=self.selection, undo_log=self.undo_log,
-                           on_progress=box.update, on_done=finished, options=self._exec_options(),
+                           on_progress=progress, on_done=finished, options=self._exec_options(),
                            **({} if self.trasher is None else {"trasher": self.trasher}))
         holder["job"] = job
-        self._job = job
+        if self.paused:
+            job.token.pause()
+        self._jobs.append(job)
+        self._job = self._jobs[0]
+        self._update_queue_label()
+
+    def toggle_pause(self) -> None:
+        """Pause or resume the running operation and the ones waiting behind it."""
+        self.paused = not self.paused
+        for job in self._jobs:
+            job.token.pause() if self.paused else job.token.resume()
+        self._update_queue_label()
+
+    def cancel_waiting(self) -> None:
+        """Drop the operations that have not started; the running one carries on."""
+        waiting = [j for j in self._jobs if j.state is JobState.QUEUED]
+        for job in waiting:
+            job.cancel()
+        self._say(f"Cancelled {len(waiting)} waiting operation{'s' if len(waiting) != 1 else ''}" if waiting
+                  else "No operations are waiting")
+
+    def _update_queue_label(self) -> None:
+        waiting = sum(1 for j in self._jobs if j.state is JobState.QUEUED)
+        parts = []
+        if self._jobs:
+            parts.append(("Paused: " if self.paused else "Running: ") + self._jobs[0].label)
+        if waiting:
+            parts.append(f"{waiting} waiting")
+        self.queue_label.setText((" " + chr(0xB7) + " ").join(parts))
+        self.queue_label.setVisible(bool(parts))
 
     def _exec_options(self) -> ExecOptions:
         """The copy settings: the speed limit and whether a failing file asks what to do."""
@@ -1002,8 +1049,8 @@ class MainWindow(QMainWindow):
             if not ed.close():                       # the user cancelled a save question: stay open
                 event.ignore()
                 return
-        if self._job is not None:
-            self._job.cancel()
+        for job in list(self._jobs):
+            job.cancel()
         self.settings.setValue("window/geometry", self.saveGeometry())
         self.settings.setValue("window/split", self.split.sizes())
         self.settings.setValue("panel/left", self.left.path)
