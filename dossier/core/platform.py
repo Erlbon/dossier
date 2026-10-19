@@ -170,6 +170,23 @@ def list_volumes() -> list:
     return _windows_volumes() if IS_WINDOWS else _posix_volumes()
 
 
+def quote_arg(arg: str) -> str:
+    """One argument, quoted for the shell the command line uses (cmd on Windows, sh elsewhere)."""
+    if IS_WINDOWS:
+        import subprocess
+        return subprocess.list2cmdline([arg])
+    import shlex
+    return shlex.quote(arg)
+
+
+def console_encoding() -> str:
+    """The encoding a console program's output is written in (the OEM code page on Windows)."""
+    if IS_WINDOWS:
+        import ctypes
+        return f"cp{ctypes.windll.kernel32.GetOEMCP()}"
+    return "utf-8"
+
+
 def home_dir() -> str:
     return os.path.expanduser("~")
 
