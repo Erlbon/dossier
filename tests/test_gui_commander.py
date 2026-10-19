@@ -30,6 +30,7 @@ class FakeDialogs:
         self.conflict_answer = Resolution.SKIP
         self.confirm_answer = True
         self.verify_answer = None            # None: leave the checkbox as offered
+        self.progress_boxes = []             # every progress box that was shown, newest last
         self.transfer_offered_verify = None
         self.outputs = []
         self.save_answer = "discard"
@@ -69,10 +70,17 @@ class FakeDialogs:
         return self.conflict_answer
 
     def make_progress(self, title, on_cancel):
+        shown = self.progress_boxes
+
         class Box:
+            detail = ""
+            closed = False
             def update(self, done, total): pass
-            def close(self): pass
-        return Box()
+            def close(self): self.closed = True
+        box = Box()
+        box.title, box.cancel = title, on_cancel
+        shown.append(box)
+        return box
 
 
 @pytest.fixture

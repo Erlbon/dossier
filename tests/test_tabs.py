@@ -8,7 +8,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtCore import QPoint, Qt  # noqa: E402
 from PyQt6.QtTest import QTest  # noqa: E402
-from tests.helpers import activate_window  # noqa: E402
+from tests.helpers import activate_window, wait_planned  # noqa: E402
 from PyQt6.QtWidgets import QApplication  # noqa: E402
 
 from dossier.gui.main_window import MainWindow  # noqa: E402
@@ -184,6 +184,7 @@ def test_copy_goes_to_the_other_panels_current_tab(world):
     win.left.table.setCurrentIndex(win.left.model.index(win.left.model.row_of("a.txt"), 0))
     win.dialogs.confirm_answer = True
     win.copy()
+    wait_planned(win)
     end = __import__("time").time() + 5
     while __import__("time").time() < end and not (right / "gamma" / "a.txt").exists():
         QApplication.processEvents()

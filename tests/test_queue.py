@@ -3,6 +3,7 @@ import threading
 import time
 
 import pytest
+from tests.helpers import wait_planned
 
 pytest.importorskip("PyQt6")
 
@@ -51,11 +52,13 @@ def mark_all_and_copy(win):
     win.left.refresh()
     win.left.table.setCurrentIndex(win.left.model.index(1, 0))
     win.copy()
+    wait_planned(win)
 
 
 def move_second(win):
     win.left.table.setCurrentIndex(win.left.model.index(2, 0))
     win.move()
+    wait_planned(win)
 
 
 def test_a_second_operation_while_one_runs_is_queued_not_refused(world):

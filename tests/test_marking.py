@@ -1,5 +1,6 @@
 """Marking several items with the keyboard and the mouse, the way Explorer users expect, on top of Space."""
 import pytest
+from tests.helpers import wait_planned
 
 pytest.importorskip("PyQt6")
 
@@ -175,6 +176,7 @@ def test_a_failed_item_stays_marked_for_a_retry_the_others_are_unmarked(world, m
     monkeypatch.setattr(ops_module, "copy_file", flaky)
     win.select_all()
     win.copy()
+    wait_planned(win)
     pump(win, lambda: bool(dialogs.infos))
     assert marked(win) == ["f1.txt"] and (right / "f0.txt").exists() and (right / "f2.txt").exists()
 
@@ -209,6 +211,7 @@ def test_commands_use_only_the_marks_of_the_panel_they_start_from(world):
     assert "2 marked" in win.status.text() and "in this panel" in win.status.text()
     assert "1 more in the other panel" in win.status.text()
     win.copy()                                                      # right to left: only r0 and r1
+    wait_planned(win)
     assert "r0.txt" in dialogs.confirms[-1][1] or "2 items" in dialogs.confirms[-1][1]
     assert "3 items" not in dialogs.confirms[-1][1]
 
@@ -243,6 +246,7 @@ def test_the_confirmation_lists_the_items_of_this_panel_with_sizes_and_folders_w
     key(win, Qt.Key.Key_Space)
     key(win, Qt.Key.Key_Tab)
     win.copy()
+    wait_planned(win)
     text = dialogs.confirms[-1][1]
     assert text.startswith("Copy 2 items") and "3 files" in text
     assert f"from {left}" in text and f"to {right}" in text
@@ -258,5 +262,6 @@ def test_a_long_list_stops_at_twelve_and_says_how_many_more(world):
     win.left.table.setCurrentIndex(win.left.model.index(1, 0))
     win.select_all()
     win.copy()
+    wait_planned(win)
     text = dialogs.confirms[-1][1]
     assert "f11.txt" in text and "f12.txt" not in text and "and 8 more" in text and text.startswith("Copy 20 items")

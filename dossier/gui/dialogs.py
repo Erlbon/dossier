@@ -43,6 +43,10 @@ class ProgressBox:
         self._title = title
         self._meter = RateMeter()
 
+    def indeterminate(self) -> None:
+        """The work has no known size: the bar just moves."""
+        self._dlg.setRange(0, 0)
+
     detail = ""                  # the item being worked on, set by the window
     plan_bytes = None            # the bytes the plan moves; the bar's own total also counts reading back and flushing
 

@@ -197,7 +197,9 @@ def _placed(fs: FileSystem, src: str, dst: str, taken: set, is_dir: bool) -> dic
     return fields
 
 
-def _tree_ops(fs: FileSystem, src: str, dst: str, taken: set, ops: list, warnings: list) -> None:
+def _tree_ops(fs: FileSystem, src: str, dst: str, taken: set, ops: list, warnings: list, watch=None) -> None:
+    if watch is not None:
+        watch(len(ops))                       # told once per folder: how far the plan is, and the place to cancel
     ops.append(Op(Kind.MKDIR, src, dst, is_dir=True, **_placed(fs, src, dst, taken, True)))
     for e in sort_entries(fs.list(src)):
         child_src = fs.join(src, fs.basename(e.path))
@@ -205,7 +207,7 @@ def _tree_ops(fs: FileSystem, src: str, dst: str, taken: set, ops: list, warning
         if e.is_link:
             warnings.append(f"link skipped (links are not followed): {child_src}")
         elif e.is_dir:
-            _tree_ops(fs, child_src, child_dst, taken, ops, warnings)
+            _tree_ops(fs, child_src, child_dst, taken, ops, warnings, watch)
         else:
             ops.append(Op(Kind.COPY, child_src, child_dst, size=e.size, src_mtime=e.mtime,
                           **_placed(fs, child_src, child_dst, taken, False)))
@@ -234,8 +236,9 @@ def _check_sources_writable(fs: FileSystem, sources: Sequence[str], what: str, b
         blocking.append(f"cannot {what} items inside an archive (read-only); copy them out instead")
 
 
-def plan_copy(fs: FileSystem, sources: Sequence[str], dest_dir: str, *, flatten: bool = False) -> Plan:
-    """Copy files and folders into ``dest_dir``. ``flatten`` puts every file straight into it."""
+def plan_copy(fs: FileSystem, sources: Sequence[str], dest_dir: str, *, flatten: bool = False, watch=None) -> Plan:
+    """Copy files and folders into ``dest_dir``. ``flatten`` puts every file straight into it. ``watch(n)`` is called
+    as the plan grows (``n`` steps so far); it may raise ``Cancelled`` to stop a plan of a huge tree."""
     ops: list = []
     warnings: list = []
     blocking: list = []
@@ -243,6 +246,8 @@ def plan_copy(fs: FileSystem, sources: Sequence[str], dest_dir: str, *, flatten:
     taken: set = set()
     _check_destination(fs, dest_dir, blocking)
     for src in sources:
+        if watch is not None:
+            watch(len(ops))
         e = _stat(fs, src)
         if e is None:
             warnings.append(f"no longer there, left out: {src}")
@@ -259,7 +264,7 @@ def plan_copy(fs: FileSystem, sources: Sequence[str], dest_dir: str, *, flatten:
                     ops.append(Op(Kind.COPY, f.path, dst, size=f.size, src_mtime=f.mtime,
                                   **_placed(fs, f.path, dst, taken, False)))
             else:
-                _tree_ops(fs, src, fs.join(dest_dir, fs.basename(src)), taken, ops, warnings)
+                _tree_ops(fs, src, fs.join(dest_dir, fs.basename(src)), taken, ops, warnings, watch)
         else:
             dst = fs.join(dest_dir, fs.basename(src))
             ops.append(Op(Kind.COPY, src, dst, size=e.size, src_mtime=e.mtime, **_placed(fs, src, dst, taken, False)))
@@ -279,7 +284,7 @@ def same_volume(fs: FileSystem, a: str, b: str) -> bool:
         return True
 
 
-def plan_move(fs: FileSystem, sources: Sequence[str], dest_dir: str) -> Plan:
+def plan_move(fs: FileSystem, sources: Sequence[str], dest_dir: str, *, watch=None) -> Plan:
     ops: list = []
     warnings: list = []
     blocking: list = []
@@ -288,6 +293,8 @@ def plan_move(fs: FileSystem, sources: Sequence[str], dest_dir: str) -> Plan:
     _check_destination(fs, dest_dir, blocking)
     _check_sources_writable(fs, sources, "move", blocking)
     for src in sources:
+        if watch is not None:
+            watch(len(ops))
         e = _stat(fs, src)
         dst = fs.join(dest_dir, fs.basename(src))
         if e is None:
@@ -303,7 +310,7 @@ def plan_move(fs: FileSystem, sources: Sequence[str], dest_dir: str) -> Plan:
             # that really were copied. Nothing is removed from the source unless every copy succeeded.
             group = len([o for o in ops if o.kind is Kind.FINISH_MOVE]) + 1
             first = len(ops)
-            _tree_ops(fs, src, dst, taken, ops, warnings)
+            _tree_ops(fs, src, dst, taken, ops, warnings, watch)
             for k in range(first, len(ops)):
                 ops[k] = replace(ops[k], group=group)
             ops.append(Op(Kind.FINISH_MOVE, src, dst, is_dir=True, group=group))

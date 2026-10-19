@@ -28,6 +28,7 @@ from ..core.stallwatch import StallWatch
 from ..core.textedit import BinaryFile, EncodingProblem, FileTooLarge, load_document
 from ..core.terminals import (UnsafeArgument, builtin_profiles, default_launcher, default_profile, detect,
                               session_launch)
+from ..core.progress import check
 from ..core.undo_log import Step, UndoAction, UndoLog
 from ..core.vfs import FileSystem, LocalFileSystem
 from ..core.worker import Job, JobRunner, JobState, run_plan_job
@@ -96,7 +97,7 @@ class MainWindow(QMainWindow):
         self.profiles = detect(builtin_profiles(), self._which)
         self.profile = self._chosen_profile()
         self.windows_terminal = self._which("wt.exe") if IS_WINDOWS else None
-        self.busy = False
+        self._plans: list = []                     # plans being worked out in the background
         self.paused = False
         self._jobs: list = []                      # running first, then the ones waiting
         self._size_jobs: list = []                 # folder size walks in the background
@@ -900,18 +901,72 @@ class MainWindow(QMainWindow):
                 return None
         return plan
 
+    @property
+    def busy(self) -> bool:
+        """An operation runs or is waiting, or a plan is being worked out."""
+        return bool(self._jobs) or bool(self._plans)
+
+    def _plan_in_background(self, title: str, build, then) -> None:
+        """Work out a plan on a thread, so choosing many folders never freezes the window: ``build(watch)`` makes the
+        plan (``watch(n)`` is its place to be cancelled and to report how far it is), ``then(plan)`` goes on, on the
+        window's thread. A box with Cancel appears only when it takes a moment."""
+        holder: dict = {}
+        shown: dict = {}
+        count = {"n": 0}
+
+        def work(progress, cancel):
+            def watch(n: int) -> None:
+                check(cancel)
+                count["n"] = n
+                progress(n, 0)
+            return build(watch)
+
+        def on_progress(_done: int, _total: int) -> None:
+            if "box" not in shown:
+                shown["box"] = self.dialogs.make_progress(title, lambda: holder["job"].cancel() if "job" in holder else None)
+                make_indeterminate = getattr(shown["box"], "indeterminate", None)
+                if make_indeterminate is not None:
+                    make_indeterminate()
+            shown["box"].detail = f"{count['n']:,} items found so far"
+            shown["box"].update(0, 0)
+
+        def finished(job: Job) -> None:
+            if "box" in shown:
+                shown["box"].close()
+            if job in self._plans:
+                self._plans.remove(job)
+            if job.token.cancelled:
+                self._say("Cancelled")
+                return
+            if job.state is JobState.FAILED:
+                self.dialogs.info(title, str(job.error))
+                return
+            then(job.result)
+
+        job = self.cmd_runner.submit(title, work, on_progress=on_progress, on_done=finished)
+        holder["job"] = job
+        self._plans.append(job)
+
     def _transfer(self, move: bool) -> None:
         if self._home_blocked("Move" if move else "Copy"):
             return
         sources = self.active.targets()
         if not sources:
             return                                   # a busy window queues the operation
-        dest = self.other.path
-        plan = (plan_move if move else plan_copy)(self.fs, sources, dest)
+        dest, origin = self.other.path, self.active.path
+
+        def build(watch):
+            return (plan_move if move else plan_copy)(self.fs, sources, dest, watch=watch)
+
+        self._plan_in_background(f"Preparing the {'move' if move else 'copy'}", build,
+                                 lambda plan: self._confirm_and_run(plan, sources, dest, origin))
+
+    def _confirm_and_run(self, plan: Plan, sources: list, dest: str, origin: str) -> None:
+        """The plan is ready: conflicts, the confirmation (with the verify choice), then the run."""
         plan = self._settle(plan)
         if plan is None:
             return
-        verify = self.dialogs.confirm_transfer(plan.title, self._summary(plan, dest, sources, self.active.path), plan.title,
+        verify = self.dialogs.confirm_transfer(plan.title, self._summary(plan, dest, sources, origin), plan.title,
                                                 self.act_verify.isChecked())
         if verify is None:
             return
@@ -959,15 +1014,18 @@ class MainWindow(QMainWindow):
         if not sources:
             self.dialogs.info("Paste", "The copied items no longer exist.")
             return
-        plan = (plan_move if cut else plan_copy)(self.fs, sources, dest)
-        plan = self._settle(plan)
-        if plan is None:
-            return
-        if cut:
+        def build(watch):
+            return (plan_move if cut else plan_copy)(self.fs, sources, dest, watch=watch)
+
+        def go(plan: Plan) -> None:
+            plan = self._settle(plan)
+            if plan is None:
+                return
             self._run(plan, unmark=sources)
-            file_clipboard.clear_if_ours(sources)
-        else:
-            self._run(plan, unmark=sources)
+            if cut:
+                file_clipboard.clear_if_ours(sources)
+
+        self._plan_in_background("Preparing the paste", build, go)
 
     def rename(self) -> None:
         if self._home_blocked("Rename"):
@@ -1056,7 +1114,6 @@ class MainWindow(QMainWindow):
     def _run(self, plan: Plan, *, unmark: Optional[list] = None, select: str = "") -> None:
         """Queue a plan. Plans run one after the other (one disk is never fought over); the progress box of a
         plan appears when it starts, and a queued plan waits until the ones before it are done."""
-        self.busy = True
         holder: dict = {}
         shown: dict = {}
 
@@ -1079,7 +1136,6 @@ class MainWindow(QMainWindow):
                 shown["box"].close()
             if job in self._jobs:
                 self._jobs.remove(job)
-            self.busy = bool(self._jobs)
             self._job = self._jobs[0] if self._jobs else None
             self._update_queue_label()
             self._report(job, unmark)
@@ -1339,7 +1395,7 @@ class MainWindow(QMainWindow):
             if not ed.close():                       # the user cancelled a save question: stay open
                 event.ignore()
                 return
-        for job in list(self._jobs) + list(self._size_jobs):
+        for job in list(self._jobs) + list(self._size_jobs) + list(self._plans):
             job.cancel()
         self.settings.setValue("window/geometry", self.saveGeometry())
         self.settings.setValue("window/split", self.split.sizes())

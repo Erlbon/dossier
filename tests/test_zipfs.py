@@ -4,6 +4,7 @@ import struct
 import zipfile
 
 import pytest
+from tests.helpers import wait_planned
 
 from dossier.core import zipfs
 from dossier.core.home import HomeFileSystem, HomeProvider, RouterFileSystem
@@ -227,6 +228,7 @@ def test_enter_opens_a_zip_like_a_folder_and_dotdot_leaves_it(tmp_path):
             assert dialogs.infos, command
         # copying out works from the window
         win.copy()                                            # the left panel is active, the target is the right one
+        wait_planned(win)
         pump(win, lambda: (right / "one.txt").exists())
         assert (right / "one.txt").read_text() == "1"
     finally:
