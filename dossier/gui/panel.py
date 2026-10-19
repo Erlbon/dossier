@@ -311,8 +311,8 @@ class Panel(QFrame):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
-        # The gold frame of the active panel wraps everything BELOW the tabs, so the tabs are not drawn inside it
-        # (inside, the gold of the selected tab melted into the gold frame and bar).
+        # The gold frame of the active panel wraps everything below the tabs and has no top edge: the tabs rest
+        # directly on the address bar, and the current tab (the same gold) flows into it.
         self.body = QFrame()
         self.body.setObjectName("panelbody")
         body = QVBoxLayout(self.body)
@@ -322,7 +322,6 @@ class Panel(QFrame):
         body.addWidget(self.bar)
         body.addWidget(self.table, 1)
         layout.addWidget(self.tab_row)
-        layout.addSpacing(5)                       # a little distance between the tabs and the box
         layout.addWidget(self.body, 1)
 
         self.address.returnPressed.connect(self._address_entered)
@@ -360,7 +359,8 @@ class Panel(QFrame):
         self._active = active
         t = theme.current()
         accent, on_accent = t["accent"], t["accent_fg"]
-        self.setStyleSheet(f"#panelbody{{border:2px solid {accent if active else 'transparent'};}}")
+        # no top edge: the tabs sit directly on the box, so tabs, bar and frame read as one structure
+        self.setStyleSheet(f"#panelbody{{border:2px solid {accent if active else 'transparent'};border-top:none;}}")
         if active:
             self.bar.setStyleSheet(
                 f"#pathbarbox{{background:{accent};}}"

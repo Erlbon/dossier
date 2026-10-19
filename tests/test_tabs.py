@@ -340,3 +340,13 @@ def test_the_close_cross_of_the_current_tab_is_brighter_than_the_others(world):
     other = dominant_color(p.tabs.tabButton(0, QTabBar.ButtonPosition.RightSide).icon())
     assert cur is not None and other is not None
     assert (cur.red(), cur.green(), cur.blue()) != (other.red(), other.green(), other.blue())
+
+
+def test_the_tabs_rest_directly_on_the_panel_and_the_frame_has_no_top_edge(world):
+    from dossier.gui import theme
+    win, *_ = world
+    p = win.left
+    assert p.tab_row.geometry().bottom() + 1 == p.body.geometry().top()                 # no gap between them
+    assert "border-top:none" in p.styleSheet().replace(" ", "")
+    t = theme.current()
+    assert t["accent"] in p.styleSheet() and "transparent" in win.right.styleSheet()
