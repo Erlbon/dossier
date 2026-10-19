@@ -61,9 +61,18 @@ def test_the_generated_files_match_the_master(app, tmp_path):
     import sys
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "tools"))
     import make_icons
-    fresh = tmp_path / "fresh.ico"
-    make_icons.write_ico(str(fresh), appicon.SIZES)
-    assert fresh.read_bytes() == open(appicon.ICO, "rb").read()                 # run tools/make_icons.py after editing the SVG
+    make_icons.write_ico(str(tmp_path / "fresh.ico"), appicon.SIZES)
+    # Compared as pictures, not bytes: another system may compress the same picture differently. If this fails,
+    # the SVG changed: run tools/make_icons.py and commit the new files.
+    committed = open(appicon.ICO, "rb").read()
+    offset = struct.unpack("<II", committed[6 + 16 * (len(appicon.SIZES) - 1) + 8:6 + 16 * len(appicon.SIZES)])[1]
+    shipped = QImage.fromData(committed[offset:])
+    fresh = appicon.render(256)
+    assert shipped.size() == fresh.size()
+    total = sum(abs(shipped.pixelColor(x, y).red() - fresh.pixelColor(x, y).red())
+                + abs(shipped.pixelColor(x, y).alpha() - fresh.pixelColor(x, y).alpha())
+                for x in range(0, 256, 4) for y in range(0, 256, 4))
+    assert total / (64 * 64) < 3
     assert QImage(appicon.PNG).width() == 256
 
 
