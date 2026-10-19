@@ -208,13 +208,14 @@ def test_tabs_and_the_active_tab_are_restored(world, app):
 
 # the window title ------------------------------------------------------------------------------------------------------
 def test_the_file_manager_is_titled_with_the_machine_name_and_the_title_stays_put(world):
-    from dossier.core.platform import machine_name
+    from dossier.core.platform import is_elevated, machine_name
+    expected = f"Dossier {machine_name()}" + (" (Administrator)" if is_elevated() else "")   # CI runners are admins
     win, left, *_ = world
-    assert win.windowTitle() == f"Dossier {machine_name()}"
+    assert win.windowTitle() == expected
     win.left.table.setCurrentIndex(win.left.model.index(win.left.model.row_of("a.txt"), 0))
     key(win, Qt.Key.Key_Tab)
     win.left.new_tab()
-    assert win.windowTitle() == f"Dossier {machine_name()}"           # the cursor and the tabs do not rename it
+    assert win.windowTitle() == expected                              # the cursor and the tabs do not rename it
 
 
 def test_the_administrator_mark_follows_the_machine_name(app, tmp_path, monkeypatch):
