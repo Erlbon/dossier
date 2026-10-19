@@ -181,15 +181,19 @@ def set_app_id(app_id: str) -> None:
             pass
 
 
-def set_window_border(hwnd: int, color: str) -> bool:
-    """Colour the thin border Windows 11 draws round a window (``#rrggbb``). It is the window's own look, not
-    a system setting: only this window changes. Older Windows and other systems ignore it (returns False)."""
+def set_window_border(hwnd: int, color: Optional[str]) -> bool:
+    """Colour the thin border Windows 11 draws round a window (``#rrggbb``), or remove it (``None``). It is
+    the window's own look, not a system setting: only this window changes. Older Windows and other systems
+    ignore it (returns False)."""
     if not IS_WINDOWS:
         return False
     import ctypes
     try:
-        rgb = int(color.lstrip("#"), 16)
-        colorref = ctypes.c_uint32(((rgb & 0xFF) << 16) | (rgb & 0xFF00) | (rgb >> 16))      # 0x00BBGGRR
+        if color is None:
+            colorref = ctypes.c_uint32(0xFFFFFFFE)                                   # DWMWA_COLOR_NONE
+        else:
+            rgb = int(color.lstrip("#"), 16)
+            colorref = ctypes.c_uint32(((rgb & 0xFF) << 16) | (rgb & 0xFF00) | (rgb >> 16))   # 0x00BBGGRR
         DWMWA_BORDER_COLOR = 34
         result = ctypes.windll.dwmapi.DwmSetWindowAttribute(
             ctypes.c_void_p(int(hwnd)), DWMWA_BORDER_COLOR, ctypes.byref(colorref), ctypes.sizeof(colorref))

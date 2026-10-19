@@ -380,12 +380,11 @@ def test_the_active_panel_is_obvious_in_three_ways(world):
     assert win.right.table.palette().color(QPalette.ColorRole.Highlight) == QColor(t["cursor_bg"])
 
 
-def test_the_window_border_call_is_harmless_and_follows_the_theme(world, monkeypatch):
+def test_the_window_asks_windows_for_no_border_and_again_after_a_theme_change(world, monkeypatch):
     win, *_ = world
     calls = []
     import dossier.gui.main_window as mw
     monkeypatch.setattr(mw, "set_window_border", lambda hwnd, color: calls.append(color) or True)
     win.set_scheme("dark")
     win.set_scheme("light")
-    from dossier.gui import theme
-    assert calls and calls[-1] == theme.current()["card"]
+    assert calls and set(calls) == {None}                   # None: no border at all

@@ -299,10 +299,10 @@ class MainWindow(QMainWindow):
             b.setIcon(icon_set.icon(name, color))
 
     def _tint_window_border(self) -> None:
-        """The thin border Windows 11 draws round the window takes the window colour, so it does not show as a
-        grey line beside the panels."""
+        """Windows 11 draws a thin grey border round every window; it shows as a line beside the gold panel
+        frame, so this window asks for none."""
         if self.isVisible():
-            set_window_border(int(self.winId()), theme.current()["card"])
+            set_window_border(int(self.winId()), None)
 
     def showEvent(self, event) -> None:
         super().showEvent(event)
