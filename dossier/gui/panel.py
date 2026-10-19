@@ -89,6 +89,7 @@ class Panel(QFrame):
         self.selection = selection
         self._dispatch = dispatch
         self._last: dict = {}          # drive root -> the folder this panel was in on that drive
+        self.notes_enabled = True
         self.model = FolderModel(fs, selection, self)
         self.setObjectName("panel")
 
@@ -275,8 +276,12 @@ class Panel(QFrame):
         self.drive_bar.open_menu()
 
     # the note -------------------------------------------------------------------------
+    def set_notes_enabled(self, on: bool) -> None:
+        self.notes_enabled = on
+        self._load_note(self.path)
+
     def _load_note(self, path: str) -> None:
-        text = compose_markdown(find_notes(self.fs, path))
+        text = compose_markdown(find_notes(self.fs, path)) if self.notes_enabled else ""
         self.model.set_has_note(bool(text))
         if not text:
             self.note.hide()

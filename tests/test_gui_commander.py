@@ -345,7 +345,7 @@ def test_alt_f1_opens_the_drive_list_of_the_left_panel(world):
 
 def test_f_key_bar_only_offers_working_commands(world):
     win, *_ = world
-    assert [b.text() for b in win._fkey_buttons] == ["F2 Rename", "F5 Copy", "F6 Move", "F7 Folder", "F8 Delete"]
+    assert [b.text() for b in win._fkey_buttons] == ["F2 Rename", "F3 View", "F5 Copy", "F6 Move", "F7 Folder", "F8 Delete"]
 
 
 def test_the_active_panel_is_obvious_in_three_ways(world):

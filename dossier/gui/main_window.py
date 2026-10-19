@@ -26,6 +26,7 @@ from .models import human_size
 from .panel import Panel
 from .qt_bridge import QtDispatcher
 from .theme import ThemeManager
+from .viewer import TextViewerWindow
 
 BIN = "recycle bin" if IS_WINDOWS else "trash"
 SIZE_LIMIT = 1000    # the status line sizes at most this many marked items
@@ -50,6 +51,7 @@ class MainWindow(QMainWindow):
         self.runner = JobRunner(self.dispatcher)
         self.busy = False
         self._job: Optional[Job] = None
+        self.viewers: list = []
 
         self.left = Panel(self.fs, self.selection, dispatch=self.dispatcher)
         self.right = Panel(self.fs, self.selection, dispatch=self.dispatcher)
@@ -88,6 +90,7 @@ class MainWindow(QMainWindow):
 
         self._restore(start)
         self.set_drive_style(str(self.settings.value("view/drive_selector", "menu")))
+        self.set_notes_visible(self.act_notes.isChecked())
         self._set_active(self.left)
         self.left.table.setFocus()
         self._update_status()
@@ -112,6 +115,7 @@ class MainWindow(QMainWindow):
     def _build_menus(self) -> None:
         bar = self.menuBar()
         files = bar.addMenu("&Files")
+        self.act_view = self._action("View", "F3", self.view_file)
         self.act_rename = self._action("Rename", "F2", self.rename)
         self.act_copy = self._action("Copy to Other Panel", "F5", self.copy)
         self.act_move = self._action("Move to Other Panel", "F6", self.move)
@@ -119,7 +123,8 @@ class MainWindow(QMainWindow):
         self.act_delete = self._action("Delete", ["F8", "Delete"], self.delete)
         self.act_delete_perm = self._action("Delete Permanently", "Shift+F8", lambda: self.delete(permanent=True))
         quit_ = self._action("Quit", "Ctrl+Q", self.close)
-        for a in (self.act_rename, self.act_copy, self.act_move, self.act_mkdir, self.act_delete, self.act_delete_perm):
+        for a in (self.act_view, self.act_rename, self.act_copy, self.act_move, self.act_mkdir, self.act_delete,
+                  self.act_delete_perm):
             files.addAction(a)
         files.addSeparator()
         files.addAction(quit_)
@@ -128,7 +133,27 @@ class MainWindow(QMainWindow):
                   self._action("Invert Selection", "*", self.invert_selection),
                   self._action("Deselect All", "Ctrl+Shift+A", self.selection.clear)):
             mark.addAction(a)
-        view = bar.addMenu("&View")
+        view_menu = bar.addMenu("&View")
+        self.view_mode_actions = {}
+        mode_group = QActionGroup(self)
+        mode_group.setExclusive(True)
+        details = QAction("Details", self)
+        details.setCheckable(True)
+        details.setChecked(True)
+        mode_group.addAction(details)
+        view_menu.addAction(details)
+        self.view_mode_actions["details"] = details          # List, Icons and Thumbnails join here when built
+        view_menu.addSeparator()
+        self.act_notes = QAction("Folder Notes", self)
+        self.act_notes.setCheckable(True)
+        self.act_notes.setChecked(str(self.settings.value("view/notes", "true")).lower() != "false")
+        self.act_notes.toggled.connect(self.set_notes_visible)
+        view_menu.addAction(self.act_notes)
+        view_menu.addAction(self._action("Refresh", "Ctrl+R", self.refresh))
+        commands = bar.addMenu("&Commands")
+        for a in (self._action("Undo", "Ctrl+Z", self.undo), self._action("Swap Panels", "Ctrl+U", self.swap_panels)):
+            commands.addAction(a)
+        view = bar.addMenu("&Settings")
         scheme_menu = view.addMenu("Color Scheme")
         group = QActionGroup(self)
         group.setExclusive(True)
@@ -162,11 +187,6 @@ class MainWindow(QMainWindow):
             self.drive_style_actions[key] = act
         self._action("Drives of Left Panel", "Alt+F1", lambda: self.left.open_drive_menu())
         self._action("Drives of Right Panel", "Alt+F2", lambda: self.right.open_drive_menu())
-        commands = bar.addMenu("&Commands")
-        for a in (self._action("Undo", "Ctrl+Z", self.undo),
-                  self._action("Refresh", "Ctrl+R", self.refresh),
-                  self._action("Swap Panels", "Ctrl+U", self.swap_panels)):
-            commands.addAction(a)
 
     def _build_fkey_bar(self) -> QWidget:
         bar = QWidget()
@@ -176,6 +196,7 @@ class MainWindow(QMainWindow):
         self._fkey_buttons = []
         self._fkey_icons = []
         for label, icon_name_, slot in (("F2 Rename", "pencil", lambda: self.rename()),
+                                        ("F3 View", "file-text", lambda: self.view_file()),
                                         ("F5 Copy", "copy", lambda: self.copy()),
                                         ("F6 Move", "arrows-right-left", lambda: self.move()),
                                         ("F7 Folder", "folder-plus", lambda: self.new_folder()),
@@ -248,6 +269,28 @@ class MainWindow(QMainWindow):
             self._on_theme_changed()          # clears the cache and repaints every icon
             if set_id in self.icon_set_actions:
                 self.icon_set_actions[set_id].setChecked(True)
+
+    def set_notes_visible(self, on: bool) -> None:
+        for panel in (self.left, self.right):
+            panel.set_notes_enabled(on)
+        self.settings.setValue("view/notes", "true" if on else "false")
+
+    def view_file(self) -> None:
+        """F3: view the marked files (or the one under the cursor), stepping through them in one window."""
+        paths = []
+        for p in self.active.targets():
+            try:
+                if not self.fs.stat(p).is_dir:
+                    paths.append(p)
+            except OSError:
+                pass
+        if not paths:
+            self.dialogs.info("View", "Select a file to view.")
+            return
+        win = TextViewerWindow(paths, 0, dispatch=self.dispatcher)
+        self.viewers.append(win)
+        win.destroyed.connect(lambda _o=None, w=win: self.viewers.remove(w) if w in self.viewers else None)
+        win.show()
 
     def set_drive_style(self, style: str) -> None:
         if style not in self.drive_style_actions:
@@ -484,6 +527,8 @@ class MainWindow(QMainWindow):
             self.split.setSizes([int(s) for s in sizes])
 
     def closeEvent(self, event) -> None:
+        for v in list(self.viewers):
+            v.close()
         if self._job is not None:
             self._job.cancel()
         self.settings.setValue("window/geometry", self.saveGeometry())

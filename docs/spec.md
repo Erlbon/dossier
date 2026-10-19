@@ -91,6 +91,7 @@ F3 opens a viewer in a window of its own or in a preview pane. The viewer is cho
 | --- | --- | --- | --- |
 | V1 | Text | Any size (memory-mapped), encoding detection, line numbers, search, follow mode for logs; quick edit with save up to a size cap, larger or complex edits open in the user's external editor | TNT |
 | V2 | Hex | Hex and text side by side, search by bytes or text, edit in place with explicit save | TNT |
+| V1b | Notepad (F4) | The built-in quick editor and the viewer both support vertical (column, rectangular) selection: Alt+drag with the mouse and Alt+Shift+arrows, copy of the block, and in the editor typing and deleting down a column; never Ctrl+Alt, which is AltGr on Norwegian keyboards. Requested by the owner 2026-10-19 as an everyday function many notepads lack | New |
 | V3 | Multi-file | Step through the selected files with next/previous in one viewer window | TNT |
 | V4 | Markdown | Rendered by default with a source toggle; safe subset: raw HTML shown as text, links limited to http, https, mailto and local paths, 256 KB cap | New |
 | V5 | CSV / TSV | Table with sniffed delimiter and encoding, header toggle, column sort and filter, lazy loading for large files, copy as TSV, optional row-checker hook; edit and save keep the original dialect | New |
