@@ -80,7 +80,9 @@ Anything that holds files can be entered like a folder. One interface (list, rea
 | A3 | Pack and unpack dialogs; ZIP split and merge; self-extracting archive creation is not planned | TNT |
 | A4 | Guards: entry-count and compression-ratio limits against zip bombs, no path escape on extract, names decoded with a fallback code page | New |
 
-Status (2026-10-19): ZIP opens as a read-only folder (`core/zipfs.py`, paths `zip://<archive>!/inside`): Enter on a zip, `..` leaves it, copy out and F3 work, F4, move, rename, delete and new items are refused with a reason. Guards done: entry-count cap, no path escape, UTF-8 then DOS code page names, encrypted entries reported. Not done: compression-ratio limit, TAR/GZ, writing into archives.
+Status (2026-10-19): ZIP opens as a read-only folder (`core/zipfs.py`, paths `zip://<archive>!/inside`): Enter on a zip, `..` leaves it, copy out and F3 work, F4, move, rename, delete and new items are refused with a reason. Guards done: entry-count cap, no path escape, UTF-8 then DOS code page names, encrypted entries reported. Not done: compression-ratio limit, writing into archives.
+
+Status (2026-10-19, A2): `core/archives.py` has three readers behind one interface: zip (standard library), 7z through `py7zr` (optional extra `archives`), and everything else through an installed 7-Zip (`7z`, `7zz`, `7za`): RAR, CAB, ISO, TAR, GZ, BZ2, XZ, ARJ, LZH, CPIO and 7z as a fallback. Without a reader the file opens in the system's program and the status line says what would open it as a folder. Tested with real 7z and tar files, wildcard and non-ASCII names, encrypted members and headers (no password prompt can hang it), damaged archives; not tested with a real RAR file (needs one to try) and not with UnRAR on its own (not built). A tar.gz opens as the tar inside it, one more Enter for the contents.
 | A5 | SQLite database as a virtual folder: tables and views are items, rows open in the table viewer | New |
 | A6 | Remote sources (section 10) mount into the same tree | New |
 | A7 | Plug-in interface for new virtual file systems, documented and versioned | TNT |
