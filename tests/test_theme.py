@@ -71,3 +71,25 @@ def test_auto_follows_the_system(app, monkeypatch):
     monkeypatch.setattr(theme, "system_is_dark", lambda _app: False)
     mgr.apply()
     assert theme.current()["bg"] == theme.LIGHT["bg"]
+
+
+@pytest.mark.parametrize("tokens", [theme.LIGHT, theme.DARK])
+def test_tab_text_is_readable_on_both_kinds_of_tab(tokens):
+    c = theme.tab_colors(tokens)
+    assert theme.contrast(c["active_text"], c["active_fill"]) >= 4.5
+    assert theme.contrast(c["inactive_text"], c["inactive_fill"]) >= 4.5
+    assert theme.contrast(c["inactive_text"], c["hover_fill"]) >= 4.5
+
+
+@pytest.mark.parametrize("tokens", [theme.LIGHT, theme.DARK])
+def test_the_active_tab_is_the_big_gold_and_the_others_a_dark_gold(tokens):
+    c = theme.tab_colors(tokens)
+    assert c["active_fill"] == tokens["accent"]
+    assert c["inactive_fill"] != c["active_fill"] and theme.contrast(c["active_fill"], c["inactive_fill"]) >= 1.5
+    assert c["active_line"] != c["active_fill"] and c["inactive_line"] != c["inactive_fill"]   # an outline you can see
+
+
+def test_mix_blends_between_two_colours():
+    assert theme.mix("#000000", "#ffffff", 0.0) == "#ffffff"
+    assert theme.mix("#000000", "#ffffff", 1.0) == "#000000"
+    assert theme.mix("#ff0000", "#0000ff", 0.5) == "#800080"

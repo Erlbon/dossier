@@ -47,6 +47,26 @@ def contrast(a: str, b: str) -> float:
     return (hi + 0.05) / (lo + 0.05)
 
 
+def mix(a: str, b: str, amount: float) -> str:
+    """``a`` blended into ``b``: amount 0 is all ``b``, 1 is all ``a``. Returns '#rrggbb'."""
+    ca, cb = QColor(a), QColor(b)
+    k = max(0.0, min(1.0, amount))
+    return QColor(round(cb.red() + (ca.red() - cb.red()) * k), round(cb.green() + (ca.green() - cb.green()) * k),
+                  round(cb.blue() + (ca.blue() - cb.blue()) * k)).name()
+
+
+def tab_colors(t: Optional[dict] = None) -> dict:
+    """The folder tabs: the current one in the big solid gold, the others in a dark gold, every one with a thin
+    outline. Text colours are chosen for contrast (checked in tests/test_theme.py)."""
+    t = t or _current
+    inactive = mix(t["accent"], t["bg"], 0.30)
+    return {
+        "active_fill": t["accent"], "active_text": t["accent_fg"], "active_line": QColor(t["accent"]).darker(170).name(),
+        "inactive_fill": inactive, "inactive_text": t["fg"], "inactive_line": t["accent"],
+        "hover_fill": mix(t["accent"], t["bg"], 0.48),
+    }
+
+
 def build_palette(t: dict) -> QPalette:
     p = QPalette()
     R = QPalette.ColorRole

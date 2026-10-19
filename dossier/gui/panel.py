@@ -144,12 +144,12 @@ class PanelTabBar(QTabBar):
         return QRectF(self.tabRect(index).adjusted(2, 4, -2, 0))      # the gap between tabs is the two margins
 
     def paintEvent(self, event) -> None:
-        t = theme.current()
+        c = theme.tab_colors()
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        width = 1.0                                       # a thin outline on every tab
         for i in range(self.count()):
             selected = i == self.currentIndex()
-            width = 2.0 if selected else 1.0
             r = self.tab_outline(i).adjusted(width / 2, width / 2, -width / 2, 0)   # the line sits on whole pixels
             path = QPainterPath()                        # open at the bottom: the tab grows out of the bar below
             path.moveTo(r.left(), r.bottom())
@@ -160,17 +160,15 @@ class PanelTabBar(QTabBar):
             path.lineTo(r.right(), r.bottom())
             fill = QPainterPath(path)
             fill.closeSubpath()
-            if selected:
-                p.fillPath(fill, QColor(t["cursor_bg"]))
-            else:
-                p.fillPath(fill, QColor(t["line"] if i == self._hover else t["bg"]))
-            p.setPen(QPen(QColor(t["accent"] if selected else t["line"]), width))
+            p.fillPath(fill, QColor(c["active_fill"] if selected else c["hover_fill"] if i == self._hover
+                                    else c["inactive_fill"]))
+            p.setPen(QPen(QColor(c["active_line"] if selected else c["inactive_line"]), width))
             p.drawPath(path)
             text_rect = r.adjusted(12, 0, -26, 0)           # room for the close cross on the right
             font = p.font()
             font.setBold(selected)
             p.setFont(font)
-            p.setPen(QColor(t["fg"] if selected or i == self._hover else t["dim"]))
+            p.setPen(QColor(c["active_text"] if selected else c["inactive_text"]))
             p.drawText(text_rect, int(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft),
                        QFontMetrics(font).elidedText(self.tabText(i), Qt.TextElideMode.ElideRight,
                                                      int(text_rect.width())))
@@ -420,11 +418,11 @@ class Panel(QFrame):
         self._style_close_buttons()
 
     def _style_close_buttons(self) -> None:
-        """A cross drawn in the scheme's colours: dim on the tabs you are not on, full colour on the current one."""
-        t = theme.current()
+        """A cross in the text colour of its tab (dark on the gold tab, light on the dark gold ones)."""
+        c = theme.tab_colors()
         for tid, btn in list(self._close_buttons.items()):
             try:
-                btn.setIcon(icon_set.icon("x", t["fg"] if tid == self._current_tab_id else t["dim"]))
+                btn.setIcon(icon_set.icon("x", c["active_text"] if tid == self._current_tab_id else c["inactive_text"]))
             except RuntimeError:                      # the button went away with its tab
                 self._close_buttons.pop(tid, None)
 
