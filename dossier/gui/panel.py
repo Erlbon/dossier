@@ -16,6 +16,7 @@ from ..core.notes import compose_markdown, find_notes
 from ..core.selection import SelectionStore
 from ..core.vfs import Entry, FileSystem
 from ..core.drives import drive_of, usage_async
+from ..core.platform import has_scheme, path_key
 from . import icon_set, theme
 from .drive_bar import DriveBar
 from .models import FolderModel, human_size
@@ -364,7 +365,7 @@ class Panel(QFrame):
 
     def current_name(self) -> str:
         e = self.current_entry()
-        return os.path.basename(e.path) if e else ""
+        return self.fs.basename(e.path) if e else ""
 
     # navigation ----------------------------------------------------------------------
     def set_folder(self, path: str, select: str = "") -> bool:
@@ -426,9 +427,8 @@ class Panel(QFrame):
             except RuntimeError:                      # the button went away with its tab
                 self._close_buttons.pop(tid, None)
 
-    @staticmethod
-    def _tab_label(path: str) -> str:
-        return os.path.basename(path.rstrip("\\/")) or path or "..."
+    def _tab_label(self, path: str) -> str:
+        return self.fs.basename(path.rstrip("\\/")) or path or "..."
 
     def _index_of_tab(self, tid: Optional[int]) -> int:
         return next((i for i in range(self.tabs.count()) if self.tabs.tabData(i) == tid), -1)
@@ -472,7 +472,7 @@ class Panel(QFrame):
         self.table.sortByColumn(st.sort_col, order)
         path = st.path
         while path and not self.set_folder(path, select=st.current):     # a folder that is gone: nearest parent
-            parent = os.path.dirname(path.rstrip("\\/"))
+            parent = self.fs.parent(path)
             if not parent or parent == path:
                 break
             path = parent
@@ -514,7 +514,7 @@ class Panel(QFrame):
         self.tabs.setCurrentIndex(0)
         st = first
         while not self.set_folder(st.path):
-            parent = os.path.dirname(st.path.rstrip("\\/"))
+            parent = self.fs.parent(st.path)
             if not parent or parent == st.path:
                 break
             st.path = parent
@@ -538,7 +538,7 @@ class Panel(QFrame):
 
     def go_up(self) -> None:
         if self.model.is_up_row(0):
-            came_from = os.path.basename(self.path.rstrip("\\/"))
+            came_from = self.fs.basename(self.path.rstrip("\\/"))
             self.set_folder(self.model.entry_at(0).path, select=came_from)
 
     def open_current(self, new_tab: bool = False) -> None:
@@ -557,7 +557,8 @@ class Panel(QFrame):
 
     def _address_entered(self) -> None:
         text = self.address.text().strip()
-        if text and not self.set_folder(os.path.normpath(os.path.expanduser(text))):
+        typed = text if has_scheme(text) else os.path.normpath(os.path.expanduser(text))
+        if text and not self.set_folder(typed):
             self.address.setText(self.path)
         self.table.setFocus()
 
@@ -581,7 +582,7 @@ class Panel(QFrame):
         if here is not None and (drive.kind == "home" or here.path != drive.path):
             self._last[here.path] = self.path          # remember where we were when leaving a drive
         target = self._last.get(drive.path, drive.path)
-        if drive.kind != "home" and os.path.normcase(target) == os.path.normcase(self.path):
+        if drive.kind != "home" and path_key(target) == path_key(self.path):
             target = drive.path                          # clicking the drive you are in toggles to its root
         if not self.set_folder(target) and target != drive.path:
             self.set_folder(drive.path)

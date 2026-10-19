@@ -50,8 +50,8 @@ class FolderModel(QAbstractTableModel):
     def set_folder(self, path: str) -> None:
         """List ``path``. Raises OSError (the old listing stays) when it cannot be read."""
         entries = self.fs.list(path)
-        parent = os.path.dirname(os.path.normpath(path))
-        up = Entry("..", parent, True) if parent and parent != os.path.normpath(path) else None
+        parent = self.fs.parent(path)
+        up = Entry("..", parent, True) if parent else None
         self.beginResetModel()
         self.path = path
         self._up = up
@@ -85,7 +85,7 @@ class FolderModel(QAbstractTableModel):
     def row_of(self, name: str) -> int:
         for r in range(self.entry_count()):
             e = self.entry_at(r)
-            if e and os.path.basename(e.path) == name and not self.is_up_row(r):
+            if e and self.fs.basename(e.path) == name and not self.is_up_row(r):
                 return r
         return -1
 

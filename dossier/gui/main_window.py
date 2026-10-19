@@ -495,7 +495,7 @@ class MainWindow(QMainWindow):
             self.dialogs.info("Command", "No command interpreter was found.")
             return
         entry = self.active.current_entry()
-        ph = Placeholders(current_name=os.path.basename(entry.path) if entry else "",
+        ph = Placeholders(current_name=self.fs.basename(entry.path) if entry else "",
                           current_path=entry.path if entry else "",
                           marked=tuple(self.selection.paths()), folder=self.active.path, other=self.other.path)
         try:
@@ -614,7 +614,7 @@ class MainWindow(QMainWindow):
             self.dialogs.info(plan.title, "Nothing to do.\n" + "\n".join(plan.warnings[:8]))
             return None
         if plan.conflicts:
-            names = [os.path.basename(plan.ops[i].dst) for i in plan.conflicts[:6]]
+            names = [self.fs.basename(plan.ops[i].dst) for i in plan.conflicts[:6]]
             more = "" if len(plan.conflicts) <= 6 else f"\nand {len(plan.conflicts) - 6} more"
             choice = self.dialogs.ask_conflict(f"{len(plan.conflicts)} already exist:\n" + "\n".join(names) + more)
             if choice is None:
@@ -649,7 +649,7 @@ class MainWindow(QMainWindow):
         entry = self.active.current_entry()
         if entry is None or self.busy:
             return
-        old = os.path.basename(entry.path)
+        old = self.fs.basename(entry.path)
         new = self.dialogs.ask_text("Rename", "New name:", old)
         if not new or new == old:
             return
@@ -669,7 +669,7 @@ class MainWindow(QMainWindow):
         if why:
             self.dialogs.info("New Folder", why[0].upper() + why[1:] + ".")
             return
-        path = os.path.join(self.active.path, name)
+        path = self.fs.join(self.active.path, name)
         try:
             self.fs.mkdir(path)
         except FileExistsError:
@@ -691,7 +691,7 @@ class MainWindow(QMainWindow):
         if plan.blocking or not plan.ops:
             self._settle(plan)
             return
-        names = "\n".join(os.path.basename(op.src) for op in plan.ops[:6])
+        names = "\n".join(self.fs.basename(op.src) for op in plan.ops[:6])
         more = "" if len(plan.ops) <= 6 else f"\nand {len(plan.ops) - 6} more"
         if permanent:
             ok = self.dialogs.confirm("Delete Permanently", f"Delete {len(plan.ops)} item(s) permanently? "
@@ -744,7 +744,7 @@ class MainWindow(QMainWindow):
             return
         result = job.result
         if result.failed:
-            lines = [f"{os.path.basename(r.op.src or r.op.dst)}: {r.error}" for r in result.failed[:10]]
+            lines = [f"{self.fs.basename(r.op.src or r.op.dst)}: {r.error}" for r in result.failed[:10]]
             self.dialogs.info("Some items failed", "\n".join(lines))
         elif job.state is JobState.CANCELLED:
             self._say(f"Cancelled. {len(result.done)} step(s) were done; Ctrl+Z undoes them.")

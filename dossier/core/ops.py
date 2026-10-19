@@ -96,10 +96,10 @@ class Plan:
                 taken = {path_key(o.dst) for j, o in enumerate(ops) if j != i and o.dst}
                 new_dst = _unique_name(fs, op.dst, op.is_dir, taken)
                 if op.kind is Kind.MKDIR:   # children were planned under the old folder name
-                    old_prefix = op.dst.rstrip(os.sep) + os.sep
+                    old_prefix = op.dst.rstrip(fs.sep) + fs.sep
                     for j in range(i + 1, len(ops)):
                         if ops[j].dst.startswith(old_prefix):
-                            moved = new_dst + os.sep + ops[j].dst[len(old_prefix):]
+                            moved = new_dst + fs.sep + ops[j].dst[len(old_prefix):]
                             still = ops[j].conflict if ops[j].conflict != _SAME_ITEM else ""
                             ops[j] = replace(ops[j], dst=moved, conflict=still)
                 ops[i] = replace(op, dst=new_dst, conflict="", dst_is_dir=False, dst_mtime=0.0)
@@ -149,17 +149,17 @@ def _stat(fs: FileSystem, path: str) -> Optional[Entry]:
         return None
 
 
-def _within(child: str, parent: str) -> bool:
+def _within(fs: FileSystem, child: str, parent: str) -> bool:
     c, p = path_key(child), path_key(parent)
-    return c == p or c.startswith(p.rstrip(os.sep) + os.sep)
+    return c == p or c.startswith(p.rstrip(fs.sep) + fs.sep)
 
 
 def _unique_name(fs: FileSystem, dst: str, is_dir: bool, taken: set) -> str:
-    folder, base = os.path.split(dst)
+    folder, base = fs.dirname(dst), fs.basename(dst)
     stem, ext = (base, "") if is_dir else os.path.splitext(base)
     n = 2
     while True:
-        cand = os.path.join(folder, f"{stem} ({n}){ext}")
+        cand = fs.join(folder, f"{stem} ({n}){ext}")
         if path_key(cand) not in taken and _stat(fs, cand) is None:
             return cand
         n += 1
@@ -189,8 +189,8 @@ def _placed(fs: FileSystem, src: str, dst: str, taken: set, is_dir: bool) -> dic
 def _tree_ops(fs: FileSystem, src: str, dst: str, taken: set, ops: list, warnings: list) -> None:
     ops.append(Op(Kind.MKDIR, src, dst, is_dir=True, **_placed(fs, src, dst, taken, True)))
     for e in sort_entries(fs.list(src)):
-        child_src = os.path.join(src, os.path.basename(e.path))
-        child_dst = os.path.join(dst, os.path.basename(e.path))
+        child_src = fs.join(src, fs.basename(e.path))
+        child_dst = fs.join(dst, fs.basename(e.path))
         if e.is_link:
             warnings.append(f"link skipped (links are not followed): {child_src}")
         elif e.is_dir:
@@ -233,17 +233,17 @@ def plan_copy(fs: FileSystem, sources: Sequence[str], dest_dir: str, *, flatten:
             warnings.append(f"link skipped (links are not followed): {src}")
             skipped.append(src)
         elif e.is_dir:
-            if _within(dest_dir, src) and path_key(dest_dir) != path_key(os.path.dirname(src)):
+            if _within(fs, dest_dir, src) and path_key(dest_dir) != path_key(fs.dirname(src)):
                 blocking.append(f"cannot copy a folder into itself: {src}")
             elif flatten:
                 for f in _flat_files(fs, src, warnings):
-                    dst = os.path.join(dest_dir, os.path.basename(f.path))
+                    dst = fs.join(dest_dir, fs.basename(f.path))
                     ops.append(Op(Kind.COPY, f.path, dst, size=f.size, src_mtime=f.mtime,
                                   **_placed(fs, f.path, dst, taken, False)))
             else:
-                _tree_ops(fs, src, os.path.join(dest_dir, os.path.basename(src)), taken, ops, warnings)
+                _tree_ops(fs, src, fs.join(dest_dir, fs.basename(src)), taken, ops, warnings)
         else:
-            dst = os.path.join(dest_dir, os.path.basename(src))
+            dst = fs.join(dest_dir, fs.basename(src))
             ops.append(Op(Kind.COPY, src, dst, size=e.size, src_mtime=e.mtime, **_placed(fs, src, dst, taken, False)))
     return Plan("Copy", tuple(ops), tuple(warnings), tuple(blocking), tuple(skipped))
 
@@ -257,14 +257,14 @@ def plan_move(fs: FileSystem, sources: Sequence[str], dest_dir: str) -> Plan:
     _check_destination(fs, dest_dir, blocking)
     for src in sources:
         e = _stat(fs, src)
-        dst = os.path.join(dest_dir, os.path.basename(src))
+        dst = fs.join(dest_dir, fs.basename(src))
         if e is None:
             warnings.append(f"no longer there, left out: {src}")
             skipped.append(src)
         elif path_key(src) == path_key(dst):
             warnings.append(f"already in that folder, left out: {src}")
             skipped.append(src)
-        elif e.is_dir and _within(dest_dir, src):
+        elif e.is_dir and _within(fs, dest_dir, src):
             blocking.append(f"cannot move a folder into itself: {src}")
         else:
             fields = _placed(fs, src, dst, taken, False)   # a folder never merges on a move
@@ -284,17 +284,17 @@ def plan_rename_many(fs: FileSystem, pairs: Sequence[tuple]) -> Plan:
         why = check_name(new_name)
         e = _stat(fs, src)
         if why:
-            blocking.append(f"{os.path.basename(src)}: {why}")
+            blocking.append(f"{fs.basename(src)}: {why}")
             continue
         if e is None:
             warnings.append(f"no longer there, left out: {src}")
             skipped.append(src)
             continue
-        dst = os.path.join(os.path.dirname(src), new_name)
-        if os.path.basename(src) == new_name:
+        dst = fs.join(fs.dirname(src), new_name)
+        if fs.basename(src) == new_name:
             skipped.append(src)
             continue
-        case_only = os.path.normcase(src) == os.path.normcase(dst)
+        case_only = path_key(src) == path_key(dst)          # only differs in case, on a case-insensitive system
         if case_only:
             ops.append(Op(Kind.RENAME, src, dst, is_dir=e.is_dir, size=e.size, src_mtime=e.mtime))
             taken.add(path_key(dst))
@@ -382,7 +382,7 @@ def _remove_tree(fs: FileSystem, path: str) -> None:
     e = fs.stat(path)
     if e.is_dir and not e.is_link:
         for child in fs.list(path):
-            _remove_tree(fs, os.path.join(path, os.path.basename(child.path)))
+            _remove_tree(fs, fs.join(path, fs.basename(child.path)))
     fs.remove(path)
 
 

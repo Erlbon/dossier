@@ -6,7 +6,6 @@ Top note: ``about.md``, ``artist.md``, ``author.md``, ``series.md`` or ``album.m
 """
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass
 from typing import Optional
 
@@ -71,7 +70,7 @@ def find_notes(fs: FileSystem, folder: str) -> list:
     """The notes of ``folder``: the top note first, then the bottom note. Empty if there are none.
     Names match exactly first; on a case-insensitive match the exact spelling wins (O11)."""
     try:
-        names = {os.path.basename(e.path): e for e in fs.list(folder) if not e.is_dir}
+        names = {fs.basename(e.path): e for e in fs.list(folder) if not e.is_dir}
     except OSError:
         return []
     by_fold: dict = {}
@@ -82,7 +81,7 @@ def find_notes(fs: FileSystem, folder: str) -> list:
         for wanted in group:
             actual = wanted if wanted in names else next(iter(sorted(by_fold.get(wanted.casefold(), []))), None)
             if actual:
-                note = _read(fs, os.path.join(folder, actual))
+                note = _read(fs, fs.join(folder, actual))
                 if note is not None:
                     found.append(note)
                 break

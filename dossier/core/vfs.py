@@ -10,9 +10,9 @@ import re
 import stat
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import BinaryIO, Iterator
+from typing import BinaryIO, Iterator, Optional
 
-from .platform import decode_name, is_link_like, longpath, path_key, strip_longpath
+from .platform import IS_WINDOWS, decode_name, is_link_like, longpath, path_key, strip_longpath
 
 
 class NotWritable(OSError):
@@ -33,6 +33,47 @@ class FileSystem(ABC):
     """What every source of files provides."""
 
     writable = False
+    scheme = ""              # "" is the local disk; a virtual system has one ("mem", "home", later "sftp"...)
+    sep = "/"                # the separator of its paths
+    case_sensitive = True
+
+    # Path functions. Code that handles an item's path must use these and never ``os.path``: a path of a
+    # remote or virtual system (``sftp://host/a/b``) uses forward slashes on every platform. The defaults
+    # are for a virtual system; the local one overrides them with ``os.path``.
+    @property
+    def root(self) -> str:
+        return f"{self.scheme}://" if self.scheme else ""
+
+    def _split_root(self, path: str) -> tuple:
+        root = self.root
+        return (root, path[len(root):]) if root and path.startswith(root) else ("", path)
+
+    def join(self, base: str, *parts: str) -> str:
+        root, rest = self._split_root(base)
+        out = rest.rstrip("/")
+        for part in parts:
+            part = part.strip("/")
+            if part:
+                out = f"{out}/{part}" if out else part
+        return root + out
+
+    def basename(self, path: str) -> str:
+        _root, rest = self._split_root(path)
+        return rest.rstrip("/").rsplit("/", 1)[-1]
+
+    def dirname(self, path: str) -> str:
+        """The folder holding ``path``; the root of the system holds itself."""
+        root, rest = self._split_root(path)
+        rest = rest.rstrip("/")
+        return root + rest.rsplit("/", 1)[0] if "/" in rest else root
+
+    def is_root(self, path: str) -> bool:
+        _root, rest = self._split_root(path)
+        return rest.strip("/") == ""
+
+    def parent(self, path: str) -> Optional[str]:
+        """The folder above ``path``, or None at the root of the system."""
+        return None if self.is_root(path) else self.dirname(path)
 
     @abstractmethod
     def list(self, path: str) -> list[Entry]: ...
@@ -69,6 +110,30 @@ class FileSystem(ABC):
 
 class LocalFileSystem(FileSystem):
     writable = True
+    sep = os.sep
+    case_sensitive = not IS_WINDOWS
+
+    @property
+    def root(self) -> str:
+        return ""
+
+    def join(self, base: str, *parts: str) -> str:
+        return os.path.join(base, *parts)
+
+    def basename(self, path: str) -> str:
+        return os.path.basename(path)
+
+    def dirname(self, path: str) -> str:
+        return os.path.dirname(path)
+
+    def is_root(self, path: str) -> bool:
+        norm = os.path.normpath(path)
+        return os.path.dirname(norm) == norm
+
+    def parent(self, path: str) -> Optional[str]:
+        norm = os.path.normpath(path)
+        above = os.path.dirname(norm)
+        return above if above and above != norm else None
 
     def list(self, path: str) -> list[Entry]:
         return list(self.scan(path))

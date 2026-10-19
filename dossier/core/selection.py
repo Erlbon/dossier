@@ -144,7 +144,7 @@ class SelectionStore:
         path, and so does everything that was inside a moved folder."""
         if not mapping:
             return
-        pairs = [(os.path.normpath(old), new) for old, new in mapping.items()]
+        pairs = list(mapping.items())
         with self._lock:
             new_items: dict[str, str] = {}
             for path in self._items.values():
@@ -194,13 +194,21 @@ class SelectionStore:
 
 
 def _follow(path: str, pairs: list) -> str:
-    """``path`` after the moves in ``pairs`` (old normalised path, new path)."""
-    norm = os.path.normpath(path)
-    folded = os.path.normcase(norm)
+    """``path`` after the moves in ``pairs`` (old path, new path). Local paths are compared as the system
+    compares them; a path of a virtual system (``sftp://h/a``) is compared exactly, with forward slashes."""
     for old, new in pairs:
-        old_folded = os.path.normcase(old)
+        if has_scheme(old) or has_scheme(path):
+            if path == old:
+                return new
+            prefix = old.rstrip("/") + "/"
+            if path.startswith(prefix):
+                return new.rstrip("/") + "/" + path[len(prefix):]
+            continue
+        norm = os.path.normpath(path)
+        old_norm = os.path.normpath(old)
+        folded, old_folded = os.path.normcase(norm), os.path.normcase(old_norm)
         if folded == old_folded:
             return new
         if folded.startswith(old_folded.rstrip(os.sep) + os.sep):
-            return os.path.join(new, norm[len(old.rstrip(os.sep)) + 1:])
+            return os.path.join(new, norm[len(old_norm.rstrip(os.sep)) + 1:])
     return path

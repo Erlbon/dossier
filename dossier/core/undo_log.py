@@ -16,6 +16,7 @@ import time
 from dataclasses import asdict, dataclass, field
 from typing import Optional
 
+from .platform import path_key
 from .transfer import move_item as _move_item
 from .vfs import FileSystem
 
@@ -120,9 +121,9 @@ def _revert(fs: FileSystem, step: Step) -> str:
         now = _stat(fs, step.b)
         if now is None:
             return f"{step.b} is no longer there"
-        if _stat(fs, step.a) is not None and os.path.normcase(step.a) != os.path.normcase(step.b):
+        if _stat(fs, step.a) is not None and path_key(step.a) != path_key(step.b):
             return f"the original place is taken: {step.a}"
-        fs.mkdir(os.path.dirname(step.a), parents=True, exist_ok=True)
+        fs.mkdir(fs.dirname(step.a), parents=True, exist_ok=True)
         try:
             _move_item(fs, step.b, step.a, now.is_dir, None)
         except OSError as e:
