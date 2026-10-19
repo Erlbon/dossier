@@ -9,6 +9,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtCore import Qt  # noqa: E402
 from PyQt6.QtTest import QTest  # noqa: E402
+from tests.helpers import activate_window  # noqa: E402
 from PyQt6.QtWidgets import QApplication  # noqa: E402
 
 from dossier.core.home import ADD_NETWORK, HOME_URL  # noqa: E402
@@ -35,7 +36,7 @@ def world(app, tmp_path):
     win.home_provider.exists = lambda p: os.path.isdir(p)
     win.show()
     win.activateWindow()
-    QTest.qWaitForWindowActive(win)
+    activate_window(win)
     yield win, dialogs, drive, folder, tmp_path
     win.close()
 

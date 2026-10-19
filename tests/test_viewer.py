@@ -10,6 +10,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PyQt6.QtCore import QPoint, Qt  # noqa: E402
 from PyQt6.QtGui import QGuiApplication  # noqa: E402
 from PyQt6.QtTest import QTest  # noqa: E402
+from tests.helpers import activate_window  # noqa: E402
 from PyQt6.QtWidgets import QApplication  # noqa: E402
 
 from dossier.gui.line_view import col_of_vcol, vcol_of  # noqa: E402
@@ -263,7 +264,7 @@ def commander(app, tmp_path):
     win = MainWindow(settings_path=str(tmp_path / "s.ini"), start=(str(left), str(tmp_path)), dialogs=dialogs)
     win.show()
     win.activateWindow()
-    QTest.qWaitForWindowActive(win)
+    activate_window(win)
     yield win, dialogs
     win.close()
 
@@ -312,7 +313,7 @@ def test_menus_view_has_modes_and_notes_while_settings_has_the_choices(commander
     assert titles == ["Files", "Mark", "View", "Commands", "Settings", "Help"]
     menus = {a.text().replace("&", ""): a.menu() for a in win.menuBar().actions()}
     view = [a.text() for a in menus["View"].actions() if not a.isSeparator()]
-    assert view == ["Details", "Folder Notes", "Home Page", "Refresh", "Tabs"]
+    assert view == ["Details", "Folder Notes", "Home Page", "Edit the Path", "Refresh", "Tabs"]
     settings = [a.text() for a in menus["Settings"].actions()]
     assert settings == ["Color Scheme", "Copy Speed Limit", "Verify Copies After Copying", "Ask When a File Cannot Be Copied", "Slowness Log", "Icon Set", "Drive Selector"]
 

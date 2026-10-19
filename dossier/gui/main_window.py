@@ -222,6 +222,7 @@ class MainWindow(QMainWindow):
         self.act_notes.toggled.connect(self.set_notes_visible)
         view_menu.addAction(self.act_notes)
         view_menu.addAction(self._action("Home Page", "Alt+Home", lambda: self.active.go_home()))
+        view_menu.addAction(self._action("Edit the Path", "Ctrl+L", lambda: self.active.address_bar.start_edit()))
         view_menu.addAction(self._action("Refresh", "Ctrl+R", self.refresh))
         tabs_menu = view_menu.addMenu("Tabs")
         for text, keys, slot in (("New Tab", "Ctrl+T", lambda: self.active.new_tab()),

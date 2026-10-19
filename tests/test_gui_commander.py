@@ -10,6 +10,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtCore import Qt  # noqa: E402
 from PyQt6.QtTest import QTest  # noqa: E402
+from tests.helpers import activate_window  # noqa: E402
 from PyQt6.QtWidgets import QApplication  # noqa: E402
 
 from dossier.core.ops import Resolution  # noqa: E402
@@ -90,7 +91,7 @@ def world(app, tmp_path):
                      trasher=trasher)
     win.show()
     win.activateWindow()
-    QTest.qWaitForWindowActive(win)      # window shortcuts only fire in an active window
+    activate_window(win)      # window shortcuts only fire in an active window
     yield win, dialogs, left, right, tmp_path
     win.close()
 

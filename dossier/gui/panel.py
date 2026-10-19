@@ -13,7 +13,7 @@ from PyQt6.QtWidgets import (QAbstractItemView, QApplication, QFrame, QHBoxLayou
                              QTabBar, QToolButton,
                              QTableView, QTextBrowser, QVBoxLayout, QWidget)
 
-from ..core import archives, zipfs
+from ..core import archives, pathparts, zipfs
 from ..core.notes import compose_markdown, find_notes
 from ..core.selection import SelectionStore
 from ..core.vfs import Entry, FileSystem
@@ -21,6 +21,7 @@ from ..core.drives import drive_of, usage_async
 from ..core.home import HOME_URL, is_home
 from ..core.platform import has_scheme, path_key
 from . import icon_set, theme
+from .address_bar import AddressBar
 from .drive_bar import DriveBar
 from .models import FolderModel, human_size
 
@@ -389,8 +390,8 @@ class Panel(QFrame):
 
         self.drive_bar = DriveBar(dispatch, self)
         self.drive_bar.chosen.connect(self._drive_chosen)
-        self.address = QLineEdit()
-        self.address.setObjectName("pathbar")
+        self.address_bar = AddressBar(fs)
+        self.address = self.address_bar.line             # the text field behind the clickable parts
         self.free = QLabel()
         bar = QHBoxLayout()
         bar.setContentsMargins(4, 2, 4, 2)
@@ -403,7 +404,7 @@ class Panel(QFrame):
         self.home_button.clicked.connect(self.go_home)
         bar.addWidget(self.home_button)
         bar.addWidget(self.drive_bar.chip)
-        bar.addWidget(self.address, 1)
+        bar.addWidget(self.address_bar, 1)
         bar.addWidget(self.free)
         self.bar = QWidget()
         self.bar.setObjectName("pathbarbox")
@@ -450,6 +451,9 @@ class Panel(QFrame):
         layout.addWidget(self.body, 1)
 
         self.address.returnPressed.connect(self._address_entered)
+        self.address_bar.navigate.connect(self._crumb_clicked)
+        self.address_bar.navigate_new_tab.connect(lambda target: self.new_tab(target, activate=False))
+        self.address_bar.escaped.connect(lambda: self.table.setFocus())
         self.enter_hook = None         # set by the window: Enter runs a command being written, if there is one
         self.backspace_hook = None     # likewise Backspace edits that command instead of going up
         self.table.activate.connect(self._enter)
@@ -498,7 +502,11 @@ class Panel(QFrame):
             f"#pathbarbox QToolButton{{color:{text};border:1px solid {text};border-radius:6px;"
             f"padding:1px 6px;background:transparent;font-weight:bold;}}"
             f"#pathbarbox QToolButton::menu-indicator{{image:none;}}"
-            f"#pathbarbox QToolButton#homebtn{{border:none;padding:1px 3px;}}")
+            f"#pathbarbox QToolButton#homebtn{{border:none;padding:1px 3px;}}"
+            f"#pathbarbox QToolButton#crumb{{border:none;border-radius:4px;padding:1px 4px;}}"
+            f"#pathbarbox QToolButton#crumb:hover{{background:rgba(0,0,0,60);}}"
+            f"#pathbarbox QToolButton#crumb::menu-indicator{{image:none;}}"
+            f"#pathbarbox QLabel#crumbsep{{color:{text};}}")
         palette = QPalette(QApplication.palette())
         if not active:
             for group in (QPalette.ColorGroup.Active, QPalette.ColorGroup.Inactive):
@@ -628,6 +636,7 @@ class Panel(QFrame):
         self.model.set_entries(path, listing.entries)
         self._apply_columns()
         self.address.setText(path)
+        self.address_bar.set_path(path)
         self.drive_bar.set_current_path(path)
         self._update_free(path)
         self._load_note(path)
@@ -848,6 +857,16 @@ class Panel(QFrame):
         typed = text if has_scheme(text) else os.path.normpath(os.path.expanduser(text))
         if text and not self.set_folder(typed):
             self.address.setText(self.path)
+        self.address_bar.finish_edit()
+        self.table.setFocus()
+
+    def _crumb_clicked(self, target: str) -> None:
+        """A part of the address was clicked: go there, and stand on the folder we came out of."""
+        here = [p for _label, p in self.address_bar.parts()]
+        came_from = ""
+        if target in here and here.index(target) + 1 < len(here):
+            came_from = self.fs.basename(here[here.index(target) + 1].rstrip(pathparts.SEPARATORS))
+        self.set_folder(target, select=came_from)
         self.table.setFocus()
 
     def _update_free(self, path: str) -> None:

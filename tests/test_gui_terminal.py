@@ -10,6 +10,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtCore import Qt  # noqa: E402
 from PyQt6.QtTest import QTest  # noqa: E402
+from tests.helpers import activate_window  # noqa: E402
 from PyQt6.QtWidgets import QApplication  # noqa: E402
 
 import dossier.gui.main_window as mw  # noqa: E402
@@ -54,7 +55,7 @@ def world(app, tmp_path):
                      terminal_launcher=rec, which=with_a_terminal_program)
     win.show()
     win.activateWindow()
-    QTest.qWaitForWindowActive(win)
+    activate_window(win)
     yield win, dialogs, rec, left, right, tmp_path
     win.close()
 

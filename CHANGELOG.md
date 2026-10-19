@@ -2,6 +2,12 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-19#02 -- Click the parts of the address
+
+- The address field shows the path as parts: `C:` > `Temp` > `Export`. A click on a part goes to that folder and stands on the folder you came out of; a middle click opens it in a background tab. A long path folds its left parts into a `...` button with a menu.
+- A click on the empty end of the field, a double click, or Ctrl+L (View > Edit the Path) turns it into text to type into; Enter goes there, Esc or leaving the field brings the parts back.
+- Works inside archives (the way up leaves the archive) and on the Home page.
+
 ## 2026-10-19#01 -- The first build number
 
 Dossier is a dual-pane file manager for Windows (primary) and Linux. This is the first numbered build; what it holds so far:

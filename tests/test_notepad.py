@@ -9,6 +9,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtCore import Qt  # noqa: E402
 from PyQt6.QtTest import QTest  # noqa: E402
+from tests.helpers import activate_window  # noqa: E402
 from PyQt6.QtWidgets import QApplication  # noqa: E402
 
 from dossier.core.textedit import load_document  # noqa: E402
@@ -34,7 +35,7 @@ def pad(app, tmp_path):
         win = NotepadWindow(load_document(str(p)), dialogs, **kw)
         win.show()
         win.activateWindow()
-        QTest.qWaitForWindowActive(win)            # window shortcuts only fire in an active window
+        activate_window(win)            # window shortcuts only fire in an active window
         made.append(win)
         return win, dialogs, p
 
@@ -292,7 +293,7 @@ def commander(app, tmp_path):
                      dialogs=dialogs)
     win.show()
     win.activateWindow()
-    QTest.qWaitForWindowActive(win)
+    activate_window(win)
     yield win, dialogs, tmp_path
     for e in list(win.editors):
         e.mark_clean()
@@ -338,7 +339,7 @@ def test_ctrl_h_in_the_viewer_hands_the_file_to_the_notepad_with_the_replace_bar
     win.view_file()
     viewer = win.viewers[0]
     viewer.activateWindow()
-    QTest.qWaitForWindowActive(viewer)
+    activate_window(viewer)
     QTest.keyClick(viewer.view, Qt.Key.Key_H, Qt.KeyboardModifier.ControlModifier)
     QApplication.processEvents()
     assert len(win.editors) == 1 and win.editors[0].bar.replace_row.isVisible()
