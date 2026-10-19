@@ -280,7 +280,8 @@ class Panel(QFrame):
         self.tab_row.setStyleSheet(
             f"#tabrow{{background:{t['card']};}}"
             f"QTabBar::tab{{background:{t['card']};color:{t['dim']};padding:4px 4px 4px 12px;"
-            f"border:1px solid {t['line']};border-bottom:none;margin-right:2px;min-width:70px;max-width:190px;}}"
+            f"border:1px solid {t['line']};border-bottom:none;border-top-left-radius:7px;"
+            f"border-top-right-radius:7px;margin-right:3px;min-width:70px;max-width:190px;}}"
             f"QTabBar::tab:hover:!selected{{background:{t['bg']};color:{t['fg']};}}"
             f"QTabBar::tab:selected{{background:{t['cursor_bg']};color:{t['fg']};font-weight:bold;"
             f"border-top:3px solid {t['accent']};}}"

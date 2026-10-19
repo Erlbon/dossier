@@ -277,3 +277,10 @@ def test_the_close_cross_of_the_current_tab_is_brighter_than_the_others(world):
     other = dominant_color(p.tabs.tabButton(0, QTabBar.ButtonPosition.RightSide).icon())
     assert cur is not None and other is not None
     assert (cur.red(), cur.green(), cur.blue()) != (other.red(), other.green(), other.blue())
+
+
+def test_tabs_have_rounded_top_corners_and_a_gap_so_each_one_is_distinct(world):
+    sheet = world[0].left.tab_row.styleSheet().replace(" ", "")
+    plain = sheet.split("QTabBar::tab{")[1].split("}")[0]
+    assert "border-top-left-radius:7px" in plain and "border-top-right-radius:7px" in plain
+    assert "margin-right:3px" in plain
