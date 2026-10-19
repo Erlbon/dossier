@@ -5,7 +5,7 @@ from typing import Callable, Optional
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFontDatabase
-from PyQt6.QtWidgets import (QDialog, QFileDialog, QInputDialog, QMessageBox, QPlainTextEdit, QProgressDialog, QPushButton,
+from PyQt6.QtWidgets import (QDialog, QFileDialog, QInputDialog, QCheckBox, QMessageBox, QPlainTextEdit, QProgressDialog, QPushButton,
                              QVBoxLayout, QWidget)
 
 from ..core.ops import Resolution
@@ -94,6 +94,19 @@ class Dialogs:
         box.setDefaultButton(ok)
         box.exec()
         return box.clickedButton() is ok
+
+    def confirm_transfer(self, title: str, text: str, ok_label: str, verify: bool) -> Optional[bool]:
+        """Confirm a copy or move with the choice to read the copies back and compare them. Returns None when
+        cancelled, otherwise whether to verify."""
+        box = QMessageBox(QMessageBox.Icon.Question, title, text, parent=self.parent)
+        check = QCheckBox("Verify the copies afterwards (reads everything back and compares it)")
+        check.setChecked(verify)
+        box.setCheckBox(check)
+        ok = box.addButton(ok_label, QMessageBox.ButtonRole.AcceptRole)
+        box.addButton(QMessageBox.StandardButton.Cancel)
+        box.setDefaultButton(ok)
+        box.exec()
+        return check.isChecked() if box.clickedButton() is ok else None
 
     def ask_save(self, name: str) -> str:
         """Unsaved changes on closing: ``save``, ``discard`` or ``cancel``."""

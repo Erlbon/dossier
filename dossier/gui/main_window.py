@@ -39,6 +39,7 @@ from .theme import ThemeManager
 from .viewer import TextViewerWindow
 
 BIN = "recycle bin" if IS_WINDOWS else "trash"
+STAT_LIMIT = 200      # at most this many sizes are read from the disk for one status line
 SIZE_LIMIT = 1000    # the status line sizes at most this many marked items
 
 
@@ -119,8 +120,10 @@ class MainWindow(QMainWindow):
             panel.backspace_hook = self._backspace_edits_command
             panel.folder_changed.connect(lambda _p: self._update_prompt())
             panel.folder_changed.connect(lambda _p: self._update_title())
+            panel.folder_changed.connect(self._remember_sizes)
             panel.message.connect(self._say)
             panel.home_action.connect(self._home_action)
+        self._sizes: dict = {}                       # path -> size (0 for a folder), from the listings on screen
         self.selection.subscribe(lambda _s: self._update_status())
         self.theme.changed.connect(self._on_theme_changed)
 
@@ -757,20 +760,38 @@ class MainWindow(QMainWindow):
             return
         self.selection.invert(self._entry_paths())
 
+    def _remember_sizes(self, panel) -> None:
+        """Keep the sizes of the items just listed, so the status line never has to ask the disk for them."""
+        model = panel.model
+        if model.is_home:
+            return
+        for r in range(model.entry_count()):
+            e = model.entry_at(r)
+            if e is not None and not model.is_up_row(r):
+                self._sizes[e.path] = 0 if e.is_dir else e.size
+        if len(self._sizes) > 200_000:               # a long session: start again from what is on screen
+            self._sizes.clear()
+
     def _update_status(self) -> None:
         paths = self.selection.paths()
         if not paths:
             self.status.setText("No items marked")
             return
-        total, counted = 0, 0
+        total, asked = 0, 0
         for p in paths[:SIZE_LIMIT]:
-            try:
-                e = self.fs.stat(p)
-                total += 0 if e.is_dir else e.size
-                counted += 1
-            except OSError:
-                pass
-        more = "" if len(paths) <= SIZE_LIMIT else "+"
+            size = self._sizes.get(p)
+            if size is None:                         # marked somewhere that is no longer listed: ask once, remember
+                if asked >= STAT_LIMIT:
+                    continue
+                asked += 1
+                try:
+                    e = self.fs.stat(p)
+                    size = 0 if e.is_dir else e.size
+                except OSError:
+                    size = 0
+                self._sizes[p] = size
+            total += size
+        more = "" if len(paths) <= SIZE_LIMIT and asked < STAT_LIMIT else "+"
         self.status.setText(f"{len(paths)} marked, {human_size(total)}{more}, across both panels")
 
     # commands -------------------------------------------------------------------------------
@@ -819,8 +840,12 @@ class MainWindow(QMainWindow):
         dest = self.other.path
         plan = (plan_move if move else plan_copy)(self.fs, sources, dest)
         plan = self._settle(plan)
-        if plan is None or not self.dialogs.confirm(plan.title, self._summary(plan, dest), plan.title):
+        if plan is None:
             return
+        verify = self.dialogs.confirm_transfer(plan.title, self._summary(plan, dest), plan.title, self.act_verify.isChecked())
+        if verify is None:
+            return
+        self.act_verify.setChecked(verify)           # the choice is remembered for the next time (and shown in Settings)
         self._run(plan, unmark=sources)
 
     def copy(self) -> None:

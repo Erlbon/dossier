@@ -28,6 +28,8 @@ class FakeDialogs:
         self.texts = []
         self.conflict_answer = Resolution.SKIP
         self.confirm_answer = True
+        self.verify_answer = None            # None: leave the checkbox as offered
+        self.transfer_offered_verify = None
         self.outputs = []
         self.save_answer = "discard"
         self.disk_answer = "overwrite"
@@ -39,6 +41,13 @@ class FakeDialogs:
     def confirm(self, title, text, ok_label="OK"):
         self.confirms.append((title, text))
         return self.confirm_answer
+
+    def confirm_transfer(self, title, text, ok_label, verify):
+        self.confirms.append((title, text))
+        self.transfer_offered_verify = verify
+        if not self.confirm_answer:
+            return None
+        return self.verify_answer if self.verify_answer is not None else verify
 
     def ask_save(self, name):
         return self.save_answer

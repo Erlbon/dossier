@@ -192,3 +192,97 @@ def test_the_window_passes_the_verify_setting(tmp_path):
         assert win._exec_options().verify is True
     finally:
         win.close()
+
+
+# the checkbox in the transfer dialog --------------------------------------------------------------------------
+def commander(tmp_path):
+    pytest.importorskip("PyQt6")
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PyQt6.QtWidgets import QApplication
+    from dossier.gui.main_window import MainWindow
+    from tests.test_gui_commander import FakeDialogs
+    app = QApplication.instance() or QApplication([])
+    left, right = tmp_path / "l", tmp_path / "r"
+    left.mkdir()
+    right.mkdir()
+    (left / "a.txt").write_text("A")
+    dialogs = FakeDialogs()
+    win = MainWindow(settings_path=str(tmp_path / "s.ini"), start=(str(left), str(right)), dialogs=dialogs)
+    win.show()
+    win.left.refresh()
+    win.left.table.setCurrentIndex(win.left.model.index(1, 0))
+    return win, dialogs, left, right
+
+
+def wait_idle(win):
+    import time
+    from PyQt6.QtWidgets import QApplication
+    end = time.time() + 10
+    while time.time() < end and win.busy:
+        QApplication.processEvents()
+        time.sleep(0.01)
+
+
+def test_the_transfer_dialog_offers_verify_off_at_first_and_runs_the_copy_with_the_choice(tmp_path, monkeypatch):
+    win, dialogs, left, right = commander(tmp_path)
+    seen = []
+    real = ops_module.verify_copy
+    monkeypatch.setattr(ops_module, "verify_copy", lambda *a, **k: seen.append(a[1]) or real(*a, **k))
+    try:
+        dialogs.verify_answer = True
+        win.copy()
+        assert dialogs.transfer_offered_verify is False             # off until the user asks for it
+        wait_idle(win)
+        assert len(seen) == 1 and (right / "a.txt").read_text() == "A"
+    finally:
+        win.close()
+
+
+def test_the_choice_is_remembered_and_shown_in_settings_and_offered_next_time(tmp_path):
+    win, dialogs, left, right = commander(tmp_path)
+    try:
+        dialogs.verify_answer = True
+        win.copy()
+        wait_idle(win)
+        assert win.act_verify.isChecked() and str(win.settings.value("copy/verify")).lower() == "true"
+        (left / "b.txt").write_text("B")
+        win.left.refresh()
+        win.left.table.setCurrentIndex(win.left.model.index(2, 0))
+        dialogs.verify_answer = None
+        win.copy()
+        assert dialogs.transfer_offered_verify is True               # offered as last chosen
+    finally:
+        win.close()
+
+
+def test_cancelling_the_transfer_dialog_changes_nothing_and_keeps_the_setting(tmp_path):
+    win, dialogs, left, right = commander(tmp_path)
+    try:
+        dialogs.confirm_answer = False
+        dialogs.verify_answer = True
+        win.copy()
+        assert not win.busy and list(right.iterdir()) == [] and not win.act_verify.isChecked()
+    finally:
+        win.close()
+
+
+def test_the_real_dialog_has_the_checkbox_and_returns_its_state(tmp_path, monkeypatch):
+    pytest.importorskip("PyQt6")
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PyQt6.QtWidgets import QApplication, QCheckBox, QMessageBox
+    from dossier.gui.dialogs import Dialogs
+    app = QApplication.instance() or QApplication([])
+    state = {}
+
+    def fake_exec(self):
+        box = self.checkBox()
+        state["text"], state["start"] = box.text(), box.isChecked()
+        box.setChecked(True)                                         # the user ticks it
+        accept = [b for b in self.buttons() if self.buttonRole(b) == QMessageBox.ButtonRole.AcceptRole][0]
+        self._clicked = accept
+        return 0
+
+    monkeypatch.setattr(QMessageBox, "exec", fake_exec)
+    monkeypatch.setattr(QMessageBox, "clickedButton", lambda self: self._clicked)
+    assert Dialogs(None).confirm_transfer("Copy", "text", "Copy", False) is True
+    assert state["start"] is False and "Verify" in state["text"]
