@@ -73,10 +73,13 @@ class CommandResult:
 
 
 def run_command(profile: Profile, command: str, cwd: str, *, wait: float = 1.5, max_output: int = 1_000_000,
-                which: Which = shutil.which, popen: Callable = subprocess.Popen) -> CommandResult:
+                which: Which = shutil.which, popen: Callable = subprocess.Popen,
+                on_finish: Optional[Callable[["CommandResult"], None]] = None) -> CommandResult:
     """Run ``command`` and wait up to ``wait`` seconds. A command that is still running after that (a
-    program that opens its own window, a long job) is left running and reported as such; its output
-    is drained and dropped so it can never block on a full pipe."""
+    program that opens its own window, a long job, a slow interpreter start) is left running and reported
+    as not finished; when it ends later ``on_finish(result)`` is called from a background thread with its
+    exit code and output. Output past ``max_output`` is drained and dropped so a command can never block
+    on a full pipe."""
     launch: Launch = run_launch(profile, command, cwd, which)
     argv = launch.argv
     if isinstance(argv, str) and not IS_WINDOWS:
@@ -102,15 +105,25 @@ def run_command(profile: Profile, command: str, cwd: str, *, wait: float = 1.5, 
 
     reader = threading.Thread(target=drain, daemon=True, name="dossier-command-output")
     reader.start()
+    def result(code, finished: bool) -> CommandResult:
+        with lock:
+            raw = b"".join(chunks)
+            cut = state["cut"] or len(raw) > max_output
+            raw = raw[:max_output]
+        return CommandResult(finished, code, raw.decode(console_encoding(), errors="replace"), proc.pid, cut)
+
     try:
         code = proc.wait(timeout=wait)
-        finished = True
         reader.join(timeout=2)
+        return result(code, True)
     except subprocess.TimeoutExpired:
-        code, finished = None, False
-    with lock:
-        raw = b"".join(chunks)
-        cut = state["cut"] or len(raw) > max_output
-        raw = raw[:max_output]
-    text = raw.decode(console_encoding(), errors="replace")
-    return CommandResult(finished, code, text, proc.pid, cut)
+        pass
+
+    if on_finish is not None:
+        def watch() -> None:
+            code = proc.wait()
+            reader.join(timeout=2)
+            on_finish(result(code, True))
+
+        threading.Thread(target=watch, daemon=True, name="dossier-command-watch").start()
+    return result(None, False)

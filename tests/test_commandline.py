@@ -94,3 +94,27 @@ def test_powershell_runs_through_the_encoded_command(tmp_path):
     ps = next(p for p in WINDOWS_PROFILES if p.id == "powershell")
     result = run_command(ps, "Write-Output ('a' + 'b')", str(tmp_path), wait=30)
     assert result.finished and result.output.strip() == "ab"
+
+
+def test_a_command_that_ends_later_reports_its_output_through_on_finish(tmp_path):
+    import threading
+    done = threading.Event()
+    got = []
+
+    def later(result):
+        got.append(result)
+        done.set()
+
+    first = run_command(RAW, py("import time; time.sleep(1); print('late output')"), str(tmp_path), wait=0.2,
+                        on_finish=later)
+    assert not first.finished
+    assert done.wait(15)
+    assert got[0].finished and got[0].exit_code == 0 and "late output" in got[0].output
+
+
+def test_on_finish_is_not_called_for_a_command_that_finished_in_time(tmp_path):
+    called = []
+    result = run_command(RAW, py("print(1)"), str(tmp_path), wait=15, on_finish=called.append)
+    assert result.finished and result.output.strip() == "1"
+    time.sleep(0.3)
+    assert called == []

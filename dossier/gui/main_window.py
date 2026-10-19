@@ -541,7 +541,16 @@ class MainWindow(QMainWindow):
                 self._say(f"Still running (process {res.pid}): {command}")
             self.refresh()                                      # a command may have changed the files
 
-        self.cmd_runner.submit("Command", lambda progress, cancel: run_command(profile, command, cwd),
+        def ended_later(res) -> None:                           # from the watcher thread: hop to the GUI thread
+            def show() -> None:
+                if res.output.strip():
+                    self.dialogs.show_output(command, res.output + ("\n[output cut]" if res.truncated else ""))
+                self._say(f"Finished (exit code {res.exit_code}): {command}")
+                self.refresh()
+            self.dispatcher(show)
+
+        self.cmd_runner.submit("Command",
+                               lambda progress, cancel: run_command(profile, command, cwd, on_finish=ended_later),
                                on_done=finished)
 
     def open_terminal(self, admin: Optional[bool] = None, profile=None, other: bool = False) -> None:

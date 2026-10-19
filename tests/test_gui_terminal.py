@@ -1,5 +1,6 @@
 """The command line under the panels, the terminal buttons, interpreter choice and the elevated warning."""
 import os
+import shutil
 import time
 
 import pytest
@@ -33,6 +34,12 @@ class Recorder:
         self.launches.append(launch)
 
 
+def with_a_terminal_program(name):
+    """The real lookup, plus a stand-in terminal emulator so the tests also run on a machine (a CI runner) that has none."""
+    from dossier.core.terminals import EMULATORS
+    return shutil.which(name) or ("/usr/bin/" + name if name in EMULATORS else None)
+
+
 @pytest.fixture
 def world(app, tmp_path):
     left = tmp_path / "left"
@@ -44,7 +51,7 @@ def world(app, tmp_path):
     dialogs = FakeDialogs()
     rec = Recorder()
     win = MainWindow(settings_path=str(tmp_path / "s.ini"), start=(str(left), str(right)), dialogs=dialogs,
-                     terminal_launcher=rec)
+                     terminal_launcher=rec, which=with_a_terminal_program)
     win.show()
     win.activateWindow()
     QTest.qWaitForWindowActive(win)
@@ -170,8 +177,8 @@ def test_an_unknown_command_reports_instead_of_hanging(world):
     win, dialogs, *_ = world
     win.cmdline.setText("definitely_not_a_program_xyz")
     win.run_command_line()
-    wait_for(lambda: dialogs.outputs or "Done" in win.status.text())
-    assert "Done" in win.status.text()
+    wait_for(lambda: dialogs.outputs or "exit code" in win.status.text())
+    assert "exit code" in win.status.text() or dialogs.outputs      # done at once, or reported when it ended later
 
 
 # terminals --------------------------------------------------------------------------------------------------------------------
@@ -224,11 +231,14 @@ def test_every_installed_interpreter_has_its_own_visible_button_on_a_separate_li
 
 
 def test_an_interpreter_that_is_not_installed_gets_no_button(app, tmp_path):
-    only = {"cmd.exe": "C:/x/cmd.exe", "sh": "/bin/sh"}
+    from dossier.core.terminals import builtin_profiles
+    installed = builtin_profiles()[0]                       # the only interpreter this made-up computer has
     win = MainWindow(settings_path=str(tmp_path / "s.ini"), start=(str(tmp_path), str(tmp_path)),
-                     dialogs=FakeDialogs(), terminal_launcher=Recorder(), which=lambda n: only.get(n))
+                     dialogs=FakeDialogs(), terminal_launcher=Recorder(),
+                     which=lambda n: "/fake/" + n if n == installed.program else None)
     try:
-        assert set(win.terminal_buttons) <= {"cmd", "login-shell"} and win.terminal_buttons
+        assert set(win.terminal_buttons) == {installed.id}
+        assert win.interpreter.count() == 1
     finally:
         win.close()
 
