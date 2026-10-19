@@ -36,6 +36,7 @@ class Kind(str, Enum):
     MOVE = "move"      # file or folder to another folder
     RENAME = "rename"  # same folder, new name
     DELETE = "delete"
+    FINISH_MOVE = "finish_move"   # the last step of a folder moved to another drive: removes what was copied
 
 
 class Resolution(Enum):
@@ -58,6 +59,7 @@ class Op:
     conflict: str = ""          # not empty = unresolved; the text says why
     dst_is_dir: bool = False    # what is in the way
     dst_mtime: float = 0.0
+    group: int = 0              # the steps of a folder moved to another drive belong together
 
 
 class PlanNotReady(Exception):
@@ -105,7 +107,9 @@ class Plan:
                 if op.kind is Kind.MKDIR:   # children were planned under the old folder name
                     old_prefix = op.dst.rstrip(fs.sep) + fs.sep
                     for j in range(i + 1, len(ops)):
-                        if ops[j].dst.startswith(old_prefix):
+                        if ops[j].kind is Kind.FINISH_MOVE and ops[j].dst == op.dst:
+                            ops[j] = replace(ops[j], dst=new_dst)
+                        elif ops[j].dst.startswith(old_prefix):
                             moved = new_dst + fs.sep + ops[j].dst[len(old_prefix):]
                             still = ops[j].conflict if ops[j].conflict != _SAME_ITEM else ""
                             ops[j] = replace(ops[j], dst=moved, conflict=still)
@@ -262,6 +266,19 @@ def plan_copy(fs: FileSystem, sources: Sequence[str], dest_dir: str, *, flatten:
     return Plan("Copy", tuple(ops), tuple(warnings), tuple(blocking), tuple(skipped))
 
 
+def same_volume(fs: FileSystem, a: str, b: str) -> bool:
+    """Whether a rename from ``a`` to ``b`` stays on one drive. Anything that is not the local disk counts as
+    one volume (the file system itself decides whether it can rename); a failed look counts as one too."""
+    if fs.scheme or has_scheme(a) or has_scheme(b):
+        return True
+    try:
+        if IS_WINDOWS:
+            return os.path.splitdrive(os.path.abspath(a))[0].lower() == os.path.splitdrive(os.path.abspath(b))[0].lower()
+        return os.stat(a).st_dev == os.stat(b).st_dev
+    except OSError:
+        return True
+
+
 def plan_move(fs: FileSystem, sources: Sequence[str], dest_dir: str) -> Plan:
     ops: list = []
     warnings: list = []
@@ -281,6 +298,15 @@ def plan_move(fs: FileSystem, sources: Sequence[str], dest_dir: str) -> Plan:
             skipped.append(src)
         elif e.is_dir and _within(fs, dest_dir, src):
             blocking.append(f"cannot move a folder into itself: {src}")
+        elif e.is_dir and not same_volume(fs, src, dest_dir):
+            # another drive: copy the whole tree (folders merge, as in a copy), then take away the source files
+            # that really were copied. Nothing is removed from the source unless every copy succeeded.
+            group = len([o for o in ops if o.kind is Kind.FINISH_MOVE]) + 1
+            first = len(ops)
+            _tree_ops(fs, src, dst, taken, ops, warnings)
+            for k in range(first, len(ops)):
+                ops[k] = replace(ops[k], group=group)
+            ops.append(Op(Kind.FINISH_MOVE, src, dst, is_dir=True, group=group))
         else:
             fields = _placed(fs, src, dst, taken, False)   # a folder never merges on a move
             ops.append(Op(Kind.MOVE, src, dst, size=e.size, is_dir=e.is_dir, src_mtime=e.mtime, **fields))
@@ -564,8 +590,11 @@ def execute(
             steps: list = []
             attempts += 1
             try:
-                _run_op(op, fs, steps, sub, cancel, safe_trasher, limit, opts.native_copy,
-                        sub_verify if opts.verify else False)
+                if op.kind is Kind.FINISH_MOVE:
+                    _finish_move(op, indexed, outcomes, fs, steps)
+                else:
+                    _run_op(op, fs, steps, sub, cancel, safe_trasher, limit, opts.native_copy,
+                            sub_verify if opts.verify else False)
                 outcome = OpResult(op, "done", attempts=attempts)
                 done.finish(i, unit)
                 break
@@ -653,13 +682,44 @@ def _flush_pass(outcomes: dict, done: _Progress, share: int, cancel) -> None:
         done.finish(-1 - n, each)
 
 
+def _finish_move(op: Op, indexed: list, outcomes: dict, fs: FileSystem, steps: list) -> None:
+    """The last step of a folder moved to another drive. Only when every file of the folder was copied (and has
+    the size of its original) are the originals removed, then the folders that are empty by then; otherwise
+    nothing is touched and the user is told. The journal gets one "moved" entry: the copies are not journaled,
+    because undoing them would delete the only copy."""
+    members = [(i, o) for i, o in indexed if o.group == op.group and o.kind in (Kind.COPY, Kind.MKDIR)]
+    files = [(i, o) for i, o in members if o.kind is Kind.COPY]
+    not_done = [o for i, o in files if i not in outcomes or outcomes[i][0].status != "done"]
+    if not_done:
+        raise OSError(f"{len(not_done)} of {len(files)} files were not copied, so nothing was removed from {op.src}")
+    for _i, o in files:
+        if fs.stat(o.dst).size != fs.stat(o.src).size:
+            raise OSError(f"the copy of {fs.basename(o.src)} does not match the original, so nothing was removed from {op.src}")
+    stuck = []
+    for _i, o in files:
+        try:
+            fs.remove(o.src)
+        except OSError as e:
+            stuck.append(f"{fs.basename(o.src)}: {e.strerror or e}")
+    folders = sorted((o.src for _i, o in members if o.kind is Kind.MKDIR), key=len, reverse=True)
+    for folder in folders:
+        try:
+            fs.remove(folder)                     # only succeeds when it is empty
+        except OSError:
+            pass
+    if stuck:
+        raise OSError(f"copied, but {len(stuck)} originals could not be removed: " + "; ".join(stuck[:3]))
+    steps.append(Step("moved", op.src, op.dst))
+
+
 def _run_op(op: Op, fs: FileSystem, steps: list, progress, cancel, trasher: Trasher, throttle=None,
             native: bool = True, verify=False) -> None:
     if op.kind is Kind.MKDIR:
         existing = _stat(fs, op.dst)
         if existing is None:
             fs.mkdir(op.dst, parents=True)
-            steps.append(Step("created_dir", op.dst))
+            if not op.group:                      # an undo must never delete the only copy of a moved folder
+                steps.append(Step("created_dir", op.dst))
         elif not existing.is_dir:
             raise FileExistsError(op.dst)
         return
@@ -683,7 +743,8 @@ def _run_op(op: Op, fs: FileSystem, steps: list, progress, cancel, trasher: Tras
                     pass
                 raise
         made = fs.stat(op.dst)
-        steps.append(Step("created_file", op.dst, size=made.size, mtime=made.mtime))
+        if not op.group:
+            steps.append(Step("created_file", op.dst, size=made.size, mtime=made.mtime))
     else:                                     # MOVE or RENAME
         _move_item(fs, op.src, op.dst, op.is_dir, cancel, progress=progress, throttle=throttle)
         steps.append(Step("moved", op.src, op.dst))

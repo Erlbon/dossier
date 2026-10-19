@@ -26,7 +26,8 @@ def move_item(fs: FileSystem, src: str, dst: str, is_dir: bool, cancel: Optional
         if isinstance(e, FileExistsError) or e.errno != errno.EXDEV:
             raise
         if is_dir:
-            raise OSError("moving a folder to another drive is not supported yet; nothing was changed") from e
+            raise OSError("this folder is on another volume than its new place (a mount point or a link): copy it and delete "
+                          "the original; nothing was changed") from e
         copy_file(fs, src, fs, dst, cancel=cancel, progress=progress, throttle=throttle)
         if fs.stat(dst).size != fs.stat(src).size:
             fs.remove(dst)
