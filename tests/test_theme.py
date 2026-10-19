@@ -28,6 +28,8 @@ def test_text_pairs_are_readable(name, t):
         "dim text on page": (t["dim"], t["bg"]),
         "dim text on card": (t["dim"], t["card"]),
         "marked text on card": (t["marked"], t["card"]),
+        "text on the quiet cursor row of the inactive panel": (t["fg"], t["line"]),
+        "marked text on the quiet cursor row": (t["marked"], t["line"]),
         "danger on page": (t["danger"], t["bg"]),
         "button text on accent": (t["accent_fg"], t["accent"]),
     }

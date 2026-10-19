@@ -7,9 +7,9 @@ import shutil
 from typing import Optional
 
 from PyQt6.QtCore import QModelIndex, Qt, QUrl, pyqtSignal
-from PyQt6.QtGui import QDesktopServices
-from PyQt6.QtWidgets import (QAbstractItemView, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QTableView,
-                             QTextBrowser, QVBoxLayout, QWidget)
+from PyQt6.QtGui import QColor, QDesktopServices, QPalette
+from PyQt6.QtWidgets import (QAbstractItemView, QApplication, QFrame, QHBoxLayout, QHeaderView, QLabel, QLineEdit,
+                             QTableView, QTextBrowser, QVBoxLayout, QWidget)
 
 from ..core.notes import compose_markdown, find_notes
 from ..core.selection import SelectionStore
@@ -77,7 +77,7 @@ class PanelTable(QTableView):
         return False   # Tab belongs to the commander, not to widget focus
 
 
-class Panel(QWidget):
+class Panel(QFrame):
     folder_changed = pyqtSignal(object)   # the panel
     activated = pyqtSignal(object)        # the user focused this panel
     message = pyqtSignal(str)
@@ -146,10 +146,26 @@ class Panel(QWidget):
         return self.model.path
 
     def set_active(self, active: bool) -> None:
-        # Only the address bar shows which panel is active. The list keeps the normal scheme colours in
-        # both panels (the inactive one is never dimmed: that made it unreadable on dark themes).
+        # The active panel has three signs: a solid accent address bar, an accent frame around the panel, and
+        # the full cursor row. The inactive panel is never dimmed (that made it unreadable on dark themes):
+        # its text is normal, only its cursor row turns into a quiet grey bar.
         self._active = active
-        self.bar.setStyleSheet(f"#pathbarbox{{background:{theme.active_bar_color()};}}" if active else "")
+        t = theme.current()
+        accent, on_accent = t["accent"], t["accent_fg"]
+        self.setStyleSheet(f"#panel{{border:2px solid {accent if active else 'transparent'};}}")
+        if active:
+            self.bar.setStyleSheet(
+                f"#pathbarbox{{background:{accent};}}"
+                f"#pathbarbox QLineEdit{{background:transparent;color:{on_accent};border:none;font-weight:bold;}}"
+                f"#pathbarbox QLabel{{color:{on_accent};}}")
+        else:
+            self.bar.setStyleSheet("")
+        palette = QPalette(QApplication.palette())
+        if not active:
+            for group in (QPalette.ColorGroup.Active, QPalette.ColorGroup.Inactive):
+                palette.setColor(group, QPalette.ColorRole.Highlight, QColor(t["line"]))
+                palette.setColor(group, QPalette.ColorRole.HighlightedText, QColor(t["fg"]))
+        self.table.setPalette(palette)
 
     def restyle(self) -> None:
         """The colour scheme changed: redraw the active mark, the marked rows and the note."""

@@ -282,9 +282,9 @@ def test_color_scheme_menu_switches_persists_and_restyles(world):
     from dossier.gui import theme
     assert theme.current()["bg"] == theme.DARK["bg"] and win.scheme_actions["dark"].isChecked()
     win.left.set_active(True)
-    assert "212,169,79" in win.left.bar.styleSheet()        # the dark accent, washed out
+    assert "#d4a94f" in win.left.bar.styleSheet()           # the dark accent, solid
     win.set_scheme("light")
-    assert "138,100,16" in win.left.bar.styleSheet()        # restyled to the light accent
+    assert "#8a6410" in win.left.bar.styleSheet()           # restyled to the light accent
     win.close()
     again = MainWindow(settings_path=str(tmp / "s.ini"), dialogs=FakeDialogs())
     try:
@@ -296,3 +296,19 @@ def test_color_scheme_menu_switches_persists_and_restyles(world):
 def test_f_key_bar_only_offers_working_commands(world):
     win, *_ = world
     assert [b.text() for b in win._fkey_buttons] == ["F2 Rename", "F5 Copy", "F6 Move", "F7 Folder", "F8 Delete"]
+
+
+def test_the_active_panel_is_obvious_in_three_ways(world):
+    from PyQt6.QtGui import QColor, QPalette
+    from dossier.gui import theme
+    win, *_ = world
+    t = theme.current()
+    # active (left): accent frame, solid accent bar, full cursor row
+    assert t["accent"] in win.left.styleSheet() and "transparent" in win.right.styleSheet()
+    assert t["accent"] in win.left.bar.styleSheet() and win.right.bar.styleSheet() == ""
+    active_hl = win.left.table.palette().color(QPalette.ColorRole.Highlight)
+    quiet_hl = win.right.table.palette().color(QPalette.ColorRole.Highlight)
+    assert active_hl == QColor(t["cursor_bg"]) and quiet_hl == QColor(t["line"]) and active_hl != quiet_hl
+    key(win, Qt.Key.Key_Tab)
+    assert t["accent"] in win.right.styleSheet() and "transparent" in win.left.styleSheet()
+    assert win.right.table.palette().color(QPalette.ColorRole.Highlight) == QColor(t["cursor_bg"])

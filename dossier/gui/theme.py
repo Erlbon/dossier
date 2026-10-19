@@ -63,12 +63,6 @@ def build_palette(t: dict) -> QPalette:
     return p
 
 
-def active_bar_color(t: Optional[dict] = None) -> str:
-    """The address bar of the active panel: the accent, washed out."""
-    c = QColor((t or _current)["accent"])
-    return f"rgba({c.red()},{c.green()},{c.blue()},70)"
-
-
 def system_is_dark(app: QApplication) -> bool:
     try:
         return app.styleHints().colorScheme() == Qt.ColorScheme.Dark
