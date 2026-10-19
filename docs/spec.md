@@ -210,7 +210,9 @@ Two rules follow from O11 and O12. Sorting, rename-by-pattern, conflict handling
 **Decided**
 
 - 2026-10-19: one selection shared by all windows (S3, S5).
-- 2026-10-19: the name is Dossier. The PyPI and domain checks are still to do.
+- 2026-10-19: the name is Dossier. Kept after the review; distributed through GitHub releases, not PyPI. Domain check still to do.
+- 2026-10-19: windows are separate top-level windows with native chrome (not MDI). W3 arrangement modes, W4 commander mode and W5 virtual desktops move to Later.
+- 2026-10-19: version 0.1 scope is fixed in `docs/review-and-plan.md` section 5.
 
 **Open questions**
 

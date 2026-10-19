@@ -11,6 +11,13 @@ The README says what this is; `docs/spec.md` says what it must do (requirement i
 - **Architecture:** Qt-free core (`dossier/core`), the GUI and a later MCP server are thin front ends over it. Nothing in `core` imports Qt.
 - **Looks:** no blue Norton Commander look; native chrome following the system theme. The visual target is the Design mockup the user approved (workspace board and viewers board); its palette borrows from pluteus's warm night theme (bg #0d0d0f, text #cfc8bd, accent #d9a05b).
 
+## Decided (the user, 2026-10-19, after the review in `docs/review-and-plan.md`)
+- **Windows:** separate top-level windows with native chrome, not an MDI workspace. Arrange modes (W3), virtual desktops (W5) and commander mode (W4) are later.
+- **Version 0.1 scope:** as in section 5 of `docs/review-and-plan.md` (tree+list windows, shared selection, copy/move/delete/rename with plan and undo, folder note, text viewer, session restore). Everything else waits for a week of real use.
+- **pluteus reuse:** pluteus will be made public soon, so its MIT code may be reused with the notice kept; promote shared pieces to `redactor_common` where sensible.
+- **Name:** keep Dossier; ship via GitHub releases (exe, tarball), not PyPI. Domain and trademark check still to do.
+- **Ebdac permission:** not blocking; the clean-room rule stands.
+
 ## Clean-room rule (important)
 The function list follows The Next Tool (Ebdac Software GmbH, discontinued 2007). We reimplement FUNCTIONS only, written in our own words. Never copy its code, help text, graphics or name, never decompile or disassemble its binaries, never translate its documentation, and never put its files in this repo. Whether to ask Ebdac for permission is an open question in the spec.
 
