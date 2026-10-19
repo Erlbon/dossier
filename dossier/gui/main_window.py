@@ -29,7 +29,7 @@ from ..core.worker import Job, JobRunner, JobState, run_plan_job
 from .appicon import app_icon
 from .command_line import CommandLine
 from .dialogs import Dialogs
-from . import icon_set, theme
+from . import file_clipboard, icon_set, theme
 from .models import human_size
 from .panel import Panel
 from .qt_bridge import QtDispatcher
@@ -190,6 +190,11 @@ class MainWindow(QMainWindow):
             tabs_menu.addAction(self._action(text, keys, slot))
         commands = bar.addMenu("&Commands")
         for a in (self._action("Undo", "Ctrl+Z", self.undo), self._action("Swap Panels", "Ctrl+U", self.swap_panels)):
+            commands.addAction(a)
+        commands.addSeparator()
+        for a in (self._action("Copy Files to Clipboard", "Ctrl+C", self.clip_copy),
+                  self._action("Cut Files to Clipboard", "Ctrl+X", self.clip_cut),
+                  self._action("Paste Files Here", "Ctrl+V", self.clip_paste)):
             commands.addAction(a)
         commands.addSeparator()
         for a in (self._action("Pin Folder to Home Page", "Ctrl+D", self.pin_folder),
@@ -742,6 +747,53 @@ class MainWindow(QMainWindow):
 
     def move(self) -> None:
         self._transfer(move=True)
+
+    # the system clipboard: Ctrl+C / Ctrl+X / Ctrl+V, also with Explorer and other file managers ----------
+    def _to_clipboard(self, cut: bool) -> None:
+        if self.active.is_home:
+            return
+        sources = self.active.targets()
+        if not sources:
+            return
+        file_clipboard.put(sources, cut)
+        n = len(sources)
+        self._say(f"{'Cut' if cut else 'Copied'} {n} item{'s' if n != 1 else ''} to the clipboard")
+
+    def clip_copy(self) -> None:
+        self._to_clipboard(False)
+
+    def clip_cut(self) -> None:
+        self._to_clipboard(True)
+
+    def clip_paste(self) -> None:
+        if self._home_blocked("Paste"):
+            return
+        sources, cut = file_clipboard.get()
+        if not sources:
+            self._say("The clipboard holds no files")
+            return
+        if self.busy:
+            return
+        dest = self.active.path
+        def there(path: str) -> bool:
+            try:
+                self.fs.stat(path)
+                return True
+            except OSError:
+                return False
+        sources = [s for s in sources if there(s)]
+        if not sources:
+            self.dialogs.info("Paste", "The copied items no longer exist.")
+            return
+        plan = (plan_move if cut else plan_copy)(self.fs, sources, dest)
+        plan = self._settle(plan)
+        if plan is None:
+            return
+        if cut:
+            self._run(plan, unmark=sources)
+            file_clipboard.clear_if_ours(sources)
+        else:
+            self._run(plan)
 
     def rename(self) -> None:
         if self._home_blocked("Rename"):
