@@ -19,7 +19,7 @@ from PyQt6.QtWidgets import (QApplication, QHBoxLayout, QLabel, QMainWindow, QMe
 from ..core.ops import (ExecOptions, Plan, Resolution, check_name, plan_copy, plan_delete, plan_move, plan_rename)
 from ..core.home import ADD_NETWORK, HomeFileSystem, HomeProvider, RouterFileSystem, removable_from_home
 from ..core.commandline import Placeholders, expand, run_command
-from ..core import zipfs
+from ..core import patterns, zipfs
 from ..core.platform import IS_WINDOWS, has_scheme, is_elevated, machine_name, path_key, set_window_border
 from ..core.selection import SelectionStore
 from ..core.textedit import BinaryFile, EncodingProblem, FileTooLarge, load_document
@@ -167,6 +167,8 @@ class MainWindow(QMainWindow):
         files.addAction(quit_)
         mark = bar.addMenu("&Mark")
         for a in (self._action("Select All", "Ctrl+A", self.select_all),
+                  self._action("Mark by Pattern...", "Ctrl+F", self.mark_by_pattern),
+                  self._action("Unmark by Pattern...", "Ctrl+Shift+F", lambda: self.mark_by_pattern(False)),
                   self._action("Invert Selection", "*", self.invert_selection),
                   self._action("Deselect All", "Ctrl+Shift+A", self.selection.clear)):
             mark.addAction(a)
@@ -713,6 +715,37 @@ class MainWindow(QMainWindow):
     def _entry_paths(self) -> list:
         m = self.active.model
         return [m.entry_at(r).path for r in range(m.entry_count()) if not m.is_up_row(r)]
+
+    def mark_by_pattern(self, mark: bool = True) -> None:
+        """Ctrl+F: ask for wildcard patterns and mark (or, with Ctrl+Shift+F, unmark) the matching items of the
+        active panel. Files by default; a pattern ending in / is for folders."""
+        if self.active.is_home:
+            return
+        title = "Mark by Pattern" if mark else "Unmark by Pattern"
+        last = str(self.settings.value("mark/pattern", "*.*") or "*.*")
+        text = self.dialogs.ask_text(title, "Pattern (for example *.jpg;*.png  or  *.log !debug*  or  backup*/ for folders):", last)
+        if not text or not text.strip():
+            return
+        why = patterns.describe(text)
+        if why:
+            self.dialogs.info(title, why)
+            return
+        self.settings.setValue("mark/pattern", text.strip())
+        wanted = patterns.parse(text, case_sensitive=self.fs.case_sensitive)
+        model = self.active.model
+        hits = []
+        for r in range(model.entry_count()):
+            e = model.entry_at(r)
+            if e is not None and not model.is_up_row(r) and e.kind not in ("header", "action") \
+                    and wanted.matches(self.fs.basename(e.path), e.is_dir):
+                hits.append(e.path)
+        if mark:
+            self.selection.add(hits)
+        else:
+            self.selection.remove(hits)
+        n = len(hits)
+        self._say(f"{'Marked' if mark else 'Unmarked'} {n} item{'s' if n != 1 else ''} matching {text.strip()}" if n
+                  else f"Nothing matches {text.strip()}")
 
     def select_all(self) -> None:
         if self.active.is_home:
