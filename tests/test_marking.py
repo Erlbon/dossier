@@ -187,3 +187,76 @@ def test_escape_clears_the_marks_when_no_folder_is_pending(world):
     assert len(win.selection) == 2
     key(win, Qt.Key.Key_Escape)
     assert marked(win) == []
+
+
+def test_commands_use_only_the_marks_of_the_panel_they_start_from(world):
+    win, dialogs, left, right, _t = world
+    for i in range(3):
+        (left / f"l{i}.txt").write_text("L")
+        (right / f"r{i}.txt").write_text("R")
+    (left / "z.txt").write_text("Z")
+    win.left.refresh()
+    win.right.refresh()
+    win.left.table.setCurrentIndex(win.left.model.index(1, 0))
+    key(win, Qt.Key.Key_Space)                                      # marks l0 in the left panel
+    key(win, Qt.Key.Key_Tab)                                        # the right panel
+    win.right.table.setCurrentIndex(win.right.model.index(1, 0))
+    key(win, Qt.Key.Key_Space)                                      # marks r0 in the right panel
+    key(win, Qt.Key.Key_Space)                                      # and r1
+    assert len(win.selection) == 3
+    assert [p.rsplit("\\", 1)[-1].rsplit("/", 1)[-1] for p in win.right.targets()] == ["r0.txt", "r1.txt"]
+    assert [p.rsplit("\\", 1)[-1].rsplit("/", 1)[-1] for p in win.left.targets()] == ["l0.txt"]
+    assert "2 marked" in win.status.text() and "in this panel" in win.status.text()
+    assert "1 more in the other panel" in win.status.text()
+    win.copy()                                                      # right to left: only r0 and r1
+    assert "r0.txt" in dialogs.confirms[-1][1] or "2 items" in dialogs.confirms[-1][1]
+    assert "3 items" not in dialogs.confirms[-1][1]
+
+
+def test_the_status_follows_the_active_panel(world):
+    win, _d, left, right, _t = world
+    (left / "a.txt").write_text("A")
+    win.left.refresh()
+    win.left.table.setCurrentIndex(win.left.model.index(1, 0))
+    key(win, Qt.Key.Key_Space)
+    assert "1 marked" in win.status.text()
+    key(win, Qt.Key.Key_Tab)
+    assert "No items marked here" in win.status.text() and "1 more in the other panel" in win.status.text()
+    key(win, Qt.Key.Key_Tab)
+    assert "1 marked" in win.status.text()
+
+
+def test_the_confirmation_lists_the_items_of_this_panel_with_sizes_and_folders_with_their_files(world):
+    win, dialogs, left, right, _t = world
+    (left / "photo.jpg").write_bytes(b"x" * 2048)
+    (left / "docs").mkdir()
+    (left / "docs" / "a.txt").write_bytes(b"a" * 100)
+    (left / "docs" / "b.txt").write_bytes(b"b" * 100)
+    (right / "other.txt").write_text("not in this panel")
+    win.left.refresh()
+    win.right.refresh()
+    win.left.table.setCurrentIndex(win.left.model.index(1, 0))
+    key(win, Qt.Key.Key_Space)
+    key(win, Qt.Key.Key_Space)
+    key(win, Qt.Key.Key_Tab)                                       # a mark in the other panel too
+    win.right.table.setCurrentIndex(win.right.model.index(1, 0))
+    key(win, Qt.Key.Key_Space)
+    key(win, Qt.Key.Key_Tab)
+    win.copy()
+    text = dialogs.confirms[-1][1]
+    assert text.startswith("Copy 2 items") and "3 files" in text
+    assert f"from {left}" in text and f"to {right}" in text
+    assert "docs" in text and "2 files" in text and "photo.jpg" in text and "2.0 K" in text.replace("KB", "K")
+    assert "other.txt" not in text                                 # what is marked in the other panel is not listed
+
+
+def test_a_long_list_stops_at_twelve_and_says_how_many_more(world):
+    win, dialogs, left, *_ = world
+    for i in range(20):
+        (left / f"f{i:02d}.txt").write_text("x")
+    win.left.refresh()
+    win.left.table.setCurrentIndex(win.left.model.index(1, 0))
+    win.select_all()
+    win.copy()
+    text = dialogs.confirms[-1][1]
+    assert "f11.txt" in text and "f12.txt" not in text and "and 8 more" in text and text.startswith("Copy 20 items")

@@ -907,11 +907,23 @@ class Panel(QFrame):
             self._place_note()
 
     # acting on items (S4) ----------------------------------------------------------------
+    def marked_here(self) -> list:
+        """The marked items that are listed in this panel. The marks are shared, but a command works on what the
+        user sees marked in the panel it is started from, never on marks left in the other panel."""
+        if self.is_home:
+            return []
+        marked = self.selection.paths()
+        if not marked:
+            return []
+        listed = {self.model.entry_at(r).path for r in range(self.model.entry_count())
+                  if not self.model.is_up_row(r) and self.model.entry_at(r) is not None}
+        return [p for p in marked if p in listed]
+
     def targets(self) -> list:
         """The marked items, else the item under the cursor."""
         if self.is_home:
             return []                                        # the Home page lists shortcuts, not files
-        marked = self.selection.paths()
+        marked = self.marked_here()
         if marked:
             return marked
         e = self.current_entry()

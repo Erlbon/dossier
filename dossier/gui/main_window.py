@@ -11,7 +11,7 @@ import shutil
 import threading
 from typing import Optional
 
-from PyQt6.QtCore import QSettings, QSize, QStandardPaths, Qt
+from PyQt6.QtCore import QEvent, QObject, QSettings, QSize, QStandardPaths, Qt, QTimer
 from PyQt6.QtGui import QAction, QActionGroup, QKeySequence
 from PyQt6.QtWidgets import (QApplication, QHBoxLayout, QLabel, QMainWindow, QMenu, QPushButton, QSplitter,
                              QToolButton, QVBoxLayout, QWidget)
@@ -22,6 +22,7 @@ from ..core.commandline import Placeholders, expand, run_command
 from ..core import patterns, zipfs
 from ..core.platform import IS_WINDOWS, has_scheme, is_elevated, machine_name, path_key, set_window_border
 from ..core.selection import SelectionStore
+from ..core.stallwatch import StallWatch
 from ..core.textedit import BinaryFile, EncodingProblem, FileTooLarge, load_document
 from ..core.terminals import (UnsafeArgument, builtin_profiles, default_launcher, default_profile, detect,
                               session_launch)
@@ -40,7 +41,28 @@ from .viewer import TextViewerWindow
 
 BIN = "recycle bin" if IS_WINDOWS else "trash"
 STAT_LIMIT = 200      # at most this many sizes are read from the disk for one status line
+SUMMARY_ITEMS = 12    # the confirmation lists this many items, then says how many more
 SIZE_LIMIT = 1000    # the status line sizes at most this many marked items
+
+
+class _LastInput(QObject):
+    """Remembers what the user last did, as a name: which key (never the letter typed) or a mouse click."""
+
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+        self.text = ""
+
+    def eventFilter(self, obj, event) -> bool:
+        kind = event.type()
+        if kind == QEvent.Type.KeyPress:
+            key = event.key()
+            mods = event.modifiers()
+            printable = bool(event.text()) and event.text().isprintable() and not (
+                mods & (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.AltModifier))
+            self.text = "a typed character" if printable else QKeySequence(int(mods.value) | key).toString()
+        elif kind == QEvent.Type.MouseButtonPress:
+            self.text = "a mouse click"
+        return False
 
 
 class MainWindow(QMainWindow):
@@ -128,6 +150,8 @@ class MainWindow(QMainWindow):
         self.theme.changed.connect(self._on_theme_changed)
 
         self._restore(start)
+        if self.act_stall_log.isChecked():
+            self.set_stall_log(True)
         self.set_drive_style(str(self.settings.value("view/drive_selector", "menu")))
         self.set_notes_visible(self.act_notes.isChecked())
         self._set_active(self.left)
@@ -256,6 +280,14 @@ class MainWindow(QMainWindow):
         self.act_ask_error.setChecked(str(self.settings.value("copy/ask_on_error", "false")).lower() == "true")
         self.act_ask_error.toggled.connect(lambda on: self.settings.setValue("copy/ask_on_error", "true" if on else "false"))
         view.addAction(self.act_ask_error)
+        slow_menu = view.addMenu("Slowness Log")
+        self.act_stall_log = QAction("Record Slow Moments (window stalls over 200 ms)", self)
+        self.act_stall_log.setCheckable(True)
+        self.act_stall_log.setChecked(str(self.settings.value("debug/stall_log", "false")).lower() == "true")
+        self.act_stall_log.toggled.connect(self.set_stall_log)
+        slow_menu.addAction(self.act_stall_log)
+        slow_menu.addAction(self._action("Open the Log", None, self.open_stall_log))
+        slow_menu.addAction(self._action("Delete the Log", None, self.delete_stall_log))
         self.icon_menu = view.addMenu("Icon Set")
         self.icon_group = QActionGroup(self)
         self.icon_group.setExclusive(True)
@@ -332,12 +364,15 @@ class MainWindow(QMainWindow):
         return self.right if self.active is self.left else self.left
 
     def _set_active(self, panel: Panel) -> None:
+        changed = getattr(self, "active", None) is not panel
         self.active = panel
         self.left.set_active(panel is self.left)
         self.right.set_active(panel is self.right)
         if hasattr(self, "prompt"):
             self._update_prompt()
         self._update_title()
+        if changed:                                  # the other panel's marks are what the line is about now
+            self._update_status()
 
     def switch_panel(self) -> None:
         target = self.other          # taken once: focusing it already makes it the active panel
@@ -574,7 +609,7 @@ class MainWindow(QMainWindow):
         entry = self.active.current_entry()
         ph = Placeholders(current_name=self.fs.basename(entry.path) if entry else "",
                           current_path=entry.path if entry else "",
-                          marked=tuple(self.selection.paths()), folder=self.active.path, other=self.other.path)
+                          marked=tuple(self.active.marked_here()), folder=self.active.path, other=self.other.path)
         try:
             command = expand(text, ph, self.profile)
         except (UnsafeArgument, ValueError) as e:
@@ -773,14 +808,16 @@ class MainWindow(QMainWindow):
             self._sizes.clear()
 
     def _update_status(self) -> None:
-        paths = self.selection.paths()
-        if not paths:
-            self.status.setText("No items marked")
+        here = self.active.marked_here()
+        elsewhere = len(self.selection) - len(here)
+        note = f"; {elsewhere} more in the other panel (not used here)" if elsewhere > 0 else ""
+        if not here:
+            self.status.setText("No items marked here" + note)
             return
         total, asked = 0, 0
-        for p in paths[:SIZE_LIMIT]:
+        for p in here[:SIZE_LIMIT]:
             size = self._sizes.get(p)
-            if size is None:                         # marked somewhere that is no longer listed: ask once, remember
+            if size is None:                         # not in a listing we kept: ask once, remember
                 if asked >= STAT_LIMIT:
                     continue
                 asked += 1
@@ -791,21 +828,42 @@ class MainWindow(QMainWindow):
                     size = 0
                 self._sizes[p] = size
             total += size
-        more = "" if len(paths) <= SIZE_LIMIT and asked < STAT_LIMIT else "+"
-        self.status.setText(f"{len(paths)} marked, {human_size(total)}{more}, across both panels")
+        more = "" if len(here) <= SIZE_LIMIT and asked < STAT_LIMIT else "+"
+        self.status.setText(f"{len(here)} marked, {human_size(total)}{more}, in this panel{note}")
 
     # commands -------------------------------------------------------------------------------
-    def _summary(self, plan: Plan, dest: str = "") -> str:
-        files = [op for op in plan.ops if op.kind.value in ("copy", "move", "rename", "delete") and not op.is_dir]
-        size = sum(op.size for op in plan.ops if op.kind.value == "copy")
-        n = len([op for op in plan.ops if op.kind.value != "mkdir"])
-        text = f"{plan.title}: {n} item{'s' if n != 1 else ''}"
+    def _summary(self, plan: Plan, dest: str = "", sources=None, origin: str = "") -> str:
+        """The text of the confirmation: how much, from where to where, and the items themselves (those of the
+        panel the command was started from), folders with what is in them."""
+        n_files = len([op for op in plan.ops if op.kind.value in ("copy", "move") and not op.is_dir])
+        size = sum(op.size for op in plan.ops if op.kind.value in ("copy", "move") and not op.is_dir)
+        top = list(sources) if sources else []
+        count = len(top) if top else len([op for op in plan.ops if op.kind.value != "mkdir"])
+        text = f"{plan.title} {count} item{'s' if count != 1 else ''}"
         if size:
-            text += f" ({human_size(size)})"
+            text += f" ({human_size(size)}" + (f", {n_files} files" if n_files != count else "") + ")"
+        if origin:
+            text += f"{chr(10)}from {origin}"
         if dest:
-            text += f"\nto {dest}"
+            text += f"{chr(10)}to {dest}"
+        if top:
+            sep = self.fs.sep
+            lines = []
+            for src in top[:SUMMARY_ITEMS]:
+                below = [op for op in plan.ops if op.src == src or op.src.startswith(src.rstrip(sep) + sep)]
+                files = [op for op in below if not op.is_dir and op.kind.value in ("copy", "move")]
+                name = self.fs.basename(src)
+                if any(op.src != src for op in below):                      # a folder with files in it
+                    lines.append(f"  {name}{sep}   {len(files)} files, {human_size(sum(op.size for op in files))}")
+                elif len(files) == 1 and files[0].src == src:
+                    lines.append(f"  {name}   {human_size(files[0].size)}")
+                else:
+                    lines.append(f"  {name}")
+            if len(top) > SUMMARY_ITEMS:
+                lines.append(f"  ... and {len(top) - SUMMARY_ITEMS} more")
+            text += chr(10) * 2 + chr(10).join(lines)
         if plan.warnings:
-            text += "\n\n" + "\n".join(plan.warnings[:8])
+            text += chr(10) * 2 + chr(10).join(plan.warnings[:8])
         return text
 
     def _settle(self, plan: Plan) -> Optional[Plan]:
@@ -842,7 +900,8 @@ class MainWindow(QMainWindow):
         plan = self._settle(plan)
         if plan is None:
             return
-        verify = self.dialogs.confirm_transfer(plan.title, self._summary(plan, dest), plan.title, self.act_verify.isChecked())
+        verify = self.dialogs.confirm_transfer(plan.title, self._summary(plan, dest, sources, self.active.path), plan.title,
+                                                self.act_verify.isChecked())
         if verify is None:
             return
         self.act_verify.setChecked(verify)           # the choice is remembered for the next time (and shown in Settings)
@@ -1128,7 +1187,65 @@ class MainWindow(QMainWindow):
         if sizes:
             self.split.setSizes([int(s) for s in sizes])
 
+    # the slowness log (opt-in) --------------------------------------------------------------------------
+    @property
+    def stall_log_path(self) -> str:
+        return os.path.join(os.path.dirname(self.settings.fileName()), "slowness.log")
+
+    def _stall_context(self) -> str:
+        parts = []
+        if getattr(self, "_last_input", None) is not None and self._last_input.text:
+            parts.append("last input: " + self._last_input.text)
+        waiting = sum(1 for j in self._jobs if j.state is JobState.QUEUED)
+        if self._jobs:
+            parts.append(f"operations: 1 running{', ' + str(waiting) + ' waiting' if waiting else ''}")
+        parts.append(f"marked: {len(self.selection)}")
+        return "  |  ".join(parts)
+
+    def set_stall_log(self, on: bool) -> None:
+        """Start or stop watching the window for stalls. Off by default; nothing is recorded while it is off."""
+        self.settings.setValue("debug/stall_log", "true" if on else "false")
+        watch = getattr(self, "_stall_watch", None)
+        if watch is not None:
+            watch.stop()
+            self._stall_watch = None
+            self._heartbeat.stop()
+            QApplication.instance().removeEventFilter(self._last_input)
+        if on:
+            self._last_input = _LastInput(self)
+            QApplication.instance().installEventFilter(self._last_input)
+            self._stall_watch = StallWatch(self.stall_log_path, context=self._stall_context)
+            self._heartbeat = QTimer(self)
+            self._heartbeat.setInterval(40)
+            self._heartbeat.timeout.connect(self._stall_watch.beat)
+            self._stall_watch.start()
+            self._heartbeat.start()
+
+    def open_stall_log(self) -> None:
+        if not os.path.isfile(self.stall_log_path):
+            self.dialogs.info("Slowness Log", "Nothing has been recorded yet. Switch on Record Slow Moments, use "
+                                              "the program, and the moments it stalls for more than 200 ms are written here.")
+            return
+        self.edit_file(self.stall_log_path)
+
+    def delete_stall_log(self) -> None:
+        if not os.path.isfile(self.stall_log_path):
+            self._say("There is no slowness log")
+            return
+        if self.dialogs.confirm("Delete the Slowness Log", "Delete the record of slow moments?", "Delete"):
+            for editor in list(self.editors):
+                if os.path.normcase(editor.doc.path) == os.path.normcase(self.stall_log_path):
+                    editor.close()
+            try:
+                os.remove(self.stall_log_path)
+                self._say("Slowness log deleted")
+            except OSError as e:
+                self.dialogs.info("Slowness Log", f"Could not delete it: {e.strerror or e}")
+
     def closeEvent(self, event) -> None:
+        watch = getattr(self, "_stall_watch", None)
+        if watch is not None:
+            watch.stop()
         for v in list(self.viewers):
             v.close()
         for ed in list(self.editors):
