@@ -48,8 +48,11 @@ class FolderModel(QAbstractTableModel):
 
     # content -----------------------------------------------------------------------
     def set_folder(self, path: str) -> None:
-        """List ``path``. Raises OSError (the old listing stays) when it cannot be read."""
-        entries = self.fs.list(path)
+        """List ``path`` now. Raises OSError (the old listing stays) when it cannot be read."""
+        self.set_entries(path, self.fs.list(path))
+
+    def set_entries(self, path: str, entries: list) -> None:
+        """Show an already made listing of ``path`` (the panel lists on a worker thread and hands it over)."""
         parent = self.fs.parent(path)
         up = Entry("..", parent, True) if parent else None
         self.beginResetModel()

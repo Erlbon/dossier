@@ -3,10 +3,11 @@ row of the listing (scroll down past the files to read it, like a README under a
 from __future__ import annotations
 
 import os
+import threading
 from dataclasses import dataclass
 from typing import Optional
 
-from PyQt6.QtCore import QModelIndex, QRectF, QSize, Qt, QUrl, pyqtSignal
+from PyQt6.QtCore import QModelIndex, QRectF, QSize, Qt, QTimer, QUrl, pyqtSignal
 from PyQt6.QtGui import QColor, QDesktopServices, QFontMetrics, QPainter, QPainterPath, QPalette, QPen
 from PyQt6.QtWidgets import (QAbstractItemView, QApplication, QFrame, QHBoxLayout, QHeaderView, QLabel, QLineEdit,
                              QTabBar, QToolButton,
@@ -59,6 +60,7 @@ class PanelTable(QTableView):
     focused = pyqtSignal()
     type_text = pyqtSignal(str)      # a printable key: it starts (or continues) a command
     activate_in_tab = pyqtSignal()   # Ctrl+Enter: open the folder in a new tab
+    escape = pyqtSignal()            # Esc: stop waiting for a slow folder
     middle_clicked = pyqtSignal(int)  # middle click on a row: open that folder in a background tab
 
     def mouseReleaseEvent(self, event) -> None:
@@ -71,7 +73,9 @@ class PanelTable(QTableView):
         key = event.key()
         mods = event.modifiers()
         text = event.text()
-        if key in (Qt.Key.Key_Tab, Qt.Key.Key_Backtab):
+        if key == Qt.Key.Key_Escape:
+            self.escape.emit()
+        elif key in (Qt.Key.Key_Tab, Qt.Key.Key_Backtab):
             self.switch_panel.emit()
         elif key == Qt.Key.Key_Insert:
             self.mark_toggle.emit()
@@ -99,6 +103,28 @@ class PanelTable(QTableView):
 
     def focusNextPrevChild(self, next_: bool) -> bool:
         return False   # Tab belongs to the commander, not to widget focus
+
+
+NAV_BUDGET = 0.15      # seconds a folder gets to answer before the window stops waiting for it
+
+
+class _Listing:
+    """A folder being listed on its own thread, so a slow file system can never freeze the window."""
+
+    def __init__(self, fs: FileSystem, path: str) -> None:
+        self.entries: Optional[list] = None
+        self.error: Optional[BaseException] = None
+        self.cancelled = False
+        self.done = threading.Event()
+        threading.Thread(target=self._run, args=(fs, path), daemon=True, name="dossier-listing").start()
+
+    def _run(self, fs: FileSystem, path: str) -> None:
+        try:
+            self.entries = fs.list(path)
+        except BaseException as e:           # reported to the panel, never raised in the thread
+            self.error = e
+        finally:
+            self.done.set()
 
 
 @dataclass
@@ -205,6 +231,10 @@ class Panel(QFrame):
         self.model = FolderModel(fs, selection, self)
         self.setObjectName("panel")
 
+        self._pending = None            # (listing, path, select) of a slow folder being opened
+        self._poll = QTimer(self)
+        self._poll.setInterval(40)
+        self._poll.timeout.connect(self._poll_pending)
         self._tabs: dict = {}          # tab id -> TabState
         self._close_buttons: dict = {}  # tab id -> its small close button
         self._tab_seq = 0
@@ -297,6 +327,7 @@ class Panel(QFrame):
         self.table.horizontalHeader().sectionResized.connect(lambda *_a: self._position_note())
         self.selection.subscribe(lambda _s: self.model.refresh_marks())
         self.table.selectionModel().currentRowChanged.connect(lambda *_a: self.current_changed.emit(self))
+        self.table.escape.connect(self.cancel_navigation)
         self.table.activate_in_tab.connect(lambda: self.open_current(new_tab=True))
         self.table.middle_clicked.connect(self._middle_click_row)
         self.tabs.currentChanged.connect(self._tab_switched)
@@ -369,12 +400,61 @@ class Panel(QFrame):
 
     # navigation ----------------------------------------------------------------------
     def set_folder(self, path: str, select: str = "") -> bool:
-        """Show ``path``. Returns False (with a message) when it cannot be listed."""
-        try:
-            self.model.set_folder(path)
-        except OSError as e:
-            self.message.emit(f"Cannot open {path}: {e.strerror or e}")
+        """Show ``path``. The listing is made on a worker thread; a folder that answers within a moment (every
+        local one) is shown at once. A slow one (a dead network share, a server) leaves the window alive: the
+        old folder stays, a message says what is being opened, Esc cancels, and the new folder appears when the
+        answer arrives. Returns False (with a message) when it cannot be listed, True when shown or still
+        pending."""
+        self._cancel_navigation()
+        listing = _Listing(self.fs, path)
+        if listing.done.wait(NAV_BUDGET):
+            return self._finish_listing(listing, path, select)
+        self._pending = (listing, path, select)
+        self.table.viewport().setCursor(Qt.CursorShape.BusyCursor)
+        self.message.emit(f"Opening {path}... (Esc cancels)")
+        self._poll.start()
+        return True
+
+    @property
+    def loading(self) -> bool:
+        return self._pending is not None
+
+    @property
+    def pending_path(self) -> str:
+        return self._pending[1] if self._pending else ""
+
+    def cancel_navigation(self) -> bool:
+        """Stop waiting for a slow folder. Returns True when there was one."""
+        was = self._pending is not None
+        self._cancel_navigation()
+        if was:
+            self.message.emit("Cancelled")
+        return was
+
+    def _cancel_navigation(self) -> None:
+        if self._pending is not None:
+            self._pending[0].cancelled = True            # the thread cannot be stopped; its answer is ignored
+            self._pending = None
+        self._poll.stop()
+        self.table.viewport().unsetCursor()
+
+    def _poll_pending(self) -> None:
+        if self._pending is None:
+            self._poll.stop()
+            return
+        listing, path, select = self._pending
+        if listing.done.is_set():
+            self._pending = None
+            self._poll.stop()
+            self.table.viewport().unsetCursor()
+            self._finish_listing(listing, path, select)
+
+    def _finish_listing(self, listing: "_Listing", path: str, select: str) -> bool:
+        if listing.error is not None:
+            e = listing.error
+            self.message.emit(f"Cannot open {path}: {getattr(e, 'strerror', None) or e}")
             return False
+        self.model.set_entries(path, listing.entries)
         self.address.setText(path)
         self.drive_bar.set_current_path(path)
         self._update_free(path)
