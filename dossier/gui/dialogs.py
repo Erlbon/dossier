@@ -9,6 +9,18 @@ from PyQt6.QtWidgets import (QDialog, QFileDialog, QInputDialog, QMessageBox, QP
                              QVBoxLayout, QWidget)
 
 from ..core.ops import Resolution
+from ..core.progress import RateMeter, human_duration
+
+
+BYTES_SHOWN = 1 << 20          # below this a progress total is a count of steps, not bytes
+
+
+def _size(n: float) -> str:
+    for unit in ("B", "KB", "MB", "GB", "TB"):
+        if n < 1024 or unit == "TB":
+            return f"{n:.0f} {unit}" if unit == "B" or n >= 10 else f"{n:.1f} {unit}"
+        n /= 1024
+    return ""
 
 
 class ProgressBox:
@@ -27,10 +39,25 @@ class ProgressBox:
             label.setWordWrap(True)          # labels word-wrap (house rule)
         self._dlg.canceled.connect(on_cancel)
         self._dlg.setValue(0)
+        self._title = title
+        self._meter = RateMeter()
 
     def update(self, done: int, total: int) -> None:
         if total > 0:
             self._dlg.setValue(min(1000, int(1000 * done / total)))
+        if total >= BYTES_SHOWN:                       # a count of items has no speed worth showing
+            self._meter.add(done)
+            self._dlg.setLabelText(self.status_text(done, total))
+
+    def status_text(self, done: int, total: int) -> str:
+        rate = self._meter.speed()
+        parts = [f"{_size(done)} of {_size(total)}"]
+        if rate > 0:
+            parts.append(f"{_size(rate)}/s")
+            left = human_duration(self._meter.seconds_left(done, total))
+            if left:
+                parts.append(f"{left} left")
+        return self._title + chr(10) + ("  " + chr(0xB7) + "  ").join(parts)
 
     def close(self) -> None:
         self._dlg.canceled.disconnect()
@@ -106,6 +133,16 @@ class Dialogs:
         box.addButton(QMessageBox.StandardButton.Cancel)
         box.exec()
         return choices.get(box.clickedButton())
+
+    def ask_error(self, text: str) -> str:
+        """A file could not be copied or moved: ``retry``, ``skip``, ``skip_all`` or ``abort``."""
+        box = QMessageBox(QMessageBox.Icon.Warning, "Could not finish", text, parent=self.parent)
+        buttons = {box.addButton("Try again", QMessageBox.ButtonRole.AcceptRole): "retry",
+                   box.addButton("Skip", QMessageBox.ButtonRole.RejectRole): "skip",
+                   box.addButton("Skip all errors", QMessageBox.ButtonRole.RejectRole): "skip_all",
+                   box.addButton("Stop", QMessageBox.ButtonRole.DestructiveRole): "abort"}
+        box.exec()
+        return buttons.get(box.clickedButton(), "skip")
 
     def make_progress(self, title: str, on_cancel: Callable[[], None]) -> ProgressBox:
         return ProgressBox(self.parent, title, on_cancel)

@@ -13,8 +13,10 @@ Limits of this first version, each reported to the user rather than hidden:
 """
 from __future__ import annotations
 
+import errno
 import os
 import threading
+import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field, replace
 from enum import Enum
@@ -22,10 +24,10 @@ from typing import Callable, Iterable, Optional, Sequence
 
 from .drives import drive_of, list_drives
 from .platform import IS_WINDOWS, path_key, strip_longpath
-from .progress import Cancelled, CancelToken, ProgressFn, check
+from .progress import Cancelled, CancelToken, ProgressFn, SpeedLimit, check
 from .transfer import copy_file, move_item as _move_item
 from .undo_log import Step, UndoAction, UndoLog
-from .vfs import Entry, FileSystem, sort_entries
+from .vfs import Entry, FileSystem, NotWritable, sort_entries
 
 
 class Kind(str, Enum):
@@ -356,13 +358,19 @@ class OpResult:
     op: Op
     status: str            # done | skipped | failed | cancelled
     error: str = ""
+    attempts: int = 1      # more than one when a locked file was tried again
 
 
 @dataclass
 class Result:
     results: list = field(default_factory=list)
     cancelled: bool = False
+    aborted: bool = False                          # the user chose to stop after an error: later steps never started
     action: Optional[UndoAction] = None
+
+    @property
+    def retried(self) -> list:
+        return [r for r in self.results if r.attempts > 1]
 
     @property
     def failed(self) -> list:
@@ -409,6 +417,28 @@ class ExecOptions:
     """How a plan is run. The defaults are what a user wants without asking."""
     workers: Optional[int] = None         # None: choose by the target; 1 forces one file at a time
     small_limit: int = SMALL_FILE_LIMIT
+    retries: int = 3                      # extra tries for a locked file (the virus scanner has it for a moment)
+    retry_delay: float = 0.25             # first wait; doubles each try
+    limit_bps: Optional[int] = None       # copy speed limit in bytes per second, for all workers together
+    on_error: Optional[Callable] = None   # (op, error text) -> "retry" | "skip" | "abort", after the retries ran out
+
+
+SKIP, RETRY, ABORT = "skip", "retry", "abort"
+_BUSY_WINERRORS = (5, 32, 33)             # access denied, sharing violation, lock violation
+_BUSY_ERRNOS = (errno.EBUSY, errno.ETXTBSY, errno.EAGAIN)
+
+
+def is_transient(error: OSError) -> bool:
+    """A failure that may pass by itself: a file another program holds for a moment. A missing file, a full
+    disk, a read-only system or a name that is taken will not."""
+    if isinstance(error, (FileNotFoundError, FileExistsError, NotADirectoryError, IsADirectoryError)):
+        return False
+    if isinstance(error, NotWritable):
+        return False
+    if error.errno == errno.ENOSPC:
+        return False
+    return (isinstance(error, PermissionError) or getattr(error, "winerror", None) in _BUSY_WINERRORS
+            or error.errno in _BUSY_ERRNOS)
 
 
 def choose_workers(fs: FileSystem, plan: Plan, small_count: int, options: ExecOptions) -> int:
@@ -482,26 +512,62 @@ def execute(
     done = _Progress(progress, plan.total_work)
     outcomes: dict = {}                              # plan index -> (OpResult, [Step])
     trash_lock = threading.Lock()                    # the recycle bin is asked one item at a time
+    ask_lock = threading.Lock()                      # so is the user
+    stop = threading.Event()                         # set when the user chose to abort
+    limit = SpeedLimit(opts.limit_bps) if opts.limit_bps else None
+    pause = time.sleep if opts.retry_delay else (lambda _s: None)
 
     def safe_trasher(path: str) -> None:
         with trash_lock:
             trasher(path)
 
+    def wait_to_retry(seconds: float) -> None:
+        end = time.monotonic() + seconds
+        while time.monotonic() < end:
+            if cancel is not None and cancel.cancelled:
+                raise Cancelled()
+            pause(min(0.05, max(0.0, end - time.monotonic())))
+
     def run_one(i: int, op: Op) -> None:
-        if cancel is not None and cancel.cancelled:
+        if (cancel is not None and cancel.cancelled) or stop.is_set():
             return                                   # never started: it has no result
-        steps: list = []
         unit = max(op.size, 1) if op.kind is Kind.COPY else 1
         sub = (lambda d, _t: done.partial(i, min(d, unit))) if progress else None
-        try:
-            _run_op(op, fs, steps, sub, cancel, safe_trasher)
-            outcome = OpResult(op, "done")
-            done.finish(i, unit)
-        except Cancelled:
-            outcome = OpResult(op, "cancelled")
-        except OSError as e:
-            outcome = OpResult(op, "failed", str(e))
-            done.finish(i, unit)
+        attempts, tries = 0, 0
+        while True:
+            steps: list = []
+            attempts += 1
+            try:
+                _run_op(op, fs, steps, sub, cancel, safe_trasher, limit)
+                outcome = OpResult(op, "done", attempts=attempts)
+                done.finish(i, unit)
+                break
+            except Cancelled:
+                outcome = OpResult(op, "cancelled", attempts=attempts)
+                break
+            except OSError as e:
+                if is_transient(e) and tries < opts.retries:
+                    try:
+                        wait_to_retry(opts.retry_delay * (2 ** tries))
+                    except Cancelled:
+                        outcome = OpResult(op, "cancelled", attempts=attempts)
+                        break
+                    tries += 1
+                    done.partial(i, 0)
+                    continue
+                decision = SKIP
+                if opts.on_error is not None:
+                    with ask_lock:
+                        decision = ABORT if stop.is_set() else opts.on_error(op, str(e))
+                if decision == RETRY and not (cancel is not None and cancel.cancelled):
+                    tries = 0
+                    done.partial(i, 0)
+                    continue
+                if decision == ABORT:
+                    stop.set()
+                outcome = OpResult(op, "failed", str(e), attempts=attempts)
+                done.finish(i, unit)
+                break
         outcomes[i] = (outcome, steps)
 
     indexed = list(enumerate(plan.ops))
@@ -534,6 +600,7 @@ def execute(
                 result.cancelled = True
         if cancel is not None and cancel.cancelled and len(outcomes) < len(plan.ops):
             result.cancelled = True
+        result.aborted = stop.is_set()
         if steps_in_order:
             result.action = UndoAction(plan.title, steps_in_order)
             if undo_log is not None:
@@ -541,7 +608,7 @@ def execute(
     return result
 
 
-def _run_op(op: Op, fs: FileSystem, steps: list, progress, cancel, trasher: Trasher) -> None:
+def _run_op(op: Op, fs: FileSystem, steps: list, progress, cancel, trasher: Trasher, throttle=None) -> None:
     if op.kind is Kind.MKDIR:
         existing = _stat(fs, op.dst)
         if existing is None:
@@ -559,7 +626,7 @@ def _run_op(op: Op, fs: FileSystem, steps: list, progress, cancel, trasher: Tras
     if op.overwrite and _stat(fs, op.dst) is not None:
         trasher(op.dst)                       # the old target goes to the bin first: nothing is lost
     if op.kind is Kind.COPY:
-        copy_file(fs, op.src, fs, op.dst, progress=progress, cancel=cancel)
+        copy_file(fs, op.src, fs, op.dst, progress=progress, cancel=cancel, throttle=throttle)
         made = fs.stat(op.dst)
         steps.append(Step("created_file", op.dst, size=made.size, mtime=made.mtime))
     else:                                     # MOVE or RENAME

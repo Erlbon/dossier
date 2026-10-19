@@ -139,6 +139,9 @@ class TabState:
     scroll: int = 0
 
 
+FRAME = 2                                   # width of the active panel's gold frame, in logical pixels
+
+
 class PanelTabBar(QTabBar):
     """Folder tabs that draw themselves: rounded top corners, a clear gap between tabs, the current tab filled
     with the gold tint of the cursor row and outlined in gold, the others darker with a thin outline."""
@@ -326,7 +329,7 @@ class Panel(QFrame):
         self.body = QFrame()
         self.body.setObjectName("panelbody")
         body = QVBoxLayout(self.body)
-        body.setContentsMargins(0, 0, 0, 0)
+        body.setContentsMargins(FRAME, 0, FRAME, FRAME)       # the frame is the fill behind these margins, not a border
         body.setSpacing(0)
         body.addWidget(self.drive_bar.strip)
         body.addWidget(self.bar)
@@ -370,7 +373,8 @@ class Panel(QFrame):
         t = theme.current()
         accent, on_accent = t["accent"], t["accent_fg"]
         # no top edge: the tabs sit directly on the box, so tabs, bar and frame read as one structure
-        self.setStyleSheet(f"#panelbody{{border:2px solid {accent if active else 'transparent'};border-top:none;}}")
+        # a flat fill behind the margins, not a border: a border leaves a hairline seam at fractional display scaling
+        self.setStyleSheet(f"#panelbody{{background:{accent if active else 'transparent'};border:none;}}")
         if active:
             self.bar.setStyleSheet(
                 f"#pathbarbox{{background:{accent};}}"

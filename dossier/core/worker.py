@@ -127,11 +127,14 @@ def run_plan_job(
     on_progress: Optional[ProgressFn] = None,
     on_done: Optional[Callable[[Job], None]] = None,
     trasher=None,
+    options=None,
 ) -> Job:
     """Run a plan in the background. When it ends, on the dispatcher thread, the undo journal gets
     its entry and the selection follows the moved and deleted items; then ``on_done`` is called.
     A cancelled run keeps (and journals) whatever it had already done."""
     kwargs = {} if trasher is None else {"trasher": trasher}
+    if options is not None:
+        kwargs["options"] = options
 
     def work(progress: ProgressFn, cancel: CancelToken):
         return execute(plan, fs, progress=progress, cancel=cancel, **kwargs)

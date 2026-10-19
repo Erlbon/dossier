@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import threading
 from typing import Optional
 
 from PyQt6.QtCore import QSettings, QSize, QStandardPaths, Qt
@@ -15,7 +16,7 @@ from PyQt6.QtGui import QAction, QActionGroup, QKeySequence
 from PyQt6.QtWidgets import (QApplication, QHBoxLayout, QLabel, QMainWindow, QMenu, QPushButton, QSplitter,
                              QToolButton, QVBoxLayout, QWidget)
 
-from ..core.ops import (Plan, Resolution, check_name, plan_copy, plan_delete, plan_move, plan_rename)
+from ..core.ops import (ExecOptions, Plan, Resolution, check_name, plan_copy, plan_delete, plan_move, plan_rename)
 from ..core.home import ADD_NETWORK, HomeFileSystem, HomeProvider, RouterFileSystem, removable_from_home
 from ..core.commandline import Placeholders, expand, run_command
 from ..core import zipfs
@@ -218,6 +219,24 @@ class MainWindow(QMainWindow):
             group.addAction(act)
             scheme_menu.addAction(act)
             self.scheme_actions[key] = act
+        limit_menu = view.addMenu("Copy Speed Limit")
+        limit_group = QActionGroup(self)
+        limit_group.setExclusive(True)
+        self.limit_actions = {}
+        current = str(self.settings.value("copy/limit_mb", "0") or "0")
+        for mb, label in ((0, "Unlimited"), (1, "1 MB/s"), (5, "5 MB/s"), (20, "20 MB/s"), (50, "50 MB/s")):
+            act = QAction(label, self)
+            act.setCheckable(True)
+            act.setChecked(float(current) == mb)
+            act.triggered.connect(lambda _c=False, m=mb: self.settings.setValue("copy/limit_mb", m))
+            limit_group.addAction(act)
+            limit_menu.addAction(act)
+            self.limit_actions[mb] = act
+        self.act_ask_error = QAction("Ask When a File Cannot Be Copied", self)
+        self.act_ask_error.setCheckable(True)
+        self.act_ask_error.setChecked(str(self.settings.value("copy/ask_on_error", "false")).lower() == "true")
+        self.act_ask_error.toggled.connect(lambda on: self.settings.setValue("copy/ask_on_error", "true" if on else "false"))
+        view.addAction(self.act_ask_error)
         self.icon_menu = view.addMenu("Icon Set")
         self.icon_group = QActionGroup(self)
         self.icon_group.setExclusive(True)
@@ -898,10 +917,45 @@ class MainWindow(QMainWindow):
             self.other.refresh()
 
         job = run_plan_job(self.runner, plan, self.fs, selection=self.selection, undo_log=self.undo_log,
-                           on_progress=box.update, on_done=finished,
+                           on_progress=box.update, on_done=finished, options=self._exec_options(),
                            **({} if self.trasher is None else {"trasher": self.trasher}))
         holder["job"] = job
         self._job = job
+
+    def _exec_options(self) -> ExecOptions:
+        """The copy settings: the speed limit and whether a failing file asks what to do."""
+        try:
+            limit = int(float(self.settings.value("copy/limit_mb", 0) or 0) * 1024 * 1024) or None
+        except (TypeError, ValueError):
+            limit = None
+        options = ExecOptions(limit_bps=limit)
+        if str(self.settings.value("copy/ask_on_error", "false")).lower() == "true":
+            skip_all = []
+
+            def on_error(op, text: str) -> str:
+                """Called on a worker thread: the question is asked on the window's thread and the worker waits."""
+                if skip_all:
+                    return "skip"
+                answer: dict = {}
+                ready = threading.Event()
+
+                def ask() -> None:
+                    try:
+                        name = self.fs.basename(op.src or op.dst)
+                        answer["v"] = self.dialogs.ask_error(name + chr(10) * 2 + text)
+                    finally:
+                        ready.set()
+
+                self.dispatcher(ask)
+                ready.wait()
+                choice = answer.get("v", "skip")
+                if choice == "skip_all":
+                    skip_all.append(True)
+                    return "skip"
+                return choice
+
+            options.on_error = on_error
+        return options
 
     def _report(self, job: Job, unmark: Optional[list]) -> None:
         if job.state is JobState.FAILED:

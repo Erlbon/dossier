@@ -40,6 +40,7 @@ def copy_file(
     cancel: Optional[CancelToken] = None,
     overwrite: bool = False,
     chunk_size: int = 1 << 20,
+    throttle=None,
 ) -> None:
     check(cancel)
     if not overwrite:
@@ -49,6 +50,8 @@ def copy_file(
             pass
         else:
             raise FileExistsError(dst)
+    if throttle is not None:
+        chunk_size = min(chunk_size, max(16384, throttle.rate // 4))     # a slow limit still reports and cancels often
     info = src_fs.stat(src)
     total = info.size
     part = dst + PART_SUFFIX
@@ -62,6 +65,8 @@ def copy_file(
                     break
                 w.write(chunk)
                 done += len(chunk)
+                if throttle is not None:
+                    throttle.wait(len(chunk), cancel)
                 if progress:
                     progress(done, total)
         if done == 0 and progress:

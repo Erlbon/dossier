@@ -349,7 +349,7 @@ def test_the_tabs_rest_directly_on_the_panel_and_the_frame_has_no_top_edge(world
     win, *_ = world
     p = win.left
     assert p.tab_row.geometry().bottom() + 1 == p.body.geometry().top()                 # no gap between them
-    assert "border-top:none" in p.styleSheet().replace(" ", "")
+    assert p.body.layout().contentsMargins().top() == 0                                   # the frame has no top edge
     t = theme.current()
     assert t["accent"] in p.styleSheet() and "transparent" in win.right.styleSheet()
 
@@ -394,7 +394,9 @@ def test_the_current_tab_of_the_active_panel_continues_the_frame_line_exactly(wo
     assert img.pixelColor(int(r.left()) + 1, y).name() == QColor(t["accent"]).name()
     frame_x = p.body.mapTo(p, p.body.rect().topLeft()).x()
     assert int(p.tabs.mapTo(p, p.tabs.rect().topLeft()).x() + r.left()) == frame_x
-    assert "border:2pxsolid" + t["accent"] in p.styleSheet().replace(" ", "")          # the same colour and width
+    assert "background:" + t["accent"] in p.styleSheet().replace(" ", "")               # the same colour, as a fill
+    assert p.body.layout().contentsMargins().left() == 2                                 # and the same width
+    assert "border:none" in p.styleSheet().replace(" ", "")                              # a border would leave a seam at 125% scaling
 
 
 def test_an_inactive_panels_current_tab_keeps_the_thin_darker_outline(world):
