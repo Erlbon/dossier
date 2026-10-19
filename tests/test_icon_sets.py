@@ -101,7 +101,8 @@ def test_the_view_menu_lists_sets_switches_repaints_and_remembers(app, tmp_path)
     win = MainWindow(settings_path=ini, start=(str(start), str(start)), dialogs=FakeDialogs())
     win.show()
     try:
-        assert set(win.icon_set_actions) == {"tabler", "square"} and win.icon_set_actions["tabler"].isChecked()
+        assert set(win.icon_set_actions) == {"tabler", "lucide", "square"}
+        assert win.icon_set_actions["tabler"].isChecked()
         win.icon_set_actions["square"].trigger()
         assert icon_set.active() == "square" and win.icon_set_actions["square"].isChecked()
         c = dominant_color(win._fkey_buttons[0].icon())                  # F2 Rename icon is "pencil"
@@ -115,3 +116,34 @@ def test_the_view_menu_lists_sets_switches_repaints_and_remembers(app, tmp_path)
         again.close()
         icon_set.set_user_dir(None)
         icon_set.use("tabler")
+
+
+# the built-in Lucide set ------------------------------------------------------------------------------
+NEEDED = ("copy", "pencil", "trash", "folder-plus", "arrows-right-left", "refresh", "arrow-up", "search")
+
+
+def test_lucide_covers_every_icon_the_app_uses_without_falling_back(app, user_sets):
+    from dossier.core.filetypes import all_icon_names
+    assert icon_set.use("lucide")
+    folder = next(s.folder for s in icon_set.available_sets() if s.id == "lucide")
+    for name in sorted(all_icon_names() | set(NEEDED)):
+        path = icon_set.resolve(name)
+        assert path and os.path.dirname(path) == folder, f"{name} fell back to {path!r}"
+        assert not icon_set.icon(name, "#000000").isNull(), name
+
+
+def test_lucide_shows_the_same_meaning_as_tabler_for_ebooks_and_comics(app, user_sets):
+    icon_set.use("lucide")
+    assert icon_set.resolve("book").endswith("book-open.svg")      # ebook: the open-book glyph, as in Tabler
+    assert icon_set.resolve("book-2").endswith("book.svg")         # comic: the closed-book glyph, as in Tabler
+    assert icon_set.use("tabler")
+    assert icon_set.resolve("book").endswith("book.svg") and icon_set.resolve("book-2").endswith("book-2.svg")
+
+
+def test_lucide_ships_its_licence_and_a_valid_manifest():
+    lucide = next(s for s in icon_set.available_sets() if s.id == "lucide")
+    assert lucide.builtin and lucide.title == "Lucide" and "ISC" in lucide.licence
+    text = open(os.path.join(lucide.folder, "LICENSE.txt"), encoding="utf-8").read()
+    assert text.startswith("ISC License") and "Permission to use, copy, modify" in text
+    for target in lucide.mapping.values():
+        assert os.path.isfile(os.path.join(lucide.folder, target)), target

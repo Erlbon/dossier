@@ -80,7 +80,8 @@ def available_sets() -> list:
                 s = _read_set(folder, builtin)
                 if s is not None and s.id not in found:
                     found[s.id] = s
-    return list(found.values())
+    # the default first, the rest in the order found (built-in, then the user's)
+    return sorted(found.values(), key=lambda s: s.id != DEFAULT_SET)
 
 
 def active() -> str:

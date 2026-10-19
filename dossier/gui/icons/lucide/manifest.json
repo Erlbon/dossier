@@ -1,0 +1,26 @@
+{
+  "title": "Lucide",
+  "licence": "ISC, Lucide 0.469.0 (see LICENSE.txt)",
+  "map": {
+    "file-zip": "file-archive.svg",
+    "file-music": "file-audio.svg",
+    "file-type-pdf": "file-text.svg",
+    "file-type-doc": "file-text.svg",
+    "file-database": "database.svg",
+    "file-unknown": "file-question.svg",
+    "file-settings": "file-cog.svg",
+    "photo": "image.svg",
+    "movie": "film.svg",
+    "book": "book-open.svg",
+    "book-2": "book.svg",
+    "markdown": "file-text.svg",
+    "device-desktop": "hard-drive.svg",
+    "home": "house.svg",
+    "arrows-right-left": "arrow-left-right.svg",
+    "trash": "trash-2.svg",
+    "refresh": "refresh-cw.svg",
+    "world": "globe.svg",
+    "device-floppy": "save.svg",
+    "player-play": "play.svg"
+  }
+}
