@@ -274,6 +274,25 @@ def test_the_inactive_panel_is_never_dimmed(world):
     assert win.right.bar.styleSheet() != "" and win.left.bar.styleSheet() == ""
 
 
+def test_color_scheme_menu_switches_persists_and_restyles(world):
+    win, _d, left, _r, tmp = world
+    (left / "a.txt").write_text("x")
+    win.left.refresh()
+    win.set_scheme("dark")
+    from dossier.gui import theme
+    assert theme.current()["bg"] == theme.DARK["bg"] and win.scheme_actions["dark"].isChecked()
+    win.left.set_active(True)
+    assert "212,169,79" in win.left.bar.styleSheet()        # the dark accent, washed out
+    win.set_scheme("light")
+    assert "138,100,16" in win.left.bar.styleSheet()        # restyled to the light accent
+    win.close()
+    again = MainWindow(settings_path=str(tmp / "s.ini"), dialogs=FakeDialogs())
+    try:
+        assert again.theme.scheme == "light" and again.scheme_actions["light"].isChecked()
+    finally:
+        again.close()
+
+
 def test_f_key_bar_only_offers_working_commands(world):
     win, *_ = world
     assert [b.text() for b in win._fkey_buttons] == ["F2 Rename", "F5 Copy", "F6 Move", "F7 Folder", "F8 Delete"]

@@ -14,6 +14,7 @@ from PyQt6.QtWidgets import (QAbstractItemView, QHBoxLayout, QHeaderView, QLabel
 from ..core.notes import compose_markdown, find_notes
 from ..core.selection import SelectionStore
 from ..core.vfs import Entry, FileSystem
+from . import theme
 from .models import FolderModel, human_size
 
 SAFE_SCHEMES = ("http", "https", "mailto")
@@ -136,6 +137,7 @@ class Panel(QWidget):
         self.table.verticalScrollBar().rangeChanged.connect(lambda _a, _b: self._position_note())
         self.table.horizontalHeader().sectionResized.connect(lambda *_a: self._position_note())
         self.selection.subscribe(lambda _s: self.model.refresh_marks())
+        self._active = False
         self.set_active(False)
 
     # state ---------------------------------------------------------------------------
@@ -144,9 +146,17 @@ class Panel(QWidget):
         return self.model.path
 
     def set_active(self, active: bool) -> None:
-        # Only the address bar shows which panel is active. The list keeps the normal system colours in
+        # Only the address bar shows which panel is active. The list keeps the normal scheme colours in
         # both panels (the inactive one is never dimmed: that made it unreadable on dark themes).
-        self.bar.setStyleSheet("#pathbarbox{background:rgba(217,160,91,90);}" if active else "")
+        self._active = active
+        self.bar.setStyleSheet(f"#pathbarbox{{background:{theme.active_bar_color()};}}" if active else "")
+
+    def restyle(self) -> None:
+        """The colour scheme changed: redraw the active mark, the marked rows and the note."""
+        self.set_active(self._active)
+        self.model.refresh_marks()
+        if self.model.note_row >= 0:
+            self._load_note(self.path)
 
     def current_entry(self) -> Optional[Entry]:
         row = self.table.currentIndex().row()

@@ -10,7 +10,7 @@ import os
 from typing import Optional
 
 from PyQt6.QtCore import QSettings, QStandardPaths, Qt
-from PyQt6.QtGui import QAction, QKeySequence
+from PyQt6.QtGui import QAction, QActionGroup, QKeySequence
 from PyQt6.QtWidgets import (QApplication, QHBoxLayout, QLabel, QMainWindow, QPushButton, QSplitter, QVBoxLayout,
                              QWidget)
 
@@ -24,6 +24,7 @@ from .dialogs import Dialogs
 from .models import human_size
 from .panel import Panel
 from .qt_bridge import QtDispatcher
+from .theme import ThemeManager
 
 BIN = "recycle bin" if IS_WINDOWS else "trash"
 SIZE_LIMIT = 1000    # the status line sizes at most this many marked items
@@ -38,6 +39,7 @@ class MainWindow(QMainWindow):
         self.trasher = trasher
         self.dialogs = dialogs or Dialogs(self)
         self.settings = self._open_settings(settings_path)
+        self.theme = ThemeManager(QApplication.instance(), str(self.settings.value("view/scheme", "auto")))
 
         self.dispatcher = QtDispatcher(self)
         self.selection = SelectionStore(dispatch=self.dispatcher)
@@ -79,6 +81,7 @@ class MainWindow(QMainWindow):
             panel.table.mark_toggle.connect(self.toggle_mark)
             panel.message.connect(self._say)
         self.selection.subscribe(lambda _s: self._update_status())
+        self.theme.changed.connect(lambda: [p.restyle() for p in (self.left, self.right)])
 
         self._restore(start)
         self._set_active(self.left)
@@ -121,6 +124,19 @@ class MainWindow(QMainWindow):
                   self._action("Invert Selection", "*", self.invert_selection),
                   self._action("Deselect All", "Ctrl+Shift+A", self.selection.clear)):
             mark.addAction(a)
+        view = bar.addMenu("&View")
+        scheme_menu = view.addMenu("Color Scheme")
+        group = QActionGroup(self)
+        group.setExclusive(True)
+        self.scheme_actions = {}
+        for key, label in (("auto", "Follow System"), ("light", "Light"), ("dark", "Dark")):
+            act = QAction(label, self)
+            act.setCheckable(True)
+            act.setChecked(self.theme.scheme == key)
+            act.triggered.connect(lambda _c=False, k=key: self.set_scheme(k))
+            group.addAction(act)
+            scheme_menu.addAction(act)
+            self.scheme_actions[key] = act
         commands = bar.addMenu("&Commands")
         for a in (self._action("Undo", "Ctrl+Z", self.undo),
                   self._action("Refresh", "Ctrl+R", self.refresh),
@@ -167,6 +183,11 @@ class MainWindow(QMainWindow):
     def refresh(self) -> None:
         self.left.refresh()
         self.right.refresh()
+
+    def set_scheme(self, scheme: str) -> None:
+        self.theme.set_scheme(scheme)
+        self.settings.setValue("view/scheme", self.theme.scheme)
+        self.scheme_actions[self.theme.scheme].setChecked(True)
 
     def _say(self, text: str) -> None:
         self.status.setText(text)

@@ -8,10 +8,11 @@ from datetime import datetime
 from typing import Optional
 
 from PyQt6.QtCore import QAbstractTableModel, QModelIndex, Qt
-from PyQt6.QtGui import QBrush, QColor, QFont, QGuiApplication
+from PyQt6.QtGui import QBrush, QColor, QFont
 
 from ..core.selection import SelectionStore
 from ..core.vfs import Entry, FileSystem, natural_key
+from . import theme
 
 COLUMNS = ("Name", "Size", "Date")
 ENTRY_ROLE = Qt.ItemDataRole.UserRole
@@ -28,9 +29,8 @@ def human_size(n: int) -> str:
 
 
 def marked_color() -> QColor:
-    """Amber that stays readable on light and dark system themes."""
-    dark = QGuiApplication.palette().color(QGuiApplication.palette().ColorRole.Window).lightness() < 128
-    return QColor("#d9a05b") if dark else QColor("#9a5b00")
+    """The gold of the current colour scheme (see theme.py), readable on its page and cursor row."""
+    return QColor(theme.current()["marked"])
 
 
 class FolderModel(QAbstractTableModel):
