@@ -359,6 +359,25 @@ class Result:
         return [r for r in self.results if r.status == "done"]
 
 
+@dataclass
+class SelectionEffects:
+    moved: dict = field(default_factory=dict)     # old path -> new path
+    removed: list = field(default_factory=list)   # paths that no longer exist
+
+
+def selection_effects(result: Result) -> SelectionEffects:
+    """What a finished (or cancelled) run did to paths, so the shared selection can follow it."""
+    effects = SelectionEffects()
+    for r in result.results:
+        if r.status == "done" and r.op.kind is Kind.DELETE:
+            effects.removed.append(r.op.src)
+    if result.action is not None:
+        for step in result.action.steps:
+            if step.kind == "moved":
+                effects.moved[step.a] = step.b
+    return effects
+
+
 def _remove_tree(fs: FileSystem, path: str) -> None:
     e = fs.stat(path)
     if e.is_dir and not e.is_link:

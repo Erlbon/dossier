@@ -22,6 +22,11 @@ _EXTENDED_UNC = "\\\\?\\UNC\\"
 _LONGPATH_THRESHOLD = 240
 
 
+def has_scheme(path: str) -> bool:
+    """True for a path of a virtual file system (``zip://a.zip/x``), false for a local path."""
+    return bool(_SCHEME.match(path))
+
+
 def strip_longpath(path: str) -> str:
     """Remove the Windows extended-length prefix so one file has one spelling."""
     if not IS_WINDOWS:

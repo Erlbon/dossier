@@ -43,6 +43,8 @@ class UndoReport:
     label: str
     reverted: int = 0
     problems: list = field(default_factory=list)
+    moved: dict = field(default_factory=dict)      # where reverted items are now: old path -> new path
+    removed: list = field(default_factory=list)    # created items the undo removed
 
 
 class UndoLog:
@@ -79,6 +81,10 @@ class UndoLog:
                 left.append(step)
             else:
                 report.reverted += 1
+                if step.kind == "moved":
+                    report.moved[step.b] = step.a
+                else:
+                    report.removed.append(step.a)
         left.reverse()
         if left:
             action.steps = left
