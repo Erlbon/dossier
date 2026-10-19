@@ -22,6 +22,7 @@ from ..core.commandline import Placeholders, expand, run_command
 from ..core import patterns, zipfs
 from ..core.platform import IS_WINDOWS, has_scheme, is_elevated, machine_name, path_key, set_window_border
 from ..core.selection import SelectionStore
+from ..core.version import APP_NAME, APP_REPO_URL, APP_VERSION
 from ..core.stallwatch import StallWatch
 from ..core.textedit import BinaryFile, EncodingProblem, FileTooLarge, load_document
 from ..core.terminals import (UnsafeArgument, builtin_profiles, default_launcher, default_profile, detect,
@@ -120,6 +121,10 @@ class MainWindow(QMainWindow):
         status_row.addWidget(self.status, 1)
         status_row.addWidget(self.queue_label)
         status_row.addWidget(self.hint)
+        self.build_label = QLabel(f"build {APP_VERSION}")
+        self.build_label.setEnabled(False)
+        self.build_label.setToolTip(f"{APP_NAME} build {APP_VERSION}")
+        status_row.addWidget(self.build_label)
 
         central = QWidget()
         box = QVBoxLayout(central)
@@ -131,6 +136,7 @@ class MainWindow(QMainWindow):
         box.addLayout(status_row)
         self.setCentralWidget(central)
         self._build_menus()
+        self._build_help_menu()
 
         for panel in (self.left, self.right):
             panel.activated.connect(self._set_active)
@@ -1186,6 +1192,21 @@ class MainWindow(QMainWindow):
         sizes = self.settings.value("window/split")
         if sizes:
             self.split.setSizes([int(s) for s in sizes])
+
+    def _build_help_menu(self) -> None:
+        help_menu = self.menuBar().addMenu("&Help")
+        help_menu.addAction(self._action(f"About {APP_NAME}...", None, self.about))
+
+    def about(self) -> None:
+        self.dialogs.info(f"About {APP_NAME}", chr(10).join([
+            f"{APP_NAME}, a dual-pane file manager",
+            f"Build {APP_VERSION}",
+            "",
+            APP_REPO_URL,
+            "",
+            "Free software under the GPL, version 3 or later.",
+            "Made with Python and Qt (PyQt6), the QScintilla editor component, and the Tabler and Lucide icon sets.",
+            "The full credits are in CREDITS.md."]))
 
     # the slowness log (opt-in) --------------------------------------------------------------------------
     @property

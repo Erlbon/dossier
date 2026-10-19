@@ -309,7 +309,7 @@ def test_closing_the_commander_closes_its_viewers(commander):
 def test_menus_view_has_modes_and_notes_while_settings_has_the_choices(commander):
     win, _d = commander
     titles = [a.text().replace("&", "") for a in win.menuBar().actions()]
-    assert titles == ["Files", "Mark", "View", "Commands", "Settings"]
+    assert titles == ["Files", "Mark", "View", "Commands", "Settings", "Help"]
     menus = {a.text().replace("&", ""): a.menu() for a in win.menuBar().actions()}
     view = [a.text() for a in menus["View"].actions() if not a.isSeparator()]
     assert view == ["Details", "Folder Notes", "Home Page", "Refresh", "Tabs"]

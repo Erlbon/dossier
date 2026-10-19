@@ -30,7 +30,7 @@ The function list follows The Next Tool (Ebdac Software GmbH, discontinued 2007)
 - Slow operations show progress (`redactor_common` `run_with_progress()` / `run_busy()`); labels word-wrap.
 - Secrets only through the system keyring (`redactor_common.core.secret_store`), never in config files.
 - Guard Windows-only code with the platform module; keep the Linux build working.
-- Version bump and CHANGELOG entry at check-in once there is a release (`python bump_version.py`, as in the other Redactor repos; not yet added here).
+- **Version bump at check-in (the user, 2026-10-19):** the build number is `YYYY-MM-DD#NN`, as in the Redactor apps (`dossier/core/version.py`, shown in the status line and Help > About). Any commit that changes real code runs `python bump_version.py` and adds a matching `CHANGELOG.md` section in the same check-in, before pushing, without being asked. Never edit `APP_VERSION` by hand. A test fails when the CHANGELOG has no section for the current build.
 - Edit code with the Edit/Write tools; tests are plain `pytest` (`python -m pytest -q`).
 
 ## Lanes between sessions
