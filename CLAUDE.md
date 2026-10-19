@@ -12,7 +12,8 @@ The README says what this is; `docs/spec.md` says what it must do (requirement i
 - **Looks:** no blue Norton Commander look; native chrome following the system theme. The visual target is the Design mockup the user approved (workspace board and viewers board); its palette borrows from pluteus's warm night theme (bg #0d0d0f, text #cfc8bd, accent #d9a05b).
 
 ## Decided (the user, 2026-10-19, after the review in `docs/review-and-plan.md`)
-- **Windows:** separate top-level windows with native chrome, not an MDI workspace. Arrange modes (W3), virtual desktops (W5) and commander mode (W4) are later.
+- **Windows:** separate top-level windows with native chrome, not an MDI workspace.
+- **CORRECTION 2026-10-19 (the user): Dossier IS a dual-pane, orthodox (Norton Commander style) file commander.** Two panels side by side, F-key bar, command line, copy/move to the other panel, Tab switches panel, one shared selection. Commander mode (W4) is the CORE of 0.1, not a later extra. My first window mockups (single Explorer-style tree+list window) missed this and are void. Arrange modes (W3) and virtual desktops (W5) stay later. No Ctrl+Alt shortcuts.
 - **Version 0.1 scope:** as in section 5 of `docs/review-and-plan.md` (tree+list windows, shared selection, copy/move/delete/rename with plan and undo, folder note, text viewer, session restore). Everything else waits for a week of real use.
 - **pluteus reuse:** pluteus will be made public soon, so its MIT code may be reused with the notice kept; promote shared pieces to `redactor_common` where sensible.
 - **Name:** keep Dossier; ship via GitHub releases (exe, tarball), not PyPI. Domain and trademark check still to do.

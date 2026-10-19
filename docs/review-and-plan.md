@@ -41,7 +41,7 @@ The foundation is sound: Qt-free core, one platform module, shared selection, CI
 
 ## 5. Version 0.1: what it is
 
-One tree-and-list window type, any number of windows. One shared selection with count and total size in the status bar. Copy, move, delete (to trash) and rename with a plan dialog, progress, cancel and undo. A folder note (`README.md` or `about.md`) rendered under the listing, read-only. A read-only text viewer. Open with the system program. Session restore of folders and window geometry. Windows exe and Linux tarball.
+**Corrected 2026-10-19: the 0.1 window is a dual-pane orthodox commander (two panels, F-key bar, command line, copy and move to the other panel, Tab to switch); the sentence below about one tree-and-list window is superseded.** One tree-and-list window type, any number of windows. One shared selection with count and total size in the status bar. Copy, move, delete (to trash) and rename with a plan dialog, progress, cancel and undo. A folder note (`README.md` or `about.md`) rendered under the listing, read-only. A read-only text viewer. Open with the system program. Session restore of folders and window geometry. Windows exe and Linux tarball.
 
 Not in 0.1: archives, SQLite, CSV viewer, hex, Markdown editing, metadata, remote, MCP, search, user commands, themes beyond system, languages, desktops, commander mode.
 
