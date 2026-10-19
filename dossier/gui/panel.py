@@ -13,7 +13,7 @@ from PyQt6.QtWidgets import (QAbstractItemView, QApplication, QFrame, QHBoxLayou
                              QTabBar, QToolButton,
                              QTableView, QTextBrowser, QVBoxLayout, QWidget)
 
-from ..core import zipfs
+from ..core import archives, zipfs
 from ..core.notes import compose_markdown, find_notes
 from ..core.selection import SelectionStore
 from ..core.vfs import Entry, FileSystem
@@ -455,7 +455,7 @@ class Panel(QFrame):
         self.table.horizontalHeader().sectionResized.connect(lambda *_a: self._position_note())
         self.selection.subscribe(lambda _s: self.model.refresh_marks())
         self.table.selectionModel().currentRowChanged.connect(lambda *_a: self.current_changed.emit(self))
-        self.table.escape.connect(self.cancel_navigation)
+        self.table.escape.connect(self._escape)
         self.table.activate_in_tab.connect(lambda: self.open_current(new_tab=True))
         self.table.middle_clicked.connect(self._middle_click_row)
         self.tabs.currentChanged.connect(self._tab_switched)
@@ -556,6 +556,11 @@ class Panel(QFrame):
     @property
     def pending_path(self) -> str:
         return self._pending[1] if self._pending else ""
+
+    def _escape(self) -> None:
+        """Esc stops a slow folder; when nothing is pending it clears the marks."""
+        if not self.cancel_navigation():
+            self.selection.clear()
 
     def cancel_navigation(self) -> bool:
         """Stop waiting for a slow folder. Returns True when there was one."""
@@ -814,7 +819,10 @@ class Panel(QFrame):
         elif entry.is_dir:
             self.set_folder(entry.path)
         elif not has_scheme(entry.path) and zipfs.is_archive(entry.path):
-            self.set_folder(zipfs.archive_root(entry.path))          # a zip opens like a folder
+            self.set_folder(zipfs.archive_root(entry.path))          # an archive opens like a folder
+        elif not has_scheme(entry.path) and archives.missing_reader(entry.path):
+            self.message.emit(archives.missing_reader(entry.path))   # say what would open it, then let the system try
+            QDesktopServices.openUrl(QUrl.fromLocalFile(entry.path))
         elif has_scheme(entry.path):
             try:
                 QDesktopServices.openUrl(QUrl.fromLocalFile(zipfs.local_copy(self.fs, entry.path)))

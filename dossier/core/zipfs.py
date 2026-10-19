@@ -1,4 +1,4 @@
-"""A zip archive as a read-only folder tree.
+"""An archive (zip, 7z, RAR and more, see ``archives.py``) as a read-only folder tree.
 
 A path is ``zip://<path of the archive>!/<path inside>``, for example ``zip://C:\\Data\\a.zip!/docs/x.txt``.
 The archive root is ``zip://C:\\Data\\a.zip!/``; the folder above it is the folder holding the archive, so
@@ -15,10 +15,9 @@ import os
 import shutil
 import tempfile
 import threading
-import time
-import zipfile
 from typing import BinaryIO, Iterator, Optional
 
+from . import archives
 from .vfs import Entry, FileSystem
 
 MAX_ENTRIES = 1_000_000
@@ -27,32 +26,15 @@ SEP = "!/"
 
 
 def is_archive(path: str) -> bool:
-    """A local file that is a readable zip (checked by content, not by the name)."""
+    """A local file that some reader can open as a folder (checked by content, not only by the name)."""
     try:
-        return os.path.isfile(path) and zipfile.is_zipfile(path)
+        return archives.backend_for(path) is not None
     except OSError:
         return False
 
 
 def archive_root(path: str) -> str:
     return "zip://" + path + SEP
-
-
-def _decode(info: zipfile.ZipInfo) -> str:
-    """The name as the user should see it. A name without the UTF-8 flag was stored in a code page: UTF-8 is
-    tried first (many tools write it without the flag), then the Western European DOS page, which is what
-    Windows' own zip writer used."""
-    name = info.filename
-    if info.flag_bits & 0x800:
-        return name
-    try:
-        raw = name.encode("cp437")
-    except UnicodeEncodeError:
-        return name
-    try:
-        return raw.decode("utf-8")
-    except UnicodeDecodeError:
-        return raw.decode("cp850", errors="replace")
 
 
 def _safe_parts(name: str) -> Optional[list]:
@@ -68,7 +50,8 @@ class _Index:
     def __init__(self, stamp: tuple) -> None:
         self.stamp = stamp
         self.children: dict = {"": {}}          # folder -> {name: Entry}
-        self.infos: dict = {}                   # inside path -> ZipInfo (files only)
+        self.infos: dict = {}                   # inside path -> Member (files only)
+        self.backend = None
 
 
 class ZipFileSystem(FileSystem):
@@ -137,39 +120,35 @@ class ZipFileSystem(FileSystem):
             hit = self._cache.get(archive)
             if hit is not None and hit.stamp == stamp:
                 return hit
+        backend = archives.backend_for(archive)
+        if backend is None:
+            raise OSError(archives.missing_reader(archive) or f"not a readable archive: {archive}")
+        members = backend.members(archive)
+        if len(members) > MAX_ENTRIES:
+            raise OSError(f"the archive holds {len(members):,} entries; the limit is {MAX_ENTRIES:,}")
         index = _Index(stamp)
-        try:
-            with zipfile.ZipFile(archive) as zf:
-                infos = zf.infolist()
-                if len(infos) > MAX_ENTRIES:
-                    raise OSError(f"the archive holds {len(infos):,} entries; the limit is {MAX_ENTRIES:,}")
-                for info in infos:
-                    self._add(index, archive, info)
-        except zipfile.BadZipFile as e:
-            raise OSError(f"not a readable zip archive: {e}") from e
+        index.backend = backend
+        for member in members:
+            self._add(index, archive, member)
         with self._lock:
             if len(self._cache) >= CACHE_ARCHIVES:
                 self._cache.pop(next(iter(self._cache)))
             self._cache[archive] = index
         return index
 
-    def _add(self, index: _Index, archive: str, info: zipfile.ZipInfo) -> None:
-        parts = _safe_parts(_decode(info))
+    def _add(self, index: _Index, archive: str, member) -> None:
+        parts = _safe_parts(member.name)
         if parts is None:
             return
-        is_dir = info.is_dir()
+        is_dir = member.is_dir
         folder = ""
         for i, part in enumerate(parts):
             last = i == len(parts) - 1
             here = f"{folder}/{part}" if folder else part
             kids = index.children.setdefault(folder, {})
             if last and not is_dir:
-                try:
-                    mtime = time.mktime(info.date_time + (0, 0, -1))
-                except (OverflowError, ValueError):
-                    mtime = 0.0
-                kids[part] = Entry(part, self._base(archive) + here, False, info.file_size, mtime)
-                index.infos[here] = info
+                kids[part] = Entry(part, self._base(archive) + here, False, member.size, member.mtime)
+                index.infos[here] = member
             else:
                 if part not in kids or not kids[part].is_dir:
                     kids[part] = Entry(part, self._base(archive) + here, True)
@@ -201,45 +180,12 @@ class ZipFileSystem(FileSystem):
     def open_read(self, path: str) -> BinaryIO:
         archive, inside = self.split(path)
         index = self._index(archive)
-        info = index.infos.get(inside)
-        if info is None:
+        member = index.infos.get(inside)
+        if member is None:
             raise IsADirectoryError(path) if inside in index.children else FileNotFoundError(path)
-        if info.flag_bits & 0x1:
+        if member.encrypted:
             raise PermissionError(f"{os.path.basename(inside)} is encrypted")
-        zf = zipfile.ZipFile(archive)
-        try:
-            return _Stream(zf, zf.open(info))
-        except (NotImplementedError, RuntimeError) as e:
-            zf.close()
-            raise OSError(f"cannot read {os.path.basename(inside)}: {e}") from e
-        except BaseException:
-            zf.close()
-            raise
-
-
-class _Stream:
-    """A read stream of one entry that also closes the archive handle it came from."""
-
-    def __init__(self, zf: zipfile.ZipFile, inner) -> None:
-        self._zf, self._inner = zf, inner
-
-    def __getattr__(self, name):
-        return getattr(self._inner, name)
-
-    def __iter__(self):
-        return iter(self._inner)
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *exc) -> None:
-        self.close()
-
-    def close(self) -> None:
-        try:
-            self._inner.close()
-        finally:
-            self._zf.close()
+        return index.backend.open(archive, member)
 
 
 # a local copy of one entry, for a program that needs a real file ---------------------------------

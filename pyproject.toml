@@ -9,6 +9,7 @@ dependencies = ["send2trash>=1.8"]
 
 [project.optional-dependencies]
 gui = ["PyQt6>=6.6", "PyQt6-QScintilla>=2.14"]
+archives = ["py7zr>=0.21"]          # 7z archives as folders; RAR and the rest use an installed 7-Zip
 
 [project.gui-scripts]
 dossier = "dossier.gui.app:main"

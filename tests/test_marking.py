@@ -148,3 +148,42 @@ def test_home_and_end_go_to_the_first_and_last_item(world):
     assert win.left.current_name() == "f5.txt"
     key(win, Qt.Key.Key_Home)
     assert win.left.table.currentIndex().row() == 0                     # the ".." row is the first row
+
+
+def test_marks_are_cleared_after_a_paste_and_after_a_partly_failed_copy(world):
+    win, dialogs, left, right, _t = world
+    setup_files(win, left, n=3)
+    win.select_all()
+    key(win, Qt.Key.Key_C, CTRL)
+    key(win, Qt.Key.Key_Tab)
+    key(win, Qt.Key.Key_V, CTRL)
+    pump(win, lambda: len(list(right.iterdir())) == 3)
+    assert marked(win) == []                                            # the next operation starts clean
+
+
+def test_a_failed_item_stays_marked_for_a_retry_the_others_are_unmarked(world, monkeypatch):
+    win, dialogs, left, right, _t = world
+    setup_files(win, left, n=3)
+    from dossier.core import ops as ops_module
+    real = ops_module.copy_file
+
+    def flaky(fs, src, fs2, dst, **kw):
+        if src.endswith("f1.txt"):
+            raise OSError(22, "cannot copy this one")
+        return real(fs, src, fs2, dst, **kw)
+
+    monkeypatch.setattr(ops_module, "copy_file", flaky)
+    win.select_all()
+    win.copy()
+    pump(win, lambda: bool(dialogs.infos))
+    assert marked(win) == ["f1.txt"] and (right / "f0.txt").exists() and (right / "f2.txt").exists()
+
+
+def test_escape_clears_the_marks_when_no_folder_is_pending(world):
+    win, _d, left, *_ = world
+    setup_files(win, left)
+    key(win, Qt.Key.Key_Space)
+    key(win, Qt.Key.Key_Space)
+    assert len(win.selection) == 2
+    key(win, Qt.Key.Key_Escape)
+    assert marked(win) == []

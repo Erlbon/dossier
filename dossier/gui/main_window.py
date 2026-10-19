@@ -839,7 +839,7 @@ class MainWindow(QMainWindow):
             self._run(plan, unmark=sources)
             file_clipboard.clear_if_ours(sources)
         else:
-            self._run(plan)
+            self._run(plan, unmark=sources)
 
     def rename(self) -> None:
         if self._home_blocked("Rename"):
@@ -1026,6 +1026,9 @@ class MainWindow(QMainWindow):
             return
         result = job.result
         if result.failed:
+            failed = [r.op.src for r in result.failed]
+            if unmark:                           # what went well is unmarked; what failed stays marked for a retry
+                self.selection.remove([u for u in unmark if not any(f.startswith(u) for f in failed)])
             lines = [f"{self.fs.basename(r.op.src or r.op.dst)}: {r.error}" for r in result.failed[:10]]
             self.dialogs.info("Some items failed", "\n".join(lines))
         elif job.state is JobState.CANCELLED:
