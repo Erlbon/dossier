@@ -12,8 +12,8 @@ from typing import Optional
 
 from PyQt6.QtCore import QSettings, QSize, QStandardPaths, Qt
 from PyQt6.QtGui import QAction, QActionGroup, QKeySequence
-from PyQt6.QtWidgets import (QApplication, QComboBox, QHBoxLayout, QLabel, QMainWindow, QPushButton, QSplitter,
-                             QVBoxLayout, QWidget)
+from PyQt6.QtWidgets import (QApplication, QHBoxLayout, QLabel, QMainWindow, QMenu, QPushButton, QSplitter,
+                             QToolButton, QVBoxLayout, QWidget)
 
 from ..core.ops import (Plan, Resolution, check_name, plan_copy, plan_delete, plan_move, plan_rename)
 from ..core.commandline import Placeholders, expand, run_command
@@ -255,7 +255,7 @@ class MainWindow(QMainWindow):
     def _on_theme_changed(self) -> None:
         icon_set.clear_cache()
         self._apply_fkey_icons()
-        self._style_admin_toggle(self.admin_toggle.isChecked())
+        self._style_terminal_button()
         for p in (self.left, self.right):
             p.restyle()
 
@@ -307,9 +307,6 @@ class MainWindow(QMainWindow):
             if p.id == profile_id and path:
                 self.profile = p
                 self.settings.setValue("terminal/profile", profile_id)
-                i = self.interpreter.findData(profile_id)
-                if i >= 0 and i != self.interpreter.currentIndex():
-                    self.interpreter.setCurrentIndex(i)
                 return
 
     def set_icon_set(self, set_id: str) -> None:
@@ -410,39 +407,8 @@ class MainWindow(QMainWindow):
         return default_profile(self.profiles)
 
     def _build_command_row(self) -> QWidget:
-        """Two lines under the panels: the terminal buttons (one visible button per interpreter found, and
-        an Administrator switch), then the command line with the interpreter it uses."""
-        box = QWidget()
-        outer = QVBoxLayout(box)
-        outer.setContentsMargins(0, 0, 0, 0)
-        outer.setSpacing(0)
-
-        self.terminal_bar = QWidget()
-        bar = QHBoxLayout(self.terminal_bar)
-        bar.setContentsMargins(6, 3, 6, 0)
-        bar.setSpacing(6)
-        bar.addWidget(QLabel("Open a terminal here:"))
-        self.terminal_buttons = {}
-        for p, path in self.profiles:
-            if not path:
-                continue                     # an interpreter that is not installed has no button
-            b = QPushButton(p.title)
-            b.setToolTip(f"Open {p.title} in this panel's folder\n{path}")
-            b.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-            b.clicked.connect(lambda _c=False, prof=p: self.open_terminal(profile=prof))
-            bar.addWidget(b)
-            self.terminal_buttons[p.id] = b
-        bar.addStretch(1)
-        self.admin_toggle = QPushButton("As Administrator")
-        self.admin_toggle.setCheckable(True)
-        self.admin_toggle.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        self.admin_toggle.setToolTip("The next terminal opens with administrator rights: the system asks for "
-                                     "permission. The switch turns itself off afterwards.")
-        self.admin_toggle.toggled.connect(self._style_admin_toggle)
-        bar.addWidget(self.admin_toggle)
-        self.terminal_bar.setVisible(bool(self.terminal_buttons))
-        outer.addWidget(self.terminal_bar)
-
+        """One line under the panels: the prompt, the command line, and one Terminal button. The button opens a
+        terminal in this folder; a right-click on it offers the administrator terminal and the other choices."""
         row = QWidget()
         lay = QHBoxLayout(row)
         lay.setContentsMargins(6, 3, 6, 3)
@@ -452,25 +418,42 @@ class MainWindow(QMainWindow):
         self.cmdline.returnPressed.connect(self.run_command_line)
         self.cmdline.escape_pressed.connect(lambda: self.active.table.setFocus())
         self.cmdline.tab_pressed.connect(lambda: self.active.table.setFocus())
-        self.interpreter = QComboBox()
-        self.interpreter.setToolTip("The interpreter that runs what you type here")
-        self.interpreter.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        for p, path in self.profiles:
-            if path:
-                self.interpreter.addItem(p.title, p.id)
-        if self.profile is not None:
-            self.interpreter.setCurrentIndex(max(0, self.interpreter.findData(self.profile.id)))
-        self.interpreter.currentIndexChanged.connect(lambda _i: self.set_profile(self.interpreter.currentData()))
-        lay.addWidget(self.interpreter)
+        self.term_button = QToolButton()
+        self.term_button.setAutoRaise(True)
+        self.term_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.term_button.setIconSize(QSize(18, 18))
+        self.term_button.setToolTip("Open a terminal in this folder (Ctrl+Shift+T). "
+                                    "Right-click: administrator, other folder, interpreter.")
+        self.term_button.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.term_button.clicked.connect(lambda: self.open_terminal())
+        self.term_button.customContextMenuRequested.connect(
+            lambda pos: self.build_terminal_menu().popup(self.term_button.mapToGlobal(pos)))
+        self._style_terminal_button()
         lay.addWidget(self.prompt)
         lay.addWidget(self.cmdline, 1)
-        outer.addWidget(row)
-        return box
+        lay.addWidget(self.term_button)
+        return row
 
-    def _style_admin_toggle(self, on: bool) -> None:
-        t = theme.current()
-        self.admin_toggle.setStyleSheet(
-            f"QPushButton{{background:{t['danger']};color:{t['bg']};font-weight:bold;}}" if on else "")
+    def _style_terminal_button(self) -> None:
+        self.term_button.setIcon(icon_set.icon("terminal-2", theme.current()["fg"]))
+
+    def build_terminal_menu(self) -> QMenu:
+        """The right-click menu of the Terminal button."""
+        menu = QMenu(self)
+        menu.addAction("Open as Administrator").triggered.connect(lambda _c=False: self.open_terminal(admin=True))
+        menu.addAction("Open in the Other Panel's Folder").triggered.connect(
+            lambda _c=False: self.open_terminal(other=True))
+        sub = menu.addMenu("Interpreter")
+        group = QActionGroup(menu)
+        group.setExclusive(True)
+        for p, path in self.profiles:
+            act = sub.addAction(p.title if path else f"{p.title} (not found)")
+            act.setCheckable(True)
+            act.setEnabled(bool(path))
+            act.setChecked(self.profile is not None and p.id == self.profile.id)
+            group.addAction(act)
+            act.triggered.connect(lambda _c=False, prof=p: self.set_profile(prof.id))
+        return menu
 
     def _update_title(self) -> None:
         """The file manager is titled 'Dossier <machine name>', so several computers' windows are told apart.
@@ -553,14 +536,10 @@ class MainWindow(QMainWindow):
                                lambda progress, cancel: run_command(profile, command, cwd, on_finish=ended_later),
                                on_done=finished)
 
-    def open_terminal(self, admin: Optional[bool] = None, profile=None, other: bool = False) -> None:
-        """Open an interactive session in the panel's folder. Administrator (the explicit argument, or the
-        switch on the terminal row) means the system's own permission prompt (Windows) or ``sudo -s`` typed
-        inside the terminal: Dossier never sees a password and never raises its own rights. The switch
-        turns itself off after a launch so the next terminal is a normal one."""
-        if admin is None:
-            admin = self.admin_toggle.isChecked()
-        self.admin_toggle.setChecked(False)
+    def open_terminal(self, admin: bool = False, profile=None, other: bool = False) -> None:
+        """Open an interactive session in the panel's folder. Administrator (the right-click menu of the
+        Terminal button) means the system's own permission prompt (Windows) or ``sudo -s`` typed inside the
+        terminal: Dossier never sees a password and never raises its own rights."""
         profile = profile or self.profile
         panel = self.other if other else self.active
         if profile is None:

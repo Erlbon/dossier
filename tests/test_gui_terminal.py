@@ -216,75 +216,86 @@ def test_a_remote_folder_has_no_terminal(world, monkeypatch):
     assert not rec.launches and dialogs.infos and "this computer" in dialogs.infos[-1][1]
 
 
-def test_every_installed_interpreter_has_its_own_visible_button_on_a_separate_line(world):
+def test_there_is_one_plain_terminal_button_next_to_the_command_line(world):
     win, _d, rec, left, *_ = world
-    installed = [p for p, path in win.profiles if path]
-    assert installed and set(win.terminal_buttons) == {p.id for p in installed}
-    assert win.terminal_bar.isVisible() and win.terminal_bar is not win.cmdline.parentWidget()
-    for p in installed:
-        win.terminal_buttons[p.id].click()
-        assert rec.launches[-1].cwd == str(left)
-    assert len(rec.launches) == len(installed)
+    assert win.term_button.parentWidget() is win.cmdline.parentWidget()        # the same single line
+    assert not hasattr(win, "terminal_buttons") and not hasattr(win, "admin_toggle")
+    assert not win.term_button.icon().isNull()
+    win.term_button.click()
+    assert rec.launches[-1].cwd == str(left) and not rec.launches[-1].elevate
     commands = {a.text().replace("&", ""): a.menu() for a in win.menuBar().actions()}["Commands"]
     texts = [a.text() for a in commands.actions() if not a.isSeparator()]
     assert "Terminal Here" in texts and "Administrator Terminal Here" in texts
 
 
-def test_an_interpreter_that_is_not_installed_gets_no_button(app, tmp_path):
-    from dossier.core.terminals import builtin_profiles
-    installed = builtin_profiles()[0]                       # the only interpreter this made-up computer has
-    win = MainWindow(settings_path=str(tmp_path / "s.ini"), start=(str(tmp_path), str(tmp_path)),
-                     dialogs=FakeDialogs(), terminal_launcher=Recorder(),
-                     which=lambda n: "/fake/" + n if n == installed.program else None)
-    try:
-        assert set(win.terminal_buttons) == {installed.id}
-        assert win.interpreter.count() == 1
-    finally:
-        win.close()
-
-
-def test_the_administrator_switch_elevates_the_next_terminal_only_and_looks_dangerous(world):
-    win, _d, rec, *_ = world
-    first = next(iter(win.terminal_buttons.values()))
-    assert not win.admin_toggle.isChecked() and win.admin_toggle.styleSheet() == ""
-    win.admin_toggle.setChecked(True)
-    assert win.admin_toggle.styleSheet() != ""
-    first.click()
+def test_right_click_offers_administrator_the_other_folder_and_the_interpreter(world):
+    win, _d, rec, left, right, _t = world
+    menu = win.build_terminal_menu()
+    texts = [a.text() for a in menu.actions()]
+    assert texts[:2] == ["Open as Administrator", "Open in the Other Panel's Folder"] and "Interpreter" in texts
+    menu.actions()[0].trigger()
     if IS_WINDOWS:
-        assert rec.launches[-1].elevate
+        assert rec.launches[-1].elevate and rec.launches[-1].cwd == str(left)
     else:
         assert rec.launches[-1].argv[-2:] == ["sudo", "-s"]
-    assert not win.admin_toggle.isChecked()           # one terminal only
-    first.click()
-    assert not rec.launches[-1].elevate
+    menu.actions()[1].trigger()
+    assert rec.launches[-1].cwd == str(right) and not rec.launches[-1].elevate
 
 
-def test_the_command_line_interpreter_is_chosen_next_to_the_line_and_remembered(world, app):
+def test_a_right_click_event_asks_for_the_menu_and_a_left_click_does_not(world, monkeypatch):
+    win, _d, rec, *_ = world
+    shown = []
+    monkeypatch.setattr(mw.MainWindow, "build_terminal_menu",
+                        lambda self: type("M", (), {"popup": lambda s, pos: shown.append(pos)})())
+    from PyQt6.QtCore import QPoint
+    from PyQt6.QtGui import QContextMenuEvent
+    QApplication.sendEvent(win.term_button, QContextMenuEvent(QContextMenuEvent.Reason.Mouse, QPoint(4, 4)))
+    assert shown and not rec.launches                          # the menu came up, no terminal was opened
+    QTest.mouseClick(win.term_button, Qt.MouseButton.LeftButton)
+    assert len(rec.launches) == 1
+
+
+def test_the_interpreter_is_chosen_in_that_menu_saved_and_used_by_the_command_line(world, app):
     win, _d, rec, left, right, tmp = world
-    ids = [win.interpreter.itemData(i) for i in range(win.interpreter.count())]
-    assert ids and win.interpreter.currentData() == win.profile.id
-    pick = ids[-1]
-    win.interpreter.setCurrentIndex(ids.index(pick))
-    assert win.profile.id == pick
-    titles = [a.text() for a in {a.text().replace("&", ""): a.menu() for a in win.menuBar().actions()}["Settings"].actions()]
-    assert "Command Interpreter" not in titles          # it is not hidden in the settings
+    available = [p for p, path in win.profiles if path]
+    sub = next(a.menu() for a in win.build_terminal_menu().actions() if a.text() == "Interpreter")
+    assert [a.text() for a in sub.actions() if a.isEnabled()] == [p.title for p in available]
+    assert sum(a.isChecked() for a in sub.actions()) == 1
+    pick = available[-1]
+    next(a for a in sub.actions() if a.text() == pick.title).trigger()
+    assert win.profile.id == pick.id
     win.close()
     again = MainWindow(settings_path=str(tmp / "s.ini"), dialogs=FakeDialogs(), terminal_launcher=Recorder())
     try:
-        assert again.profile.id == pick and again.interpreter.currentData() == pick
+        assert again.profile.id == pick.id
     finally:
         again.close()
 
 
-def test_without_any_interpreter_the_row_is_hidden_and_the_command_line_explains(app, tmp_path):
+def test_an_interpreter_that_is_not_installed_is_listed_but_cannot_be_chosen(app, tmp_path):
+    from dossier.core.terminals import builtin_profiles
+    installed = builtin_profiles()[0]
+    win = MainWindow(settings_path=str(tmp_path / "s.ini"), start=(str(tmp_path), str(tmp_path)),
+                     dialogs=FakeDialogs(), terminal_launcher=Recorder(),
+                     which=lambda n: "/fake/" + n if n == installed.program else None)
+    try:
+        sub = next(a.menu() for a in win.build_terminal_menu().actions() if a.text() == "Interpreter")
+        enabled = [a.text() for a in sub.actions() if a.isEnabled()]
+        assert enabled == [installed.title] and any("not found" in a.text() for a in sub.actions())
+    finally:
+        win.close()
+
+
+def test_without_any_interpreter_the_command_line_explains(app, tmp_path):
     win = MainWindow(settings_path=str(tmp_path / "s.ini"), start=(str(tmp_path), str(tmp_path)),
                      dialogs=FakeDialogs(), terminal_launcher=Recorder(), which=lambda n: None)
     try:
-        win.show()
-        assert win.profile is None and not win.terminal_buttons and not win.terminal_bar.isVisible()
+        assert win.profile is None
         win.cmdline.setText("echo hi")
         win.run_command_line()
         assert win.dialogs.infos and "interpreter" in win.dialogs.infos[-1][1]
+        win.term_button.click()
+        assert "interpreter" in win.dialogs.infos[-1][1]
     finally:
         win.close()
 

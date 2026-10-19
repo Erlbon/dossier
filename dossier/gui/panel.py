@@ -16,7 +16,7 @@ from ..core.notes import compose_markdown, find_notes
 from ..core.selection import SelectionStore
 from ..core.vfs import Entry, FileSystem
 from ..core.drives import drive_of, usage_async
-from . import theme
+from . import icon_set, theme
 from .drive_bar import DriveBar
 from .models import FolderModel, human_size
 
@@ -146,11 +146,12 @@ class Panel(QFrame):
         self.setObjectName("panel")
 
         self._tabs: dict = {}          # tab id -> TabState
+        self._close_buttons: dict = {}  # tab id -> its small close button
         self._tab_seq = 0
         self._current_tab_id: Optional[int] = None
         self.tabs = PanelTabBar()
         self.tabs.setDocumentMode(True)
-        self.tabs.setTabsClosable(True)
+        self.tabs.setTabsClosable(False)         # our own small close buttons, see _attach_close_button
         self.tabs.setMovable(True)
         self.tabs.setExpanding(False)
         self.tabs.setElideMode(Qt.TextElideMode.ElideRight)
@@ -230,7 +231,6 @@ class Panel(QFrame):
         self.table.activate_in_tab.connect(lambda: self.open_current(new_tab=True))
         self.table.middle_clicked.connect(self._middle_click_row)
         self.tabs.currentChanged.connect(self._tab_switched)
-        self.tabs.tabCloseRequested.connect(self.close_tab)
         self.tabs.middle_clicked.connect(self.close_tab)
         self.tabs.new_requested.connect(lambda: self.new_tab())
         self.new_tab_button.clicked.connect(lambda: self.new_tab())
@@ -275,12 +275,19 @@ class Panel(QFrame):
         self.set_active(self._active)
         self.drive_bar.restyle()
         t = theme.current()
+        # The selected tab is the gold-tinted one with a thick gold top edge and bold text, the same tint as the
+        # cursor row; the others are flat and dim. The close buttons are small and quiet until the pointer is on them.
         self.tab_row.setStyleSheet(
             f"#tabrow{{background:{t['card']};}}"
-            f"QTabBar::tab{{background:{t['card']};color:{t['dim']};padding:3px 10px;border:1px solid {t['line']};"
-            f"border-bottom:none;margin-right:1px;min-width:60px;max-width:180px;}}"
-            f"QTabBar::tab:selected{{background:{t['bg']};color:{t['fg']};border-top:2px solid {t['accent']};}}"
-            f"QToolButton{{color:{t['fg']};font-weight:bold;padding:0 8px;}}")
+            f"QTabBar::tab{{background:{t['card']};color:{t['dim']};padding:4px 4px 4px 12px;"
+            f"border:1px solid {t['line']};border-bottom:none;margin-right:2px;min-width:70px;max-width:190px;}}"
+            f"QTabBar::tab:hover:!selected{{background:{t['bg']};color:{t['fg']};}}"
+            f"QTabBar::tab:selected{{background:{t['cursor_bg']};color:{t['fg']};font-weight:bold;"
+            f"border-top:3px solid {t['accent']};}}"
+            f"QToolButton{{color:{t['fg']};font-weight:bold;padding:0 8px;border:none;background:transparent;}}"
+            f"QTabBar QToolButton{{padding:1px;border-radius:3px;}}"
+            f"QTabBar QToolButton:hover{{background:{t['line']};}}")
+        self._style_close_buttons()
         self.model.refresh_marks()
         if self.model.note_row >= 0:
             self._load_note(self.path)
@@ -332,7 +339,28 @@ class Panel(QFrame):
             self._current_tab_id = tid
             self.tabs.setCurrentIndex(index)
         self.tabs.blockSignals(blocked)
+        self._attach_close_button(index, tid)
         return index
+
+    def _attach_close_button(self, index: int, tid: int) -> None:
+        btn = QToolButton()
+        btn.setAutoRaise(True)
+        btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        btn.setIconSize(QSize(12, 12))
+        btn.setToolTip("Close tab (Ctrl+W)")
+        btn.clicked.connect(lambda _c=False, t=tid: self.close_tab(self._index_of_tab(t)))
+        self.tabs.setTabButton(index, QTabBar.ButtonPosition.RightSide, btn)
+        self._close_buttons[tid] = btn
+        self._style_close_buttons()
+
+    def _style_close_buttons(self) -> None:
+        """A cross drawn in the scheme's colours: dim on the tabs you are not on, full colour on the current one."""
+        t = theme.current()
+        for tid, btn in list(self._close_buttons.items()):
+            try:
+                btn.setIcon(icon_set.icon("x", t["fg"] if tid == self._current_tab_id else t["dim"]))
+            except RuntimeError:                      # the button went away with its tab
+                self._close_buttons.pop(tid, None)
 
     @staticmethod
     def _tab_label(path: str) -> str:
@@ -385,13 +413,16 @@ class Panel(QFrame):
                 break
             path = parent
         self.table.verticalScrollBar().setValue(st.scroll)
+        self._style_close_buttons()
 
     def close_tab(self, index: int) -> None:
         if self.tabs.count() <= 1 or index < 0 or index >= self.tabs.count():
             return                                   # the last tab stays: a panel always shows a folder
         tid = self.tabs.tabData(index)
         self._tabs.pop(tid, None)
+        self._close_buttons.pop(tid, None)
         self.tabs.removeTab(index)                   # when it was the current tab, the neighbour is shown
+        self._style_close_buttons()
 
     def next_tab(self, step: int = 1) -> None:
         if self.tabs.count() > 1:

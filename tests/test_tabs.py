@@ -227,3 +227,53 @@ def test_the_administrator_mark_follows_the_machine_name(app, tmp_path, monkeypa
         assert win.windowTitle() == f"Dossier {machine_name()} (Administrator)"
     finally:
         win.close()
+
+
+# the look of the tabs ----------------------------------------------------------------------------------------------------
+def test_close_buttons_are_small_drawn_crosses_and_not_the_dominant_default(world):
+    win, left, *_ = world
+    p = win.left
+    p.new_tab(str(left / "alpha"))
+    assert not p.tabs.tabsClosable()
+    from PyQt6.QtWidgets import QTabBar
+    for i in range(p.tabs.count()):
+        btn = p.tabs.tabButton(i, QTabBar.ButtonPosition.RightSide)
+        assert btn is not None and not btn.icon().isNull() and btn.iconSize().width() <= 14
+
+
+def test_a_close_button_closes_its_own_tab_even_after_tabs_were_moved(world):
+    win, left, *_ = world
+    from PyQt6.QtWidgets import QTabBar
+    p = win.left
+    p.new_tab(str(left / "alpha"))
+    p.new_tab(str(left / "beta"))
+    p.tabs.moveTab(0, 2)                                       # drag the first tab to the end
+    assert labels(p) == ["alpha", "beta", "left"]
+    p.tabs.tabButton(1, QTabBar.ButtonPosition.RightSide).click()
+    assert labels(p) == ["alpha", "left"]
+
+
+def test_the_selected_tab_is_the_gold_tinted_one_and_the_others_are_not(world):
+    from dossier.gui import theme
+    win, left, *_ = world
+    sheet = win.left.tab_row.styleSheet()
+    t = theme.current()
+    assert f"QTabBar::tab:selected{{background:{t['cursor_bg']}" in sheet.replace(" ", "")
+    assert f"border-top:3px solid {t['accent']}" in sheet
+    assert "font-weight:bold" in sheet.split("QTabBar::tab:selected")[1].split("}")[0]
+    assert f"QTabBar::tab{{background:{t['card']}" in sheet.replace(" ", "")
+    assert t["cursor_bg"] != t["card"]
+
+
+def test_the_close_cross_of_the_current_tab_is_brighter_than_the_others(world):
+    from PyQt6.QtWidgets import QTabBar
+    from dossier.gui import theme
+    from tests.test_icons import dominant_color
+    win, left, *_ = world
+    p = win.left
+    p.new_tab(str(left / "alpha"))                              # the new tab is the current one
+    t = theme.current()
+    cur = dominant_color(p.tabs.tabButton(p.tabs.currentIndex(), QTabBar.ButtonPosition.RightSide).icon())
+    other = dominant_color(p.tabs.tabButton(0, QTabBar.ButtonPosition.RightSide).icon())
+    assert cur is not None and other is not None
+    assert (cur.red(), cur.green(), cur.blue()) != (other.red(), other.green(), other.blue())

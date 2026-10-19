@@ -22,7 +22,7 @@ from PyQt6.QtCore import QByteArray, QRectF, Qt
 from PyQt6.QtGui import QGuiApplication, QIcon, QImage, QPainter, QPixmap
 from PyQt6.QtSvg import QSvgRenderer
 
-from . import theme
+from . import painted_icons, theme
 
 BUILTIN_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "icons")
 DEFAULT_SET = "tabler"
@@ -150,12 +150,14 @@ def icon(name: str, color: Optional[str] = None) -> QIcon:
         return _cache[key]
     svg = _source(name)
     result = QIcon()
+    app = QGuiApplication.instance()
+    ratio = max(1.0, app.devicePixelRatio()) if app else 1.0
     if svg:
         tinted = svg.replace("currentColor", color)
-        app = QGuiApplication.instance()
-        ratio = max(1.0, app.devicePixelRatio()) if app else 1.0
         for size in SIZES:
             result.addPixmap(_render(tinted, size, ratio))
+    elif painted_icons.has(name):                 # the set has no file for it: a drawn one, never a blank
+        result = painted_icons.icon(name, color, ratio)
     _cache[key] = result
     return result
 
