@@ -1,0 +1,6 @@
+# Qt-free core needs nothing beyond the standard library.
+# GUI and shared code (added when the GUI shell starts):
+# PyQt6>=6.6
+# redactor_common @ git+https://github.com/Erlbon/redactor_common.git@2026-10-18-08   # pin a tag, never @main
+send2trash>=1.8
+pytest

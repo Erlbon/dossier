@@ -1,0 +1,11 @@
+[project]
+name = "dossier"
+version = "0.0.1"
+description = "Multi-window file manager with a shared selection, Markdown notes and file metadata"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "GPL-3.0-or-later" }
+dependencies = []
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

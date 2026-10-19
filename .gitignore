@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+build/
+dist/
+*.egg-info/
+# PyInstaller rewrites the spec file each build; flags live in the build script
+*.spec
+.env
+.env.local
