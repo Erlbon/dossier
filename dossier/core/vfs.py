@@ -12,7 +12,11 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import BinaryIO, Iterator
 
-from .platform import decode_name, is_link_like, path_key
+from .platform import decode_name, is_link_like, longpath, path_key, strip_longpath
+
+
+class NotWritable(OSError):
+    """The file system (or this connection) is read-only (spec principle 2)."""
 
 
 @dataclass(frozen=True)
@@ -39,22 +43,83 @@ class FileSystem(ABC):
     @abstractmethod
     def open_read(self, path: str) -> BinaryIO: ...
 
+    def scan(self, path: str) -> Iterator[Entry]:
+        """Entries one by one, so a window can show the first rows of a huge folder at once."""
+        return iter(self.list(path))
+
+    # Writing. Read-only sources keep these defaults and raise NotWritable. -------------
+    def mkdir(self, path: str, *, parents: bool = False, exist_ok: bool = False) -> None:
+        raise NotWritable(path)
+
+    def rename(self, src: str, dst: str, *, overwrite: bool = False) -> None:
+        """Move within this file system. Refuses an existing target unless ``overwrite``."""
+        raise NotWritable(src)
+
+    def remove(self, path: str) -> None:
+        """Delete one file, link or EMPTY folder. Recursion belongs to the operations layer."""
+        raise NotWritable(path)
+
+    def open_write(self, path: str, *, exclusive: bool = False) -> BinaryIO:
+        """Create or truncate a file. ``exclusive`` fails if it already exists."""
+        raise NotWritable(path)
+
+    def set_mtime(self, path: str, mtime: float) -> None:
+        raise NotWritable(path)
+
 
 class LocalFileSystem(FileSystem):
     writable = True
 
     def list(self, path: str) -> list[Entry]:
-        out: list[Entry] = []
-        with os.scandir(path) as it:
+        return list(self.scan(path))
+
+    def scan(self, path: str) -> Iterator[Entry]:
+        with os.scandir(longpath(path)) as it:
             for de in it:
-                out.append(self._entry(de))
-        return out
+                yield self._entry(de)
+
+    def mkdir(self, path: str, *, parents: bool = False, exist_ok: bool = False) -> None:
+        p = longpath(path)
+        if parents:
+            os.makedirs(p, exist_ok=exist_ok)
+        elif exist_ok and os.path.isdir(p):
+            return
+        else:
+            os.mkdir(p)
+
+    def rename(self, src: str, dst: str, *, overwrite: bool = False) -> None:
+        s, d = longpath(src), longpath(dst)
+        if not overwrite and os.path.lexists(d):
+            # A change of case only ('a.md' -> 'A.md') names the same file on a case-insensitive system.
+            case_only = src != dst and os.path.normcase(src) == os.path.normcase(dst)
+            if not case_only:
+                raise FileExistsError(dst)
+        os.replace(s, d)
+
+    def remove(self, path: str) -> None:
+        p = longpath(path)
+        if os.path.islink(p):
+            try:
+                os.remove(p)
+            except OSError:      # a Windows link to a folder is removed like a folder
+                os.rmdir(p)
+        elif os.path.isdir(p):
+            os.rmdir(p)          # junctions too: removes the junction, never its target
+        else:
+            os.remove(p)
+
+    def open_write(self, path: str, *, exclusive: bool = False) -> BinaryIO:
+        return open(longpath(path), "xb" if exclusive else "wb")
+
+    def set_mtime(self, path: str, mtime: float) -> None:
+        os.utime(longpath(path), (mtime, mtime))
 
     def stat(self, path: str) -> Entry:
-        lst = os.lstat(path)
+        p = longpath(path)
+        lst = os.lstat(p)
         is_link = is_link_like(stat.S_ISLNK(lst.st_mode), getattr(lst, "st_file_attributes", None))
         try:
-            st = os.stat(path) if is_link else lst   # a link shows what it points at
+            st = os.stat(p) if is_link else lst   # a link shows what it points at
         except OSError:                              # broken link
             st = lst
         is_dir = stat.S_ISDIR(st.st_mode)
@@ -68,7 +133,7 @@ class LocalFileSystem(FileSystem):
         )
 
     def open_read(self, path: str) -> BinaryIO:
-        return open(path, "rb")
+        return open(longpath(path), "rb")
 
     @staticmethod
     def _entry(de: os.DirEntry) -> Entry:
@@ -87,7 +152,7 @@ class LocalFileSystem(FileSystem):
             attrs = None
         return Entry(
             name=decode_name(de.name),
-            path=de.path,
+            path=strip_longpath(de.path),
             is_dir=is_dir,
             size=0 if is_dir else size,
             mtime=mtime,
@@ -132,4 +197,4 @@ def _walk(fs: FileSystem, path: str, root: bool) -> Iterator[Entry]:
             yield from _walk(fs, e.path, root=False)
 
 
-__all__ = ["Entry", "FileSystem", "LocalFileSystem", "natural_key", "sort_entries", "walk", "path_key"]
+__all__ = ["Entry", "FileSystem", "LocalFileSystem", "NotWritable", "natural_key", "sort_entries", "walk", "path_key"]

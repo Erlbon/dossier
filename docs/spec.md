@@ -180,6 +180,8 @@ A local server lets an AI assistant browse and work with the same state the user
 | X5 | Every call is logged, and the folder scope is limited to the roots the user lists |
 | X6 | Same core functions as the GUI; no behaviour exists only in the server |
 
+**Later (idea from the owner, 2026-10-19): an AI-aware client.** Besides serving an outside assistant over MCP, Dossier could host one: an optional AI provider setting (key in the system keyring) so the client itself can talk to a model and use the same core functions and the same plan-then-confirm rule (X3, X4). Not designed yet; it must stay off by default, never send file contents anywhere without an explicit per-folder opt-in, and work through the existing core so no behaviour exists only in the AI path.
+
 ## 13. Platforms
 
 Windows is the primary target; Linux is a tested second. The core never calls an OS-specific function directly: it goes through one platform module, so a port changes that module and nothing else. macOS is not a target but is not blocked.
