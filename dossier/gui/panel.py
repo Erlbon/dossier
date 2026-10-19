@@ -343,6 +343,7 @@ class Panel(QFrame):
     current_changed = pyqtSignal(object)  # the item under the cursor changed
     activated = pyqtSignal(object)        # the user focused this panel
     message = pyqtSignal(str)
+    sizes_requested = pyqtSignal()        # the button for folder sizes was pressed
     home_action = pyqtSignal(str)         # an action entry of the Home page was opened (its path says which)
 
     def __init__(self, fs: FileSystem, selection: SelectionStore, parent=None, dispatch=None) -> None:
@@ -405,7 +406,15 @@ class Panel(QFrame):
         bar.addWidget(self.home_button)
         bar.addWidget(self.drive_bar.chip)
         bar.addWidget(self.address_bar, 1)
+        self.sizes_button = QToolButton()
+        self.sizes_button.setObjectName("sizesbtn")
+        self.sizes_button.setText(chr(0x03A3))                                  # a capital sigma: sum
+        self.sizes_button.setAutoRaise(True)
+        self.sizes_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.sizes_button.setToolTip("Folder sizes: add up the folders in this list, or the marked ones (Alt+Shift+Enter)")
+        self.sizes_button.clicked.connect(self.sizes_requested.emit)
         bar.addWidget(self.free)
+        bar.addWidget(self.sizes_button)
         self.bar = QWidget()
         self.bar.setObjectName("pathbarbox")
         self.bar.setLayout(bar)
@@ -506,7 +515,9 @@ class Panel(QFrame):
             f"#pathbarbox QToolButton#crumb{{border:none;border-radius:4px;padding:1px 4px;}}"
             f"#pathbarbox QToolButton#crumb:hover{{background:rgba(0,0,0,60);}}"
             f"#pathbarbox QToolButton#crumb::menu-indicator{{image:none;}}"
-            f"#pathbarbox QLabel#crumbsep{{color:{text};}}")
+            f"#pathbarbox QLabel#crumbsep{{color:{text};}}"
+            f"#pathbarbox QToolButton#sizesbtn{{border:none;border-radius:4px;padding:1px 6px;font-weight:bold;}}"
+            f"#pathbarbox QToolButton#sizesbtn:hover{{background:rgba(0,0,0,60);}}")
         palette = QPalette(QApplication.palette())
         if not active:
             for group in (QPalette.ColorGroup.Active, QPalette.ColorGroup.Inactive):

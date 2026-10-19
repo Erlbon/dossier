@@ -45,6 +45,7 @@ class FolderModel(QAbstractTableModel):
         self.path = ""
         self._up: Optional[Entry] = None
         self._rows: list = []
+        self._tree_sizes: dict = {}
         self._has_note = False
         self._sort_col = 0
         self._sort_order = Qt.SortOrder.AscendingOrder
@@ -78,11 +79,21 @@ class FolderModel(QAbstractTableModel):
         """List ``path`` now. Raises OSError (the old listing stays) when it cannot be read."""
         self.set_entries(path, self.fs.list(path))
 
+    def set_tree_sizes(self, sizes: dict) -> None:
+        """Show the size of whole folder trees (``{path: bytes}``) in the Size column, and sort by it like any size.
+        They belong to this listing: the next listing starts again from DIR."""
+        if self.is_home or not sizes:
+            return
+        self._tree_sizes.update(sizes)
+        self._rows = [dc_replace(e, size=sizes[e.path]) if e.is_dir and e.path in sizes else e for e in self._rows]
+        self.sort(self._sort_col, self._sort_order)               # the cursor stays on its item, whatever the order
+
     def set_entries(self, path: str, entries: list) -> None:
         """Show an already made listing of ``path`` (the panel lists on a worker thread and hands it over)."""
         parent = self.fs.parent(path)
         up = Entry("..", parent, True) if parent else None
         self.beginResetModel()
+        self._tree_sizes = {}
         self.path = path
         self._up = up
         self._rows = entries
@@ -182,7 +193,9 @@ class FolderModel(QAbstractTableModel):
             if self.is_up_row(index.row()):
                 return "UP" if col == 1 else ""
             if col == 1:
-                return "DIR" if entry.is_dir else human_size(entry.size)
+                if entry.is_dir:
+                    return human_size(entry.size) if entry.path in self._tree_sizes else "DIR"
+                return human_size(entry.size)
             return datetime.fromtimestamp(entry.mtime).strftime("%Y-%m-%d %H:%M") if entry.mtime else ""
         if role == Qt.ItemDataRole.DecorationRole and col == 0:
             return self._icon(entry, self.is_up_row(index.row()))

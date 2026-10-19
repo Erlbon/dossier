@@ -21,6 +21,7 @@ from ..core.home import ADD_NETWORK, HomeFileSystem, HomeProvider, RouterFileSys
 from ..core.commandline import Placeholders, expand, run_command
 from ..core import patterns, zipfs
 from ..core.platform import IS_WINDOWS, has_scheme, is_elevated, machine_name, path_key, set_window_border
+from ..core.foldersize import folder_sizes
 from ..core.selection import SelectionStore
 from ..core.version import APP_NAME, APP_REPO_URL, APP_VERSION
 from ..core.stallwatch import StallWatch
@@ -98,6 +99,7 @@ class MainWindow(QMainWindow):
         self.busy = False
         self.paused = False
         self._jobs: list = []                      # running first, then the ones waiting
+        self._size_jobs: list = []                 # folder size walks in the background
         self._job: Optional[Job] = None
         self.viewers: list = []
         self.editors: list = []
@@ -151,6 +153,7 @@ class MainWindow(QMainWindow):
             panel.folder_changed.connect(self._remember_sizes)
             panel.message.connect(self._say)
             panel.home_action.connect(self._home_action)
+            panel.sizes_requested.connect(lambda p=panel: self.calculate_folder_sizes(p))
         self._sizes: dict = {}                       # path -> size (0 for a folder), from the listings on screen
         self.selection.subscribe(lambda _s: self._update_status())
         self.theme.changed.connect(self._on_theme_changed)
@@ -222,6 +225,7 @@ class MainWindow(QMainWindow):
         self.act_notes.toggled.connect(self.set_notes_visible)
         view_menu.addAction(self.act_notes)
         view_menu.addAction(self._action("Home Page", "Alt+Home", lambda: self.active.go_home()))
+        view_menu.addAction(self._action("Folder Sizes", "Alt+Shift+Return", lambda: self.calculate_folder_sizes()))
         view_menu.addAction(self._action("Edit the Path", "Ctrl+L", lambda: self.active.address_bar.start_edit()))
         view_menu.addAction(self._action("Refresh", "Ctrl+R", self.refresh))
         tabs_menu = view_menu.addMenu("Tabs")
@@ -1209,6 +1213,67 @@ class MainWindow(QMainWindow):
             "Made with Python and Qt (PyQt6), the QScintilla editor component, and the Tabler and Lucide icon sets.",
             "The full credits are in CREDITS.md."]))
 
+    # folder sizes ------------------------------------------------------------------------------------------
+    def calculate_folder_sizes(self, panel=None) -> None:
+        """Add up whole folder trees for the Size column: the marked folders of the panel, else every folder in
+        its list. In the background with a box that shows the total growing and a Cancel."""
+        panel = panel or self.active
+        if panel.is_home:
+            self._say("The Home page has no folders to add up")
+            return
+        model = panel.model
+        folders = [model.entry_at(r) for r in range(model.entry_count())
+                   if model.entry_at(r) is not None and model.entry_at(r).is_dir and not model.is_up_row(r)]
+        marked = set(panel.marked_here())
+        wanted = [e.path for e in folders if e.path in marked] or [e.path for e in folders]
+        if not wanted:
+            self._say("There are no folders in this list")
+            return
+        at = panel.path
+        holder: dict = {}
+        shown: dict = {}
+        current = {"text": ""}
+
+        def work(progress, cancel):
+            def report(done: int, total: int, bytes_so_far: int, name: str) -> None:
+                if name:
+                    current["text"] = f"{name}  ({done + 1} of {total})   {human_size(bytes_so_far)} so far"
+                progress(done, total)
+            return folder_sizes(self.fs, wanted, cancel, report)
+
+        def on_progress(done: int, total: int) -> None:
+            if "box" not in shown:
+                shown["box"] = self.dialogs.make_progress("Folder sizes", lambda: holder["job"].cancel() if "job" in holder else None)
+            shown["box"].detail = current["text"]
+            shown["box"].update(done, total)
+
+        def finished(job: Job) -> None:
+            if "box" in shown:
+                shown["box"].close()
+            if job in self._size_jobs:
+                self._size_jobs.remove(job)
+            if job.state is JobState.FAILED:
+                self.dialogs.info("Folder sizes", str(job.error))
+                return
+            results = job.result or {}
+            if panel.path == at:                          # the panel may have moved on while it worked
+                panel.model.set_tree_sizes({p: r.size for p, r in results.items()})
+            self._sizes.update({p: r.size for p, r in results.items()})
+            self._update_status()                         # the line above counts folder sizes into the marked total
+            total = sum(r.size for r in results.values())
+            files = sum(r.files for r in results.values())
+            unread = sum(r.unreadable for r in results.values())
+            text = f"{len(results)} folder{'s' if len(results) != 1 else ''}: {human_size(total)} in {files:,} files"
+            if unread:
+                text += f"; {unread} folder{'s' if unread != 1 else ''} could not be read"
+            if len(results) < len(wanted):
+                text += f"; stopped after {len(results)} of {len(wanted)}"
+            self._say(text)
+
+        job = self.cmd_runner.submit("Folder sizes", work, on_progress=on_progress, on_done=finished)
+        holder["job"] = job
+        self._size_jobs.append(job)
+
     # the slowness log (opt-in) --------------------------------------------------------------------------
     @property
     def stall_log_path(self) -> str:
@@ -1274,7 +1339,7 @@ class MainWindow(QMainWindow):
             if not ed.close():                       # the user cancelled a save question: stay open
                 event.ignore()
                 return
-        for job in list(self._jobs):
+        for job in list(self._jobs) + list(self._size_jobs):
             job.cancel()
         self.settings.setValue("window/geometry", self.saveGeometry())
         self.settings.setValue("window/split", self.split.sizes())
