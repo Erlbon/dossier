@@ -6,8 +6,8 @@ import os
 from dataclasses import dataclass
 from typing import Optional
 
-from PyQt6.QtCore import QModelIndex, QSize, Qt, QUrl, pyqtSignal
-from PyQt6.QtGui import QColor, QDesktopServices, QPalette
+from PyQt6.QtCore import QModelIndex, QRectF, QSize, Qt, QUrl, pyqtSignal
+from PyQt6.QtGui import QColor, QDesktopServices, QFontMetrics, QPainter, QPainterPath, QPalette, QPen
 from PyQt6.QtWidgets import (QAbstractItemView, QApplication, QFrame, QHBoxLayout, QHeaderView, QLabel, QLineEdit,
                              QTabBar, QToolButton,
                              QTableView, QTextBrowser, QVBoxLayout, QWidget)
@@ -111,8 +111,69 @@ class TabState:
 
 
 class PanelTabBar(QTabBar):
+    """Folder tabs that draw themselves: rounded top corners, a clear gap between tabs, the current tab filled
+    with the gold tint of the cursor row and outlined in gold, the others darker with a thin outline."""
+
     middle_clicked = pyqtSignal(int)     # a tab was middle-clicked: close it
     new_requested = pyqtSignal()         # double-click on the empty part of the bar
+    RADIUS = 8
+
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+        self.setDrawBase(False)
+        self.setMouseTracking(True)
+        self._hover = -1
+
+    def tabSizeHint(self, index: int) -> QSize:
+        hint = super().tabSizeHint(index)
+        return QSize(max(96, min(220, hint.width() + 14)), hint.height() + 6)
+
+    def mouseMoveEvent(self, event) -> None:
+        hover = self.tabAt(event.position().toPoint())
+        if hover != self._hover:
+            self._hover = hover
+            self.update()
+        super().mouseMoveEvent(event)
+
+    def leaveEvent(self, event) -> None:
+        self._hover = -1
+        self.update()
+        super().leaveEvent(event)
+
+    def tab_outline(self, index: int) -> QRectF:
+        return QRectF(self.tabRect(index).adjusted(2, 4, -2, 0))      # the gap between tabs is the two margins
+
+    def paintEvent(self, event) -> None:
+        t = theme.current()
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        for i in range(self.count()):
+            selected = i == self.currentIndex()
+            width = 2.0 if selected else 1.0
+            r = self.tab_outline(i).adjusted(width / 2, width / 2, -width / 2, 0)   # the line sits on whole pixels
+            path = QPainterPath()                        # open at the bottom: the tab grows out of the bar below
+            path.moveTo(r.left(), r.bottom())
+            path.lineTo(r.left(), r.top() + self.RADIUS)
+            path.quadTo(r.left(), r.top(), r.left() + self.RADIUS, r.top())
+            path.lineTo(r.right() - self.RADIUS, r.top())
+            path.quadTo(r.right(), r.top(), r.right(), r.top() + self.RADIUS)
+            path.lineTo(r.right(), r.bottom())
+            fill = QPainterPath(path)
+            fill.closeSubpath()
+            if selected:
+                p.fillPath(fill, QColor(t["cursor_bg"]))
+            else:
+                p.fillPath(fill, QColor(t["line"] if i == self._hover else t["bg"]))
+            p.setPen(QPen(QColor(t["accent"] if selected else t["line"]), width))
+            p.drawPath(path)
+            text_rect = r.adjusted(12, 0, -26, 0)           # room for the close cross on the right
+            font = p.font()
+            font.setBold(selected)
+            p.setFont(font)
+            p.setPen(QColor(t["fg"] if selected or i == self._hover else t["dim"]))
+            p.drawText(text_rect, int(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft),
+                       QFontMetrics(font).elidedText(self.tabText(i), Qt.TextElideMode.ElideRight,
+                                                     int(text_rect.width())))
 
     def mouseReleaseEvent(self, event) -> None:
         if event.button() == Qt.MouseButton.MiddleButton:
@@ -211,10 +272,19 @@ class Panel(QFrame):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
+        # The gold frame of the active panel wraps everything BELOW the tabs, so the tabs are not drawn inside it
+        # (inside, the gold of the selected tab melted into the gold frame and bar).
+        self.body = QFrame()
+        self.body.setObjectName("panelbody")
+        body = QVBoxLayout(self.body)
+        body.setContentsMargins(0, 0, 0, 0)
+        body.setSpacing(0)
+        body.addWidget(self.drive_bar.strip)
+        body.addWidget(self.bar)
+        body.addWidget(self.table, 1)
         layout.addWidget(self.tab_row)
-        layout.addWidget(self.drive_bar.strip)
-        layout.addWidget(self.bar)
-        layout.addWidget(self.table, 1)
+        layout.addSpacing(5)                       # a little distance between the tabs and the box
+        layout.addWidget(self.body, 1)
 
         self.address.returnPressed.connect(self._address_entered)
         self.enter_hook = None         # set by the window: Enter runs a command being written, if there is one
@@ -250,7 +320,7 @@ class Panel(QFrame):
         self._active = active
         t = theme.current()
         accent, on_accent = t["accent"], t["accent_fg"]
-        self.setStyleSheet(f"#panel{{border:2px solid {accent if active else 'transparent'};}}")
+        self.setStyleSheet(f"#panelbody{{border:2px solid {accent if active else 'transparent'};}}")
         if active:
             self.bar.setStyleSheet(
                 f"#pathbarbox{{background:{accent};}}"
@@ -275,19 +345,14 @@ class Panel(QFrame):
         self.set_active(self._active)
         self.drive_bar.restyle()
         t = theme.current()
-        # The selected tab is the gold-tinted one with a thick gold top edge and bold text, the same tint as the
-        # cursor row; the others are flat and dim. The close buttons are small and quiet until the pointer is on them.
+        # The tabs paint themselves (PanelTabBar.paintEvent). This only styles the row they sit in and the + and
+        # close buttons, which are small and quiet until the pointer is on them.
         self.tab_row.setStyleSheet(
             f"#tabrow{{background:{t['card']};}}"
-            f"QTabBar::tab{{background:{t['card']};color:{t['dim']};padding:4px 4px 4px 12px;"
-            f"border:1px solid {t['line']};border-bottom:none;border-top-left-radius:7px;"
-            f"border-top-right-radius:7px;margin-right:3px;min-width:70px;max-width:190px;}}"
-            f"QTabBar::tab:hover:!selected{{background:{t['bg']};color:{t['fg']};}}"
-            f"QTabBar::tab:selected{{background:{t['cursor_bg']};color:{t['fg']};font-weight:bold;"
-            f"border-top:3px solid {t['accent']};}}"
             f"QToolButton{{color:{t['fg']};font-weight:bold;padding:0 8px;border:none;background:transparent;}}"
             f"QTabBar QToolButton{{padding:1px;border-radius:3px;}}"
             f"QTabBar QToolButton:hover{{background:{t['line']};}}")
+        self.tabs.update()
         self._style_close_buttons()
         self.model.refresh_marks()
         if self.model.note_row >= 0:

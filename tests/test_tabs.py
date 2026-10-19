@@ -253,16 +253,76 @@ def test_a_close_button_closes_its_own_tab_even_after_tabs_were_moved(world):
     assert labels(p) == ["alpha", "left"]
 
 
-def test_the_selected_tab_is_the_gold_tinted_one_and_the_others_are_not(world):
+def close_to(img, x, y, wanted, tolerance=24, spread=2):
+    """True when a pixel within ``spread`` pixels of (x, y) is nearly ``wanted`` (edges are anti-aliased)."""
+    from PyQt6.QtGui import QColor
+    w = QColor(wanted)
+    for dx in range(-spread, spread + 1):
+        c = img.pixelColor(max(0, x + dx), y)
+        if abs(c.red() - w.red()) + abs(c.green() - w.green()) + abs(c.blue() - w.blue()) <= tolerance:
+            return True
+    return False
+
+
+def tab_image(panel):
+    from PyQt6.QtGui import QColor
+    panel.tabs.resize(600, panel.tabs.height())
+    return panel.tabs.grab().toImage()
+
+
+def test_the_selected_tab_is_filled_gold_and_the_others_are_darker(world):
+    from PyQt6.QtGui import QColor
     from dossier.gui import theme
     win, left, *_ = world
-    sheet = win.left.tab_row.styleSheet()
+    p = win.left
+    p.new_tab(str(left / "alpha"))
+    p.new_tab(str(left / "beta"))
+    p.tabs.setCurrentIndex(1)
+    img = tab_image(p)
     t = theme.current()
-    assert f"QTabBar::tab:selected{{background:{t['cursor_bg']}" in sheet.replace(" ", "")
-    assert f"border-top:3px solid {t['accent']}" in sheet
-    assert "font-weight:bold" in sheet.split("QTabBar::tab:selected")[1].split("}")[0]
-    assert f"QTabBar::tab{{background:{t['card']}" in sheet.replace(" ", "")
-    assert t["cursor_bg"] != t["card"]
+
+    def color_at(i, dx):
+        r = p.tabs.tab_outline(i)
+        return img.pixelColor(int(r.left()) + dx, int(r.bottom()) - 4).name()
+
+    assert color_at(1, 40) == QColor(t["cursor_bg"]).name()           # the current one is tinted
+    assert color_at(0, 40) == QColor(t["bg"]).name() == color_at(2, 40)  # the others are plainly darker
+    assert t["cursor_bg"] != t["bg"]
+
+
+def test_tabs_have_rounded_top_corners_and_a_visible_gap_between_them(world):
+    from PyQt6.QtGui import QColor
+    from dossier.gui import theme
+    win, left, *_ = world
+    p = win.left
+    p.new_tab(str(left / "alpha"))
+    img = tab_image(p)
+    t = theme.current()
+    row = t["card"]
+    for i in (0, 1):
+        r = p.tabs.tab_outline(i)
+        # rounding: the outline is missing exactly at the corner, but is there on the top edge and down the side
+        edge = t["line"] if i == 0 else t["accent"]
+        assert not close_to(img, int(r.left()), int(r.top()), edge, spread=0), i
+        assert close_to(img, int(r.left()) + 30, int(r.top()), edge, spread=1), i
+        assert close_to(img, int(r.left()), int(r.top()) + 14, edge, spread=1), i
+        assert not close_to(img, int(r.right()) - 1, int(r.top()), edge, spread=0), i
+    gap = (p.tabs.tab_outline(0).right() + p.tabs.tab_outline(1).left()) / 2
+    assert close_to(img, int(gap), int(p.tabs.tab_outline(0).bottom()) - 4, row, spread=0)   # a clear gap
+
+
+def test_the_current_tab_has_a_gold_outline_and_the_others_a_thin_line(world):
+    from PyQt6.QtGui import QColor
+    from dossier.gui import theme
+    win, left, *_ = world
+    p = win.left
+    p.new_tab(str(left / "alpha"))                                   # the new tab is current
+    img = tab_image(p)
+    t = theme.current()
+    cur, other = p.tabs.tab_outline(1), p.tabs.tab_outline(0)
+    assert close_to(img, int(cur.left()), int(cur.bottom()) - 6, t["accent"])
+    assert close_to(img, int(other.left()), int(other.bottom()) - 6, t["line"])
+    assert not close_to(img, int(other.left()), int(other.bottom()) - 6, t["accent"])
 
 
 def test_the_close_cross_of_the_current_tab_is_brighter_than_the_others(world):
@@ -277,10 +337,3 @@ def test_the_close_cross_of_the_current_tab_is_brighter_than_the_others(world):
     other = dominant_color(p.tabs.tabButton(0, QTabBar.ButtonPosition.RightSide).icon())
     assert cur is not None and other is not None
     assert (cur.red(), cur.green(), cur.blue()) != (other.red(), other.green(), other.blue())
-
-
-def test_tabs_have_rounded_top_corners_and_a_gap_so_each_one_is_distinct(world):
-    sheet = world[0].left.tab_row.styleSheet().replace(" ", "")
-    plain = sheet.split("QTabBar::tab{")[1].split("}")[0]
-    assert "border-top-left-radius:7px" in plain and "border-top-right-radius:7px" in plain
-    assert "margin-right:3px" in plain
