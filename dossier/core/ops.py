@@ -14,10 +14,13 @@ Limits of this first version, each reported to the user rather than hidden:
 from __future__ import annotations
 
 import os
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field, replace
 from enum import Enum
 from typing import Callable, Iterable, Optional, Sequence
 
+from .drives import drive_of, list_drives
 from .platform import IS_WINDOWS, path_key, strip_longpath
 from .progress import Cancelled, CancelToken, ProgressFn, check
 from .transfer import copy_file, move_item as _move_item
@@ -386,6 +389,66 @@ def _remove_tree(fs: FileSystem, path: str) -> None:
     fs.remove(path)
 
 
+SMALL_FILE_LIMIT = 8 * 1024 * 1024        # files up to this size are copied by several workers at once
+MIN_FILES_FOR_WORKERS = 4                 # fewer small files than this are not worth a pool
+
+
+@dataclass
+class ExecOptions:
+    """How a plan is run. The defaults are what a user wants without asking."""
+    workers: Optional[int] = None         # None: choose by the target; 1 forces one file at a time
+    small_limit: int = SMALL_FILE_LIMIT
+
+
+def choose_workers(fs: FileSystem, plan: Plan, small_count: int, options: ExecOptions) -> int:
+    """How many files to copy at once. The cost of a small file is mostly waiting (the virus scanner, the
+    file system), so several at once is much faster on a normal disk; on a USB stick, a network share or an
+    optical drive it only makes the device seek, so there it is kept low. A single big file never gets a pool."""
+    if options.workers is not None:
+        return max(1, options.workers)
+    if small_count < MIN_FILES_FOR_WORKERS:
+        return 1
+    cpus = os.cpu_count() or 4
+    if fs.scheme:                              # a virtual or remote system: a few connections, never a flood
+        return min(4, cpus)
+    kind = "fixed"
+    try:
+        dest = next((op.dst for op in plan.ops if op.kind is Kind.COPY), "")
+        drive = drive_of(dest, list_drives()) if dest else None
+        kind = drive.kind if drive else "fixed"
+    except Exception:                          # the drive list must never stop a copy
+        pass
+    if kind in ("removable", "network"):
+        return 2
+    if kind == "optical":
+        return 1
+    return max(2, min(8, cpus))
+
+
+class _Progress:
+    """Overall progress that several workers add to. Each running file reports its own bytes; this keeps the
+    sum, and a file that ends (done or failed) is counted in full so the bar reaches the end."""
+
+    def __init__(self, callback: Optional[ProgressFn], total: int) -> None:
+        self._callback, self._total = callback, total
+        self._lock = threading.Lock()
+        self._done = 0
+        self._seen: dict = {}
+
+    def partial(self, key: int, done_in_item: int) -> None:
+        with self._lock:
+            self._done += done_in_item - self._seen.get(key, 0)
+            self._seen[key] = done_in_item
+            self._emit()
+
+    def finish(self, key: int, unit: int) -> None:
+        self.partial(key, unit)
+
+    def _emit(self) -> None:
+        if self._callback is not None:
+            self._callback(min(self._done, self._total), self._total)
+
+
 def execute(
     plan: Plan,
     fs: FileSystem,
@@ -394,35 +457,74 @@ def execute(
     cancel: Optional[CancelToken] = None,
     trasher: Trasher = default_trash,
     undo_log: Optional[UndoLog] = None,
+    options: Optional[ExecOptions] = None,
 ) -> Result:
-    """Run a plan. One failing step is reported and the rest carry on; cancel stops between steps
-    (a half-copied file is removed), and what was already done stays undoable."""
+    """Run a plan. One failing step is reported and the rest carry on; cancel stops promptly (a half-copied
+    file is removed), and what was already done stays undoable.
+
+    Order of work: the folders to create first, then the small files by several workers at once, then the big
+    files one at a time, then every other step (moves, renames, deletes) in plan order. The undo journal and
+    the list of results are always in plan order, whatever order the workers finished in."""
     if not plan.executable:
         raise PlanNotReady("; ".join(plan.blocking) or "the plan has unresolved conflicts or nothing to do")
-    result = Result()
-    steps: list = []
-    total = plan.total_work
-    base = 0
+    opts = options or ExecOptions()
+    done = _Progress(progress, plan.total_work)
+    outcomes: dict = {}                              # plan index -> (OpResult, [Step])
+    trash_lock = threading.Lock()                    # the recycle bin is asked one item at a time
+
+    def safe_trasher(path: str) -> None:
+        with trash_lock:
+            trasher(path)
+
+    def run_one(i: int, op: Op) -> None:
+        if cancel is not None and cancel.cancelled:
+            return                                   # never started: it has no result
+        steps: list = []
+        unit = max(op.size, 1) if op.kind is Kind.COPY else 1
+        sub = (lambda d, _t: done.partial(i, min(d, unit))) if progress else None
+        try:
+            _run_op(op, fs, steps, sub, cancel, safe_trasher)
+            outcome = OpResult(op, "done")
+            done.finish(i, unit)
+        except Cancelled:
+            outcome = OpResult(op, "cancelled")
+        except OSError as e:
+            outcome = OpResult(op, "failed", str(e))
+            done.finish(i, unit)
+        outcomes[i] = (outcome, steps)
+
+    indexed = list(enumerate(plan.ops))
+    folders = [(i, op) for i, op in indexed if op.kind is Kind.MKDIR]
+    copies = [(i, op) for i, op in indexed if op.kind is Kind.COPY]
+    small = [(i, op) for i, op in copies if op.size <= opts.small_limit]
+    big = [(i, op) for i, op in copies if op.size > opts.small_limit]
+    others = [(i, op) for i, op in indexed if op.kind not in (Kind.MKDIR, Kind.COPY)]
+    workers = choose_workers(fs, plan, len(small), opts)
     try:
-        for op in plan.ops:
-            check(cancel)
-            unit = max(op.size, 1) if op.kind is Kind.COPY else 1
-            sub: Optional[ProgressFn] = (lambda d, _t, b=base: progress(b + d, total)) if progress else None
-            try:
-                _run_op(op, fs, steps, sub, cancel, trasher)
-                result.results.append(OpResult(op, "done"))
-            except Cancelled:
-                result.results.append(OpResult(op, "cancelled"))
-                result.cancelled = True
-                break
-            except OSError as e:
-                result.results.append(OpResult(op, "failed", str(e)))
-            base += unit
-            if progress:
-                progress(base, total)
+        for i, op in folders:
+            run_one(i, op)
+        if workers > 1 and len(small) > 1:
+            with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="dossier-copy") as pool:
+                for future in [pool.submit(run_one, i, op) for i, op in small]:
+                    future.result()                  # a bug in a worker is raised here, not swallowed
+        else:
+            for i, op in small:
+                run_one(i, op)
+        for i, op in big + others:
+            run_one(i, op)
     finally:
-        if steps:
-            result.action = UndoAction(plan.title, steps)
+        result = Result()
+        steps_in_order: list = []
+        for i in sorted(outcomes):
+            outcome, steps = outcomes[i]
+            result.results.append(outcome)
+            steps_in_order.extend(steps)
+            if outcome.status == "cancelled":
+                result.cancelled = True
+        if cancel is not None and cancel.cancelled and len(outcomes) < len(plan.ops):
+            result.cancelled = True
+        if steps_in_order:
+            result.action = UndoAction(plan.title, steps_in_order)
             if undo_log is not None:
                 undo_log.push(result.action)
     return result

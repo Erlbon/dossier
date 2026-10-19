@@ -87,3 +87,9 @@ A free GPL-3.0 copy manager written in C++17 and Qt 6, with a plugin design (eng
 | K4 | One operation at a time or a queue | A queue, one active per target disk |
 | K5 | Hook the system's own copy dialogs | No |
 | K6 | Run the same measurement on the server's disks and a USB stick before tuning | Yes, before C1 sets defaults |
+
+## 9. Status (2026-10-19)
+
+**C1 is built.** `execute` now works in phases: folders first, then the small files (up to 8 MiB) by several workers at once, then the big files one at a time, then moves, renames and deletes in plan order. The worker count is chosen by the target (8 on a fixed disk, 2 on removable or network, 1 on optical, at most 4 on a virtual system, 1 when fewer than four small files); `ExecOptions(workers=...)` overrides it. Progress is summed safely across workers, the recycle bin is asked one item at a time, results and the undo journal are in plan order, cancel stops new files and removes half-written ones, and a bug in a worker is raised, not swallowed.
+
+Measured through the real `execute` on this PC, 1500 files of 4 KiB in ten folders: **25.2 s one at a time, 1.5 s with the automatic choice (8 workers)**, no failures. A setting to force one at a time, and the rest of the plan (C2 to C8), are still to do.
