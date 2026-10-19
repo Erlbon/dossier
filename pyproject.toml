@@ -18,4 +18,4 @@ testpaths = ["tests"]
 pythonpath = ["."]   # bare `pytest` finds the package without an install
 
 [tool.setuptools.package-data]
-dossier = ["gui/icons/*.svg", "gui/icons/*.txt"]
+dossier = ["gui/icons/*/*.svg", "gui/icons/*/*.txt", "gui/icons/*/*.json"]

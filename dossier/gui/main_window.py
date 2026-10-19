@@ -40,7 +40,9 @@ class MainWindow(QMainWindow):
         self.trasher = trasher
         self.dialogs = dialogs or Dialogs(self)
         self.settings = self._open_settings(settings_path)
-        self.theme = ThemeManager(QApplication.instance(), str(self.settings.value("view/scheme", "auto")))
+        icon_set.set_user_dir(os.path.join(os.path.dirname(self.settings.fileName()), "icon-sets"))
+        icon_set.use(str(self.settings.value("view/icon_set", icon_set.DEFAULT_SET)))
+        self.theme =ThemeManager(QApplication.instance(), str(self.settings.value("view/scheme", "auto")))
 
         self.dispatcher = QtDispatcher(self)
         self.selection = SelectionStore(dispatch=self.dispatcher)
@@ -139,6 +141,12 @@ class MainWindow(QMainWindow):
             group.addAction(act)
             scheme_menu.addAction(act)
             self.scheme_actions[key] = act
+        self.icon_menu = view.addMenu("Icon Set")
+        self.icon_group = QActionGroup(self)
+        self.icon_group.setExclusive(True)
+        self.icon_set_actions = {}
+        self.icon_menu.aboutToShow.connect(self._rebuild_icon_menu)   # picks up sets the user just added
+        self._rebuild_icon_menu()
         drive_menu = view.addMenu("Drive Selector")
         drive_group = QActionGroup(self)
         drive_group.setExclusive(True)
@@ -217,6 +225,29 @@ class MainWindow(QMainWindow):
     def refresh(self) -> None:
         self.left.refresh()
         self.right.refresh()
+
+    def _rebuild_icon_menu(self) -> None:
+        for act in list(self.icon_set_actions.values()):
+            self.icon_group.removeAction(act)
+            self.icon_menu.removeAction(act)
+            act.deleteLater()
+        self.icon_set_actions = {}
+        for s in icon_set.available_sets():
+            act = QAction(s.title + ("" if s.builtin else " (yours)"), self)
+            act.setCheckable(True)
+            act.setChecked(s.id == icon_set.active())
+            act.setToolTip(s.licence)
+            act.triggered.connect(lambda _c=False, sid=s.id: self.set_icon_set(sid))
+            self.icon_group.addAction(act)
+            self.icon_menu.addAction(act)
+            self.icon_set_actions[s.id] = act
+
+    def set_icon_set(self, set_id: str) -> None:
+        if icon_set.use(set_id):
+            self.settings.setValue("view/icon_set", set_id)
+            self._on_theme_changed()          # clears the cache and repaints every icon
+            if set_id in self.icon_set_actions:
+                self.icon_set_actions[set_id].setChecked(True)
 
     def set_drive_style(self, style: str) -> None:
         if style not in self.drive_style_actions:

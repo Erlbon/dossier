@@ -1,5 +1,5 @@
 """Which icon belongs to which item. Pure names: the GUI turns a name into a picture
-(``dossier/gui/icons/<name>.svg``), so this stays Qt-free and testable."""
+(``dossier/gui/icons/<set>/<name>.svg``, see ``gui/icon_set.py``), so this stays Qt-free and testable."""
 from __future__ import annotations
 
 import os

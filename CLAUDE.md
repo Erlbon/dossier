@@ -44,6 +44,7 @@ The function list follows The Next Tool (Ebdac Software GmbH, discontinued 2007)
 - Metadata cores: `epubredactor`, `cbzredactor`, `mp3redactor`, `videoredactor` (read the cores, do not copy).
 
 ## Open items
+- Icon sets are swappable (View > Icon Set, user sets in the settings folder `icon-sets`). Tabler and Lucide draw the ebook and comic glyphs the other way round (Tabler `book` is open, Lucide `book` is closed): a set's manifest `map` fixes that per set; a Preferences page for per-file-type icon overrides is a possible later step (user, 2026-10-19).
 - Push access to `redactor_common` for promoting shared modules.
 - Which metadata format comes first (EPUB, CBZ, MP3, video).
 - Remote sources read-only until phase 2 is stable?

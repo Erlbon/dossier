@@ -2,7 +2,7 @@ import os
 
 from dossier.core.filetypes import BY_EXTENSION, DRIVE_ICONS, all_icon_names, icon_name
 
-ICON_DIR = os.path.join(os.path.dirname(__file__), "..", "dossier", "gui", "icons")
+ICON_DIR = os.path.join(os.path.dirname(__file__), "..", "dossier", "gui", "icons", "tabler")
 
 
 def test_every_mapped_icon_has_a_file():
