@@ -241,3 +241,17 @@ Two rules follow from O11 and O12. Sorting, rename-by-pattern, conflict handling
 ## 16. Health checkers (planned, not in 0.1)
 
 A family of read-only checkers reports problems in files and folders (hygiene, integrity, media, library structure, duplicates, bit rot); fixes are ordinary plans with undo. Scope, contract, catalogue and build waves are in `docs/checkers-plan.md`. Decisions H1-H6 there are open.
+
+## 17. Design notes from the owner's screenshot of the original (2026-10-19)
+
+The owner installed the original program (The Next Tool) on Windows 11 and shared its default look **for design notes only**: the layout of Dossier is not to be rearranged to match it, and nothing of its graphics or text is used (clean-room rule). Functions seen on the screenshot that Dossier does not have yet, as candidates for later, each to be decided separately:
+
+| Seen | Candidate for Dossier |
+| --- | --- |
+| A separate extension column next to the name | Optional "Ext" column (sortable, resizable like the others) |
+| An attributes column (read-only, hidden, system, archive shown as letters) | Optional "Attr" column; hidden and system files are shown, marked with their letters, and a View switch can hide them |
+| Two counters at the bottom of every window: folders, files and total size of the listing, and the same for what is marked | A per-panel status line with both (today the window shows only the marked count and size across both panels) |
+| Free space shown on the drive button and above the tree | Already in the address bar; the drive menu and strip also show it |
+| Tree and list side by side in one window | The spec's tree view (W1, option C of the layout mockups); a later per-panel toggle |
+| A row of command icons across the top | Not planned: the F-key bar and menus cover it |
+| The window title shows the drive and a number | Dossier titles by machine name instead |
