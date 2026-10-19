@@ -296,7 +296,7 @@ def test_the_inactive_panel_is_never_dimmed(world):
     assert win.left.table.styleSheet() == "" and win.right.table.styleSheet() == ""
     key(win, Qt.Key.Key_Tab)
     assert win.left.table.styleSheet() == "" and win.right.table.styleSheet() == ""
-    assert win.right.bar.styleSheet() != "" and win.left.bar.styleSheet() == ""
+    assert win.right.bar.styleSheet() != "" and win.left.bar.styleSheet() != ""
 
 
 def test_color_scheme_menu_switches_persists_and_restyles(world):
@@ -380,7 +380,8 @@ def test_the_active_panel_is_obvious_in_three_ways(world):
     t = theme.current()
     # active (left): accent frame, solid accent bar, full cursor row
     assert t["accent"] in win.left.styleSheet() and "transparent" in win.right.styleSheet()
-    assert t["accent"] in win.left.bar.styleSheet() and win.right.bar.styleSheet() == ""
+    c = theme.tab_colors()
+    assert t["accent"] in win.left.bar.styleSheet() and c["dim_fill"] in win.right.bar.styleSheet()   # dark gold
     active_hl = win.left.table.palette().color(QPalette.ColorRole.Highlight)
     quiet_hl = win.right.table.palette().color(QPalette.ColorRole.Highlight)
     assert active_hl == QColor(t["cursor_bg"]) and quiet_hl == QColor(t["line"]) and active_hl != quiet_hl

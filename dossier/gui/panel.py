@@ -303,16 +303,21 @@ class PanelTabBar(QTabBar):
             path.lineTo(r.right(), bottom)
             fill = QPainterPath(path)
             fill.closeSubpath()
-            p.fillPath(fill, QColor(c["active_fill"] if selected else c["hover_fill"] if i == self._hover
-                                    else c["inactive_fill"]))
-            line = c["active_fill"] if continues_frame else c["active_line"] if selected else c["inactive_line"]
+            if selected:
+                top = c["active_fill"] if self.panel_active else c["dim_fill"]
+                p.fillPath(fill, QColor(top))
+                line = c["active_fill"] if continues_frame else c["active_line"] if self.panel_active else c["dim_fill"]
+                text = c["active_text"] if self.panel_active else c["dim_text"]
+            else:
+                p.fillPath(fill, QColor(c["blue_hover"] if i == self._hover else c["blue_fill"]))
+                line, text = c["blue_line"], c["blue_text"]
             p.setPen(QPen(QColor(line), width))
             p.drawPath(path)
             text_rect = r.adjusted(12, 0, -26, 0)           # room for the close cross on the right
             font = p.font()
             font.setBold(selected)
             p.setFont(font)
-            p.setPen(QColor(c["active_text"] if selected else c["inactive_text"]))
+            p.setPen(QColor(text))
             p.drawText(text_rect, int(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft),
                        QFontMetrics(font).elidedText(self.tabText(i), Qt.TextElideMode.ElideRight,
                                                      int(text_rect.width())))
@@ -341,6 +346,7 @@ class Panel(QFrame):
 
     def __init__(self, fs: FileSystem, selection: SelectionStore, parent=None, dispatch=None) -> None:
         super().__init__(parent)
+        self._active = False                          # set before the first tab is built: its close button reads it
         self.fs = fs
         self.selection = selection
         self._dispatch = dispatch
@@ -481,17 +487,18 @@ class Panel(QFrame):
         # no top edge: the tabs sit directly on the box, so tabs, bar and frame read as one structure
         # a flat fill behind the margins, not a border: a border leaves a hairline seam at fractional display scaling
         self.setStyleSheet(f"#panelbody{{background:{accent if active else 'transparent'};border:none;}}")
-        if active:
-            self.bar.setStyleSheet(
-                f"#pathbarbox{{background:{accent};}}"
-                f"#pathbarbox QLineEdit{{background:transparent;color:{on_accent};border:none;font-weight:bold;}}"
-                f"#pathbarbox QLabel{{color:{on_accent};}}"
-                f"#pathbarbox QToolButton{{color:{on_accent};border:1px solid {on_accent};border-radius:6px;"
-                f"padding:1px 6px;background:transparent;font-weight:bold;}}"
-                f"#pathbarbox QToolButton::menu-indicator{{image:none;}}"
-                f"#pathbarbox QToolButton#homebtn{{border:none;padding:1px 3px;}}")
-        else:
-            self.bar.setStyleSheet("")
+        colors = theme.tab_colors(t)
+        # the address field belongs to the tabs above it: solid gold with the current tab in the active panel,
+        # a dark gold with the current tab in the other one
+        fill, text = (accent, on_accent) if active else (colors["dim_fill"], colors["dim_text"])
+        self.bar.setStyleSheet(
+            f"#pathbarbox{{background:{fill};}}"
+            f"#pathbarbox QLineEdit{{background:transparent;color:{text};border:none;font-weight:bold;}}"
+            f"#pathbarbox QLabel{{color:{text};}}"
+            f"#pathbarbox QToolButton{{color:{text};border:1px solid {text};border-radius:6px;"
+            f"padding:1px 6px;background:transparent;font-weight:bold;}}"
+            f"#pathbarbox QToolButton::menu-indicator{{image:none;}}"
+            f"#pathbarbox QToolButton#homebtn{{border:none;padding:1px 3px;}}")
         palette = QPalette(QApplication.palette())
         if not active:
             for group in (QPalette.ColorGroup.Active, QPalette.ColorGroup.Inactive):
@@ -499,8 +506,9 @@ class Panel(QFrame):
                 palette.setColor(group, QPalette.ColorRole.HighlightedText, QColor(t["fg"]))
         self.table.setPalette(palette)
         self.table.viewport().setPalette(palette)   # the viewport keeps an old copy otherwise (white rows in dark)
-        self.drive_bar.set_chip_color(on_accent if active else None)
-        self.home_button.setIcon(icon_set.icon("home", on_accent if active else t["fg"]))
+        self.drive_bar.set_chip_color(text)
+        self.home_button.setIcon(icon_set.icon("home", text))
+        self._style_close_buttons()
         self.tabs.panel_active = active
         self.tabs.update()
 
@@ -673,7 +681,9 @@ class Panel(QFrame):
         c = theme.tab_colors()
         for tid, btn in list(self._close_buttons.items()):
             try:
-                btn.setIcon(icon_set.icon("x", c["active_text"] if tid == self._current_tab_id else c["inactive_text"]))
+                current = tid == self._current_tab_id
+                colour = (c["active_text"] if self._active else c["dim_text"]) if current else c["blue_text"]
+                btn.setIcon(icon_set.icon("x", colour))
             except RuntimeError:                      # the button went away with its tab
                 self._close_buttons.pop(tid, None)
 

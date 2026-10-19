@@ -55,15 +55,25 @@ def mix(a: str, b: str, amount: float) -> str:
                   round(cb.blue() + (ca.blue() - cb.blue()) * k)).name()
 
 
+def is_dark(t: Optional[dict] = None) -> bool:
+    return luminance((t or _current)["bg"]) < 0.3
+
+
 def tab_colors(t: Optional[dict] = None) -> dict:
-    """The folder tabs: the current one in the big solid gold, the others in a dark gold, every one with a thin
-    outline. Text colours are chosen for contrast (checked in tests/test_theme.py)."""
+    """The folder tabs. The current tab and the address field that belongs to it are solid gold in the active
+    panel and a dark gold in the other panel; every tab that is not the current one is blue, in both panels.
+    Every tab has a thin outline. Text colours are chosen for contrast (checked in tests/test_theme.py)."""
     t = t or _current
+    dark = is_dark(t)
     inactive = mix(t["accent"], t["bg"], 0.30)
+    dim = mix(t["accent"], t["bg"], 0.50 if dark else 0.34)
+    blue = {"fill": "#2f4d77", "line": "#6b90c2", "text": "#e3ecf8", "hover": "#3b5f93"} if dark else            {"fill": "#cfe0f5", "line": "#4b74a8", "text": "#12294a", "hover": "#bcd3ef"}
     return {
         "active_fill": t["accent"], "active_text": t["accent_fg"], "active_line": QColor(t["accent"]).darker(170).name(),
+        "dim_fill": dim, "dim_text": t["fg"] if dark else t["fg"],
         "inactive_fill": inactive, "inactive_text": t["fg"], "inactive_line": t["accent"],
         "hover_fill": mix(t["accent"], t["bg"], 0.48),
+        "blue_fill": blue["fill"], "blue_line": blue["line"], "blue_text": blue["text"], "blue_hover": blue["hover"],
     }
 
 

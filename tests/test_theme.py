@@ -19,6 +19,7 @@ def app():
 
 @pytest.mark.parametrize("name,t", [("light", theme.LIGHT), ("dark", theme.DARK)])
 def test_text_pairs_are_readable(name, t):
+    tabs = theme.tab_colors(t)
     pairs = {
         "text on page": (t["fg"], t["bg"]),
         "text on card": (t["fg"], t["card"]),
@@ -32,6 +33,9 @@ def test_text_pairs_are_readable(name, t):
         "marked text on the quiet cursor row": (t["marked"], t["line"]),
         "danger on page": (t["danger"], t["bg"]),
         "button text on accent": (t["accent_fg"], t["accent"]),
+        "text on the dark gold of the inactive panel": (tabs["dim_text"], tabs["dim_fill"]),
+        "text on a blue tab": (tabs["blue_text"], tabs["blue_fill"]),
+        "text on a hovered blue tab": (tabs["blue_text"], tabs["blue_hover"]),
     }
     for what, (a, b) in pairs.items():
         assert theme.contrast(a, b) >= 4.5, f"{name}: {what} is only {theme.contrast(a, b):.2f}:1"
@@ -93,3 +97,13 @@ def test_mix_blends_between_two_colours():
     assert theme.mix("#000000", "#ffffff", 0.0) == "#ffffff"
     assert theme.mix("#000000", "#ffffff", 1.0) == "#000000"
     assert theme.mix("#ff0000", "#0000ff", 0.5) == "#800080"
+
+
+@pytest.mark.parametrize("t", [theme.LIGHT, theme.DARK])
+def test_blue_tabs_gold_and_dark_gold_are_three_different_things(t):
+    c = theme.tab_colors(t)
+    fills = {c["blue_fill"], c["active_fill"], c["dim_fill"]}
+    assert len(fills) == 3
+    assert theme.contrast(c["blue_fill"], c["dim_fill"]) >= 1.1 and theme.contrast(c["blue_fill"], c["active_fill"]) >= 1.1
+    blue = QColor(c["blue_fill"])
+    assert blue.blue() > blue.red() and blue.blue() > blue.green() * 0.95          # it is blue

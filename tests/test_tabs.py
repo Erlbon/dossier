@@ -287,8 +287,8 @@ def test_the_active_tab_is_the_big_gold_and_the_others_dark_gold(world):
 
     c = theme.tab_colors()
     assert color_at(1, 40) == QColor(c["active_fill"]).name() == QColor(t["accent"]).name()   # the big gold
-    assert color_at(0, 40) == QColor(c["inactive_fill"]).name() == color_at(2, 40)           # the others: dark gold
-    assert c["active_fill"] != c["inactive_fill"]
+    assert color_at(0, 40) == QColor(c["blue_fill"]).name() == color_at(2, 40)               # the others: blue
+    assert c["active_fill"] != c["blue_fill"]
 
 
 def test_tabs_have_rounded_top_corners_and_a_visible_gap_between_them(world):
@@ -304,7 +304,7 @@ def test_tabs_have_rounded_top_corners_and_a_visible_gap_between_them(world):
         r = p.tabs.tab_outline(i)
         # rounding: the outline is missing exactly at the corner, but is there on the top edge and down the side
         c = theme.tab_colors()
-        edge = c["inactive_line"] if i == 0 else c["active_fill"]      # the current tab of the active panel: frame gold
+        edge = c["blue_line"] if i == 0 else c["active_fill"]          # the current tab of the active panel: frame gold
         assert not close_to(img, int(r.left()), int(r.top()), edge, spread=0), i
         assert close_to(img, int(r.left()) + 30, int(r.top()), edge, spread=1), i
         assert close_to(img, int(r.left()), int(r.top()) + 14, edge, spread=1), i
@@ -324,7 +324,7 @@ def test_every_tab_has_a_thin_outline(world):
     cur, other = p.tabs.tab_outline(1), p.tabs.tab_outline(0)
     c = theme.tab_colors()
     assert close_to(img, int(cur.left()), int(cur.bottom()) - 6, c["active_fill"])      # the frame's gold, 2 pixels
-    assert close_to(img, int(other.left()), int(other.bottom()) - 6, c["inactive_line"])   # the others: a thin line
+    assert close_to(img, int(other.left()), int(other.bottom()) - 6, c["blue_line"])       # the others: a thin blue line
     y = int(cur.bottom()) - 6
     assert close_to(img, int(cur.left()) + 1, y, c["active_fill"], spread=0)             # 2 pixels wide
     assert not close_to(img, int(other.left()) + 1, y, c["active_fill"], tolerance=6, spread=0)   # 1 pixel wide
@@ -399,7 +399,7 @@ def test_the_current_tab_of_the_active_panel_continues_the_frame_line_exactly(wo
     assert "border:none" in p.styleSheet().replace(" ", "")                              # a border would leave a seam at 125% scaling
 
 
-def test_an_inactive_panels_current_tab_keeps_the_thin_darker_outline(world):
+def test_the_inactive_panel_has_a_dark_gold_current_tab_and_the_other_tabs_stay_blue(world):
     from PyQt6.QtGui import QColor
     from dossier.gui import theme
     win, *_ = world
@@ -408,7 +408,13 @@ def test_an_inactive_panels_current_tab_keeps_the_thin_darker_outline(world):
     img = p.tabs.grab().toImage()
     c = theme.tab_colors()
     r = p.tabs.tab_outline(0)
-    assert QColor(img.pixelColor(int(r.left()), int(r.bottom()) - 6)).name() == QColor(c["active_line"]).name()
+    assert QColor(img.pixelColor(int(r.left()) + 30, int(r.bottom()) - 6)).name() == QColor(c["dim_fill"]).name()
+    assert c["dim_fill"] != c["active_fill"]
+    p.new_tab(str(p.path))                                           # a second tab; the first is no longer current
+    p.tabs.setCurrentIndex(1)
+    img = tab_image(p)
+    first = p.tabs.tab_outline(0)
+    assert QColor(img.pixelColor(int(first.left()) + 30, int(first.bottom()) - 6)).name() == QColor(c["blue_fill"]).name()
 
 
 def test_the_current_tab_has_no_faint_row_at_its_foot_at_a_fractional_display_scale(world):
