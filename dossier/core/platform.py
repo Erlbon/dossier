@@ -170,6 +170,17 @@ def list_volumes() -> list:
     return _windows_volumes() if IS_WINDOWS else _posix_volumes()
 
 
+def set_app_id(app_id: str) -> None:
+    """Tell Windows this program is its own application, so the taskbar groups its windows under its own icon
+    instead of the Python interpreter's. Does nothing elsewhere."""
+    if IS_WINDOWS:
+        import ctypes
+        try:
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(app_id)
+        except (AttributeError, OSError):
+            pass
+
+
 def machine_name() -> str:
     """This computer's name, for the file manager's title."""
     import socket

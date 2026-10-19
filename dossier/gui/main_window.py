@@ -26,6 +26,7 @@ from ..core.terminals import (UnsafeArgument, builtin_profiles, default_launcher
 from ..core.undo_log import Step, UndoAction, UndoLog
 from ..core.vfs import FileSystem, LocalFileSystem
 from ..core.worker import Job, JobRunner, JobState, run_plan_job
+from .appicon import app_icon
 from .command_line import CommandLine
 from .dialogs import Dialogs
 from . import icon_set, theme
@@ -45,6 +46,8 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.elevated = is_elevated()
         self.setWindowTitle("Dossier")
+        QApplication.setWindowIcon(app_icon())
+        self.setWindowIcon(app_icon())
         self.fs = fs or LocalFileSystem()
         self.trasher = trasher
         self.launch_terminal = terminal_launcher or default_launcher      # tests pass a recorder: no windows, no UAC

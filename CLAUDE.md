@@ -3,6 +3,7 @@
 The README says what this is; `docs/spec.md` says what it must do (requirement ids such as S3, F4, V5). This file holds the decisions behind them so a new session does not reopen what is settled. Keep it current when a decision changes.
 
 ## Decided (the user, 2026-10-19)
+- **Program icon (the user, 2026-10-19): option C, a gold folder with a bold D cut out, on a dark tile.** Master `dossier/gui/appicon/dossier.svg`; after editing it run `python tools/make_icons.py` to regenerate the committed `dossier.ico` (seven sizes) and `dossier-256.png` (a test fails if they are out of date). Use the .ico for the PyInstaller exe.
 - **Name:** Dossier. PyPI and domain checks are still to do.
 - **Stack:** Python 3.10+ and PyQt6. Shared code comes from the user's `redactor_common` package, pinned to a git tag in `requirements.txt` (never `@main`). If something reusable is written here, promote it to `redactor_common` first, then bump the pin.
 - **Licence:** GPL-3.0-or-later. Free and open source, never commercial.

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="256" height="256">
+  <title>Dossier</title>
+  <rect x="2" y="2" width="60" height="60" rx="13" fill="#14171f"/>
+  <rect x="2.75" y="2.75" width="58.5" height="58.5" rx="12.4" fill="none" stroke="#2b3140" stroke-width="1.5"/>
+  <path d="M10 22a4 4 0 0 1 4-4h12l4 5h20a4 4 0 0 1 4 4v22a4 4 0 0 1-4 4H14a4 4 0 0 1-4-4z" fill="#d4a94f"/>
+  <path d="M24 29h8.5a9.5 9.5 0 0 1 0 19H24z" fill="none" stroke="#14171f" stroke-width="5" stroke-linejoin="round"/>
+</svg>
