@@ -65,16 +65,117 @@ class PanelTable(QTableView):
     escape = pyqtSignal()            # Esc: stop waiting for a slow folder
     middle_clicked = pyqtSignal(int)  # middle click on a row: open that folder in a background tab
 
+    # Marking several items. The marks are the shared selection; the cursor is the current row.
+    #   Space / Insert       mark the item and move down          Ctrl+Space   mark it, stay
+    #   Shift+arrows, Page, Home, End   mark everything from where the Shift began to the cursor
+    #   Ctrl+arrows          move the cursor only                 Ctrl+click   mark or unmark that item
+    #   Shift+click          mark from the cursor to the click    drag         mark every item the mouse passes
+    selection = None            # the SelectionStore, set by the panel
+
+    def _path_of(self, row: int):
+        model = self.model()
+        entry = model.entry_at(row)
+        if entry is None or model.is_up_row(row) or entry.kind in ("header", "action") or model.is_home:
+            return None
+        return entry.path
+
+    def _begin_range(self, anchor_row: int) -> None:
+        if self.selection is not None and getattr(self, "_anchor", None) is None:
+            self._anchor = anchor_row
+            self._base = set(self.selection.paths())
+
+    def _mark_range(self, row: int) -> None:
+        """Marks = what was marked when the range began, plus every item from the anchor to ``row``."""
+        if self.selection is None or getattr(self, "_anchor", None) is None:
+            return
+        lo, hi = sorted((self._anchor, row))
+        wanted = set(self._base) | {p for p in (self._path_of(r) for r in range(lo, hi + 1)) if p}
+        now = set(self.selection.paths())
+        self.selection.remove(now - wanted)
+        self.selection.add(wanted - now)
+
+    def _end_range(self) -> None:
+        self._anchor = None
+        self._base = set()
+
+    def keyReleaseEvent(self, event) -> None:
+        if event.key() == Qt.Key.Key_Shift:
+            self._end_range()
+        super().keyReleaseEvent(event)
+
+    def mousePressEvent(self, event) -> None:
+        index = self.indexAt(event.position().toPoint())
+        if event.button() != Qt.MouseButton.LeftButton or not index.isValid():
+            super().mousePressEvent(event)
+            return
+        mods = event.modifiers()
+        row = index.row()
+        if mods & Qt.KeyboardModifier.ControlModifier:
+            path = self._path_of(row)
+            if path and self.selection is not None:
+                self.selection.toggle(path)
+            self.setCurrentIndex(self.model().index(row, 0))
+            self._drag_from = None
+            return
+        if mods & Qt.KeyboardModifier.ShiftModifier:
+            self._end_range()
+            self._begin_range(max(0, self.currentIndex().row()))
+            self.setCurrentIndex(self.model().index(row, 0))
+            self._mark_range(row)
+            self._end_range()
+            self._drag_from = None
+            return
+        super().mousePressEvent(event)
+        self._drag_from = row                      # a drag from here marks what the mouse passes over
+
+    def mouseMoveEvent(self, event) -> None:
+        start = getattr(self, "_drag_from", None)
+        if start is not None and event.buttons() & Qt.MouseButton.LeftButton:
+            row = self.indexAt(event.position().toPoint()).row()
+            if row >= 0 and (row != start or getattr(self, "_anchor", None) is not None):
+                self._begin_range(start)
+                self.setCurrentIndex(self.model().index(row, 0))
+                self._mark_range(row)
+                return
+        super().mouseMoveEvent(event)
+
     def mouseReleaseEvent(self, event) -> None:
         if event.button() == Qt.MouseButton.MiddleButton:
             self.middle_clicked.emit(self.indexAt(event.position().toPoint()).row())
             return
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._drag_from = None
+            self._end_range()
         super().mouseReleaseEvent(event)
 
     def keyPressEvent(self, event) -> None:
         key = event.key()
         mods = event.modifiers()
         text = event.text()
+        if key in (Qt.Key.Key_Home, Qt.Key.Key_End):      # first and last item, not the first and last column
+            model = self.model()
+            row = max(0, model.first_selectable_row()) if key == Qt.Key.Key_Home else model.entry_count() - 1
+            shifted = bool(mods & Qt.KeyboardModifier.ShiftModifier)
+            if shifted:
+                self._begin_range(max(0, self.currentIndex().row()))
+            if row >= 0:
+                self.setCurrentIndex(model.index(row, 0))
+                self.scrollTo(model.index(row, 0))
+            if shifted:
+                self._mark_range(row)
+            return
+        shift_nav = (mods & Qt.KeyboardModifier.ShiftModifier and key in (
+            Qt.Key.Key_Up, Qt.Key.Key_Down, Qt.Key.Key_PageUp, Qt.Key.Key_PageDown))
+        if shift_nav:
+            self._begin_range(max(0, self.currentIndex().row()))
+            super().keyPressEvent(event)                 # moves the cursor
+            self._mark_range(self.currentIndex().row())
+            return
+        if key == Qt.Key.Key_Space and mods & Qt.KeyboardModifier.ControlModifier:
+            path = self._path_of(self.currentIndex().row())
+            if path and self.selection is not None:
+                self.selection.toggle(path)              # Ctrl+Space marks without moving
+            return
         if key == Qt.Key.Key_Escape:
             self.escape.emit()
         elif key in (Qt.Key.Key_Tab, Qt.Key.Key_Backtab):
@@ -303,6 +404,7 @@ class Panel(QFrame):
         self.bar.setLayout(bar)
 
         self.table = PanelTable()
+        self.table.selection = selection
         self.table.setModel(self.model)
         self.table.setShowGrid(False)
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
