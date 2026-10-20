@@ -141,6 +141,7 @@ class OperationQueueMixin:
             self.dialogs.info("Operation failed", str(job.error))
             return
         result = job.result
+        lost = len(getattr(result, "tags_lost", []) or [])
         if result.failed:
             failed = [r.op.src for r in result.failed]
             if unmark:                           # what went well is unmarked; what failed stays marked for a retry
@@ -152,4 +153,5 @@ class OperationQueueMixin:
         else:
             if unmark:
                 self.selection.remove(unmark)
-            self._say("Done")
+            self._say("Done" if not lost else
+                      f"Done. {lost} item{'s were' if lost != 1 else ' was'} copied without tags: the drive cannot store them")

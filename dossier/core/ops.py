@@ -25,7 +25,7 @@ from typing import Callable, Iterable, Optional, Sequence
 from .drives import drive_of, is_network_path, list_drives
 from .platform import IS_WINDOWS, has_scheme, path_key, strip_longpath
 from .progress import Cancelled, CancelToken, ProgressFn, SpeedLimit, check
-from .transfer import Swap, copy_file, flush_file, move_item as _move_item, verify_copy
+from .transfer import Swap, carry_tags, copy_file, flush_file, move_item as _move_item, verify_copy
 from .undo_log import Step, UndoAction, UndoLog
 from .vfs import Entry, FileSystem, NotWritable, sort_entries, stat_or_none
 
@@ -472,6 +472,7 @@ class Result:
     cancelled: bool = False
     aborted: bool = False                          # the user chose to stop after an error: later steps never started
     action: Optional[UndoAction] = None
+    tags_lost: list = field(default_factory=list)  # copies whose drive cannot hold the tags of the original
 
     @property
     def retried(self) -> list:
@@ -629,6 +630,7 @@ def execute(
     flush_share = max(len(copies_all), plan.total_work // 50) if want_flush else 0        # the last 2 percent of the bar
     done = _Progress(progress, plan.total_work + verify_extra + flush_share)
     outcomes: dict = {}                              # plan index -> (OpResult, [Step])
+    tags_lost: list = []                             # copies that could not get the tags of their originals
     trash_lock = threading.Lock()                    # the recycle bin is asked one item at a time
     ask_lock = threading.Lock()                      # so is the user
     stop = threading.Event()                         # set when the user chose to abort
@@ -670,7 +672,7 @@ def execute(
                     _finish_move(op, indexed, outcomes, fs)
                 else:
                     _run_op(op, fs, steps, sub, cancel, safe_trasher, limit, opts.native_copy,
-                            sub_verify if opts.verify else False)
+                            sub_verify if opts.verify else False, tags_lost)
                 outcome = OpResult(op, "done", attempts=attempts)
                 done.finish(i, unit)
                 break
@@ -725,6 +727,7 @@ def execute(
             _flush_pass(outcomes, done, flush_share, cancel)
     finally:
         result = Result()
+        result.tags_lost = list(tags_lost)
         steps_in_order: list = []
         for i in sorted(outcomes):
             outcome, steps = outcomes[i]
@@ -787,11 +790,12 @@ def _finish_move(op: Op, indexed: list, outcomes: dict, fs: FileSystem) -> None:
 
 
 def _run_op(op: Op, fs: FileSystem, steps: list, progress, cancel, trasher: Trasher, throttle=None,
-            native: bool = True, verify=False) -> None:
+            native: bool = True, verify=False, tags_lost=None) -> None:
     if op.kind is Kind.MKDIR:
         existing = _stat(fs, op.dst)
         if existing is None:
             fs.mkdir(op.dst, parents=True)
+            carry_tags(fs, op.src, fs, op.dst, tags_lost)          # a new folder gets the tags of the one it copies
         elif not existing.is_dir:
             raise FileExistsError(op.dst)
         return
@@ -807,7 +811,7 @@ def _run_op(op: Op, fs: FileSystem, steps: list, progress, cancel, trasher: Tras
     swap = Swap(fs, op.dst, trasher, permanent=no_bin) if op.overwrite and _stat(fs, op.dst) is not None else None
     if op.kind is Kind.COPY:
         copy_file(fs, op.src, fs, op.dst, progress=progress, cancel=cancel, throttle=throttle, native=native,
-                  overwrite=swap is not None, swap=swap)
+                  overwrite=swap is not None, swap=swap, tags_lost=tags_lost)
         if verify is not False:
             try:
                 verify_copy(fs, op.src, fs, op.dst, progress=verify, cancel=cancel)
@@ -819,6 +823,7 @@ def _run_op(op: Op, fs: FileSystem, steps: list, progress, cancel, trasher: Tras
                 raise
 
     else:                                     # MOVE or RENAME
-        renamed = _move_item(fs, op.src, op.dst, op.is_dir, cancel, progress=progress, throttle=throttle, swap=swap)
+        renamed = _move_item(fs, op.src, op.dst, op.is_dir, cancel, progress=progress, throttle=throttle, swap=swap,
+                             tags_lost=tags_lost)
         if renamed and swap is None:              # only a plain rename can be put back; a copy and delete cannot
             steps.append(Step("moved", op.src, op.dst))

@@ -20,6 +20,20 @@ PART_SUFFIX = ".dossier-part"
 MAX_NAME_WITH_SUFFIX = 240          # a file name may be 255 characters; the temporary name must fit too
 
 
+def carry_tags(src_fs: FileSystem, src: str, dst_fs: FileSystem, dst: str, lost: Optional[list] = None) -> None:
+    """Put the tags of ``src`` (kept on the file itself, see filetags.py) on its copy ``dst``: neither Python's copy nor the
+    small-file path carries an NTFS stream. Only between two plain local paths. When the destination cannot hold them its path
+    is added to ``lost`` so the window can say so once. Never raises: a copy must not fail because its tags could not follow."""
+    if not (_plain_local(src_fs, src) and _plain_local(dst_fs, dst)):
+        return
+    try:
+        from . import filetags
+        if filetags.copy_tags(src, dst) == "lost" and lost is not None:
+            lost.append(dst)
+    except Exception:   # noqa: BLE001 -- see above
+        pass
+
+
 def side_name(fs: FileSystem, dst: str, suffix: str, taken=None) -> str:
     """A name next to ``dst`` for something temporary (the half-written copy, the older file set aside). It is
     ``dst`` plus the suffix, which tells the user what it is; when the name is already near the limit of the file
@@ -40,7 +54,7 @@ def copy_mode(src: str, dst: str) -> None:
 
 
 def move_item(fs: FileSystem, src: str, dst: str, is_dir: bool, cancel: Optional[CancelToken] = None, *,
-              progress: Optional[ProgressFn] = None, throttle=None, swap=None) -> bool:
+              progress: Optional[ProgressFn] = None, throttle=None, swap=None, tags_lost: Optional[list] = None) -> bool:
     """Rename in place; across drives a file is copied, verified by size, then removed. ``swap`` puts the item in
     the place of an existing one without ever being without the old one (see ``Swap``). Returns True when the item
     was renamed (it can be renamed back), False when it had to be copied to another drive and removed."""
@@ -56,7 +70,8 @@ def move_item(fs: FileSystem, src: str, dst: str, is_dir: bool, cancel: Optional
         if is_dir:
             raise OSError("this folder is on another volume than its new place (a mount point or a link): copy it and delete "
                           "the original; nothing was changed") from e
-        copy_file(fs, src, fs, dst, cancel=cancel, progress=progress, throttle=throttle, overwrite=swap is not None, swap=swap)
+        copy_file(fs, src, fs, dst, cancel=cancel, progress=progress, throttle=throttle, overwrite=swap is not None, swap=swap,
+                  tags_lost=tags_lost)
         if fs.stat(dst).size != fs.stat(src).size:
             fs.remove(dst)
             raise OSError("the copy does not match the original; the original was kept") from e
@@ -133,6 +148,7 @@ def copy_file(
     throttle=None,
     native: bool = True,
     swap=None,
+    tags_lost: Optional[list] = None,
 ) -> None:
     check(cancel)
     if not overwrite:
@@ -153,6 +169,7 @@ def copy_file(
             if fastcopy.fast_copy(src, part, total, progress, cancel):       # the system's own copy, in the kernel
                 _check_whole(dst_fs.stat(part).size, total, src)
                 _finish(dst_fs, part, dst, info, overwrite, cancel, swap)
+                carry_tags(src_fs, src, dst_fs, dst, tags_lost)
                 return
         with src_fs.open_read(src) as r, dst_fs.open_write(part) as w:
             while True:
@@ -172,6 +189,7 @@ def copy_file(
         if _plain_local(src_fs, src) and _plain_local(dst_fs, dst):
             copy_mode(src, part)
         _finish(dst_fs, part, dst, info, overwrite, cancel, swap)
+        carry_tags(src_fs, src, dst_fs, dst, tags_lost)
     except BaseException:
         try:
             dst_fs.remove(part)

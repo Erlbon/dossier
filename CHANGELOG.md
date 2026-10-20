@@ -2,6 +2,12 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-20#13 -- Copy and move keep the tags
+
+- **Tags follow the file.** Dossier's copy, move to another drive and paste now put the tags of a file (and of a folder) on its copy. Before this, large files kept them (the system's own copy) but small files lost them, because Python's copy leaves the NTFS stream behind. Copying over an existing file gives it the new file's tags. A move on the same drive never lost them.
+- **A drive that cannot hold tags** (FAT, exFAT, memory sticks) does not stop the copy: the files are copied and the status line says once how many were copied without tags.
+- Files without tags cost one quick look at their stream and nothing else.
+
 ## 2026-10-20#12 -- Tags on files (the Properties Tags tab)
 
 - **Properties > Tags:** put tags, a rating (1-5 stars), a colour label and a note on a file or a folder. Several items at once: add tags to all of them, take tags off all of them, set the rating or label; a field you leave alone is not touched. A "tags you used before" list (this session only) helps you reuse spellings.
