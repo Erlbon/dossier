@@ -185,3 +185,17 @@ def test_copy_tags_repairs_what_a_plain_python_copy_drops(tmp_path, f):
     shutil.copyfile(f, dst)
     assert read_tags(dst).is_empty()
     assert filetags.copy_tags(f, dst) == "copied" and read_tags(dst).tags == ["kept"] and read_tags(dst).rating == 5
+
+
+def test_a_change_touches_only_what_it_names(f):
+    b = FakeBackend()
+    write_tags(f, Tags(tags=["a", "b"], rating=2, label="red", note="n"), b)
+    t = filetags.apply_change(f, filetags.TagChange(add=["c"], remove=["A"]), b)
+    assert t.tags == ["b", "c"] and t.rating == 2 and t.label == "red" and t.note == "n"
+    t = filetags.apply_change(f, filetags.TagChange(rating=5, label=""), b)
+    assert t.rating == 5 and t.label == "" and t.tags == ["b", "c"] and t.note == "n"
+    t = filetags.apply_change(f, filetags.TagChange(replace=["only"], note=""), b)
+    assert t.tags == ["only"] and t.note == "" and t.rating == 5
+    assert filetags.TagChange().is_empty() and not filetags.TagChange(rating=0).is_empty()
+    with pytest.raises(CannotHoldTags):
+        filetags.apply_change(f, filetags.TagChange(add=["x"]), FakeBackend(holds=False))

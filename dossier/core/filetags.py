@@ -252,3 +252,39 @@ def copy_tags(src: str, dst: str, source_backend=None, target_backend=None) -> s
     except OSError:
         return "lost"
     return "copied"
+
+
+@dataclass
+class TagChange:
+    """What the Properties dialog asks to change. ``None`` means "leave as it is" (so several files can be edited at once
+    without touching a field nobody changed)."""
+    replace: Optional[list] = None        # the full list of tags (one file)
+    add: list = field(default_factory=list)
+    remove: list = field(default_factory=list)
+    rating: Optional[int] = None
+    label: Optional[str] = None
+    note: Optional[str] = None
+
+    def is_empty(self) -> bool:
+        return (self.replace is None and not self.add and not self.remove and self.rating is None and self.label is None
+                and self.note is None)
+
+
+def apply_change(path: str, change: TagChange, backend=None) -> Tags:
+    """Apply ``change`` to the tags of ``path`` and save them. Raises ``CannotHoldTags`` or OSError like ``write_tags``."""
+    t = read_tags(path, backend)
+    if change.replace is not None:
+        t.tags = clean_tags(change.replace)
+    if change.remove:
+        gone = {r.casefold() for r in change.remove}
+        t.tags = [x for x in t.tags if x.casefold() not in gone]
+    if change.add:
+        t.tags = clean_tags(list(t.tags) + list(change.add))
+    if change.rating is not None:
+        t.rating = change.rating
+    if change.label is not None:
+        t.label = change.label
+    if change.note is not None:
+        t.note = change.note
+    write_tags(path, t, backend)
+    return normalise(t)

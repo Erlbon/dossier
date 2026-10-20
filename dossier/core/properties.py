@@ -38,6 +38,10 @@ class Gathered:
     facts: list = field(default_factory=list)       # General tab
     meta: Optional[object] = None                   # a redactor_common MetaResult, or None for a type without a reader
     meta_kind: str = ""                             # audio | comic | video
+    paths: list = field(default_factory=list)       # the items these facts are about
+    tags: dict = field(default_factory=dict)        # path -> Tags (empty when the items cannot hold tags)
+    tags_reason: str = ""                           # why there is no Tags tab, or why it is read only
+    tags_can_write: bool = False
 
 
 def kind_of(path: str) -> str:
@@ -148,5 +152,31 @@ def many_items(fs, paths: list, cancel: Optional[CancelToken] = None) -> Gathere
     return out
 
 
+MAX_TAGGED = 2000
+
+
+def _read_tags(out: Gathered, paths: list) -> None:
+    """Fill in the tags of local items: each one's record, and whether every item's drive can hold tags."""
+    from . import filetags
+    if any(has_scheme(p) for p in paths):
+        out.tags_reason = "Tags are kept on files and folders on a drive of this computer, not inside archives or lists."
+        return
+    if filetags.default_backend() is None:
+        out.tags_reason = "This system has no place to keep tags."
+        return
+    if len(paths) > MAX_TAGGED:
+        out.tags_reason = f"Too many items at once for tags ({len(paths):,}); select fewer than {MAX_TAGGED:,}."
+        return
+    out.paths = list(paths)
+    cannot = [p for p in paths if not filetags.can_hold_tags(p)]
+    out.tags = {p: filetags.read_tags(p) for p in paths}
+    out.tags_can_write = not cannot
+    if cannot:
+        out.tags_reason = ("This drive cannot store tags (FAT, exFAT and most memory sticks have no place for them)."
+                           if len(paths) == 1 else f"{len(cannot)} of these items are on a drive that cannot store tags.")
+
+
 def gather(fs, paths: list, cancel: Optional[CancelToken] = None) -> Gathered:
-    return one_item(fs, paths[0], cancel) if len(paths) == 1 else many_items(fs, paths, cancel)
+    out = one_item(fs, paths[0], cancel) if len(paths) == 1 else many_items(fs, paths, cancel)
+    _read_tags(out, paths)
+    return out

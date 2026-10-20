@@ -2,6 +2,13 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-20#12 -- Tags on files (the Properties Tags tab)
+
+- **Properties > Tags:** put tags, a rating (1-5 stars), a colour label and a note on a file or a folder. Several items at once: add tags to all of them, take tags off all of them, set the rating or label; a field you leave alone is not touched. A "tags you used before" list (this session only) helps you reuse spellings.
+- **No database and no extra files.** The tags are kept on the file itself: in an NTFS alternate data stream named `dossier` (on Linux in the extended attribute `user.dossier`, with `user.xdg.tags` and `user.baloo.rating` for other Linux programs). Saving tags does not change the file's content, size or modified time, also not on read-only files.
+- **Drives that cannot hold tags** (FAT, exFAT, memory sticks) and archives get a read-only Tags tab that says why.
+- Tags are lost when a file is copied by a program that ignores them, or sent by mail or to most cloud services. Carrying tags along in Dossier's own copy and move is the next step (the part that does it, `copy_tags`, is written and tested).
+
 ## 2026-10-20#11 -- Copy and move settings in one place
 
 - **Settings > Copy and Move...** is one dialog for everything that changes how files are copied or moved. It replaces three separate Settings entries (Copy Speed Limit, Verify Copies After Copying, Ask When a File Cannot Be Copied) and adds the options that had no way in: how many small files at the same time (or automatic), whether the system copies large local files, when to push the data to the drive (removable and network only, always, never), how many extra tries for a file another program holds, and how long to wait before the first retry.
