@@ -14,7 +14,7 @@ import os
 from dataclasses import dataclass, field
 from typing import Optional
 
-from .columns import KEYS, PROTECTED
+from .columns import KEYS, LEGACY_KEYS, PROTECTED, newly_hidden
 
 SCOPES = ("only", "tree")
 MODES = ("details", "icons")
@@ -30,14 +30,16 @@ class Layout:
     size: int = 128                                  # thumbnail size in pixels
     sort: str = "name"
     desc: bool = False
+    known: list = field(default_factory=lambda: list(KEYS), compare=False)   # the columns that existed when this was saved
 
     def cleaned(self) -> "Layout":
         """The same layout with only known columns, Name and Type always shown, every column present in the order."""
-        hidden = [k for k in KEYS if k in set(self.hidden) and k not in PROTECTED]
+        off = set(self.hidden) | newly_hidden(self.known)      # a column added since this was saved starts hidden
+        hidden = [k for k in KEYS if k in off and k not in PROTECTED]
         order = [k for k in self.order if k in KEYS]
         order = list(dict.fromkeys(order)) + [k for k in KEYS if k not in order]
         return Layout(hidden, order, self.mode if self.mode in MODES else "details", int(self.size or 128),
-                      self.sort if self.sort in SORT_KEYS else "name", bool(self.desc))
+                      self.sort if self.sort in SORT_KEYS else "name", bool(self.desc), list(KEYS))
 
 
 @dataclass
@@ -125,7 +127,8 @@ class LayoutStore:
                 continue
             try:
                 layout = Layout(list(item.get("hidden") or []), list(item.get("order") or []), str(item.get("mode", "details")),
-                                int(item.get("size", 128)), str(item.get("sort", "name")), bool(item.get("desc", False)))
+                                int(item.get("size", 128)), str(item.get("sort", "name")), bool(item.get("desc", False)),
+                                list(item.get("known") or LEGACY_KEYS))
             except (TypeError, ValueError):
                 continue
             store.set(item["path"], str(item.get("scope", "only")), layout)

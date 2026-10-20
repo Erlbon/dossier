@@ -15,7 +15,7 @@ from PyQt6.QtGui import QBrush, QColor, QFont, QFontMetrics, QIcon, QPainter, QP
 from PyQt6.QtWidgets import QApplication
 
 from ..core.columns import KEYS as column_keys, LABELS as column_labels, RIGHT_ALIGNED, attributes_text, location_text, type_text
-from ..core.columns import LABEL_COLORS, label_text, rating_text, when
+from ..core.columns import LABEL_COLORS, META_KEYS, label_text, rating_text, when
 from ..core import covers
 from ..core.drives import is_remote_quick
 from ..core.filetypes import DRIVE_ICONS, icon_name
@@ -110,6 +110,7 @@ class FolderModel(QAbstractTableModel):
         self._rc: dict = {}
         self._framed_cache: dict = {}
         self._tag_info: dict = {}                # path -> (tags text, rating, label), filled in on a thread when a column is on
+        self._meta_info: dict = {}               # path -> {metadata column key: text}, read from the files on a thread
         self._has_note = False
         self._sort_col = 0
         self._sort_order = Qt.SortOrder.AscendingOrder
@@ -147,6 +148,19 @@ class FolderModel(QAbstractTableModel):
         if self.entry_count():
             self.dataChanged.emit(self.index(0, 8), self.index(self.entry_count() - 1, 10))
 
+    def _meta(self, path: str, key: str) -> str:
+        return self._meta_info.get(path, {}).get(key, "")
+
+    def set_meta_info(self, info: dict) -> None:
+        """Values for the metadata columns (``{path: {column key: text}}``), a few files at a time as they are read. Sorting by one of
+        those columns is done again with what has arrived."""
+        self._meta_info.update(info)
+        first = column_keys.index(META_KEYS[0])
+        if self._sort_col >= first:
+            self.sort(self._sort_col, self._sort_order)
+        if self.entry_count():
+            self.dataChanged.emit(self.index(0, first), self.index(self.entry_count() - 1, len(column_keys) - 1))
+
     def update_detail(self, path: str, detail: str, status: Optional[str] = None, note: str = "") -> None:
         """Fill in the third column of one Home entry (free space arrives after the page is shown), and its light."""
         for i, e in enumerate(self._rows):
@@ -182,6 +196,8 @@ class FolderModel(QAbstractTableModel):
         previous = self.path
         self.beginResetModel()
         self._tree_sizes = {}
+        if path != previous:
+            self._meta_info = {}                 # the values of another folder are of no use here
         self._network = is_remote_quick(path) if path and not path.startswith("home:") else False
         self.path = path
         self._up = up
@@ -275,6 +291,9 @@ class FolderModel(QAbstractTableModel):
                 8: lambda e: (self._tag(e.path)[0].lower(), natural_key(e.name)),
                 9: lambda e: (self._tag(e.path)[1], natural_key(e.name)),
                 10: lambda e: (self._tag(e.path)[2], natural_key(e.name))}
+        if self._sort_col >= len(keys):                  # a metadata column: by its text, numbers in their natural order
+            meta_key = column_keys[self._sort_col]
+            keys[self._sort_col] = lambda e: (natural_key(self._meta(e.path, meta_key)), natural_key(e.name))
         reverse = self._sort_order == Qt.SortOrder.DescendingOrder
         folders = sorted((e for e in self._rows if e.is_dir), key=keys[self._sort_col], reverse=reverse)
         files = sorted((e for e in self._rows if not e.is_dir), key=keys[self._sort_col], reverse=reverse)
@@ -342,7 +361,9 @@ class FolderModel(QAbstractTableModel):
                 return rating_text(self._tag(entry.path)[1])
             if col == 10:
                 return label_text(self._tag(entry.path)[2])
-            return location_text(entry.path, self.fs.dirname)
+            if col == 7:
+                return location_text(entry.path, self.fs.dirname)
+            return self._meta(entry.path, column_keys[col])
         if role == Qt.ItemDataRole.DecorationRole and col == 0:
             if self.icon_px:
                 if self.is_up_row(index.row()):

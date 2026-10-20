@@ -10,6 +10,18 @@ from dossier.core import shellmenu as sm
 windows = pytest.mark.skipif(sys.platform != "win32", reason="the Windows shell")
 
 
+@pytest.fixture(autouse=True)
+def _quiet_first_chance_com_exceptions():
+    """Shell extensions raise and catch exceptions of their own inside COM (RPC_E_DISCONNECTED...). Python's fault handler would print a
+    scary "Windows fatal exception" for them although nothing is wrong, so it is off for these tests and back on after."""
+    import faulthandler
+    was = faulthandler.is_enabled()
+    faulthandler.disable()
+    yield
+    if was:
+        faulthandler.enable()
+
+
 @windows
 def test_only_real_paths_in_one_folder_qualify(tmp_path):
     a, b = str(tmp_path / "a.txt"), str(tmp_path / "b.txt")

@@ -2,6 +2,13 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-20#36 -- Metadata columns
+
+- **Sixteen new columns that show what is inside the files** (Settings > Columns..., or right-click a column header): *Title (tag), Artist, Album, Track, Year, Genre, Length, Bitrate* (audio tags: mp3, flac, m4a, ogg and more), *Series, Issue, Writer, Publisher, Pages* (the ComicInfo of a CBZ) and *Resolution, Video codec, Audio languages* (video: mkv, mp4, avi and more, read through ffprobe). Length, Title, Year, Bitrate and Publisher come from whichever kind of file has them. They are **read-only** for now.
+- **Off everywhere until you switch them on, and a folder layout can switch them on for one folder only** (View > Folder Layout > Keep This Layout for This Folder...): a column that opens every file is only paid for where you work with that kind of file. An old column choice or folder layout made before these columns existed does not show them.
+- **Read on the side:** the files are opened by a few background threads, only the kinds of file the visible columns need (an Artist column never opens a comic or a video), and the cells fill in a batch at a time while the list stays usable. Each answer is kept in memory by path, size and time, so a file is read again only when it has changed. Nothing is written to disk. The columns sort (numbers in their natural order) once the values have arrived.
+- A file that cannot be read (damaged, no ffprobe, no mutagen) has empty cells, never an error.
+
 ## 2026-10-20#35 -- Folder layouts
 
 - **View > Folder Layout** lets a folder keep its own **columns, view (details or thumbnails), thumbnail size and sort order**: *Keep This Layout for This Folder Only*, *Keep This Layout for This Folder and Its Subfolders*, *Back to the Default for This Folder* and *Forget All Folder Layouts...*. A photo folder can be thumbnails sorted by date, newest first, while everything else stays as it was; a music folder can show columns the other folders do not.

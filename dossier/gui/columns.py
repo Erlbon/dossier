@@ -9,10 +9,11 @@ from redactor_common.core.table_settings import is_column_visible, sanitize_hidd
 from redactor_common.gui.column_menu import show_column_header_context_menu
 from redactor_common.gui.column_settings_dialog import ColumnSettingsDialog
 
-from ..core.columns import DEFAULT_HIDDEN, DEFAULT_ORDER, KEYS, LABELS, PROTECTED
+from ..core.columns import DEFAULT_HIDDEN, DEFAULT_ORDER, KEYS, LABELS, LEGACY_KEYS, PROTECTED, newly_hidden
 
 HIDDEN_KEY = "view/columns_hidden"
 ORDER_KEY = "view/columns_order"
+KNOWN_KEY = "view/columns_known"      # the columns that existed when the choice was saved
 
 
 class ColumnsMixin:
@@ -32,7 +33,11 @@ class ColumnsMixin:
         if rule is not None:
             layout = rule.layout.cleaned()
             return sanitize_hidden_fields(set(layout.hidden), PROTECTED), list(layout.order)
-        hidden = sanitize_hidden_fields(set(self._read_names(HIDDEN_KEY, DEFAULT_HIDDEN)), PROTECTED)
+        known = self._read_names(KNOWN_KEY, LEGACY_KEYS)
+        hidden = set(self._read_names(HIDDEN_KEY, DEFAULT_HIDDEN))
+        if self.settings.value(HIDDEN_KEY, None) is not None:
+            hidden |= newly_hidden(known)                       # a column added since the choice was saved starts hidden
+        hidden = sanitize_hidden_fields(hidden, PROTECTED)
         order = self._read_names(ORDER_KEY, DEFAULT_ORDER)
         order += [k for k in DEFAULT_ORDER if k not in order]                 # a column added in a later version
         return hidden, order
@@ -40,6 +45,7 @@ class ColumnsMixin:
     def _store_columns(self, hidden: set, order: list) -> None:
         self.settings.setValue(HIDDEN_KEY, ",".join(k for k in KEYS if k in hidden) or "-")
         self.settings.setValue(ORDER_KEY, ",".join(order))
+        self.settings.setValue(KNOWN_KEY, ",".join(KEYS))
 
     def _store_columns_for(self, panel, hidden: set, order: list) -> None:
         """A change of the columns goes to the folder layout in force for ``panel``, or to the default when it has none."""

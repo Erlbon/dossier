@@ -17,7 +17,8 @@ from ..core import archives, pathparts, zipfs
 from ..core.notes import compose_markdown, find_notes
 from ..core.selection import SelectionStore
 from ..core.vfs import Entry, FileSystem
-from ..core.columns import DEFAULT_HIDDEN, DEFAULT_ORDER, DEFAULT_WIDTHS, KEYS as COLUMN_KEYS, PROTECTED as PROTECTED_COLUMNS
+from ..core.columns import DEFAULT_HIDDEN, DEFAULT_ORDER, DEFAULT_WIDTHS, KEYS as COLUMN_KEYS, META_KEYS, PROTECTED as PROTECTED_COLUMNS
+from ..core import metacolumns
 from ..core.columns import index_of as column_index
 from redactor_common.core.table_settings import is_column_visible
 from redactor_common.gui.column_order import apply_column_order, visual_column_keys
@@ -1065,6 +1066,7 @@ class Panel(QFrame):
         finally:
             self._laying_out = False
         self.refresh_tags()                                   # a tags column may just have been switched on
+        self.refresh_meta()                                   # and so may a metadata column
 
     def column_keys_in_order(self) -> list:
         return visual_column_keys(self.table.horizontalHeader(), list(COLUMN_KEYS))
@@ -1141,6 +1143,36 @@ class Panel(QFrame):
 
         threading.Thread(target=work, daemon=True, name="dossier-tags").start()
 
+    # the metadata columns (Artist, Album, Series, Resolution...) --------------------------------------------------------------
+    meta_reader = staticmethod(metacolumns.read_values)       # a seam for tests: the function that reads one file
+
+    def meta_columns_visible(self) -> list:
+        header = self.table.horizontalHeader()
+        return [] if self.is_home else [k for k in META_KEYS if not header.isSectionHidden(column_index(k))]
+
+    def refresh_meta(self) -> None:
+        """Read the files of the listing that the visible metadata columns are about, on a thread, a few at a time: the cells fill in
+        while the rest is read. Nothing is opened when no metadata column is on. A newer call makes an older one stop."""
+        self._meta_gen = getattr(self, "_meta_gen", 0) + 1
+        visible = self.meta_columns_visible()
+        if not visible or self._dispatch is None:
+            return
+        kinds = metacolumns.kinds_needed(visible)
+        entries = [e for e in (self.model.entry_at(r) for r in range(self.model.entry_count()))
+                   if e is not None and e.name != ".." and not e.is_dir and not e.kind and not has_scheme(e.path)][:5000]
+        gen, shown, reader = self._meta_gen, self.model.path, self.meta_reader
+
+        def work() -> None:
+            def batch(info: dict) -> None:
+                def show() -> None:
+                    if gen == self._meta_gen and self.model.path == shown:
+                        self.model.set_meta_info(info)
+                self._dispatch(show)
+            metacolumns.read_many(entries, kinds, metacolumns.SHARED_CACHE, batch, reader=reader,
+                                  cancelled=lambda: gen != self._meta_gen)
+
+        threading.Thread(target=work, daemon=True, name="dossier-meta").start()
+
     def _fill_home_usage(self, entries: list) -> None:
         """Free space of the drives, asked on background threads: a dead network drive only delays its own row."""
         if self._dispatch is None:
@@ -1201,6 +1233,7 @@ class Panel(QFrame):
             self._fill_home_usage(listing.entries)
         else:
             self.refresh_tags()
+            self.refresh_meta()
         if row >= 0:
             self.table.setCurrentIndex(self.model.index(row, 0))
         self.view.scrollToTop() if not select else self.view.scrollTo(self.table.currentIndex())
