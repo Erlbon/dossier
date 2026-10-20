@@ -17,7 +17,7 @@ from PyQt6.QtWidgets import (QApplication, QHBoxLayout, QLabel, QMainWindow, QMe
                              QToolButton, QVBoxLayout, QWidget)
 
 from ..core.ops import (Plan, check_name, conflict_rows, plan_copy, plan_delete, plan_move, plan_rename)
-from ..core.home import ADD_NETWORK, HomeFileSystem, HomeProvider, RouterFileSystem, removable_from_home
+from ..core.home import ADD_NETWORK, MOUNT_SHARE, HomeFileSystem, HomeProvider, RouterFileSystem, removable_from_home
 from ..core.commandline import Placeholders, expand, run_command
 from ..core import patterns
 from ..core.platform import IS_WINDOWS, has_scheme, is_elevated, machine_name, path_key, set_window_border
@@ -33,6 +33,7 @@ from .appicon import app_icon
 from .command_line import CommandLine
 from .batch_rename import BatchRenameMixin
 from .checksums import ChecksumMixin
+from .mounting import MountMixin
 from .dialogs import Dialogs
 from .marks_and_notes import MarksAndNotesMixin
 from .search_command import SearchCommandMixin
@@ -56,7 +57,7 @@ SUMMARY_ITEMS = 12    # the confirmation lists this many items, then says how ma
 SIZE_LIMIT = 1000    # the status line sizes at most this many marked items
 
 
-class MainWindow(ChecksumMixin, MarksAndNotesMixin, SearchCommandMixin, BatchRenameMixin, OperationQueueMixin, StallLogMixin, GoingPlacesMixin, FolderSizesMixin, UnpackMixin, QMainWindow):
+class MainWindow(MountMixin, ChecksumMixin, MarksAndNotesMixin, SearchCommandMixin, BatchRenameMixin, OperationQueueMixin, StallLogMixin, GoingPlacesMixin, FolderSizesMixin, UnpackMixin, QMainWindow):
     def __init__(self, fs: Optional[FileSystem] = None, *, settings_path: Optional[str] = None, start=(None, None),
                  dialogs=None, trasher=None, terminal_launcher=None, which=None) -> None:
         super().__init__()
@@ -247,6 +248,7 @@ class MainWindow(ChecksumMixin, MarksAndNotesMixin, SearchCommandMixin, BatchRen
             go.addAction(a)
         go.addSeparator()
         go.addAction(self._action("All Files Below This Folder", "Ctrl+Shift+B", self.show_all_files_below))
+        go.addAction(self._action("Mount Network Share...", None, self.mount_share))
         for a in (self._action("Open Folder in the Other Panel", ["Ctrl+Right", "Ctrl+Left"], self.open_in_other_panel),
                   self._action("Other Panel Shows This Folder", "Ctrl+Shift+O", self.same_in_other_panel)):
             go.addAction(a)
@@ -316,6 +318,11 @@ class MainWindow(ChecksumMixin, MarksAndNotesMixin, SearchCommandMixin, BatchRen
         self.act_ask_error.setChecked(str(self.settings.value("copy/ask_on_error", "false")).lower() == "true")
         self.act_ask_error.toggled.connect(lambda on: self.settings.setValue("copy/ask_on_error", "true" if on else "false"))
         view.addAction(self.act_ask_error)
+        net_menu = view.addMenu("Network Drives")
+        self._nfs_status = net_menu.addAction(self.nfs_status_text())
+        self._nfs_status.setEnabled(False)
+        net_menu.aboutToShow.connect(lambda: self._nfs_status.setText(self.nfs_status_text()))
+        net_menu.addAction(self._action("How to Switch On Client for NFS...", None, self.explain_nfs))
         drives_menu = view.addMenu("Drive Memory")
         self.act_remember_drives = QAction("Remember Drives Between Sessions (to notice a different drive under a letter)", self)
         self.act_remember_drives.setCheckable(True)
@@ -743,6 +750,8 @@ class MainWindow(ChecksumMixin, MarksAndNotesMixin, SearchCommandMixin, BatchRen
     def _home_action(self, path: str) -> None:
         if path == ADD_NETWORK:
             self.add_network_location()
+        elif path == MOUNT_SHARE:
+            self.mount_share()
 
     def pin_folder(self) -> None:
         """Pin the active panel's folder to the Home page."""

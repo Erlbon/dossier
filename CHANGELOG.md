@@ -2,6 +2,12 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-20#07 -- Mount a network share, and the Client for NFS check
+
+- **Mount a Network Share** (Home page entry, and Go menu): pick SMB or NFS, type the address (`\\server\share`, or `server:/export` for NFS), pick a drive letter or the next free one. Windows mounts it and the share appears under Network on the Home page with a light. A password is never typed into Dossier or put on a command line: a share that needs a login works when Windows already has it (Credential Manager); otherwise the mount fails and says why.
+- **Client for NFS check:** View > Network Drives shows whether Windows' Client for NFS is switched on (looked up without administrator rights). When it is off, Mount says so and shows how to switch it on (Windows Features, or an administrator PowerShell line). Dossier never changes that system setting itself.
+- The mount runs on a background thread with a progress box; the system's own answer is shown afterwards.
+
 ## 2026-10-20#06 -- Indicator lights on the Home page
 
 - **Lights on drives and network places.** A small light on the icon: green filled dot (answered), grey hollow dot (not checked yet), red cross (not available or the last attempt failed), amber diamond (a different drive than last time under this letter). The shapes differ as well as the colours; the tooltip says what it means. Nothing is pinged: a drive's light follows its free-space check, a network location's light follows the last time you opened it.
