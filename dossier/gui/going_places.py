@@ -76,3 +76,31 @@ class GoingPlacesMixin:
             return
         self.other.set_folder(self.active.path)
         self._say(f"The other panel shows {self.active.path}")
+
+    # which drive each letter held (opt-in: off by default, stored only when switched on) ------------------------------
+    def _remember_drives(self) -> bool:
+        return str(self.settings.value("home/remember_drives", "false")).lower() == "true"
+
+    def _load_seen_drives(self) -> dict:
+        out = {}
+        for line in self._saved_list("home/seen_drives"):
+            root, _sep, identity = line.partition("=")
+            if root and identity:
+                out[root] = identity
+        return out
+
+    def _save_seen_drives(self, seen: dict) -> None:
+        if seen:
+            self.settings.setValue("home/seen_drives", [f"{r}={i}" for r, i in sorted(seen.items())])
+        else:
+            self.settings.remove("home/seen_drives")
+
+    def set_remember_drives(self, on: bool) -> None:
+        self.settings.setValue("home/remember_drives", "true" if on else "false")
+        if not on:
+            self.settings.remove("home/seen_drives")           # switching it off also deletes what was kept
+        self._say("Drives are remembered between sessions" if on else "Remembered drives deleted; drives are only compared within one session")
+
+    def forget_remembered_drives(self) -> None:
+        self.home_provider.memory.forget()
+        self._say("Remembered drives deleted")

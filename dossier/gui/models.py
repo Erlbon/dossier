@@ -10,7 +10,8 @@ from datetime import datetime
 from typing import Optional
 
 from PyQt6.QtCore import QAbstractTableModel, QModelIndex, Qt
-from PyQt6.QtGui import QBrush, QColor, QFont
+from PyQt6.QtCore import QPointF
+from PyQt6.QtGui import QBrush, QColor, QFont, QIcon, QPainter, QPen, QPixmap, QPolygonF
 
 from ..core.filetypes import DRIVE_ICONS, icon_name
 from ..core.home import HOME_URL, TYPE_NAMES
@@ -37,6 +38,52 @@ def name_fits(name: str, text: str) -> bool:
     if any(ch in text for ch in "*?["):
         return fnmatch.fnmatch(name.lower(), text.lower())
     return text.lower() in name.lower()
+
+
+LIGHT_COLORS = {"ok": "#2e9e5b", "unchecked": "#8a8f98", "failed": "#d64545", "changed": "#e0a020"}
+_light_cache: dict = {}
+
+
+def with_light(icon: QIcon, status: str) -> QIcon:
+    """The icon with a small indicator light in its lower right corner. The shapes differ as well as the colours
+    (filled dot, hollow dot, cross, diamond), so the state can be told without telling the colours apart."""
+    key = (icon.cacheKey(), status)
+    if key in _light_cache:
+        return _light_cache[key]
+    ratio = 2
+    base = icon.pixmap(16 * ratio, 16 * ratio)
+    pm = QPixmap(base)
+    pm.setDevicePixelRatio(1)
+    p = QPainter(pm)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    size = pm.width()
+    r = size * 0.25
+    cx, cy = size - r - 1, size - r - 1
+    color = QColor(LIGHT_COLORS.get(status, "#8a8f98"))
+    backdrop = QColor(0, 0, 0, 170)                        # a dark ring keeps the light visible on any row colour
+    p.setPen(Qt.PenStyle.NoPen)
+    p.setBrush(backdrop)
+    p.drawEllipse(QPointF(cx, cy), r + 1.5, r + 1.5)
+    if status == "ok":
+        p.setBrush(color)
+        p.drawEllipse(QPointF(cx, cy), r, r)
+    elif status == "unchecked":
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        p.setPen(QPen(color, size * 0.09))
+        p.drawEllipse(QPointF(cx, cy), r * 0.8, r * 0.8)
+    elif status == "failed":
+        p.setPen(QPen(color, size * 0.12, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+        d = r * 0.7
+        p.drawLine(QPointF(cx - d, cy - d), QPointF(cx + d, cy + d))
+        p.drawLine(QPointF(cx - d, cy + d), QPointF(cx + d, cy - d))
+    else:                                                  # changed: a diamond
+        p.setBrush(color)
+        p.drawPolygon(QPolygonF([QPointF(cx, cy - r * 1.15), QPointF(cx + r * 1.15, cy), QPointF(cx, cy + r * 1.15),
+                                 QPointF(cx - r * 1.15, cy)]))
+    p.end()
+    result = QIcon(pm)
+    _light_cache[key] = result
+    return result
 
 
 class FolderModel(QAbstractTableModel):
@@ -69,11 +116,14 @@ class FolderModel(QAbstractTableModel):
                 return r
         return -1
 
-    def update_detail(self, path: str, detail: str) -> None:
-        """Fill in the third column of one Home entry (free space arrives after the page is shown)."""
+    def update_detail(self, path: str, detail: str, status: Optional[str] = None, note: str = "") -> None:
+        """Fill in the third column of one Home entry (free space arrives after the page is shown), and its light."""
         for i, e in enumerate(self._rows):
             if e.path == path and e.kind not in ("header", "action"):
-                self._rows[i] = dc_replace(e, detail=detail)
+                changes = {"detail": detail} if detail else {}
+                if status is not None:
+                    changes.update(status=status, note=note)
+                self._rows[i] = dc_replace(e, **changes)
                 row = i + (1 if self._up else 0)
                 self.dataChanged.emit(self.index(row, 0), self.index(row, len(HOME_COLUMNS) - 1))
                 return
@@ -252,6 +302,8 @@ class FolderModel(QAbstractTableModel):
             return entry.name if col == 0 else (TYPE_NAMES.get(entry.kind, "") if col == 1 else entry.detail)
         if role == Qt.ItemDataRole.DecorationRole and col == 0:
             return self._home_icon(entry)
+        if role == Qt.ItemDataRole.ToolTipRole and entry.note:
+            return entry.note
         if role == Qt.ItemDataRole.FontRole:
             font = QFont()
             font.setBold(entry.kind in ("header", "action") or col == 0)      # section titles, actions and names
@@ -266,6 +318,10 @@ class FolderModel(QAbstractTableModel):
         return None
 
     def _home_icon(self, entry: Entry):
+        icon = self._home_base_icon(entry)
+        return with_light(icon, entry.status) if entry.status and icon is not None else icon
+
+    def _home_base_icon(self, entry: Entry):
         t = theme.current()
         if entry.kind == "header":
             return None

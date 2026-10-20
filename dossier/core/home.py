@@ -12,9 +12,11 @@ and the drive menu treat it like any other place; opening an entry goes to its r
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, replace as dc_replace
 from typing import Callable, Optional
 
+from .drive_identity import DriveMemory
+from .lights import LIT_KINDS, UNCHECKED, LightBoard, describe
 from .platform import home_dir, list_volumes
 from .vfs import Entry, FileSystem, NotWritable
 from .listings import FlatFileSystem, FoundFileSystem
@@ -47,6 +49,12 @@ class HomeProvider:
     environ: Optional[dict] = None
     pins: Callable[[], list] = lambda: []
     network: Callable[[], list] = lambda: []
+    board: LightBoard = None                      # what the panels found out about places (set in __post_init__)
+    memory: DriveMemory = None                    # which drive each letter held
+
+    def __post_init__(self) -> None:
+        self.board = self.board or LightBoard()
+        self.memory = self.memory or DriveMemory()
 
     def env(self, name: str) -> str:
         return (self.environ if self.environ is not None else os.environ).get(name, "")
@@ -74,6 +82,15 @@ def _header(section: str) -> Entry:
     return Entry(name=SECTION_TITLES[section], path=HEADER_PREFIX + section, is_dir=False, kind="header")
 
 
+def _lit(p: HomeProvider, entry: Entry) -> Entry:
+    """Give an entry its light: what the panels already learned about it, else grey (not checked). No I/O."""
+    if entry.kind not in LIT_KINDS:
+        return entry
+    found = p.board.get(entry.path)
+    status, note = found if found else (UNCHECKED, "")
+    return dc_replace(entry, status=status, note=describe(status, note))
+
+
 def build_entries(p: HomeProvider) -> list:
     """The Home page as a list of entries, headers included. Free space is left empty here: it needs the disks
     and is filled in afterwards, in the background, so a dead drive cannot hold the page up."""
@@ -84,7 +101,7 @@ def build_entries(p: HomeProvider) -> list:
         if kind == "network":
             continue
         name = root.rstrip("\\/") if os.sep == "\\" else root
-        entries.append(Entry(name=f"{name}  {label}".strip() if label else name, path=root, is_dir=True, kind=kind))
+        entries.append(_lit(p, Entry(name=f"{name}  {label}".strip() if label else name, path=root, is_dir=True, kind=kind)))
     entries.append(_header("places"))
     for title, path in place_folders(p):
         entries.append(Entry(name=title, path=path, is_dir=True, kind="place", detail=path))
@@ -97,9 +114,9 @@ def build_entries(p: HomeProvider) -> list:
     entries.append(_header("network"))
     for root, label, _kind in network_volumes:
         name = root.rstrip("\\/") if os.sep == "\\" else root
-        entries.append(Entry(name=name, path=root, is_dir=True, kind="network", detail=label))
+        entries.append(_lit(p, Entry(name=name, path=root, is_dir=True, kind="network", detail=label)))
     for address in p.network():
-        entries.append(Entry(name=address, path=address, is_dir=True, kind="netloc", detail="Saved network location"))
+        entries.append(_lit(p, Entry(name=address, path=address, is_dir=True, kind="netloc", detail="Saved network location")))
     entries.append(Entry(name="Add a network location...", path=ADD_NETWORK, is_dir=False, kind="action"))
     return entries
 

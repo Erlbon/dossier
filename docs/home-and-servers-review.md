@@ -147,3 +147,13 @@ H0 and H1 are built and tested.
 - What the preset adds: the right URL from just a server address and user name; login with an **app password** (never the main password; created in Nextcloud under Settings > Security), kept in the credential store; two-factor accounts work the same way.
 - Later, Nextcloud-only extras: its trash (`/remote.php/dav/trashbin/<user>/trash`) as the recycle bin for deletes there (unlike SMB/NFS, a delete need not be permanent), chunked upload for big files, share links through the OCS API, and file versions.
 - Order: after WebDAV works (phase 3). Needs a test server in pytest like the others (WsgiDAV serves the plain WebDAV part; the Nextcloud-only extras need a recorded-response test).
+
+## 11. Status of the lights (2026-10-20, build #06)
+
+Built: lights on local drives, mapped network drives and saved network locations (green filled dot, grey hollow dot, red cross,
+amber diamond, drawn over the lower right corner of the icon, with a tooltip); `core/lights.py` (the board of what is known),
+`core/drive_identity.py` (volume GUID + serial, Windows; `DriveMemory` with the "same drive on a new letter" case and the
+opt-in storage), View > Drive Memory (Remember Drives Between Sessions, off by default; Forget Remembered Drives).
+How the lights get their state: a drive answers its free-space probe (green) or does not (red); a panel that opens a path
+records it (green) or fails to (red); nothing is pinged. Not built yet: the Mount... button, the Client for NFS check in
+Settings, the "update pins to the new letter" offer, the Check button for remote sources (there are none yet).

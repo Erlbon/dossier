@@ -29,6 +29,8 @@ class Entry:
     is_link: bool = False
     kind: str = ""       # for a virtual listing such as the Home page: drive, place, pin, network, action, header
     detail: str = ""     # the text for the third column of such a listing (free space, an address)
+    status: str = ""     # the indicator light of a Home entry: ok, unchecked, failed, changed ("" = no light)
+    note: str = ""       # what the light means, for its tooltip
 
 
 class FileSystem(ABC):

@@ -76,6 +76,19 @@ def disk_usage(path: str) -> Optional[tuple]:
         return None
 
 
+def probe_async(paths: list, callback: Callable[[str, Optional[tuple], str], None]) -> None:
+    """Like ``usage_async``, and the identity of each volume as well: ``callback(path, usage_or_None, identity)``.
+    One daemon thread per path, so a dead share holds only its own row."""
+    from .drive_identity import identity_of
+
+    def one(p: str) -> None:
+        usage = disk_usage(p)
+        callback(p, usage, identity_of(p) if usage else "")
+
+    for p in paths:
+        threading.Thread(target=one, args=(p,), daemon=True, name="dossier-probe").start()
+
+
 def usage_async(paths: list, callback: Callable[[str, Optional[tuple]], None]) -> None:
     """Ask for the usage of each path on its own daemon thread (a hung share holds only its own thread
     and never blocks the application from exiting). ``callback(path, usage_or_None)`` runs on that

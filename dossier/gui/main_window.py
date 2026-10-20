@@ -40,6 +40,7 @@ from .folder_sizes import FolderSizesMixin
 from .going_places import GoingPlacesMixin
 from .ops_queue import OperationQueueMixin
 from .stall_log import StallLogMixin
+from ..core.drive_identity import DriveMemory
 from .unpack import UnpackMixin
 from . import file_clipboard, icon_set, theme
 from .models import human_size
@@ -70,7 +71,9 @@ class MainWindow(ChecksumMixin, MarksAndNotesMixin, SearchCommandMixin, BatchRen
         self.dialogs = dialogs or Dialogs(self)
         self.settings = self._open_settings(settings_path)
         self.home_provider = HomeProvider(pins=lambda: self._saved_list("home/pins"),
-                                          network=lambda: self._saved_list("home/network"))
+                                          network=lambda: self._saved_list("home/network"),
+                                          memory=DriveMemory(load=self._load_seen_drives, save=self._save_seen_drives,
+                                                             persist=lambda: self._remember_drives()))
         self.fs = RouterFileSystem(self.fs, HomeFileSystem(self.home_provider))     # home:// and the disk as one
         icon_set.set_user_dir(os.path.join(os.path.dirname(self.settings.fileName()), "icon-sets"))
         icon_set.use(str(self.settings.value("view/icon_set", icon_set.DEFAULT_SET)))
@@ -313,6 +316,13 @@ class MainWindow(ChecksumMixin, MarksAndNotesMixin, SearchCommandMixin, BatchRen
         self.act_ask_error.setChecked(str(self.settings.value("copy/ask_on_error", "false")).lower() == "true")
         self.act_ask_error.toggled.connect(lambda on: self.settings.setValue("copy/ask_on_error", "true" if on else "false"))
         view.addAction(self.act_ask_error)
+        drives_menu = view.addMenu("Drive Memory")
+        self.act_remember_drives = QAction("Remember Drives Between Sessions (to notice a different drive under a letter)", self)
+        self.act_remember_drives.setCheckable(True)
+        self.act_remember_drives.setChecked(self._remember_drives())
+        self.act_remember_drives.toggled.connect(self.set_remember_drives)
+        drives_menu.addAction(self.act_remember_drives)
+        drives_menu.addAction(self._action("Forget Remembered Drives", None, self.forget_remembered_drives))
         slow_menu = view.addMenu("Slowness Log")
         self.act_stall_log = QAction("Record Slow Moments (window stalls over 200 ms)", self)
         self.act_stall_log.setCheckable(True)

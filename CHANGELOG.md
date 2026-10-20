@@ -2,6 +2,13 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-20#06 -- Indicator lights on the Home page
+
+- **Lights on drives and network places.** A small light on the icon: green filled dot (answered), grey hollow dot (not checked yet), red cross (not available or the last attempt failed), amber diamond (a different drive than last time under this letter). The shapes differ as well as the colours; the tooltip says what it means. Nothing is pinged: a drive's light follows its free-space check, a network location's light follows the last time you opened it.
+- **Drives are told apart by volume ID, not letter.** A drive that comes back under another letter is recognised ("seen before as E:") and not flagged; another stick under the same letter turns amber.
+- **View > Drive Memory:** "Remember Drives Between Sessions" is off by default (until you switch it on, drives are only compared within one session); "Forget Remembered Drives" deletes what was kept.
+- Still to come: the Mount button for NFS and SMB, the Client for NFS check, and updating pins when a drive letter changes.
+
 ## 2026-10-20#05 -- A choice for every file that already exists
 
 - **The conflict dialog is a table now.** When a copy, move or paste meets files that already exist, every one gets a row: name, what is being copied (size, time, newer or older), what is already there, and its own choice (Overwrite, Skip, Keep both). The row starts as Skip for files that look identical, Overwrite for a newer copy, Keep both otherwise. Buttons set many rows at once: All overwrite, All skip, All keep both, Newer only, Skip identical.

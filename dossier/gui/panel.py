@@ -17,7 +17,8 @@ from ..core import archives, pathparts, zipfs
 from ..core.notes import compose_markdown, find_notes
 from ..core.selection import SelectionStore
 from ..core.vfs import Entry, FileSystem
-from ..core.drives import drive_of, usage_async
+from ..core.drives import drive_of, probe_async, usage_async
+from ..core.lights import FAILED, OK, describe
 from ..core.home import HOME_URL, is_home
 from ..core.platform import has_scheme, path_key
 from . import icon_set, theme
@@ -768,20 +769,36 @@ class Panel(QFrame):
         if self._dispatch is None:
             return
         paths = [e.path for e in entries if e.kind in ("fixed", "removable", "optical", "other", "network")]
+        provider = getattr(getattr(self.fs, "home", None), "provider", None)
 
-        def ready(p: str, usage) -> None:
+        def ready(p: str, usage, identity: str = "") -> None:
             def show() -> None:
-                if self.is_home and usage:
-                    self.model.update_detail(p, f"{human_size(usage[1])} free of {human_size(usage[0])}")
+                if not self.is_home:
+                    return
+                if not usage:                                    # the drive did not answer: not ready, or gone
+                    if provider is not None:
+                        provider.board.record(p, FAILED)
+                    self.model.update_detail(p, "Not available", FAILED, describe(FAILED))
+                    return
+                status, note = provider.memory.judge(p, identity) if provider is not None else (OK, "")
+                if provider is not None:
+                    provider.board.record(p, status, note)
+                self.model.update_detail(p, f"{human_size(usage[1])} free of {human_size(usage[0])}", status,
+                                         describe(status, note))
             self._dispatch(show)
 
-        usage_async(paths, ready)
+        probe_async(paths, ready)
 
     def _finish_listing(self, listing: "_Listing", path: str, select: str) -> bool:
+        provider = getattr(getattr(self.fs, "home", None), "provider", None)
         if listing.error is not None:
             e = listing.error
+            if provider is not None and not is_home(path):
+                provider.board.record(path, FAILED, str(getattr(e, "strerror", None) or e))
             self.message.emit(f"Cannot open {path}: {getattr(e, 'strerror', None) or e}")
             return False
+        if provider is not None and not is_home(path):
+            provider.board.record(path, OK)
         moved_on = path != self.model.path
         self.model.set_entries(path, listing.entries)
         if moved_on and (self.filter_edit.isVisible() or self.filter_edit.text()):
