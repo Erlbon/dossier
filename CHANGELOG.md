@@ -2,6 +2,14 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-20#27 -- The tools bar
+
+- **A row of your own programs between the menu bar and the panels**, like the bookmarks bar in a browser. One click starts a program on the marked items (or the item under the cursor); the program's own icon is shown. **Folders** hold more programs, and more folders inside them, as a drop-down. View > Tools Bar shows or hides it.
+- **Add a program:** right-click the bar > Add Program (a list of the ones found on this computer starts you off: 7-Zip, File Locksmith and PowerRename from PowerToys, Notepad, Calculator), or **drop a program file on the bar**. Name, program, arguments and the folder to start in; choose the bar itself or a folder to put it in.
+- **Arguments** can use `{files}` (every marked item, or the one under the cursor, each as its own argument), `{file}` (the first), `{name}` (its name), `{dir}` (this panel's folder) and `{other}` (the other panel's folder). The line is cut into words first and the values put in afterwards, so a file name with spaces or quotes can never become a second argument or a command, and no shell is started. A mistake (an unknown placeholder, `{files}` stuck to other text) is explained in the dialog.
+- **Edit, remove, move left or right** from the right-click menu of a button; **Manage Tools** shows the whole bar as a tree where you drag items into folders and into order. The list is kept in the settings file only.
+- On Windows the system starts the program, so a shortcut, a script or a program that asks for administrator rights works as it does from Explorer.
+
 ## 2026-10-20#26 -- Batch Rename, Terminal Here and Pin in the right-click menu
 
 - **Batch Rename** submenu on every item (By Pattern, Search and Replace in Names, Change Case, Number the Files), in place of PowerRename in the Windows menu. It works on the item you right-clicked, or on all the marked items when you click a marked one; before, batch rename only used marks.

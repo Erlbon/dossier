@@ -39,6 +39,7 @@ from .columns import ColumnsMixin
 from .archive_commands import ArchiveCommandsMixin
 from .look_settings import LookMixin
 from .context_menu import ContextMenuMixin
+from .tools_bar import ToolsBarMixin
 from .drop_handler import DragDropMixin
 from .zip_edit import ZipEditMixin, zip_parts
 from .copy_settings import CopySettingsMixin
@@ -65,7 +66,7 @@ SUMMARY_ITEMS = 12    # the confirmation lists this many items, then says how ma
 SIZE_LIMIT = 1000    # the status line sizes at most this many marked items
 
 
-class MainWindow(ContextMenuMixin, DragDropMixin, LookMixin, ZipEditMixin, ArchiveCommandsMixin, CopySettingsMixin, ColumnsMixin, PropertiesMixin, MountMixin, ChecksumMixin, MarksAndNotesMixin, SearchCommandMixin, BatchRenameMixin, OperationQueueMixin, StallLogMixin, GoingPlacesMixin, FolderSizesMixin, UnpackMixin, QMainWindow):
+class MainWindow(ToolsBarMixin, ContextMenuMixin, DragDropMixin, LookMixin, ZipEditMixin, ArchiveCommandsMixin, CopySettingsMixin, ColumnsMixin, PropertiesMixin, MountMixin, ChecksumMixin, MarksAndNotesMixin, SearchCommandMixin, BatchRenameMixin, OperationQueueMixin, StallLogMixin, GoingPlacesMixin, FolderSizesMixin, UnpackMixin, QMainWindow):
     def __init__(self, fs: Optional[FileSystem] = None, *, settings_path: Optional[str] = None, start=(None, None),
                  dialogs=None, trasher=None, terminal_launcher=None, which=None) -> None:
         super().__init__()
@@ -133,6 +134,9 @@ class MainWindow(ContextMenuMixin, DragDropMixin, LookMixin, ZipEditMixin, Archi
         box = QVBoxLayout(central)
         box.setContentsMargins(0, 0, 0, 0)
         box.setSpacing(0)
+        self.tools_bar = self.build_tools_bar()                  # between the menu bar and the panels' tabs
+        self.tools_bar.setVisible(str(self.settings.value("view/tools_bar", "true")).lower() == "true")
+        box.addWidget(self.tools_bar)
         box.addWidget(self.split, 1)
         box.addWidget(self._build_command_row())
         box.addWidget(self.fkeys)
@@ -252,6 +256,11 @@ class MainWindow(ContextMenuMixin, DragDropMixin, LookMixin, ZipEditMixin, Archi
         view_menu.addAction(self._action("Folder Sizes", "Alt+Shift+Return", lambda: self.calculate_folder_sizes()))
         view_menu.addAction(self._action("Edit the Path", "Ctrl+L", lambda: self.active.address_bar.start_edit()))
         view_menu.addAction(self._action("Refresh", "Ctrl+R", self.refresh))
+        self.act_tools_bar = QAction("Tools Bar", self)
+        self.act_tools_bar.setCheckable(True)
+        self.act_tools_bar.setChecked(self.tools_bar.isVisibleTo(self))
+        self.act_tools_bar.toggled.connect(self.set_tools_bar_visible)
+        view_menu.addAction(self.act_tools_bar)
         tabs_menu = view_menu.addMenu("Tabs")
         for text, keys, slot in (("New Tab", "Ctrl+T", lambda: self.active.new_tab()),
                                  ("Close Tab", "Ctrl+W", lambda: self.active.close_tab(self.active.tabs.currentIndex())),
