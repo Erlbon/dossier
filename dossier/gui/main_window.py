@@ -44,6 +44,7 @@ from .view_modes import ViewModesMixin
 from .drop_handler import DragDropMixin
 from .zip_edit import ZipEditMixin, zip_parts
 from .copy_settings import CopySettingsMixin
+from .queue_resume import QueueResumeMixin
 from .dialogs import Dialogs
 from .marks_and_notes import MarksAndNotesMixin
 from .search_command import SearchCommandMixin
@@ -67,7 +68,7 @@ SUMMARY_ITEMS = 12    # the confirmation lists this many items, then says how ma
 SIZE_LIMIT = 1000    # the status line sizes at most this many marked items
 
 
-class MainWindow(ViewModesMixin, ToolsBarMixin, ContextMenuMixin, DragDropMixin, LookMixin, ZipEditMixin, ArchiveCommandsMixin, CopySettingsMixin, ColumnsMixin, PropertiesMixin, MountMixin, ChecksumMixin, MarksAndNotesMixin, SearchCommandMixin, BatchRenameMixin, OperationQueueMixin, StallLogMixin, GoingPlacesMixin, FolderSizesMixin, UnpackMixin, QMainWindow):
+class MainWindow(ViewModesMixin, ToolsBarMixin, ContextMenuMixin, DragDropMixin, LookMixin, ZipEditMixin, ArchiveCommandsMixin, CopySettingsMixin, QueueResumeMixin, ColumnsMixin, PropertiesMixin, MountMixin, ChecksumMixin, MarksAndNotesMixin, SearchCommandMixin, BatchRenameMixin, OperationQueueMixin, StallLogMixin, GoingPlacesMixin, FolderSizesMixin, UnpackMixin, QMainWindow):
     def __init__(self, fs: Optional[FileSystem] = None, *, settings_path: Optional[str] = None, start=(None, None),
                  dialogs=None, trasher=None, terminal_launcher=None, which=None) -> None:
         super().__init__()
@@ -100,6 +101,7 @@ class MainWindow(ViewModesMixin, ToolsBarMixin, ContextMenuMixin, DragDropMixin,
         self.windows_terminal = self._which("wt.exe") if IS_WINDOWS else None
         self._plans: list = []                     # plans being worked out in the background
         self.paused = False
+        self._closing = False                      # the program is being closed: unfinished jobs stay in the journal
         self._jobs: list = []                      # running first, then the ones waiting
         self._size_jobs: list = []                 # folder size walks in the background
         self._size_thread = None                   # the thread that looks up sizes for the status line
@@ -427,6 +429,7 @@ class MainWindow(ViewModesMixin, ToolsBarMixin, ContextMenuMixin, DragDropMixin,
     def showEvent(self, event) -> None:
         super().showEvent(event)
         self._tint_window_border()
+        self.schedule_resume_offer()
 
     def _on_theme_changed(self) -> None:
         self._tint_window_border()
@@ -1032,7 +1035,7 @@ class MainWindow(ViewModesMixin, ToolsBarMixin, ContextMenuMixin, DragDropMixin,
         if verify is None:
             return
         self.act_verify.setChecked(verify)           # the choice is remembered for the next time (and shown in Settings)
-        self._run(plan, unmark=sources)
+        self._run(plan, unmark=sources, remember=self.intent_for(plan, sources, dest))
 
     def copy(self) -> None:
         self._transfer(move=False)
@@ -1077,7 +1080,7 @@ class MainWindow(ViewModesMixin, ToolsBarMixin, ContextMenuMixin, DragDropMixin,
             plan = self._settle(plan)
             if plan is None:
                 return
-            self._run(plan, unmark=sources)
+            self._run(plan, unmark=sources, remember=self.intent_for(plan, sources, dest))
             if cut:
                 file_clipboard.clear_if_ours(sources)
 
@@ -1165,7 +1168,7 @@ class MainWindow(ViewModesMixin, ToolsBarMixin, ContextMenuMixin, DragDropMixin,
         else:
             ok = self.dialogs.confirm("Delete", f"Move {len(plan.ops)} item(s) to the {BIN}?\n\n{names}{more}", "Delete")
         if ok:
-            self._run(plan)
+            self._run(plan, remember=self.intent_for(plan, sources))
 
     def undo(self) -> None:
         if self.busy:
@@ -1232,6 +1235,7 @@ class MainWindow(ViewModesMixin, ToolsBarMixin, ContextMenuMixin, DragDropMixin,
             if not ed.close():                       # the user cancelled a save question: stay open
                 event.ignore()
                 return
+        self._closing = True
         for job in list(self._jobs) + list(self._size_jobs) + list(self._plans):
             job.cancel()
         self.cmd_runner.shutdown(wait=False, cancel_futures=True)   # a listing stuck on a dead share must not hold us

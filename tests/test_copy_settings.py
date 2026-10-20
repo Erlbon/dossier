@@ -27,7 +27,7 @@ def test_the_dialog_shows_the_values_and_hands_back_what_was_changed(world):
     dlg.retry_delay.setValue(1.5)
     dlg.ask.setChecked(True)
     assert dlg.values() == {"limit_mb": 12.5, "verify": True, "ask_on_error": True, "retries": 7, "retry_delay": 1.5,
-                            "workers": 4, "native": False, "flush": "always", "ask_on_drop": False}
+                            "workers": 4, "native": False, "flush": "always", "ask_on_drop": False, "remember_queue": False}
 
 
 def test_saving_changes_the_next_run_and_the_state_of_the_confirmation_checkbox(world, monkeypatch):

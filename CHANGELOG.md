@@ -2,6 +2,13 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-20#33 -- Continue unfinished copies, moves and deletes after a restart
+
+- **Settings > Copy and Move > After a restart:** switch on *Remember copies, moves and deletes that were not finished*. It is **off by default**: the list names the folders and files you worked on, so nothing is written unless you ask for it.
+- While it is on, every copy, move (also by drag, Ctrl+X/Ctrl+V and the batch of marked items) and delete is written to `queue.json` next to the settings file when it is queued, and taken off the moment it ends: done, cancelled or failed. If the program is closed or killed (or the computer loses power) while it runs or waits, the entry stays.
+- **At the next start-up** a box lists what was not finished and offers *Continue*, *Discard the list* or *Not now* (the list stays for next time). Continue makes the plan again from what is still on the disk: a move whose source is gone drops out, **a file that was copied completely is recognised (same size and time) and skipped**, a half-written file never carried its final name, and a name that is really in conflict is asked about as usual. Nothing is done twice.
+- **Forget the remembered list now** in the same dialog, and switching the setting off, empty the file.
+
 ## 2026-10-20#32 -- The test suite runs in 2 minutes instead of 48
 
 - **Tests only, nothing changes in the program.** The tests never deleted the windows they opened, so hundreds of closed windows and thousands of menus kept receiving events and every later test got slower (a window that opened in 1 second took 15 at the end of a run). A shared test fixture now deletes them after each test: the full suite (1036 tests) runs in about 2 minutes, and the check before each push no longer takes most of an hour.

@@ -108,6 +108,19 @@ class Dialogs:
         box.exec()
         return check.isChecked() if box.clickedButton() is ok else None
 
+    def ask_resume(self, lines: list) -> str:
+        """Unfinished operations from the last run: ``continue`` them, ``discard`` the list, or ``later`` (leave it)."""
+        shown = lines[:8] + ([f"and {len(lines) - 8} more"] if len(lines) > 8 else [])
+        box = QMessageBox(QMessageBox.Icon.Question, "Unfinished operations",
+                          "These were not finished when the program was closed:" + chr(10) * 2 + chr(10).join(shown) + chr(10) * 2 +
+                          "Continue them? What was already copied is not copied again.", parent=self.parent)
+        go = box.addButton("Continue", QMessageBox.ButtonRole.AcceptRole)
+        drop = box.addButton("Discard the list", QMessageBox.ButtonRole.DestructiveRole)
+        box.addButton("Not now", QMessageBox.ButtonRole.RejectRole)
+        box.setDefaultButton(go)
+        box.exec()
+        return "continue" if box.clickedButton() is go else "discard" if box.clickedButton() is drop else "later"
+
     def ask_save(self, name: str) -> str:
         """Unsaved changes on closing: ``save``, ``discard`` or ``cancel``."""
         box = QMessageBox(QMessageBox.Icon.Question, "Unsaved changes", f"Save the changes to {name}?", parent=self.parent)

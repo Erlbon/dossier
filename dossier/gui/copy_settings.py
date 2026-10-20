@@ -6,10 +6,10 @@ kept in the settings file under ``copy/``; ``ExecOptions`` for a run is built fr
 from __future__ import annotations
 
 from PyQt6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, QDoubleSpinBox, QFormLayout, QGroupBox, QLabel,
-                             QSpinBox, QVBoxLayout)
+                             QPushButton, QSpinBox, QVBoxLayout)
 
 DEFAULTS = {"limit_mb": 0.0, "verify": False, "ask_on_error": False, "retries": 3, "retry_delay": 0.25, "workers": 0,
-            "native": True, "flush": "auto", "ask_on_drop": False}
+            "native": True, "flush": "auto", "ask_on_drop": False, "remember_queue": False}
 FLUSH_CHOICES = (("Only for removable and network drives", "auto"), ("Always", "always"), ("Never", "never"))
 
 
@@ -32,7 +32,8 @@ def read_settings(settings) -> dict:
             "verify": _flag(g("verify"), False), "ask_on_error": _flag(g("ask_on_error"), False),
             "retries": _number(g("retries"), 3, 0, 20, int), "retry_delay": _number(g("retry_delay"), 0.25, 0.0, 30.0),
             "workers": _number(g("workers"), 0, 0, 32, int), "native": _flag(g("native"), True),
-            "flush": flush if flush in ("auto", "always", "never") else "auto", "ask_on_drop": _flag(g("ask_on_drop"), False)}
+            "flush": flush if flush in ("auto", "always", "never") else "auto", "ask_on_drop": _flag(g("ask_on_drop"), False),
+            "remember_queue": _flag(g("remember_queue"), False)}
 
 
 def write_settings(settings, values: dict) -> None:
@@ -102,6 +103,20 @@ class CopySettingsDialog(QDialog):
         form.addRow("", self.ask_drop)
         layout.addWidget(drop)
 
+        resume = QGroupBox("After a restart")
+        form = QFormLayout(resume)
+        self.remember = QCheckBox("Remember copies, moves and deletes that were not finished, and offer to continue them at start-up")
+        self.remember.setChecked(values["remember_queue"])
+        self.remember.setToolTip("Off by default: the list names the folders and files you worked on. It is kept in the settings "
+                                 "folder, and an entry goes as soon as its operation ends.")
+        self.forget = QPushButton("Forget the remembered list now")
+        self.forget.setAutoDefault(False)
+        self.forget.clicked.connect(self._forget)
+        form.addRow("", self.remember)
+        form.addRow("", self.forget)
+        layout.addWidget(resume)
+        self.forgotten = False
+
         note = QLabel("A name that is already taken is asked about in its own dialog, one choice per file.")
         note.setWordWrap(True)
         layout.addWidget(note)
@@ -111,11 +126,16 @@ class CopySettingsDialog(QDialog):
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
 
+    def _forget(self) -> None:
+        self.forgotten = True
+        self.forget.setEnabled(False)
+        self.forget.setText("The list will be forgotten when you press Save")
+
     def values(self) -> dict:
         return {"limit_mb": float(self.limit.value()), "verify": self.verify.isChecked(), "ask_on_error": self.ask.isChecked(),
                 "retries": int(self.retries.value()), "retry_delay": float(self.retry_delay.value()),
                 "workers": int(self.workers.value()), "native": self.native.isChecked(), "flush": self.flush.currentData(),
-                "ask_on_drop": self.ask_drop.isChecked()}
+                "ask_on_drop": self.ask_drop.isChecked(), "remember_queue": self.remember.isChecked()}
 
 
 class CopySettingsMixin:
@@ -128,7 +148,10 @@ class CopySettingsMixin:
         dlg = CopySettingsDialog(self, self.copy_settings())
         if not self._run_copy_settings(dlg):
             return
-        self.save_copy_settings(dlg.values())
+        values = dlg.values()
+        self.save_copy_settings(values)
+        if getattr(dlg, "forgotten", False) or not values["remember_queue"]:
+            self.forget_queue_journal()                        # switched off, or asked for: nothing stays on disk
 
     def _run_copy_settings(self, dlg) -> bool:                # a seam for tests
         return dlg.exec() == QDialog.DialogCode.Accepted

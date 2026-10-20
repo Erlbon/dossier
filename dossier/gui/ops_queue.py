@@ -35,9 +35,13 @@ class OperationQueueMixin:
         run_in_background(self, self.cmd_runner, title, work, on_result=then, tracked=self._plans,
                           detail=lambda: f"{count['n']:,} items found so far", indeterminate=True)
 
-    def _run(self, plan: Plan, *, unmark: Optional[list] = None, select: str = "") -> None:
+    def _run(self, plan: Plan, *, unmark: Optional[list] = None, select: str = "", remember=None) -> None:
         """Queue a plan. Plans run one after the other (one disk is never fought over); the progress box of a
-        plan appears when it starts, and a queued plan waits until the ones before it are done."""
+        plan appears when it starts, and a queued plan waits until the ones before it are done. ``remember`` (an
+        ``Entry``) is kept in the journal while the operation is unfinished, when the owner switched that on."""
+        journal = self.queue_journal() if remember is not None else None
+        if journal is not None:
+            journal.add(remember)
         holder: dict = {}
         shown: dict = {}
 
@@ -56,6 +60,8 @@ class OperationQueueMixin:
             shown["box"].update(done, total)
 
         def finished(job: Job) -> None:
+            if journal is not None and not self._closing:      # closing the program cancels the jobs: that is not finishing
+                journal.remove(remember.id)
             if "box" in shown:
                 shown["box"].close()
             if job in self._jobs:

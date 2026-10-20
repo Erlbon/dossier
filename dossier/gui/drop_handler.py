@@ -42,6 +42,6 @@ class DragDropMixin:
                 return
             plan = self._settle(plan)                          # conflicts are asked about; the rest just runs
             if plan is not None:
-                self._run(plan, unmark=paths)
+                self._run(plan, unmark=paths, remember=self.intent_for(plan, paths, dest))
 
         self._plan_in_background("Preparing the drop", build, then)

@@ -36,6 +36,8 @@ class FakeDialogs:
         self.save_answer = "discard"
         self.disk_answer = "overwrite"
         self.save_path = None
+        self.resume_answer = "later"
+        self.resume_asked = []
 
     def info(self, title, text):
         self.infos.append((title, text))
@@ -50,6 +52,10 @@ class FakeDialogs:
         if not self.confirm_answer:
             return None
         return self.verify_answer if self.verify_answer is not None else verify
+
+    def ask_resume(self, lines):
+        self.resume_asked.append(list(lines))
+        return self.resume_answer
 
     def ask_save(self, name):
         return self.save_answer
