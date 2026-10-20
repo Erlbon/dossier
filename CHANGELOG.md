@@ -2,6 +2,11 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-20#21 -- The Home page says why it ignores the column choice
+
+- Adding or removing columns (Settings > Columns, or a right-click on a column header) seemed to do nothing in a panel that was showing the Home page, because that page always has its own three columns (Name, Type, Details). The choice was kept all the time and applied to the folders you open, but nothing said so. Now the status line explains it whenever you change columns while the active panel shows the Home page. In a panel with a folder open the columns change at once.
+- New columns are added to the right of the ones already there. In a narrow panel they can sit past the right edge: scroll right, or make the panel wider with the divider.
+
 ## 2026-10-20#20 -- A zip that is open elsewhere for a moment is waited for
 
 - Changing a zip (delete, rename, copy in) swaps the new file in for the old one. If another program has the old one open at that moment (the panel's own listing, a virus scanner, a preview), Windows refuses the swap. Dossier now waits for up to a few seconds and tries again; only if the file stays in use does it stop, say "the archive is in use by another program" and leave everything as it was. Found by a full test run in which three tests failed this way.

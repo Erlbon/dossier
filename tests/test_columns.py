@@ -126,3 +126,19 @@ def test_the_menu_entries_exist_and_defaults_come_back(world):
     win._column_toggled("created", True)
     win.reset_columns()
     assert visible(win.left) == ["name", "type", "size", "modified"]
+
+
+def test_on_the_home_page_the_columns_choice_is_kept_and_the_page_says_why_nothing_changes(world):
+    win, d, left, *_ = world
+    win.left.set_folder("home://")
+    pump(win, lambda: win.left.is_home)
+    win._set_active(win.left)
+    win.show_column_menu(win.left, win.left.table.rect().center())
+    assert "Home page has its own three columns" in win.status.text()
+    win._column_toggled("created", True)
+    h = win.left.table.horizontalHeader()
+    assert [columns.KEYS[h.logicalIndex(v)] for v in range(h.count()) if not h.isSectionHidden(h.logicalIndex(v))] == \
+        ["name", "size", "modified"]                                   # the page still shows its three
+    win.left.set_folder(str(left))
+    pump(win, lambda: not win.left.is_home)
+    assert "created" in visible(win.left)                               # and the folder shows what was chosen

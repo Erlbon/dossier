@@ -53,8 +53,12 @@ class ColumnsMixin:
         self._store_columns(hidden, order)
         self.apply_columns_everywhere()                        # the other panel follows
 
+    HOME_NOTE = ("The Home page has its own three columns (Name, Type, Details). Your column choice applies to the folders you open; "
+                 "it is kept.")
+
     def show_column_menu(self, panel, pos) -> None:
         if panel.is_home:
+            self._say(self.HOME_NOTE)
             return
         hidden, order = self.column_choice()
         show_column_header_context_menu(
@@ -68,6 +72,8 @@ class ColumnsMixin:
         self._run_column_dialog(dlg)
         self._store_columns(sanitize_hidden_fields(dlg.hidden_fields(), PROTECTED), dlg.column_order())
         self.apply_columns_everywhere()
+        if self.active.is_home:
+            self._say(self.HOME_NOTE)
 
     def _run_column_dialog(self, dlg) -> None:                 # a seam for tests
         dlg.exec()
