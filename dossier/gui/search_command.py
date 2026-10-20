@@ -24,6 +24,23 @@ class SearchCommandMixin:
             return False
         return True
 
+    def search_files(self, panel=None) -> None:
+        """Alt+F7: ask what to look for and where, then search on a thread; the result opens in a new tab."""
+        panel = panel or self.active
+        if not self._search_root_ok(panel):
+            return
+        from .search_dialog import SearchDialog
+        root = panel.real_folder() if panel.path.startswith(("found:", "flat:")) else panel.path
+        dlg = SearchDialog(self, root, getattr(self, "_last_search", None))
+        if not self._ask_search(dlg):
+            return
+        criteria = dlg.criteria()
+        self._last_search = criteria              # the next dialog starts from it (this session only)
+        self.start_search(criteria, panel)
+
+    def _ask_search(self, dlg) -> bool:           # a seam for tests
+        return dlg.exec() == dlg.DialogCode.Accepted
+
     def show_all_files_below(self, panel=None) -> None:
         """Ctrl+Shift+B: every file below the folder, however deep, as one list in a new tab."""
         panel = panel or self.active

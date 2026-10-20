@@ -2,6 +2,12 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-20#08 -- The Search dialog
+
+- **Commands > Search... (Alt+F7).** Where to look (the folder you are in; from a search result or a flat list it is the real folder behind it), the name (wildcards, `;` for alternatives, a plain word matches anywhere in the name, `!` in front leaves matches out), match case, files / folders / both, include subfolders, size at least / at most (KB, MB, GB or bytes), changed on or after / on or before, and text inside the files (plain or regular expression, with match case).
+- The search runs on a background thread with a box showing how many were looked at and found, and a Cancel. The result opens in a **new tab**; its rows work like any folder (copy, move, delete, open). The next Search dialog starts from your last answers (this session only; nothing is stored).
+- A bad entry (a size that is not a number, the smallest larger than the largest, a broken regular expression) is explained in the dialog, which stays open.
+
 ## 2026-10-20#07 -- Mount a network share, and the Client for NFS check
 
 - **Mount a Network Share** (Home page entry, and Go menu): pick SMB or NFS, type the address (`\\server\share`, or `server:/export` for NFS), pick a drive letter or the next free one. Windows mounts it and the share appears under Network on the Home page with a light. A password is never typed into Dossier or put on a command line: a share that needs a login works when Windows already has it (Credential Manager); otherwise the mount fails and says why.

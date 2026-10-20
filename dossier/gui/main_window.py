@@ -264,6 +264,7 @@ class MainWindow(MountMixin, ChecksumMixin, MarksAndNotesMixin, SearchCommandMix
         for a in (self._action("Pause or Resume Operations", "Ctrl+Shift+P", self.toggle_pause),
                   self._action("Cancel Waiting Operations", None, self.cancel_waiting)):
             commands.addAction(a)
+        commands.addAction(self._action("Search...", "Alt+F7", self.search_files))
         commands.addAction(self._action("Edit Folder Note", "Ctrl+Shift+E", self.edit_folder_note))
         commands.addAction(self._action("Checksums of Marked Files", None, self.show_checksums))
         commands.addAction(self._action("Verify Checksum...", None, self.verify_checksum))
