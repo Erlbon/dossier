@@ -17,17 +17,17 @@ from PyQt6.QtWidgets import (QAbstractItemView, QComboBox, QDialog, QDialogButto
 
 from ..core import tools as T
 from ..core.drives import is_network_path
+from . import theme
 from .background import run_in_background
 
 PROGRAM_EXTENSIONS = (".exe", ".com", ".bat", ".cmd", ".lnk", ".ps1", ".msi", ".appref-ms", ".jar", ".py", ".sh")
-_icons = QFileIconProvider()
 
 
 def program_icon(command: str) -> QIcon:
     """The program's own icon; nothing for a program on a network drive (asking would wait for the share)."""
     try:
         if command and not is_network_path(command) and os.path.isabs(command):
-            return _icons.icon(QFileInfo(command))
+            return QFileIconProvider().icon(QFileInfo(command))          # made when asked: not before the application exists
     except Exception:   # noqa: BLE001 -- an icon is a nicety
         pass
     return QIcon()
@@ -276,6 +276,18 @@ class ToolsBar(QWidget):
         self._row.setSpacing(4)
         self.items: list = []
         self.buttons: list = []
+        self.setMinimumHeight(30)
+        self.restyle()
+
+    def restyle(self) -> None:
+        """A bar with its own background and a line under it, so it is seen even when it is empty."""
+        t = theme.current()
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.setStyleSheet(f"#toolsbar{{background:{t['card']};border-bottom:1px solid {t['line']};}}"
+                           f"#toolsbar QToolButton{{color:{t['fg']};padding:2px 8px;border:none;border-radius:4px;}}"
+                           f"#toolsbar QToolButton:hover{{background:{t['line']};}}"
+                           f"#toolsbar QToolButton::menu-indicator{{image:none;}}"
+                           f"#toolsbar QLabel{{color:{t['dim']};}}")
 
     def set_items(self, items: list) -> None:
         self.items = items
@@ -288,11 +300,17 @@ class ToolsBar(QWidget):
         for i, it in enumerate(items):
             self._add_widget(self._widget_for(it, (i,)))
         if not items:
-            hint = QToolButton()
-            hint.setText("Right-click here to add the programs you use")
-            hint.setAutoRaise(True)
-            hint.setEnabled(False)
+            hint = QLabel("Your programs go here: press + or right-click this bar to add one")
+            hint.setObjectName("toolshint")
             self._add_widget(hint)
+        self.add_button = QToolButton()                         # always there, like the + of a browser's bookmarks bar
+        self.add_button.setObjectName("toolsadd")
+        self.add_button.setText("+")
+        self.add_button.setAutoRaise(True)
+        self.add_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.add_button.setToolTip("Add a program or a folder of programs to this bar")
+        self.add_button.clicked.connect(lambda: self.context_requested.emit(self.add_button.mapToGlobal(self.add_button.rect().bottomLeft()), ()))
+        self._add_widget(self.add_button)
         self._row.addStretch(1)
 
     def _add_widget(self, w: QWidget) -> None:

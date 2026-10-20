@@ -118,7 +118,7 @@ def test_the_bar_sits_between_the_menu_bar_and_the_panels(world):
 
 def test_an_empty_bar_says_how_to_fill_it_and_a_full_one_shows_buttons_and_folder_menus(world):
     win, *_ = world
-    assert "Right-click" in win.tools_bar.buttons[0].text()
+    assert "Your programs go here" in win.tools_bar.buttons[0].text() and win.tools_bar.add_button.text() == "+"
     win.set_tools(sample())
     names = [b.text() for b in win.tools_bar.buttons if hasattr(b, "text")]
     assert names[0] == "7-Zip" and "Windows" in names
@@ -286,3 +286,15 @@ def test_the_bar_can_be_hidden_and_shown_again_and_it_is_remembered(world):
     assert not win.tools_bar.isVisibleTo(win) and str(win.settings.value("view/tools_bar")) == "false"
     win.act_tools_bar.setChecked(True)
     assert win.tools_bar.isVisibleTo(win)
+
+
+def test_the_plus_button_opens_the_same_menu_as_a_right_click_and_the_bar_has_its_own_background(world, monkeypatch):
+    win, *_ = world
+    shown = []
+    monkeypatch.setattr(type(win), "_popup_menu", lambda self, menu, pos: shown.append([a.text() for a in menu.actions() if not a.isSeparator()]))
+    win.tools_bar.add_button.click()
+    assert shown and shown[0][:2] == ["Add Program...", "Add Folder..."]
+    sheet = win.tools_bar.styleSheet()
+    assert "#toolsbar" in sheet and "border-bottom" in sheet and win.tools_bar.minimumHeight() >= 30
+    win.set_tools([T.Tool("A", "a.exe")])
+    assert win.tools_bar.add_button.text() == "+"                          # still there with programs on the bar

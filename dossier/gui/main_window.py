@@ -433,6 +433,7 @@ class MainWindow(ViewModesMixin, ToolsBarMixin, ContextMenuMixin, DragDropMixin,
         icon_set.clear_cache()
         self._apply_fkey_icons()
         self._style_terminal_button()
+        self.tools_bar.restyle()
         for p in (self.left, self.right):
             p.restyle()
 

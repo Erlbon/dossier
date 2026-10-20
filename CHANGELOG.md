@@ -2,6 +2,10 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-20#29 -- The tools bar can be seen
+
+- An **empty tools bar was almost invisible** (a greyed-out line of text on the menu bar's own colour), so it looked as if there was no bar. It now has its own background and a line under it, a plain hint ("Your programs go here: press + or right-click this bar to add one") and a **+ button** that is always at the end of the bar, like the + of a browser's bookmarks bar; it opens the same menu as a right-click (Add Program, Add Folder, Add Separator, Manage Tools, Hide the Tools Bar). View > Tools Bar shows or hides the bar.
+
 ## 2026-10-20#28 -- Thumbnails
 
 - **View > Thumbnails (Ctrl+2)** shows the list as a grid of pictures with the names under them; **View > Details (Ctrl+1)** goes back. The choice belongs to each panel and is remembered, so the left panel can show photos while the right shows details. The Home page always shows details.
