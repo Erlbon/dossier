@@ -8,7 +8,6 @@ from PyQt6.QtGui import QFontDatabase
 from PyQt6.QtWidgets import (QDialog, QFileDialog, QInputDialog, QCheckBox, QMessageBox, QPlainTextEdit, QProgressDialog, QPushButton,
                              QVBoxLayout, QWidget)
 
-from ..core.ops import Resolution
 from ..core.progress import RateMeter, human_duration
 from ..core.sizefmt import human_size
 
@@ -152,15 +151,11 @@ class Dialogs:
         text, ok = QInputDialog.getText(self.parent, title, label, text=default)
         return text if ok else None
 
-    def ask_conflict(self, text: str) -> Optional[Resolution]:
-        """One answer for every conflict of the plan; None means cancel."""
-        box = QMessageBox(QMessageBox.Icon.Warning, "Items already exist", text, parent=self.parent)
-        choices = {}
-        for res in (Resolution.OVERWRITE, Resolution.OVERWRITE_IF_NEWER, Resolution.SKIP, Resolution.KEEP_BOTH):
-            choices[box.addButton(res.value.capitalize(), QMessageBox.ButtonRole.AcceptRole)] = res
-        box.addButton(QMessageBox.StandardButton.Cancel)
-        box.exec()
-        return choices.get(box.clickedButton())
+    def ask_conflicts(self, rows: list, where: str = "") -> Optional[dict]:
+        """One answer per conflict: {step number: Resolution}, or None to cancel."""
+        from .conflict_dialog import ConflictDialog
+        dlg = ConflictDialog(self.parent, rows, where)
+        return dlg.answers() if dlg.exec() == QDialog.DialogCode.Accepted else None
 
     def ask_error(self, text: str) -> str:
         """A file could not be copied or moved: ``retry``, ``skip``, ``skip_all`` or ``abort``."""

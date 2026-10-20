@@ -66,8 +66,11 @@ class FakeDialogs:
     def ask_text(self, title, label, default=""):
         return self.texts.pop(0) if self.texts else None
 
-    def ask_conflict(self, text):
-        return self.conflict_answer
+    def ask_conflicts(self, rows, where=""):
+        self.conflict_rows_seen = list(rows)
+        if self.conflict_answer is None:
+            return None
+        return {r.index: self.conflict_answer for r in rows}
 
     def make_progress(self, title, on_cancel):
         shown = self.progress_boxes

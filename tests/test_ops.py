@@ -389,3 +389,41 @@ def test_undo_log_is_bounded(work):
     assert log.undo_last(fs).reverted == 1
     log.clear()
     assert UndoLog().undo_last(fs) is None
+
+
+def test_each_conflict_can_get_its_own_answer(work):
+    for n in "abcd":
+        write(work / "src" / n, "NEW-" + n)
+        write(work / "dst" / n, "OLD-" + n)
+    plan = plan_copy(fs, [str(work / "src" / n) for n in "abcd"], str(work / "dst"))
+    assert plan.conflicts == [0, 1, 2, 3]
+    names = {os.path.basename(op.dst): i for i, op in enumerate(plan.ops)}
+    plan = plan.resolve_each({names["a"]: Resolution.OVERWRITE, names["b"]: Resolution.SKIP,
+                              names["c"]: Resolution.KEEP_BOTH, names["d"]: Resolution.OVERWRITE_IF_NEWER}, fs)
+    assert not plan.conflicts
+    run(plan, Bin(work / "bin"))
+    assert (work / "dst" / "a").read_text() == "NEW-a"            # overwritten
+    assert (work / "dst" / "b").read_text() == "OLD-b"            # skipped
+    assert (work / "dst" / "c").read_text() == "OLD-c" and (work / "dst" / "c (2)").read_text() == "NEW-c"
+
+
+def test_an_unnamed_conflict_stays_a_conflict(work):
+    write(work / "src" / "a", "N")
+    write(work / "dst" / "a", "O")
+    write(work / "src" / "b", "N")
+    write(work / "dst" / "b", "O")
+    plan = plan_copy(fs, [str(work / "src" / "a"), str(work / "src" / "b")], str(work / "dst"))
+    plan = plan.resolve_each({0: Resolution.SKIP}, fs)
+    assert len(plan.conflicts) == 1 and not plan.executable
+
+
+def test_the_plan_knows_what_is_in_the_way_and_which_files_look_identical(work):
+    write(work / "src" / "same", "12345", mtime=1_700_000_000)
+    write(work / "dst" / "same", "12345", mtime=1_700_000_000)
+    write(work / "src" / "diff", "12345", mtime=1_700_000_000)
+    write(work / "dst" / "diff", "123", mtime=1_700_000_000)
+    plan = plan_copy(fs, [str(work / "src" / "same"), str(work / "src" / "diff")], str(work / "dst"))
+    by = {os.path.basename(op.dst): op for op in plan.ops}
+    assert by["diff"].dst_size == 3 and by["diff"].size == 5
+    from dossier.core.ops import looks_identical
+    assert looks_identical(by["same"]) and not looks_identical(by["diff"])

@@ -59,6 +59,7 @@ class Op:
     conflict: str = ""          # not empty = unresolved; the text says why
     dst_is_dir: bool = False    # what is in the way
     dst_mtime: float = 0.0
+    dst_size: int = 0           # the size of what is in the way (for the per-file conflict dialog)
     group: int = 0              # the steps of a folder moved to another drive belong together
 
 
@@ -89,6 +90,14 @@ class Plan:
         return sum(max(op.size, 1) if op.kind is Kind.COPY or (op.kind is Kind.MOVE and not op.is_dir) else 1
                    for op in self.ops)
 
+    def resolve_each(self, choices: dict, fs: FileSystem) -> "Plan":
+        """Settle conflicts one by one: ``choices`` maps a step number to the Resolution for that step. Steps not named
+        stay in conflict. The highest step goes first, so dropping one never shifts the numbers still to be used."""
+        plan = self
+        for i in sorted(choices, reverse=True):
+            plan = plan.resolve(choices[i], fs, only=[i])
+        return plan
+
     def resolve(self, resolution: Resolution, fs: FileSystem, only: Optional[Iterable[int]] = None) -> "Plan":
         """Settle conflicts (all of them, or the listed step numbers). Returns a new plan."""
         chosen = None if only is None else set(only)
@@ -113,7 +122,7 @@ class Plan:
                             moved = new_dst + fs.sep + ops[j].dst[len(old_prefix):]
                             still = ops[j].conflict if ops[j].conflict != _SAME_ITEM else ""
                             ops[j] = replace(ops[j], dst=moved, conflict=still)
-                ops[i] = replace(op, dst=new_dst, conflict="", dst_is_dir=False, dst_mtime=0.0)
+                ops[i] = replace(op, dst=new_dst, conflict="", dst_is_dir=False, dst_mtime=0.0, dst_size=0)
             else:
                 same_item = path_key(op.src) == path_key(op.dst)
                 if same_item or op.is_dir or op.dst_is_dir:
@@ -131,6 +140,41 @@ class Plan:
         if gone and note not in warnings:
             warnings = warnings + (note,)
         return replace(self, ops=kept, skipped=tuple(skipped), warnings=warnings)
+
+
+def looks_identical(op: "Op") -> bool:
+    """A file that is in the way and has the same size and (to the second, two for FAT) the same modified time as the
+    one being copied. Not proof of equal content, only a good reason to skip it."""
+    return (not op.is_dir and not op.dst_is_dir and op.dst_mtime > 0 and op.size == op.dst_size
+            and abs(op.src_mtime - op.dst_mtime) <= 2.0)
+
+
+@dataclass(frozen=True)
+class ConflictRow:
+    """One unresolved step of a plan, as the conflict dialog shows it."""
+    index: int                  # the step number in the plan
+    path: str
+    name: str
+    size: int
+    src_mtime: float
+    dst_size: int
+    dst_mtime: float
+    can_overwrite: bool         # False for folders and for the item itself
+    identical: bool
+    newer: bool
+    older: bool
+
+
+def conflict_rows(plan: "Plan", fs: FileSystem) -> list:
+    """The conflicts of a plan as rows for a dialog (a conflict that is only a name clash inside the batch counts too)."""
+    rows = []
+    for i in plan.conflicts:
+        op = plan.ops[i]
+        same_item = path_key(op.src) == path_key(op.dst)
+        can = not (same_item or op.is_dir or op.dst_is_dir)
+        rows.append(ConflictRow(i, op.dst, fs.basename(op.dst), op.size, op.src_mtime, op.dst_size, op.dst_mtime, can,
+                                looks_identical(op), op.src_mtime > op.dst_mtime + 2.0, op.src_mtime < op.dst_mtime - 2.0))
+    return rows
 
 
 _SAME_ITEM = "this is the same item"
@@ -195,6 +239,7 @@ def _placed(fs: FileSystem, src: str, dst: str, taken: set, is_dir: bool) -> dic
     if existing is not None:
         fields["dst_is_dir"] = existing.is_dir
         fields["dst_mtime"] = existing.mtime
+        fields["dst_size"] = existing.size
     taken.add(key)
     return fields
 

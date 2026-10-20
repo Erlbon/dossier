@@ -28,7 +28,7 @@ The drive dropdown and button strip are the same list in a smaller form: **one r
 | S3-compatible, Azure Blob, Backblaze B2, Google Drive, OneDrive, Dropbox | Cloud APIs, OAuth, rate limits | Through an `rclone` bridge, optional, later |
 | SCP | Owner asked for it (2026-10-20). The SCP protocol only copies files (no listing, rename or delete), so it runs over the same SSH connection as SFTP: browse and change with SFTP, and use SCP as the transfer mode for servers where the SFTP subsystem is switched off (paramiko exec of `scp -t`/`scp -f`, or the `scp` module). Shown as its own scheme `scp://` in the connection list | Phase 3, with SFTP |
 | AFP | Dead | Skip |
-| iSCSI | Appears as a local disk | Free |
+| iSCSI | Appears as a local disk once the OS has connected it; not relevant for Dossier (owner, 2026-10-20) | Nothing to do: it is just a local drive |
 | WebDAV mounted by Windows (`\\host@SSL\DavWWWRoot`) | Works, flaky, size limits | Do not rely on it |
 | SSHFS, rclone mount | Appear as a drive or mount | Free |
 | MTP (phones) | Windows shows them as shell folders, not paths | Out of scope |
@@ -140,3 +140,10 @@ H0 and H1 are built and tested.
 - **Identity of a local drive** = volume GUID + volume serial (+ label, size, file system); the physical disk serial is added when Windows gives it without admin rights. A serial identifies a drive; it is not a checksum (integrity is the Checksums command).
 - The identity, not the letter, is the key, so a drive that returns on another letter is recognised as the same drive ("Seen before as E:"). With a changed letter Dossier offers to update pins, favourites and tab history that use the old letter, after asking.
 - The "seen before" list is stored data: opt-in, off by default, with a checkbox and a Delete button. Without it, changes are only noticed within one session.
+
+## 10. Nextcloud (owner, 2026-10-20): future feature, under Remote sources
+
+- Nextcloud (and ownCloud) speak WebDAV at `https://host/remote.php/dav/files/<user>/`, so it rides on the WebDAV backend; it is a saved-connection preset, not a new file system.
+- What the preset adds: the right URL from just a server address and user name; login with an **app password** (never the main password; created in Nextcloud under Settings > Security), kept in the credential store; two-factor accounts work the same way.
+- Later, Nextcloud-only extras: its trash (`/remote.php/dav/trashbin/<user>/trash`) as the recycle bin for deletes there (unlike SMB/NFS, a delete need not be permanent), chunked upload for big files, share links through the OCS API, and file versions.
+- Order: after WebDAV works (phase 3). Needs a test server in pytest like the others (WsgiDAV serves the plain WebDAV part; the Nextcloud-only extras need a recorded-response test).

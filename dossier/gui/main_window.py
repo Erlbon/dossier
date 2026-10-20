@@ -16,7 +16,7 @@ from PyQt6.QtGui import QAction, QActionGroup, QKeySequence
 from PyQt6.QtWidgets import (QApplication, QHBoxLayout, QLabel, QMainWindow, QMenu, QPushButton, QSplitter,
                              QToolButton, QVBoxLayout, QWidget)
 
-from ..core.ops import (Plan, check_name, plan_copy, plan_delete, plan_move, plan_rename)
+from ..core.ops import (Plan, check_name, conflict_rows, plan_copy, plan_delete, plan_move, plan_rename)
 from ..core.home import ADD_NETWORK, HomeFileSystem, HomeProvider, RouterFileSystem, removable_from_home
 from ..core.commandline import Placeholders, expand, run_command
 from ..core import patterns
@@ -942,12 +942,11 @@ class MainWindow(ChecksumMixin, MarksAndNotesMixin, SearchCommandMixin, BatchRen
             self.dialogs.info(plan.title, "Nothing to do.\n" + "\n".join(plan.warnings[:8]))
             return None
         if plan.conflicts:
-            names = [self.fs.basename(plan.ops[i].dst) for i in plan.conflicts[:6]]
-            more = "" if len(plan.conflicts) <= 6 else f"\nand {len(plan.conflicts) - 6} more"
-            choice = self.dialogs.ask_conflict(f"{len(plan.conflicts)} already exist:\n" + "\n".join(names) + more)
+            choice = self.dialogs.ask_conflicts(conflict_rows(plan, self.fs),
+                                                self.fs.dirname(plan.ops[plan.conflicts[0]].dst))
             if choice is None:
                 return None
-            plan = plan.resolve(choice, self.fs)
+            plan = plan.resolve_each(choice, self.fs)
             if plan.conflicts:
                 self.dialogs.info(plan.title, "Some items cannot be overwritten (folders, or the item itself). "
                                               "Choose Skip or Keep Both.")

@@ -56,6 +56,10 @@ Several items selected: General shows totals; Metadata shows only the fields the
 
 ## Phases (order set by the owner, 2026-10-20: mp3, cbz, mp4/mkv first)
 
+**Step 1 is read only (owner, 2026-10-20).** Phases 1-3 below first ship the readers and the Metadata/Details tabs with every
+field greyed out: no write code, no Save button, nothing that can change a file. Editing comes as its own later step, after
+the readers have proven themselves on the real library, with the all-or-nothing writer and its tests.
+
 0. Properties dialog shell: General + Checksums tabs, empty Metadata tab.
 1. Audio tags (mp3 first, then FLAC/M4A/Ogg through the same field model). Source today: mp3redactor/core/tag_reader.py (216 lines)
    and tag_writer.py (438 lines), both tied to its `MP3File` class.

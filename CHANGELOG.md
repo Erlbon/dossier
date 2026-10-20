@@ -2,6 +2,14 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-20#05 -- A choice for every file that already exists
+
+- **The conflict dialog is a table now.** When a copy, move or paste meets files that already exist, every one gets a row: name, what is being copied (size, time, newer or older), what is already there, and its own choice (Overwrite, Skip, Keep both). The row starts as Skip for files that look identical, Overwrite for a newer copy, Keep both otherwise. Buttons set many rows at once: All overwrite, All skip, All keep both, Newer only, Skip identical.
+- The table is never taller than ten rows; more rows scroll, so a thousand conflicts do not make a box taller than the screen.
+- A folder in the way (or the item itself) cannot be overwritten, so those rows do not offer Overwrite.
+- Under the hood: `Plan.resolve_each`, `conflict_rows`, `looks_identical`, and the plan now records the size of what is in the way.
+- Plans for metadata (read only first), Nextcloud, SCP, network drives with indicator lights and the NFS check are in docs/.
+
 ## 2026-10-20#04 -- Batch rename, search, all files below a folder, saved selections, checksums
 
 - **Batch rename** (Commands > Batch Rename): by pattern (Ctrl+M), search and replace in names, change case, number the files. These are the shared dialogs of redactor_common (pinned in requirements.txt), so the Redactor apps and Dossier rename the same way. A rename is one undo; names that would collide get a number.
