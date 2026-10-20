@@ -35,7 +35,7 @@ Made by an independent Fable-model reviewer, read-only, with small experiments a
 7. Compare and synchronise folders (mark differences, then one plan). M compare, L sync. Needs 6's result list.
 8. Checksums: compute and verify into sidecar files, show on the status line. S-M.
 9. Duplicate finder (size, partial hash, full hash, mark all but one). M. Needs 8.
-10. Pack and unpack: write into archives, Alt+F5 and Alt+F9, one 7-Zip call per archive instead of one process per member. M.
+10. Pack and unpack: write into ZIP and zip-based files only (decided with the owner, 2026-10-20): zip, cbz, epub, docx, xlsx, pptx, odt and the like. No writing into 7z or RAR; those stay read only (unpack works). Alt+F5 pack, Alt+F9 unpack, copy, delete and rename inside an open zip, always by writing a new archive beside the old one and swapping at the end. Keep what the formats need: epub's mimetype entry first and stored, zip64 above 4 GB, file times, a password only in memory. M.
 11. Resume the queue after a restart (opt-in). L.
 12. Thumbnails and icons view mode with a background loader and cache. L.
 13. Properties dialog (Alt+Enter): attributes, times, alternate streams. S-M.
