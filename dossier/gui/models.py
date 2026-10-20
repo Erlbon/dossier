@@ -24,13 +24,7 @@ ENTRY_ROLE = Qt.ItemDataRole.UserRole
 SORT_ROLE = Qt.ItemDataRole.UserRole + 1
 
 
-def human_size(n: int) -> str:
-    size = float(n)
-    for unit in ("B", "K", "M", "G", "T"):
-        if size < 1024 or unit == "T":
-            return f"{int(size)} {unit}" if unit == "B" else f"{size:.1f} {unit}"
-        size /= 1024
-    return str(n)
+from ..core.sizefmt import human_size  # noqa: E402,F401  (one formatter; callers import it from here)
 
 
 def marked_color() -> QColor:

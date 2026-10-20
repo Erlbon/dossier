@@ -104,10 +104,14 @@ def test_pause_holds_the_system_copy_until_resumed(tmp_path):
 
     thread = threading.Thread(target=lambda: transfer.copy_file(fs, src, fs, dst, progress=progress, cancel=token))
     thread.start()
-    time.sleep(0.5)
-    held = len(reports)
-    time.sleep(0.5)
-    assert thread.is_alive() and len(reports) == held                # nothing moves while paused
+    held, steady_since, end = -1, time.time(), time.time() + 20
+    while time.time() < end:                                         # wait until nothing has been reported for a while
+        time.sleep(0.05)
+        if len(reports) != held:
+            held, steady_since = len(reports), time.time()
+        elif time.time() - steady_since >= 0.6 and paused_once:
+            break
+    assert thread.is_alive() and len(reports) == held and token.paused   # nothing moves while paused
     token.resume()
     thread.join(30)
     assert not thread.is_alive() and os.path.getsize(dst) == 60_000_000

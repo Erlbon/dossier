@@ -111,6 +111,14 @@ def to_wsl_path(path: str) -> str:
     raise UnsafeArgument(f"WSL cannot reach {path}")
 
 
+def _dir_in_template(template: str, cwd: str) -> str:
+    """The folder as it goes into a custom template: quoted, unless the template already puts quotes round {dir}
+    (a folder with a space or an ampersand would otherwise break the command)."""
+    if '"{dir}"' in template or "'{dir}'" in template:
+        return cwd
+    return '"' + cwd + '"' if IS_WINDOWS else shlex.quote(cwd)
+
+
 # running one command (the command line) ------------------------------------------------------------------
 def run_launch(profile: Profile, command: str, cwd: str, which: Which = shutil.which) -> Launch:
     """How to run ``command`` once, with output captured and no console window."""
@@ -129,7 +137,7 @@ def run_launch(profile: Profile, command: str, cwd: str, which: Which = shutil.w
     if profile.kind == "custom":
         if "{command}" not in profile.template:
             raise UnsafeArgument("the custom profile has no {command} in its template")
-        return Launch(profile.template.replace("{command}", command).replace("{dir}", cwd), cwd)
+        return Launch(profile.template.replace("{command}", command).replace("{dir}", _dir_in_template(profile.template, cwd)), cwd)
     return Launch([exe, "-c", command], cwd)
 
 
@@ -145,13 +153,15 @@ def session_launch(profile: Profile, cwd: str, *, admin: bool = False, windows_t
     if profile.kind == "custom":
         if "{dir}" not in profile.template:
             raise UnsafeArgument("the custom profile has no {dir} in its template")
-        return Launch(profile.template.replace("{dir}", cwd), cwd, admin, "")
+        return Launch(profile.template.replace("{dir}", _dir_in_template(profile.template, cwd)), cwd, admin, "")
     inner = [exe, *profile.session_args]
     if profile.kind == "wsl":
         inner = [exe, "--cd", to_wsl_path(cwd)]
     if IS_WINDOWS:
         if windows_terminal:
-            return Launch([windows_terminal, "-d", cwd, *inner], cwd, admin, windows_terminal)
+            # Windows Terminal reads a semicolon on its command line as the end of a command: a folder with one in
+            # its name has to be written with a backslash in front of it
+            return Launch([windows_terminal, "-d", cwd.replace(";", chr(92) + ";"), *inner], cwd, admin, windows_terminal)
         return Launch(inner, cwd, admin, exe)
     name = emulator or next((e for e in EMULATORS if which(e)), "")
     if not name:

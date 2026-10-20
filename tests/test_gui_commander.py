@@ -157,7 +157,7 @@ def test_tab_switches_the_active_panel(world):
     assert win.active is win.left
 
 
-def test_f5_copies_marked_files_to_the_other_panel_and_undo_removes_them(world):
+def test_f5_copies_marked_files_to_the_other_panel_and_undo_does_not_touch_them(world):
     win, dialogs, left, right, _t = world
     (left / "a.txt").write_text("A")
     (left / "b.txt").write_text("B")
@@ -171,8 +171,9 @@ def test_f5_copies_marked_files_to_the_other_panel_and_undo_removes_them(world):
     assert (right / "a.txt").read_text() == "A" and (left / "a.txt").exists()
     assert len(win.selection) == 0                      # marks are cleared after a copy
     assert names(win.right) == ["..", "a.txt", "b.txt"]  # the other panel refreshed
-    win.undo()
-    assert not (right / "a.txt").exists() and not (right / "b.txt").exists()
+    win.undo()                                          # a copy has no undo: the copies stay
+    assert (right / "a.txt").exists() and (right / "b.txt").exists()
+    assert "Nothing to undo" in win.status.text()
 
 
 def test_f6_moves_the_item_under_the_cursor_when_nothing_is_marked(world):

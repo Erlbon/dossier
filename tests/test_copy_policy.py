@@ -129,7 +129,7 @@ def test_on_error_abort_stops_the_steps_that_have_not_started():
     assert res.aborted
     assert [r.op.src.rsplit("/", 1)[1] for r in res.results] == ["a.txt", "b.txt"]
     assert res.results[1].status == "failed"
-    assert res.action is not None                              # what was done stays undoable
+    assert fs.stat("mem://dst/a.txt").size > 0                 # what was done stays done
 
 
 # C3: speed and time left -------------------------------------------------------------------------------------

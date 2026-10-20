@@ -85,33 +85,24 @@ def test_every_file_arrives_intact_and_no_temporary_name_is_left():
 
 
 # the order of things ------------------------------------------------------------------------------------------------
-def test_results_and_the_undo_journal_follow_the_plan_not_the_finishing_order():
+def test_results_follow_the_plan_not_the_finishing_order():
     fs = build()
     plan, res = copy_all(fs, options=ExecOptions(workers=8))
     assert [r.op.src for r in res.results] == [op.src for op in plan.ops]
-    created = [s.a for s in res.action.steps]
-    assert created == [op.dst for op in plan.ops]
 
 
-def test_folders_are_made_before_the_files_in_them_and_undo_removes_everything():
+def test_folders_are_made_before_the_files_in_them():
     fs = SlowMemory(0.01)
     fs.put("mem://src/tree/a/one.txt", b"1")
     fs.put("mem://src/tree/a/b/two.txt", b"2")
     fs.put("mem://src/tree/c/three.txt", b"3")
     fs.put("mem://src/tree/four.txt", b"4")
     fs.makedirs("mem://dst")
-    log = UndoLog()
     plan = plan_copy(fs, ["mem://src/tree"], "mem://dst")
-    res = execute(plan, fs, undo_log=log, options=ExecOptions(workers=8))
+    res = execute(plan, fs, options=ExecOptions(workers=8))
     assert not res.failed
-    steps = res.action.steps
-    position = {s.a: i for i, s in enumerate(steps)}
-    for i, s in enumerate(steps):
-        parent = fs.dirname(s.a)
-        if s.kind == "created_file" and parent in position:
-            assert position[parent] < i                       # a folder is journaled before the files in it
-    report = log.undo_last(fs)
-    assert not report.problems and fs.list("mem://dst") == []
+    assert sorted(e.name for e in fs.list("mem://dst/tree")) == ["a", "c", "four.txt"]
+    assert sorted(e.name for e in fs.list("mem://dst/tree/a")) == ["b", "one.txt"]
 
 
 def test_big_files_are_copied_one_at_a_time_after_the_small_ones():
@@ -160,23 +151,20 @@ def test_progress_from_several_workers_never_goes_back_and_ends_at_the_total():
     assert seen[-1] == (plan.total_work, plan.total_work)
 
 
-def test_cancel_stops_new_files_leaves_no_half_file_and_keeps_what_was_done_undoable():
+def test_cancel_stops_new_files_and_leaves_no_half_file():
     fs = build(n=40, delay=0.02)
     token = CancelToken()
-    log = UndoLog()
 
     def progress(d, t):
         if d >= 8 * 10:                       # after about eight files
             token.cancel()
 
     plan = plan_copy(fs, [f"mem://src/f{i:03d}.txt" for i in range(40)], "mem://dst")
-    res = execute(plan, fs, progress=progress, cancel=token, undo_log=log, options=ExecOptions(workers=4))
+    res = execute(plan, fs, progress=progress, cancel=token, options=ExecOptions(workers=4))
     assert res.cancelled
     names = [fs.basename(e.path) for e in fs.list("mem://dst")]
     assert 0 < len(names) < 40 and not any(n.endswith(".dossier-part") for n in names)
     assert len(res.results) < 40                                         # the ones never started have no result
-    assert len(log) == 1 and len(log.undo_last(fs).problems) == 0
-    assert fs.list("mem://dst") == []
 
 
 def test_one_locked_file_is_reported_and_the_others_still_arrive():
@@ -188,7 +176,7 @@ def test_one_locked_file_is_reported_and_the_others_still_arrive():
     assert len(fs.list("mem://dst")) == 38
 
 
-def test_a_bug_in_a_worker_is_raised_not_swallowed_and_the_journal_still_gets_what_was_done(monkeypatch):
+def test_a_bug_in_a_worker_is_raised_not_swallowed(monkeypatch):
     fs = build(n=10)
     original = ops_module.copy_file
     calls = {"n": 0}
@@ -200,11 +188,9 @@ def test_a_bug_in_a_worker_is_raised_not_swallowed_and_the_journal_still_gets_wh
         return original(*a, **k)
 
     monkeypatch.setattr(ops_module, "copy_file", flaky)
-    log = UndoLog()
     plan = plan_copy(fs, [f"mem://src/f{i:03d}.txt" for i in range(10)], "mem://dst")
     with pytest.raises(RuntimeError, match="a bug"):
-        execute(plan, fs, undo_log=log, options=ExecOptions(workers=4))
-    assert len(log) == 1                                                  # what finished before is still undoable
+        execute(plan, fs, options=ExecOptions(workers=4))
 
 
 def test_the_bin_is_asked_for_one_item_at_a_time_even_with_workers():

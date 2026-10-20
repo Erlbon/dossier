@@ -10,17 +10,14 @@ from PyQt6.QtWidgets import (QDialog, QFileDialog, QInputDialog, QCheckBox, QMes
 
 from ..core.ops import Resolution
 from ..core.progress import RateMeter, human_duration
+from ..core.sizefmt import human_size
 
 
 BYTES_SHOWN = 1 << 20          # below this a progress total is a count of steps, not bytes
 
 
 def _size(n: float) -> str:
-    for unit in ("B", "KB", "MB", "GB", "TB"):
-        if n < 1024 or unit == "TB":
-            return f"{n:.0f} {unit}" if unit == "B" or n >= 10 else f"{n:.1f} {unit}"
-        n /= 1024
-    return ""
+    return human_size(n, long=True, whole_from=10)
 
 
 class ProgressBox:

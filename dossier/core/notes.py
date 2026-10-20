@@ -66,11 +66,12 @@ def compose_markdown(notes: list) -> str:
     return "\n\n---\n\n".join(parts)
 
 
-def find_notes(fs: FileSystem, folder: str) -> list:
+def find_notes(fs: FileSystem, folder: str, entries: Optional[list] = None) -> list:
     """The notes of ``folder``: the top note first, then the bottom note. Empty if there are none.
-    Names match exactly first; on a case-insensitive match the exact spelling wins (O11)."""
+    Names match exactly first; on a case-insensitive match the exact spelling wins (O11). ``entries`` is the
+    listing of the folder when the caller already has it: the folder is then not listed a second time."""
     try:
-        names = {fs.basename(e.path): e for e in fs.list(folder) if not e.is_dir}
+        names = {fs.basename(e.path): e for e in (fs.list(folder) if entries is None else entries) if not e.is_dir}
     except OSError:
         return []
     by_fold: dict = {}

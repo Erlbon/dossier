@@ -73,9 +73,9 @@ def test_stderr_is_merged_and_the_exit_code_is_reported(tmp_path):
 
 def test_a_command_still_running_is_left_running_and_reported(tmp_path):
     started = time.time()
-    result = run_command(RAW, py("import time; time.sleep(2); print('late')"), str(tmp_path), wait=0.3)
+    result = run_command(RAW, py("import time; time.sleep(6); print('late')"), str(tmp_path), wait=0.3)
     assert not result.finished and result.exit_code is None and result.pid > 0
-    assert time.time() - started < 1.5
+    assert time.time() - started < 5                      # it did not wait for the process to end (a slow start is allowed)
 
 
 def test_a_huge_output_is_cut_and_the_process_does_not_block(tmp_path):

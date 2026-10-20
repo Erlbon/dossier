@@ -236,16 +236,19 @@ NAV_BUDGET = 0.15      # seconds a folder gets to answer before the window stops
 class _Listing:
     """A folder being listed on its own thread, so a slow file system can never freeze the window."""
 
-    def __init__(self, fs: FileSystem, path: str) -> None:
+    def __init__(self, fs: FileSystem, path: str, with_notes: bool = False) -> None:
         self.entries: Optional[list] = None
+        self.notes: list = []                # the folder's notes, read on this thread too: the window never reads a file
         self.error: Optional[BaseException] = None
         self.cancelled = False
         self.done = threading.Event()
-        threading.Thread(target=self._run, args=(fs, path), daemon=True, name="dossier-listing").start()
+        threading.Thread(target=self._run, args=(fs, path, with_notes), daemon=True, name="dossier-listing").start()
 
-    def _run(self, fs: FileSystem, path: str) -> None:
+    def _run(self, fs: FileSystem, path: str, with_notes: bool) -> None:
         try:
             self.entries = fs.list(path)
+            if with_notes:
+                self.notes = find_notes(fs, path, self.entries)
         except BaseException as e:           # reported to the panel, never raised in the thread
             self.error = e
         finally:
@@ -367,6 +370,7 @@ class Panel(QFrame):
     current_changed = pyqtSignal(object)  # the item under the cursor changed
     activated = pyqtSignal(object)        # the user focused this panel
     message = pyqtSignal(str)
+    open_archived = pyqtSignal(str)       # Enter on a file inside an archive: unpack it, then open it
     sizes_requested = pyqtSignal()        # the button for folder sizes was pressed
     home_action = pyqtSignal(str)         # an action entry of the Home page was opened (its path says which)
 
@@ -379,6 +383,7 @@ class Panel(QFrame):
         self._dispatch = dispatch
         self._last: dict = {}          # drive root -> the folder this panel was in on that drive
         self.notes_enabled = True
+        self._note_text = ""                      # the Markdown of the folder's notes, as read with its listing
         self.model = FolderModel(fs, selection, self)
         self.setObjectName("panel")
 
@@ -581,7 +586,7 @@ class Panel(QFrame):
         self._style_close_buttons()
         self.model.refresh_marks()
         if self.model.note_row >= 0:
-            self._load_note(self.path)
+            self._show_note(self._note_text)
 
     def current_entry(self) -> Optional[Entry]:
         row = self.table.currentIndex().row()
@@ -601,7 +606,7 @@ class Panel(QFrame):
         answer arrives. Returns False (with a message) when it cannot be listed, True when shown or still
         pending."""
         self._cancel_navigation()
-        listing = _Listing(self.fs, path)
+        listing = _Listing(self.fs, path, self.notes_enabled and not is_home(path))
         if listing.done.wait(NAV_BUDGET):
             return self._finish_listing(listing, path, select)
         self._pending = (listing, path, select)
@@ -779,7 +784,8 @@ class Panel(QFrame):
         self.address_bar.set_path(path)
         self.drive_bar.set_current_path(path)
         self._update_free(path)
-        self._load_note(path)
+        self._note_text = compose_markdown(listing.notes) if self.notes_enabled and not is_home(path) else ""
+        self._show_note(self._note_text)
         row = self.model.row_of(select) if select else -1
         if row < 0 and self.is_home and select:                # coming up from a drive or a folder: land on it
             row = next((r for r in range(self.model.entry_count())
@@ -985,10 +991,7 @@ class Panel(QFrame):
             self.message.emit(archives.missing_reader_by_name(entry.path))   # say what would open it, then let the system try
             QDesktopServices.openUrl(QUrl.fromLocalFile(entry.path))
         elif has_scheme(entry.path):
-            try:
-                QDesktopServices.openUrl(QUrl.fromLocalFile(zipfs.local_copy(self.fs, entry.path)))
-            except OSError as e:
-                self.message.emit(f"Cannot open {entry.name}: {e.strerror or e}")
+            self.open_archived.emit(entry.path)               # the window unpacks it on a thread, then opens it
         else:
             QDesktopServices.openUrl(QUrl.fromLocalFile(entry.path))
 
@@ -1052,11 +1055,16 @@ class Panel(QFrame):
 
     # the note -------------------------------------------------------------------------
     def set_notes_enabled(self, on: bool) -> None:
+        if on == self.notes_enabled:
+            return
         self.notes_enabled = on
-        self._load_note(self.path)
+        if on:
+            self.refresh()                       # the notes are read with the listing, on its thread
+        else:
+            self._note_text = ""
+            self._show_note("")
 
-    def _load_note(self, path: str) -> None:
-        text = compose_markdown(find_notes(self.fs, path)) if self.notes_enabled and not is_home(path) else ""
+    def _show_note(self, text: str) -> None:
         self.model.set_has_note(bool(text))
         if not text:
             self.note.hide()

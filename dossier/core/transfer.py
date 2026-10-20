@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import errno
 import os
+import stat
+import uuid
 from typing import Optional
 
 from . import fastcopy
@@ -15,12 +17,33 @@ from .progress import CancelToken, ProgressFn, check
 from .vfs import FileSystem, NotWritable
 
 PART_SUFFIX = ".dossier-part"
+MAX_NAME_WITH_SUFFIX = 240          # a file name may be 255 characters; the temporary name must fit too
+
+
+def side_name(fs: FileSystem, dst: str, suffix: str, taken=None) -> str:
+    """A name next to ``dst`` for something temporary (the half-written copy, the older file set aside). It is
+    ``dst`` plus the suffix, which tells the user what it is; when the name is already near the limit of the file
+    system it is a short unique name instead, so a long name does not make the copy fail."""
+    if len(fs.basename(dst)) + len(suffix) <= MAX_NAME_WITH_SUFFIX:
+        return dst + suffix
+    return fs.join(fs.dirname(dst), ".~" + uuid.uuid4().hex[:12] + suffix)
+
+
+def copy_mode(src: str, dst: str) -> None:
+    """Keep the permission bits (the exec bit above all) of a file copied by hand, as the system's own copy does."""
+    if os.name != "posix":
+        return
+    try:
+        os.chmod(dst, stat.S_IMODE(os.stat(src).st_mode))
+    except OSError:
+        pass
 
 
 def move_item(fs: FileSystem, src: str, dst: str, is_dir: bool, cancel: Optional[CancelToken] = None, *,
-              progress: Optional[ProgressFn] = None, throttle=None, swap=None) -> None:
+              progress: Optional[ProgressFn] = None, throttle=None, swap=None) -> bool:
     """Rename in place; across drives a file is copied, verified by size, then removed. ``swap`` puts the item in
-    the place of an existing one without ever being without the old one (see ``Swap``)."""
+    the place of an existing one without ever being without the old one (see ``Swap``). Returns True when the item
+    was renamed (it can be renamed back), False when it had to be copied to another drive and removed."""
     if swap is not None:
         swap.prepare()
     try:
@@ -38,29 +61,32 @@ def move_item(fs: FileSystem, src: str, dst: str, is_dir: bool, cancel: Optional
             fs.remove(dst)
             raise OSError("the copy does not match the original; the original was kept") from e
         fs.remove(src)
-        return
+        return False
     except BaseException:
         if swap is not None:
             swap.rollback()
         raise
     if swap is not None:
         swap.commit()
+    return True
 
 
 class Swap:
     """Replace an existing file without a moment where neither exists. ``prepare`` moves the old file aside (same
     folder, so it cannot fail for want of another drive), the caller puts the new one in place, and then either
     ``commit`` sends the old one to the recycle bin or ``rollback`` puts it back. A copy that fails halfway therefore
-    leaves the old file exactly where it was. In the bin the old file is called ``<name>.dossier-old``."""
+    leaves the old file exactly where it was. In the bin the old file is called ``<name>.dossier-old``. Where there is
+    no bin (``permanent``) the old file is deleted once the new one is in place."""
 
     SUFFIX = ".dossier-old"
 
-    def __init__(self, fs: FileSystem, dst: str, trasher) -> None:
+    def __init__(self, fs: FileSystem, dst: str, trasher, permanent: bool = False) -> None:
         self.fs, self.dst, self.trasher = fs, dst, trasher
+        self.permanent = permanent                    # no recycle bin there (a network drive): the old file is deleted
         self.backup = ""
 
     def prepare(self) -> None:
-        name = self.dst + self.SUFFIX
+        name = side_name(self.fs, self.dst, self.SUFFIX)
         n = 1
         while True:
             try:
@@ -68,7 +94,7 @@ class Swap:
             except FileNotFoundError:
                 break
             n += 1
-            name = f"{self.dst}{self.SUFFIX}{n}"
+            name = side_name(self.fs, self.dst, f"{self.SUFFIX}{n}")
         self.fs.rename(self.dst, name)
         self.backup = name
 
@@ -84,14 +110,14 @@ class Swap:
         backup, self.backup = self.backup, ""
         if backup:
             try:
-                self.trasher(backup)
+                if self.permanent:
+                    self.fs.remove(backup)
+                else:
+                    self.trasher(backup)
             except OSError as e:
-                raise OSError(f"replaced, but the older version could not be sent to the recycle bin and was left as "
+                where = "deleted" if self.permanent else "sent to the recycle bin"
+                raise OSError(f"replaced, but the older version could not be {where} and was left as "
                               f"{backup}: {e.strerror or e}") from e
-
-    @property
-    def name_in_bin(self) -> str:
-        return self.fs.basename(self.dst) + self.SUFFIX
 
 
 def copy_file(
@@ -120,7 +146,7 @@ def copy_file(
         chunk_size = min(chunk_size, max(16384, throttle.rate // 4))     # a slow limit still reports and cancels often
     info = src_fs.stat(src)
     total = info.size
-    part = dst + PART_SUFFIX
+    part = side_name(dst_fs, dst, PART_SUFFIX)
     done = 0
     try:
         if native and throttle is None and total >= fastcopy.FAST_MIN and _plain_local(src_fs, src) and _plain_local(dst_fs, dst):
@@ -143,6 +169,8 @@ def copy_file(
         if done == 0 and progress:
             progress(0, total)
         _check_whole(done, total, src)
+        if _plain_local(src_fs, src) and _plain_local(dst_fs, dst):
+            copy_mode(src, part)
         _finish(dst_fs, part, dst, info, overwrite, cancel, swap)
     except BaseException:
         try:

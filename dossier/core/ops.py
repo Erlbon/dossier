@@ -22,12 +22,12 @@ from dataclasses import dataclass, field, replace
 from enum import Enum
 from typing import Callable, Iterable, Optional, Sequence
 
-from .drives import drive_of, list_drives
+from .drives import drive_of, is_network_path, list_drives
 from .platform import IS_WINDOWS, has_scheme, path_key, strip_longpath
 from .progress import Cancelled, CancelToken, ProgressFn, SpeedLimit, check
 from .transfer import Swap, copy_file, flush_file, move_item as _move_item, verify_copy
 from .undo_log import Step, UndoAction, UndoLog
-from .vfs import Entry, FileSystem, NotWritable, sort_entries
+from .vfs import Entry, FileSystem, NotWritable, sort_entries, stat_or_none
 
 
 class Kind(str, Enum):
@@ -124,7 +124,13 @@ class Plan:
                 else:
                     ops[i] = replace(op, overwrite=True, conflict="")
         kept = tuple(op for i, op in enumerate(ops) if i not in drop)
-        return replace(self, ops=kept, skipped=tuple(skipped))
+        warnings = self.warnings
+        gone = sum(1 for op in kept if op.overwrite and is_network_path(op.dst))
+        note = (f"{gone} older file{'s' if gone != 1 else ''} on a network drive will be deleted permanently when "
+                "replaced: a network drive has no recycle bin, and this cannot be undone")
+        if gone and note not in warnings:
+            warnings = warnings + (note,)
+        return replace(self, ops=kept, skipped=tuple(skipped), warnings=warnings)
 
 
 _SAME_ITEM = "this is the same item"
@@ -153,11 +159,7 @@ def check_name(name: str) -> str:
 
 
 # planning --------------------------------------------------------------------------------
-def _stat(fs: FileSystem, path: str) -> Optional[Entry]:
-    try:
-        return fs.stat(path)
-    except (FileNotFoundError, NotADirectoryError):
-        return None
+_stat = stat_or_none          # the one helper, in vfs.py
 
 
 def _within(fs: FileSystem, child: str, parent: str) -> bool:
@@ -378,6 +380,7 @@ def plan_delete(fs: FileSystem, sources: Sequence[str], *, to_trash: bool = True
     warnings: list = []
     skipped: list = []
     blocking: list = []
+    no_bin = 0
     _check_sources_writable(fs, sources, "delete", blocking)
     for src in _clean_sources(fs, sources, "delete", blocking):
         e = _stat(fs, src)
@@ -385,9 +388,15 @@ def plan_delete(fs: FileSystem, sources: Sequence[str], *, to_trash: bool = True
             warnings.append(f"no longer there, left out: {src}")
             skipped.append(src)
         else:
-            ops.append(Op(Kind.DELETE, src, is_dir=e.is_dir, size=e.size, src_mtime=e.mtime, to_trash=to_trash))
+            on_network = to_trash and is_network_path(src)        # a network drive has no recycle bin
+            ops.append(Op(Kind.DELETE, src, is_dir=e.is_dir, size=e.size, src_mtime=e.mtime,
+                          to_trash=to_trash and not on_network))
+            no_bin += on_network
     if ops and not to_trash:
         warnings.append("these items will be deleted permanently and cannot be brought back")
+    elif no_bin:
+        warnings.append(f"{no_bin} item{'s are' if no_bin != 1 else ' is'} on a network drive, which has no recycle bin: "
+                        f"{'they' if no_bin != 1 else 'it'} will be deleted permanently and cannot be brought back")
     return Plan("Delete" if not to_trash else "Delete to the recycle bin", tuple(ops), tuple(warnings), tuple(blocking), tuple(skipped))
 
 
@@ -444,18 +453,17 @@ def selection_effects(result: Result) -> SelectionEffects:
     for r in result.results:
         if r.status == "done" and r.op.kind is Kind.DELETE:
             effects.removed.append(r.op.src)
-    if result.action is not None:
-        for step in result.action.steps:
-            if step.kind == "moved":
-                effects.moved[step.a] = step.b
+        elif r.status == "done" and r.op.kind in (Kind.MOVE, Kind.RENAME, Kind.FINISH_MOVE):
+            effects.moved[r.op.src] = r.op.dst
     return effects
 
 
-def _remove_tree(fs: FileSystem, path: str) -> None:
+def _remove_tree(fs: FileSystem, path: str, cancel: Optional[CancelToken] = None) -> None:
+    check(cancel)                                 # closing the window or pressing Cancel stops a big delete between items
     e = fs.stat(path)
     if e.is_dir and not e.is_link:
         for child in fs.list(path):
-            _remove_tree(fs, fs.join(path, fs.basename(child.path)))
+            _remove_tree(fs, fs.join(path, fs.basename(child.path)), cancel)
     fs.remove(path)
 
 
@@ -614,7 +622,7 @@ def execute(
             attempts += 1
             try:
                 if op.kind is Kind.FINISH_MOVE:
-                    _finish_move(op, indexed, outcomes, fs, steps)
+                    _finish_move(op, indexed, outcomes, fs)
                 else:
                     _run_op(op, fs, steps, sub, cancel, safe_trasher, limit, opts.native_copy,
                             sub_verify if opts.verify else False)
@@ -705,11 +713,10 @@ def _flush_pass(outcomes: dict, done: _Progress, share: int, cancel) -> None:
         done.finish(-1 - n, each)
 
 
-def _finish_move(op: Op, indexed: list, outcomes: dict, fs: FileSystem, steps: list) -> None:
+def _finish_move(op: Op, indexed: list, outcomes: dict, fs: FileSystem) -> None:
     """The last step of a folder moved to another drive. Only when every file of the folder was copied (and has
     the size of its original) are the originals removed, then the folders that are empty by then; otherwise
-    nothing is touched and the user is told. The journal gets one "moved" entry: the copies are not journaled,
-    because undoing them would delete the only copy."""
+    nothing is touched and the user is told. Nothing is journaled: this move has no undo."""
     members = [(i, o) for i, o in indexed if o.group == op.group and o.kind in (Kind.COPY, Kind.MKDIR)]
     files = [(i, o) for i, o in members if o.kind is Kind.COPY]
     not_done = [o for i, o in files if i not in outcomes or outcomes[i][0].status != "done"]
@@ -732,7 +739,6 @@ def _finish_move(op: Op, indexed: list, outcomes: dict, fs: FileSystem, steps: l
             pass
     if stuck:
         raise OSError(f"copied, but {len(stuck)} originals could not be removed: " + "; ".join(stuck[:3]))
-    steps.append(Step("moved", op.src, op.dst))
 
 
 def _run_op(op: Op, fs: FileSystem, steps: list, progress, cancel, trasher: Trasher, throttle=None,
@@ -741,8 +747,6 @@ def _run_op(op: Op, fs: FileSystem, steps: list, progress, cancel, trasher: Tras
         existing = _stat(fs, op.dst)
         if existing is None:
             fs.mkdir(op.dst, parents=True)
-            if not op.group:                      # an undo must never delete the only copy of a moved folder
-                steps.append(Step("created_dir", op.dst))
         elif not existing.is_dir:
             raise FileExistsError(op.dst)
         return
@@ -750,12 +754,12 @@ def _run_op(op: Op, fs: FileSystem, steps: list, progress, cancel, trasher: Tras
         if op.to_trash:
             trasher(op.src)
         else:
-            _remove_tree(fs, op.src)
+            _remove_tree(fs, op.src, cancel)
         return
     # An existing target is replaced by a swap: it moves aside only when the new data is complete, and goes to the
     # bin only when the new file is in place. Whatever fails before that leaves the old file where it was.
-    swap = Swap(fs, op.dst, trasher) if op.overwrite and _stat(fs, op.dst) is not None else None
-    replaced = swap.name_in_bin if swap is not None else ""
+    no_bin = op.overwrite and is_network_path(op.dst)
+    swap = Swap(fs, op.dst, trasher, permanent=no_bin) if op.overwrite and _stat(fs, op.dst) is not None else None
     if op.kind is Kind.COPY:
         copy_file(fs, op.src, fs, op.dst, progress=progress, cancel=cancel, throttle=throttle, native=native,
                   overwrite=swap is not None, swap=swap)
@@ -768,9 +772,8 @@ def _run_op(op: Op, fs: FileSystem, steps: list, progress, cancel, trasher: Tras
                 except OSError:
                     pass
                 raise
-        made = fs.stat(op.dst)
-        if not op.group:
-            steps.append(Step("created_file", op.dst, size=made.size, mtime=made.mtime, replaced=replaced))
+
     else:                                     # MOVE or RENAME
-        _move_item(fs, op.src, op.dst, op.is_dir, cancel, progress=progress, throttle=throttle, swap=swap)
-        steps.append(Step("moved", op.src, op.dst, replaced=replaced))
+        renamed = _move_item(fs, op.src, op.dst, op.is_dir, cancel, progress=progress, throttle=throttle, swap=swap)
+        if renamed and swap is None:              # only a plain rename can be put back; a copy and delete cannot
+            steps.append(Step("moved", op.src, op.dst))

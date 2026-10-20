@@ -8,7 +8,7 @@ import threading
 from dataclasses import dataclass
 from typing import Callable, Optional
 
-from .platform import IS_WINDOWS, home_dir, list_volumes, path_key
+from .platform import IS_WINDOWS, has_scheme, home_dir, list_volumes, path_key, strip_longpath
 
 
 @dataclass(frozen=True)
@@ -49,6 +49,22 @@ def drive_of(path: str, drives: list) -> Optional[Drive]:
         if (key == root or key.startswith(root + os.sep) or root == "") and len(root) > best_len:
             best, best_len = d, len(root)
     return best
+
+
+def is_network_path(path: str, drives: Optional[list] = None) -> bool:
+    """Whether ``path`` is on a network drive or share. Those have no recycle bin: a delete there is for good, and
+    so is the older file an overwrite replaces. A network path (``\\\\server\\share``) is recognised by its form, a
+    mapped drive or a mount by the drive list. Never touches the share, so it cannot hang on a dead one."""
+    if not path or has_scheme(path):
+        return False
+    p = strip_longpath(path) if IS_WINDOWS else path
+    if IS_WINDOWS and p.startswith(chr(92) * 2):
+        return True
+    try:
+        drive = drive_of(p, list_drives() if drives is None else drives)
+    except Exception:                                # a failed look at the drives must never stop an operation
+        return False
+    return drive is not None and drive.kind == "network"
 
 
 def disk_usage(path: str) -> Optional[tuple]:

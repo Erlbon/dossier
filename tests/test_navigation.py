@@ -1,5 +1,6 @@
 """Non-blocking navigation: a slow folder never freezes the window (plan step H0b)."""
 import os
+import threading
 import time
 
 import pytest
@@ -21,14 +22,19 @@ class SlowFileSystem(LocalFileSystem):
 
     def __init__(self, slow=(), delay=0.8, fail=()):
         self.slow, self.delay, self.fail = set(slow), delay, set(fail)
+        self.answered = threading.Event()        # set when a slow listing has given its answer: tests wait for this, not a clock
 
     def list(self, path):
         name = os.path.basename(path)
-        if name in self.slow or name in self.fail:
-            time.sleep(self.delay)
-            if name in self.fail:
-                raise PermissionError(13, "Access is denied", path)
-        return super().list(path)
+        try:
+            if name in self.slow or name in self.fail:
+                time.sleep(self.delay)
+                if name in self.fail:
+                    raise PermissionError(13, "Access is denied", path)
+            return super().list(path)
+        finally:
+            if name in self.slow or name in self.fail:
+                self.answered.set()
 
 
 @pytest.fixture(scope="module")
@@ -44,6 +50,7 @@ def make(app, tmp_path, **kw):
     win = MainWindow(fs=fs, settings_path=str(tmp_path / "s.ini"), start=(str(tmp_path / "fast"), str(tmp_path / "other")),
                      dialogs=FakeDialogs())
     win.show()
+    win.slow_fs = fs
     return win
 
 
@@ -91,7 +98,7 @@ def test_going_somewhere_else_cancels_the_slow_one(app, tmp_path):
         assert win.left.loading
         win.left.set_folder(str(tmp_path / "other"))
         assert win.left.path == str(tmp_path / "other") and not win.left.loading
-        time.sleep(0.9)
+        assert win.slow_fs.answered.wait(15)                              # the slow listing has now answered
         for _ in range(20):
             QApplication.processEvents()
             time.sleep(0.01)
@@ -108,7 +115,7 @@ def test_escape_cancels_the_wait_and_the_late_answer_changes_nothing(app, tmp_pa
         win.left.set_folder(str(tmp_path / "slow"))
         QTest.keyClick(win.left.table, Qt.Key.Key_Escape)
         assert not win.left.loading and "Cancelled" in messages
-        time.sleep(0.9)
+        assert win.slow_fs.answered.wait(15)
         for _ in range(20):
             QApplication.processEvents()
             time.sleep(0.01)

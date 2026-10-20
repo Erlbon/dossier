@@ -51,7 +51,7 @@ Selection is stored by path in one shared store, not inside a window, so it surv
 
 ## 4. File operations
 
-All operations run in the background with progress, cancel and a log. Destructive ones show a plan first (what will be created, overwritten, removed) and can be undone where the file system allows.
+All operations run in the background with progress, cancel and a log. Destructive ones show a plan first (what will be created, overwritten, removed). Undo is small by design (F10); the safety is the plan, the confirmation, the recycle bin and the swap that keeps an older file until its replacement is complete. A network drive has no recycle bin: deletes and overwrites there are permanent, and the confirmation says so.
 
 | ID | Requirement | Origin |
 | --- | --- | --- |
@@ -64,7 +64,7 @@ All operations run in the background with progress, cancel and a log. Destructiv
 | F7 | Optional short-name (8.3) handling on Windows | TNT |
 | F8 | Print a file list | TNT |
 | F9 | Create shortcuts / links | TNT |
-| F10 | Undo log: moves and renames can be reverted from a history list | New |
+| F10 | Undo, scaled down (2026-10-20, the owner: "not a common tool with file managers"): a rename, a move on the same drive and a new empty folder can be put back (Ctrl+Z). Nothing else is undone: a copy is never undone by deleting files, an overwrite keeps the older file in the recycle bin until the new one is in place, a delete goes to the recycle bin, a move to another drive is a copy and a delete | New |
 | F11 | Conflict dialog: overwrite, skip, keep both, apply to all | New |
 | F12 | Long paths and Unicode names everywhere | New |
 | F13 | Disk tools: format, disk-image copy. Dropped for now; the OS already has them | TNT (Later) |

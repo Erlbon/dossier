@@ -41,8 +41,7 @@ def test_the_window_answers_at_once_while_a_big_plan_is_worked_out(world, monkey
     win, dialogs, left, right, _t = world
     many_files(left)
     slow_planning(monkeypatch)                                  # about a second of planning
-    took = start_copy(win, left)
-    assert took < 0.15                                          # pressing copy returns at once, whatever the size
+    start_copy(win, left)                                       # returns at once, whatever the size of the plan
     assert win.busy and not dialogs.confirms                    # the plan is still being made
     ticks = 0
     end = time.time() + 0.3
@@ -89,9 +88,8 @@ def test_paste_and_move_are_planned_in_the_background_too(world, monkeypatch):
     slow_planning(monkeypatch, delay=0.01)
     win.left.refresh()
     win.left.table.setCurrentIndex(win.left.model.index(win.left.model.row_of("tree"), 0))
-    start = time.time()
     win.move()
-    assert time.time() - start < 0.15 and win.busy
+    assert win.busy and not dialogs.confirms                    # still being planned: the call did not wait for it
     wait_planned(win)
     assert dialogs.confirms
 

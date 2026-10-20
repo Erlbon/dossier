@@ -105,11 +105,21 @@ def test_run_launches_for_each_kind():
 
 def test_a_custom_profile_needs_its_placeholder_and_substitutes_it():
     p = custom_profile("mytool --dir {dir} --do {command}")
-    assert run_launch(p, "go", "/work").argv == "mytool --dir /work --do go"
+    quoted = '"/work"' if T.IS_WINDOWS else "/work"           # a folder is quoted where that is the way (a space, an &)
+    assert run_launch(p, "go", "/work").argv == f"mytool --dir {quoted} --do go"
     with pytest.raises(UnsafeArgument):
         run_launch(custom_profile("mytool"), "go", "/work")
     with pytest.raises(UnsafeArgument):
         session_launch(custom_profile("mytool"), "/work")
+
+
+def test_a_folder_with_a_space_is_quoted_in_a_custom_template_and_not_twice(monkeypatch):
+    for windows, expected in ((True, '"C:\\My Work"'), (False, "'/my work'")):
+        monkeypatch.setattr(T, "IS_WINDOWS", windows)
+        folder = "C:\\My Work" if windows else "/my work"
+        assert session_launch(custom_profile("term --cd {dir}"), folder).argv == f"term --cd {expected}"
+        already = custom_profile('term --cd "{dir}"')                  # the template quotes it itself
+        assert session_launch(already, folder).argv == f'term --cd "{folder}"'
 
 
 # opening a session ----------------------------------------------------------------------------------------------
@@ -121,6 +131,8 @@ def test_windows_sessions_with_and_without_windows_terminal_and_elevation(monkey
     assert not classic.elevate
     hosted = session_launch(CMD, "C:\\Work", windows_terminal="C:\\wt.exe", which=w)
     assert hosted.argv == ["C:\\wt.exe", "-d", "C:\\Work", "/fake/cmd.exe", "/k"]
+    odd = session_launch(CMD, "C:\\a;b", windows_terminal="C:\\wt.exe", which=w)           # ; ends a command in wt
+    assert odd.argv[2] == "C:\\a" + chr(92) + ";b" and odd.cwd == "C:\\a;b"
     admin = session_launch(PS, "C:\\Work", admin=True, which=w)
     assert admin.elevate and admin.program == "/fake/powershell.exe"
     wsl = session_launch(WSL, "C:\\My Work", which=fake_which("wsl.exe"))

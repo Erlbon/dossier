@@ -53,4 +53,16 @@ Fixed in build 2026-10-20#01: findings 1, 2, 3, 4, 9, 10 and 11 (overwrite order
 
 Built in build 2026-10-20#02: features 2 (quick filter), 3 (folder history), 4 (hotlist) and 15 (the other panel).
 
-Still open: findings 5 to 8, 12 to 17; features 1 and 5 to 14 and 16 to 20.
+Fixed in build 2026-10-20#03 (all remaining findings):
+- 5 undo on the window's thread: undo scaled down to renames, same-drive moves and new folders (instant), by the owner's decision; copies are no longer undone by deleting files.
+- 6 the folder was listed twice: the note is read on the listing thread from the same listing.
+- 7 archive members unpacked on the window's thread: unpacking runs on a thread with progress, Cancel, a question above 200 MB and a guard against an item that unpacks to much more than the archive says.
+- 8 names over 242 characters: the temporary names are short when the name is long.
+- 12 recycle bin on network: decided by the owner, there is none; deletes and overwrites on a network drive are permanent and the confirmation says so.
+- 13 closing and exit: a big permanent delete stops between items on cancel, and the program leaves after 2 seconds even if a thread is stuck on a dead share.
+- 14 the status line and paste no longer read the disk on the window's thread.
+- 15 platform: the exec bit survives the hand copy, `;` in a folder name for Windows Terminal, and a custom terminal template quotes the folder.
+- 16 tests: timing assertions replaced by events; failure paths covered.
+- 17 structure: main_window.py went from 1580 to 1160 lines (five mixins and one background helper), one size formatter, one stat helper.
+
+Still open: features 5 to 14 and 16 to 20 (batch rename, search, compare, checksums, duplicates, pack and unpack, resume, thumbnails, properties, viewer modes, named selections, note editing, MCP, remote sources, the per-file conflict dialog).

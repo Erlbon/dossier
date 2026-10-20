@@ -104,14 +104,19 @@ def test_moving_into_a_folder_of_the_same_name_merges_like_a_copy(other_drive):
     assert names(fs, "mem://src") == []
 
 
-def test_the_journal_never_holds_a_step_that_would_delete_the_only_copy(other_drive):
+def test_a_folder_moved_across_drives_has_no_undo_and_nothing_is_ever_deleted_by_one(other_drive):
     fs = tree()
     log = UndoLog()
     res = execute(plan_move(fs, ["mem://src/Photos"], "mem://dst"), fs, undo_log=log)
-    assert [s.kind for s in res.action.steps] == ["moved"]
-    report = log.undo_last(fs)                                                 # cannot be undone across drives...
-    assert report.problems                                                     # ...and says so,
-    assert names(fs, "mem://dst/Photos") == ["2022", "a.jpg"]                  # but nothing was deleted
+    assert res.action is None and len(log) == 0 and log.undo_last(fs) is None
+    assert names(fs, "mem://dst/Photos") == ["2022", "a.jpg"]
+
+
+def test_the_selection_still_follows_a_folder_moved_across_drives(other_drive):
+    from dossier.core.ops import selection_effects
+    fs = tree()
+    res = execute(plan_move(fs, ["mem://src/Photos"], "mem://dst"), fs)
+    assert selection_effects(res).moved == {"mem://src/Photos": "mem://dst/Photos"}
 
 
 def test_progress_counts_the_bytes_and_ends_at_the_total(other_drive):

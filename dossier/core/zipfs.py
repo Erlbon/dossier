@@ -192,15 +192,37 @@ class ZipFileSystem(FileSystem):
 _temp_root: Optional[str] = None
 
 
-def local_copy(fs: FileSystem, path: str) -> str:
-    """Extract one item to a temporary folder and return its path. Cleaned up when the program ends."""
+SLACK = 1024 * 1024         # how much more than its listed size an item may unpack to
+
+
+def local_copy(fs: FileSystem, path: str, cancel=None, progress=None) -> str:
+    """Extract one item to a temporary folder and return its path. Cleaned up when the program ends.
+    ``progress(bytes_done)`` and ``cancel`` work between chunks; an item that unpacks to far more than the archive
+    says it holds (a zip bomb) is stopped and removed."""
+    from .progress import check
     global _temp_root
     if _temp_root is None:
         _temp_root = tempfile.mkdtemp(prefix="dossier-")
     folder = tempfile.mkdtemp(dir=_temp_root)
     target = os.path.join(folder, fs.basename(path))
-    with fs.open_read(path) as src, open(target, "wb") as dst:
-        shutil.copyfileobj(src, dst, 1024 * 1024)
+    limit = fs.stat(path).size + SLACK
+    done = 0
+    try:
+        with fs.open_read(path) as src, open(target, "wb") as dst:
+            while True:
+                check(cancel)
+                chunk = src.read(1024 * 1024)
+                if not chunk:
+                    break
+                done += len(chunk)
+                if done > limit:
+                    raise OSError(f"{fs.basename(path)} unpacks to much more than the archive says it holds: stopped")
+                dst.write(chunk)
+                if progress is not None:
+                    progress(done)
+    except BaseException:
+        shutil.rmtree(folder, ignore_errors=True)
+        raise
     return target
 
 

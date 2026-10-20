@@ -250,6 +250,14 @@ def natural_key(name: str) -> tuple:
     return (parts, name)
 
 
+def stat_or_none(fs: "FileSystem", path: str) -> Optional[Entry]:
+    """``fs.stat(path)``, or None when there is nothing there."""
+    try:
+        return fs.stat(path)
+    except (FileNotFoundError, NotADirectoryError):
+        return None
+
+
 def sort_entries(entries: list[Entry]) -> list[Entry]:
     """Folders first, then natural name order."""
     return sorted(entries, key=lambda e: (not e.is_dir, natural_key(e.name)))

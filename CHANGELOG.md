@@ -2,6 +2,16 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-20#03 -- The rest of the review, and a much smaller undo
+
+- **Undo is small now.** Ctrl+Z puts back a rename, a move on the same drive and a new empty folder, and nothing else. A copy is never undone by deleting the files it made; an overwrite, a delete and a move to another drive have no undo (the older file is in the recycle bin).
+- **Network drives have no recycle bin, and the program says so.** Deleting there is permanent, and an overwrite deletes the older file; the delete confirmation names how many items are affected, and the overwrite plan carries a warning.
+- **The window's thread no longer touches the disk** for: a folder's note (read with the listing, not listed a second time), the sizes in the status line, unpacking a file from an archive (now on a thread with progress and Cancel, a question above 200 MB, and a guard against zip bombs), and checking pasted files (done while the plan is made).
+- **Closing:** a big permanent delete stops between items when you cancel or close, and the program ends within two seconds even if a thread is stuck on a dead share.
+- **Names over 242 characters** can be copied and overwritten (the temporary names are short then).
+- **Linux and terminals:** a file copied by hand keeps its exec bit; a folder with `;` in its name works with Windows Terminal; a custom terminal template quotes the folder.
+- **Inside:** the window is split into five parts (queue, slowness log, going places, folder sizes, unpacking) and one background-job helper; one size formatter and one stat helper; the tests that depended on timing now wait for events.
+
 ## 2026-10-20#02 -- Quick filter, folder history, hotlist, the other panel
 
 - **Quick filter (Ctrl+S, View > Quick Filter):** a field under the list narrows it as you type: a part of a name, or a pattern with `*`, `?` and `[ ]`. Enter goes back to the list and keeps the filter; Esc clears it (a second Esc clears the marks). Marks stay on hidden items, but commands work only on what is shown. A refresh keeps the filter, going to another folder drops it.

@@ -78,8 +78,8 @@ class JobRunner:
         self._pool.submit(self._run, job, fn, on_progress, on_done)
         return job
 
-    def shutdown(self, wait: bool = True) -> None:
-        self._pool.shutdown(wait=wait)
+    def shutdown(self, wait: bool = True, cancel_futures: bool = False) -> None:
+        self._pool.shutdown(wait=wait, cancel_futures=cancel_futures)
 
     # internals -----------------------------------------------------------------------------
     def _post(self, fn: Callable[[], None]) -> None:

@@ -10,6 +10,7 @@ from PyQt6.QtCore import QByteArray, QMimeData, Qt, QUrl  # noqa: E402
 from PyQt6.QtWidgets import QApplication  # noqa: E402
 
 from dossier.gui import file_clipboard  # noqa: E402
+from tests.helpers import wait_planned  # noqa: E402
 from tests.test_gui_commander import app, key, names, pump, world  # noqa: E402,F401
 
 CTRL = Qt.KeyboardModifier.ControlModifier
@@ -126,5 +127,6 @@ def test_files_that_vanished_are_not_pasted(world):
     (left / "a.txt").unlink()
     key(win, Qt.Key.Key_Tab)
     key(win, Qt.Key.Key_V, CTRL)
-    assert dialogs.infos and "no longer exist" in dialogs.infos[-1][1]
+    wait_planned(win)                                           # the sources are looked at while the plan is made
+    assert dialogs.infos and "Nothing to do" in dialogs.infos[-1][1] and "no longer there" in dialogs.infos[-1][1]
     assert list(right.iterdir()) == []

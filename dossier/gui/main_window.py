@@ -11,30 +11,32 @@ import shutil
 import threading
 from typing import Optional
 
-from PyQt6.QtCore import QEvent, QObject, QPoint, QSettings, QSize, QStandardPaths, Qt, QTimer
+from PyQt6.QtCore import QSettings, QSize, QStandardPaths, Qt
 from PyQt6.QtGui import QAction, QActionGroup, QKeySequence
 from PyQt6.QtWidgets import (QApplication, QHBoxLayout, QLabel, QMainWindow, QMenu, QPushButton, QSplitter,
                              QToolButton, QVBoxLayout, QWidget)
 
-from ..core.ops import (ExecOptions, Kind, Plan, Resolution, check_name, plan_copy, plan_delete, plan_move, plan_rename)
+from ..core.ops import (Plan, check_name, plan_copy, plan_delete, plan_move, plan_rename)
 from ..core.home import ADD_NETWORK, HomeFileSystem, HomeProvider, RouterFileSystem, removable_from_home
 from ..core.commandline import Placeholders, expand, run_command
-from ..core import patterns, zipfs
+from ..core import patterns
 from ..core.platform import IS_WINDOWS, has_scheme, is_elevated, machine_name, path_key, set_window_border
-from ..core.foldersize import folder_sizes
 from ..core.selection import SelectionStore
 from ..core.version import APP_NAME, APP_REPO_URL, APP_VERSION
-from ..core.stallwatch import StallWatch
 from ..core.textedit import BinaryFile, EncodingProblem, FileTooLarge, load_document
 from ..core.terminals import (UnsafeArgument, builtin_profiles, default_launcher, default_profile, detect,
                               session_launch)
-from ..core.progress import check
 from ..core.undo_log import Step, UndoAction, UndoLog
 from ..core.vfs import FileSystem, LocalFileSystem
-from ..core.worker import Job, JobRunner, JobState, run_plan_job
+from ..core.worker import Job, JobRunner, JobState
 from .appicon import app_icon
 from .command_line import CommandLine
 from .dialogs import Dialogs
+from .folder_sizes import FolderSizesMixin
+from .going_places import GoingPlacesMixin
+from .ops_queue import OperationQueueMixin
+from .stall_log import StallLogMixin
+from .unpack import UnpackMixin
 from . import file_clipboard, icon_set, theme
 from .models import human_size
 from .panel import Panel
@@ -43,32 +45,13 @@ from .theme import ThemeManager
 from .viewer import TextViewerWindow
 
 BIN = "recycle bin" if IS_WINDOWS else "trash"
+EXTRACT_CONFIRM = 200 * 1024 * 1024     # a file unpacked from an archive: ask first above this size
 STAT_LIMIT = 200      # at most this many sizes are read from the disk for one status line
 SUMMARY_ITEMS = 12    # the confirmation lists this many items, then says how many more
 SIZE_LIMIT = 1000    # the status line sizes at most this many marked items
 
 
-class _LastInput(QObject):
-    """Remembers what the user last did, as a name: which key (never the letter typed) or a mouse click."""
-
-    def __init__(self, parent=None) -> None:
-        super().__init__(parent)
-        self.text = ""
-
-    def eventFilter(self, obj, event) -> bool:
-        kind = event.type()
-        if kind == QEvent.Type.KeyPress:
-            key = event.key()
-            mods = event.modifiers()
-            printable = bool(event.text()) and event.text().isprintable() and not (
-                mods & (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.AltModifier))
-            self.text = "a typed character" if printable else QKeySequence(int(mods.value) | key).toString()
-        elif kind == QEvent.Type.MouseButtonPress:
-            self.text = "a mouse click"
-        return False
-
-
-class MainWindow(QMainWindow):
+class MainWindow(OperationQueueMixin, StallLogMixin, GoingPlacesMixin, FolderSizesMixin, UnpackMixin, QMainWindow):
     def __init__(self, fs: Optional[FileSystem] = None, *, settings_path: Optional[str] = None, start=(None, None),
                  dialogs=None, trasher=None, terminal_launcher=None, which=None) -> None:
         super().__init__()
@@ -101,6 +84,7 @@ class MainWindow(QMainWindow):
         self.paused = False
         self._jobs: list = []                      # running first, then the ones waiting
         self._size_jobs: list = []                 # folder size walks in the background
+        self._size_thread = None                   # the thread that looks up sizes for the status line
         self._job: Optional[Job] = None
         self.viewers: list = []
         self.editors: list = []
@@ -155,6 +139,7 @@ class MainWindow(QMainWindow):
             panel.message.connect(self._say)
             panel.home_action.connect(self._home_action)
             panel.sizes_requested.connect(lambda p=panel: self.calculate_folder_sizes(p))
+            panel.open_archived.connect(lambda path: self._unpack_then([path], lambda local: self._open_with_system(local[0])))
         self._sizes: dict = {}                       # path -> size (0 for a folder), from the listings on screen
         self.selection.subscribe(lambda _s: self._update_status())
         self.theme.changed.connect(self._on_theme_changed)
@@ -452,21 +437,29 @@ class MainWindow(QMainWindow):
         """F3: view the marked files (or the one under the cursor), stepping through them in one window."""
         if self._home_blocked("View"):
             return
-        paths = []
+        ordered = []
         for p in self.active.targets():
             try:
                 if not self.fs.stat(p).is_dir:
-                    paths.append(p if not has_scheme(p) else zipfs.local_copy(self.fs, p))   # the viewer reads real files
+                    ordered.append(p)
             except OSError as e:
                 self.dialogs.info("View", f"Cannot read {self.fs.basename(p)}: {e.strerror or e}")
-        if not paths:
+        if not ordered:
             self.dialogs.info("View", "Select a file to view.")
             return
-        win = TextViewerWindow(paths, 0, dispatch=self.dispatcher)
-        self.viewers.append(win)
-        win.edit_requested.connect(lambda p, replace: self.edit_file(p, replace))
-        win.destroyed.connect(lambda _o=None, w=win: self.viewers.remove(w) if w in self.viewers else None)
-        win.show()
+        archived = [p for p in ordered if has_scheme(p)]       # the viewer reads real files: these are unpacked first
+
+        def open_viewer(unpacked: dict) -> None:
+            win = TextViewerWindow([unpacked.get(p, p) for p in ordered], 0, dispatch=self.dispatcher)
+            self.viewers.append(win)
+            win.edit_requested.connect(lambda p, replace: self.edit_file(p, replace))
+            win.destroyed.connect(lambda _o=None, w=win: self.viewers.remove(w) if w in self.viewers else None)
+            win.show()
+
+        if archived:
+            self._unpack_then(archived, lambda local: open_viewer(dict(zip(archived, local))))
+        else:
+            open_viewer({})
 
     def edit_file(self, path: Optional[str] = None, show_replace: bool = False) -> None:
         """F4: open one file in the notepad. A file that is already open is brought forward, not opened twice."""
@@ -843,22 +836,40 @@ class MainWindow(QMainWindow):
         if not here:
             self.status.setText("No items marked here" + note)
             return
-        total, asked = 0, 0
+        total, missing = 0, []
         for p in here[:SIZE_LIMIT]:
             size = self._sizes.get(p)
-            if size is None:                         # not in a listing we kept: ask once, remember
-                if asked >= STAT_LIMIT:
-                    continue
-                asked += 1
-                try:
-                    e = self.fs.stat(p)
-                    size = 0 if e.is_dir else e.size
-                except OSError:
-                    size = 0
-                self._sizes[p] = size
-            total += size
-        more = "" if len(here) <= SIZE_LIMIT and asked < STAT_LIMIT else "+"
+            if size is None:                         # marked somewhere that is not listed now: found out on a thread
+                missing.append(p)
+            else:
+                total += size
+        if missing:
+            self._fetch_sizes(missing[:STAT_LIMIT])
+        more = "" if len(here) <= SIZE_LIMIT and not missing else "+"
         self.status.setText(f"{len(here)} marked, {human_size(total)}{more}, in this panel{note}")
+
+    def _fetch_sizes(self, paths: list) -> None:
+        """Ask the disk for sizes on a thread (a dead share must not freeze the window), then redo the status line."""
+        if self._size_thread is not None and self._size_thread.is_alive():
+            return
+        fs = self.fs
+
+        def work() -> None:
+            found = {}
+            for p in paths:
+                try:
+                    e = fs.stat(p)
+                    found[p] = 0 if e.is_dir else e.size
+                except OSError:
+                    found[p] = 0
+
+            def deliver() -> None:
+                self._sizes.update(found)
+                self._update_status()
+            self.dispatcher(deliver)
+
+        self._size_thread = threading.Thread(target=work, daemon=True, name="dossier-sizes")
+        self._size_thread.start()
 
     # commands -------------------------------------------------------------------------------
     def _summary(self, plan: Plan, dest: str = "", sources=None, origin: str = "") -> str:
@@ -917,52 +928,6 @@ class MainWindow(QMainWindow):
             if not plan.ops:
                 return None
         return plan
-
-    @property
-    def busy(self) -> bool:
-        """An operation runs or is waiting, or a plan is being worked out."""
-        return bool(self._jobs) or bool(self._plans)
-
-    def _plan_in_background(self, title: str, build, then) -> None:
-        """Work out a plan on a thread, so choosing many folders never freezes the window: ``build(watch)`` makes the
-        plan (``watch(n)`` is its place to be cancelled and to report how far it is), ``then(plan)`` goes on, on the
-        window's thread. A box with Cancel appears only when it takes a moment."""
-        holder: dict = {}
-        shown: dict = {}
-        count = {"n": 0}
-
-        def work(progress, cancel):
-            def watch(n: int) -> None:
-                check(cancel)
-                count["n"] = n
-                progress(n, 0)
-            return build(watch)
-
-        def on_progress(_done: int, _total: int) -> None:
-            if "box" not in shown:
-                shown["box"] = self.dialogs.make_progress(title, lambda: holder["job"].cancel() if "job" in holder else None)
-                make_indeterminate = getattr(shown["box"], "indeterminate", None)
-                if make_indeterminate is not None:
-                    make_indeterminate()
-            shown["box"].detail = f"{count['n']:,} items found so far"
-            shown["box"].update(0, 0)
-
-        def finished(job: Job) -> None:
-            if "box" in shown:
-                shown["box"].close()
-            if job in self._plans:
-                self._plans.remove(job)
-            if job.token.cancelled:
-                self._say("Cancelled")
-                return
-            if job.state is JobState.FAILED:
-                self.dialogs.info(title, str(job.error))
-                return
-            then(job.result)
-
-        job = self.cmd_runner.submit(title, work, on_progress=on_progress, on_done=finished)
-        holder["job"] = job
-        self._plans.append(job)
 
     def _transfer(self, move: bool) -> None:
         if self._home_blocked("Move" if move else "Copy"):
@@ -1029,16 +994,7 @@ class MainWindow(QMainWindow):
                                        "Esc, and try again.")
             return
         dest = self.active.path
-        def there(path: str) -> bool:
-            try:
-                self.fs.stat(path)
-                return True
-            except OSError:
-                return False
-        sources = [s for s in sources if there(s)]
-        if not sources:
-            self.dialogs.info("Paste", "The copied items no longer exist.")
-            return
+
         def build(watch):
             return (plan_move if cut else plan_copy)(self.fs, sources, dest, watch=watch)
 
@@ -1114,6 +1070,13 @@ class MainWindow(QMainWindow):
         if permanent:
             ok = self.dialogs.confirm("Delete Permanently", f"Delete {len(plan.ops)} item(s) permanently? "
                                       f"This cannot be undone.\n\n{names}{more}", "Delete permanently")
+        elif any(not op.to_trash for op in plan.ops):
+            lost = [op for op in plan.ops if not op.to_trash]
+            rest = len(plan.ops) - len(lost)
+            text = (f"{len(lost)} of {len(plan.ops)} item(s) are on a network drive, which has no {BIN}: "
+                    f"{'they' if len(lost) != 1 else 'it'} will be deleted permanently and cannot be brought back."
+                    + (f" The other {rest} go to the {BIN}." if rest else ""))
+            ok = self.dialogs.confirm("Delete from a Network Drive", f"{text}{chr(10) * 2}{names}{more}", "Delete permanently")
         else:
             ok = self.dialogs.confirm("Delete", f"Move {len(plan.ops)} item(s) to the {BIN}?\n\n{names}{more}", "Delete")
         if ok:
@@ -1124,7 +1087,7 @@ class MainWindow(QMainWindow):
             return
         report = self.undo_log.undo_last(self.fs)
         if report is None:
-            self._say("Nothing to undo")
+            self._say("Nothing to undo (undo covers renames, moves on the same drive, and new folders)")
             return
         self.selection.remap(report.moved)
         self.selection.remove(report.removed)
@@ -1132,131 +1095,8 @@ class MainWindow(QMainWindow):
         if report.problems:
             self.dialogs.info("Undo " + report.label.lower(),
                               "Some steps could not be undone:" + chr(10) + chr(10).join(report.problems[:10]))
-        elif report.notes:
-            self.dialogs.info("Undid " + report.label.lower(), chr(10).join(report.notes[:10]))
         else:
             self._say(f"Undid: {report.label}")
-
-    # running a plan -----------------------------------------------------------------------------
-    def _run(self, plan: Plan, *, unmark: Optional[list] = None, select: str = "") -> None:
-        """Queue a plan. Plans run one after the other (one disk is never fought over); the progress box of a
-        plan appears when it starts, and a queued plan waits until the ones before it are done."""
-        holder: dict = {}
-        shown: dict = {}
-
-        current: dict = {}
-        plan_bytes = sum(op.size for op in plan.ops
-                         if op.kind is Kind.COPY or (op.kind is Kind.MOVE and not op.is_dir))
-
-        def on_item(op, number: int, count: int) -> None:       # a worker thread: only stores the text
-            current["text"] = f"{self.fs.basename(op.src or op.dst)}  ({number} of {count})"
-
-        def progress(done: int, total: int) -> None:
-            if "box" not in shown:
-                shown["box"] = self.dialogs.make_progress(plan.title, lambda: holder["job"].cancel() if "job" in holder else None)
-                shown["box"].plan_bytes = plan_bytes
-            shown["box"].detail = current.get("text", "")
-            shown["box"].update(done, total)
-
-        def finished(job: Job) -> None:
-            if "box" in shown:
-                shown["box"].close()
-            if job in self._jobs:
-                self._jobs.remove(job)
-            self._job = self._jobs[0] if self._jobs else None
-            self._update_queue_label()
-            self._report(job, unmark)
-            keep = select or self.active.current_name()
-            self.active.set_folder(self.active.path, select=keep)
-            self.other.refresh()
-
-        job = run_plan_job(self.runner, plan, self.fs, selection=self.selection, undo_log=self.undo_log,
-                           on_progress=progress, on_done=finished, options=self._exec_options(on_item),
-                           **({} if self.trasher is None else {"trasher": self.trasher}))
-        holder["job"] = job
-        if self.paused:
-            job.token.pause()
-        self._jobs.append(job)
-        self._job = self._jobs[0]
-        self._update_queue_label()
-
-    def toggle_pause(self) -> None:
-        """Pause or resume the running operation and the ones waiting behind it."""
-        self.paused = not self.paused
-        for job in self._jobs:
-            job.token.pause() if self.paused else job.token.resume()
-        self._update_queue_label()
-
-    def cancel_waiting(self) -> None:
-        """Drop the operations that have not started; the running one carries on."""
-        waiting = [j for j in self._jobs if j.state is JobState.QUEUED]
-        for job in waiting:
-            job.cancel()
-        self._say(f"Cancelled {len(waiting)} waiting operation{'s' if len(waiting) != 1 else ''}" if waiting
-                  else "No operations are waiting")
-
-    def _update_queue_label(self) -> None:
-        waiting = sum(1 for j in self._jobs if j.state is JobState.QUEUED)
-        parts = []
-        if self._jobs:
-            parts.append(("Paused: " if self.paused else "Running: ") + self._jobs[0].label)
-        if waiting:
-            parts.append(f"{waiting} waiting")
-        self.queue_label.setText((" " + chr(0xB7) + " ").join(parts))
-        self.queue_label.setVisible(bool(parts))
-
-    def _exec_options(self, on_item=None) -> ExecOptions:
-        """The copy settings: the speed limit and whether a failing file asks what to do."""
-        try:
-            limit = int(float(self.settings.value("copy/limit_mb", 0) or 0) * 1024 * 1024) or None
-        except (TypeError, ValueError):
-            limit = None
-        options = ExecOptions(limit_bps=limit, on_item=on_item, verify=str(self.settings.value("copy/verify", "false")).lower() == "true")
-        if str(self.settings.value("copy/ask_on_error", "false")).lower() == "true":
-            skip_all = []
-
-            def on_error(op, text: str) -> str:
-                """Called on a worker thread: the question is asked on the window's thread and the worker waits."""
-                if skip_all:
-                    return "skip"
-                answer: dict = {}
-                ready = threading.Event()
-
-                def ask() -> None:
-                    try:
-                        name = self.fs.basename(op.src or op.dst)
-                        answer["v"] = self.dialogs.ask_error(name + chr(10) * 2 + text)
-                    finally:
-                        ready.set()
-
-                self.dispatcher(ask)
-                ready.wait()
-                choice = answer.get("v", "skip")
-                if choice == "skip_all":
-                    skip_all.append(True)
-                    return "skip"
-                return choice
-
-            options.on_error = on_error
-        return options
-
-    def _report(self, job: Job, unmark: Optional[list]) -> None:
-        if job.state is JobState.FAILED:
-            self.dialogs.info("Operation failed", str(job.error))
-            return
-        result = job.result
-        if result.failed:
-            failed = [r.op.src for r in result.failed]
-            if unmark:                           # what went well is unmarked; what failed stays marked for a retry
-                self.selection.remove([u for u in unmark if not any(f.startswith(u) for f in failed)])
-            lines = [f"{self.fs.basename(r.op.src or r.op.dst)}: {r.error}" for r in result.failed[:10]]
-            self.dialogs.info("Some items failed", "\n".join(lines))
-        elif job.state is JobState.CANCELLED:
-            self._say(f"Cancelled. {len(result.done)} step(s) were done; Ctrl+Z undoes them.")
-        else:
-            if unmark:
-                self.selection.remove(unmark)
-            self._say("Done")
 
     # session ----------------------------------------------------------------------------------------
     def _restore(self, start) -> None:
@@ -1296,192 +1136,6 @@ class MainWindow(QMainWindow):
             "Made with Python and Qt (PyQt6), the QScintilla editor component, and the Tabler and Lucide icon sets.",
             "The full credits are in CREDITS.md."]))
 
-    # going places: history, the hotlist, the other panel --------------------------------------------------------
-    def _popup_at_address(self, menu: QMenu) -> None:
-        bar = self.active.address_bar
-        menu.popup(bar.mapToGlobal(QPoint(0, bar.height())))
-
-    def build_history_menu(self) -> QMenu:
-        """The folders the active panel's tab has shown, newest first; the one it stands on is ticked."""
-        panel = self.active
-        menu = QMenu(self)
-        entries = panel.history_entries()
-        if not entries:
-            menu.addAction("No folders yet").setEnabled(False)
-        for index, path in entries[:30]:
-            label = path if len(path) <= 70 else path[:30] + "..." + path[-37:]
-            act = menu.addAction(label.replace("&", "&&"))
-            act.setData(path)
-            act.setToolTip(path)
-            act.setCheckable(True)
-            act.setChecked(index == panel.history_position)
-            act.triggered.connect(lambda _c=False, i=index: panel.history_go(i))
-        return menu
-
-    def show_history(self) -> None:
-        self._history_menu = self.build_history_menu()
-        self._popup_at_address(self._history_menu)
-
-    def build_hotlist_menu(self) -> QMenu:
-        """The pinned folders, numbered so a digit picks one, and the way to pin another."""
-        panel = self.active
-        menu = QMenu(self)
-        pins = self._saved_list("home/pins")
-        if not pins:
-            menu.addAction("No pinned folders yet").setEnabled(False)
-        for n, path in enumerate(pins[:9], start=1):
-            name = self.fs.basename(path.rstrip(chr(92) + "/")) or path
-            act = menu.addAction(f"&{n}  {name}".replace("&&", "&"))
-            act.setToolTip(path)
-            act.triggered.connect(lambda _c=False, p=path: self._go_to_pin(panel, p))
-        menu.addSeparator()
-        menu.addAction("Pin This Folder (Ctrl+D)").triggered.connect(lambda _c=False: self.pin_folder())
-        return menu
-
-    def _go_to_pin(self, panel, path: str) -> None:
-        if not panel.set_folder(path):
-            self._say(f"Cannot open {path}")
-
-    def show_hotlist(self) -> None:
-        if self.active.is_home:
-            self._say("Open a folder first")
-            return
-        self._hotlist_menu = self.build_hotlist_menu()
-        self._popup_at_address(self._hotlist_menu)
-
-    def open_in_other_panel(self) -> None:
-        """Ctrl+Left or Ctrl+Right: the other panel opens the folder under the cursor (the folder itself when the
-        cursor is on a file)."""
-        panel = self.active
-        if panel.is_home:
-            return
-        entry = panel.current_entry()
-        target = entry.path if entry is not None and entry.is_dir else panel.path
-        self.other.set_folder(target)
-        self._say(f"The other panel shows {target}")
-
-    def same_in_other_panel(self) -> None:
-        if self.active.is_home:
-            return
-        self.other.set_folder(self.active.path)
-        self._say(f"The other panel shows {self.active.path}")
-
-    # folder sizes ------------------------------------------------------------------------------------------
-    def calculate_folder_sizes(self, panel=None) -> None:
-        """Add up whole folder trees for the Size column: the marked folders of the panel, else every folder in
-        its list. In the background with a box that shows the total growing and a Cancel."""
-        panel = panel or self.active
-        if panel.is_home:
-            self._say("The Home page has no folders to add up")
-            return
-        model = panel.model
-        folders = [model.entry_at(r) for r in range(model.entry_count())
-                   if model.entry_at(r) is not None and model.entry_at(r).is_dir and not model.is_up_row(r)]
-        marked = set(panel.marked_here())
-        wanted = [e.path for e in folders if e.path in marked] or [e.path for e in folders]
-        if not wanted:
-            self._say("There are no folders in this list")
-            return
-        at = panel.path
-        holder: dict = {}
-        shown: dict = {}
-        current = {"text": ""}
-
-        def work(progress, cancel):
-            def report(done: int, total: int, bytes_so_far: int, name: str) -> None:
-                if name:
-                    current["text"] = f"{name}  ({done + 1} of {total})   {human_size(bytes_so_far)} so far"
-                progress(done, total)
-            return folder_sizes(self.fs, wanted, cancel, report)
-
-        def on_progress(done: int, total: int) -> None:
-            if "box" not in shown:
-                shown["box"] = self.dialogs.make_progress("Folder sizes", lambda: holder["job"].cancel() if "job" in holder else None)
-            shown["box"].detail = current["text"]
-            shown["box"].update(done, total)
-
-        def finished(job: Job) -> None:
-            if "box" in shown:
-                shown["box"].close()
-            if job in self._size_jobs:
-                self._size_jobs.remove(job)
-            if job.state is JobState.FAILED:
-                self.dialogs.info("Folder sizes", str(job.error))
-                return
-            results = job.result or {}
-            if panel.path == at:                          # the panel may have moved on while it worked
-                panel.model.set_tree_sizes({p: r.size for p, r in results.items()})
-            self._sizes.update({p: r.size for p, r in results.items()})
-            self._update_status()                         # the line above counts folder sizes into the marked total
-            total = sum(r.size for r in results.values())
-            files = sum(r.files for r in results.values())
-            unread = sum(r.unreadable for r in results.values())
-            text = f"{len(results)} folder{'s' if len(results) != 1 else ''}: {human_size(total)} in {files:,} files"
-            if unread:
-                text += f"; {unread} folder{'s' if unread != 1 else ''} could not be read"
-            if len(results) < len(wanted):
-                text += f"; stopped after {len(results)} of {len(wanted)}"
-            self._say(text)
-
-        job = self.cmd_runner.submit("Folder sizes", work, on_progress=on_progress, on_done=finished)
-        holder["job"] = job
-        self._size_jobs.append(job)
-
-    # the slowness log (opt-in) --------------------------------------------------------------------------
-    @property
-    def stall_log_path(self) -> str:
-        return os.path.join(os.path.dirname(self.settings.fileName()), "slowness.log")
-
-    def _stall_context(self) -> str:
-        parts = []
-        if getattr(self, "_last_input", None) is not None and self._last_input.text:
-            parts.append("last input: " + self._last_input.text)
-        waiting = sum(1 for j in self._jobs if j.state is JobState.QUEUED)
-        if self._jobs:
-            parts.append(f"operations: 1 running{', ' + str(waiting) + ' waiting' if waiting else ''}")
-        parts.append(f"marked: {len(self.selection)}")
-        return "  |  ".join(parts)
-
-    def set_stall_log(self, on: bool) -> None:
-        """Start or stop watching the window for stalls. Off by default; nothing is recorded while it is off."""
-        self.settings.setValue("debug/stall_log", "true" if on else "false")
-        watch = getattr(self, "_stall_watch", None)
-        if watch is not None:
-            watch.stop()
-            self._stall_watch = None
-            self._heartbeat.stop()
-            QApplication.instance().removeEventFilter(self._last_input)
-        if on:
-            self._last_input = _LastInput(self)
-            QApplication.instance().installEventFilter(self._last_input)
-            self._stall_watch = StallWatch(self.stall_log_path, context=self._stall_context)
-            self._heartbeat = QTimer(self)
-            self._heartbeat.setInterval(40)
-            self._heartbeat.timeout.connect(self._stall_watch.beat)
-            self._stall_watch.start()
-            self._heartbeat.start()
-
-    def open_stall_log(self) -> None:
-        if not os.path.isfile(self.stall_log_path):
-            self.dialogs.info("Slowness Log", "Nothing has been recorded yet. Switch on Record Slow Moments, use "
-                                              "the program, and the moments it stalls for more than 200 ms are written here.")
-            return
-        self.edit_file(self.stall_log_path)
-
-    def delete_stall_log(self) -> None:
-        if not os.path.isfile(self.stall_log_path):
-            self._say("There is no slowness log")
-            return
-        if self.dialogs.confirm("Delete the Slowness Log", "Delete the record of slow moments?", "Delete"):
-            for editor in list(self.editors):
-                if os.path.normcase(editor.doc.path) == os.path.normcase(self.stall_log_path):
-                    editor.close()
-            try:
-                os.remove(self.stall_log_path)
-                self._say("Slowness log deleted")
-            except OSError as e:
-                self.dialogs.info("Slowness Log", f"Could not delete it: {e.strerror or e}")
-
     def closeEvent(self, event) -> None:
         watch = getattr(self, "_stall_watch", None)
         if watch is not None:
@@ -1494,6 +1148,7 @@ class MainWindow(QMainWindow):
                 return
         for job in list(self._jobs) + list(self._size_jobs) + list(self._plans):
             job.cancel()
+        self.cmd_runner.shutdown(wait=False, cancel_futures=True)   # a listing stuck on a dead share must not hold us
         self.settings.setValue("window/geometry", self.saveGeometry())
         self.settings.setValue("window/split", self.split.sizes())
         self.settings.setValue("panel/left", self.left.path)

@@ -297,11 +297,10 @@ def test_progress_reaches_total(work):
     assert [d for d, _ in seen] == sorted(d for d, _ in seen)
 
 
-def test_cancel_stops_between_steps_and_what_was_done_can_be_undone(work):
+def test_cancel_stops_between_steps_and_leaves_no_half_file(work):
     for n in "abc":
         write(work / "src" / n, n * 100)
     token = CancelToken()
-    log = UndoLog()
     plan = plan_copy(fs, [str(work / "src" / n) for n in "abc"], str(work / "dst"))
     calls = []
 
@@ -310,13 +309,12 @@ def test_cancel_stops_between_steps_and_what_was_done_can_be_undone(work):
         if len(calls) >= 3:      # cancel after the first file finished
             token.cancel()
 
-    res = run(plan, Bin(work / "bin"), log, progress=progress, cancel=token)
+    res = run(plan, Bin(work / "bin"), None, progress=progress, cancel=token)
     assert res.cancelled
     done_names = listing(work / "dst")
     assert 1 <= len(done_names) < 3
     assert not any(n.endswith(".dossier-part") for n in done_names)
-    log.undo_last(fs)
-    assert listing(work / "dst") == []
+    assert res.action is None                  # a copy is not journaled: nothing to undo, nothing deleted behind the user
 
 
 def test_one_failure_does_not_stop_the_rest(work):
@@ -330,16 +328,30 @@ def test_one_failure_does_not_stop_the_rest(work):
 
 
 # undo safety ------------------------------------------------------------------------------------------
-def test_undo_copy_removes_what_it_created_but_not_edited_files(work):
+def test_a_copy_is_never_undone_by_deleting_files(work):
+    write(work / "src" / "a", "A")
+    log = UndoLog()
+    run(plan_copy(fs, [str(work / "src" / "a")], str(work / "dst")), Bin(work / "bin"), log)
+    assert len(log) == 0 and log.undo_last(fs) is None            # nothing journaled: the copy stays
+    assert listing(work / "dst") == ["a"]
+
+
+def test_only_a_same_drive_move_and_a_rename_are_journaled(work):
     write(work / "src" / "a", "A")
     write(work / "src" / "b", "B")
     log = UndoLog()
-    run(plan_copy(fs, [str(work / "src" / "a"), str(work / "src" / "b")], str(work / "dst")), Bin(work / "bin"), log)
-    write(work / "dst" / "b", "edited afterwards, longer")
-    report = log.undo_last(fs)
-    assert report.reverted == 1 and len(report.problems) == 1
-    assert listing(work / "dst") == ["b"]
-    assert len(log) == 1                      # the unreverted step stays for another try
+    run(plan_move(fs, [str(work / "src" / "a")], str(work / "dst")), Bin(work / "bin"), log)
+    run(plan_rename(fs, str(work / "src" / "b"), "b2"), Bin(work / "bin"), log)
+    assert log.labels() == ["Rename", "Move"]
+
+
+def test_an_overwriting_move_has_no_undo_because_the_older_file_cannot_be_brought_back(work):
+    write(work / "src" / "a", "NEW")
+    write(work / "dst" / "a", "OLD")
+    log = UndoLog()
+    plan = plan_move(fs, [str(work / "src" / "a")], str(work / "dst")).resolve(Resolution.OVERWRITE, fs)
+    run(plan, Bin(work / "bin"), log)
+    assert len(log) == 0 and (work / "dst" / "a").read_text() == "NEW"
 
 
 def test_undo_move_refuses_when_the_original_place_is_taken(work):
@@ -353,27 +365,27 @@ def test_undo_move_refuses_when_the_original_place_is_taken(work):
     assert (work / "src" / "a").read_text() == "someone made a new one"
 
 
-def test_undo_created_folder_stays_if_not_empty(work):
-    (work / "src" / "d").mkdir()
-    write(work / "src" / "d" / "f", "F")
+def test_undo_of_a_created_folder_removes_it_but_not_when_it_is_not_empty(work):
+    from dossier.core.undo_log import Step, UndoAction
     log = UndoLog()
-    run(plan_copy(fs, [str(work / "src" / "d")], str(work / "dst")), Bin(work / "bin"), log)
-    write(work / "dst" / "d" / "mine", "added by the user")
+    (work / "dst" / "newdir").mkdir()
+    log.push(UndoAction("New folder", [Step("created_dir", str(work / "dst" / "newdir"))]))
+    report = log.undo_last(fs)
+    assert not report.problems and not (work / "dst" / "newdir").exists()
+    (work / "dst" / "full").mkdir()
+    write(work / "dst" / "full" / "mine", "added by the user")
+    log.push(UndoAction("New folder", [Step("created_dir", str(work / "dst" / "full"))]))
     report = log.undo_last(fs)
     assert any("not empty" in p for p in report.problems)
-    assert (work / "dst" / "d" / "mine").exists()
+    assert (work / "dst" / "full" / "mine").exists()
 
 
-def test_undo_log_is_bounded_and_can_be_saved_only_on_request(work, tmp_path):
+def test_undo_log_is_bounded(work):
     log = UndoLog(max_entries=2)
     for n in "abc":
         write(work / "src" / n, n)
         run(plan_rename(fs, str(work / "src" / n), n + "2"), Bin(work / "bin"), log)
     assert len(log) == 2 and log.labels() == ["Rename", "Rename"]
-    saved = str(tmp_path / "undo.json")
-    log.save(saved)
-    other = UndoLog()
-    other.load(saved)
-    assert len(other) == 2
-    assert other.undo_last(fs).reverted == 1
+    assert log.undo_last(fs).reverted == 1
+    log.clear()
     assert UndoLog().undo_last(fs) is None

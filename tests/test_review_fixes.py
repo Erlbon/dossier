@@ -115,22 +115,14 @@ def test_a_move_over_an_existing_file_also_keeps_the_old_one_until_it_succeeds(w
     assert [r.status for r in res.results] == ["failed"] and read(work / "dst" / "b.txt") == "OLD-B"
 
 
-def test_undoing_an_overwrite_removes_the_new_file_and_says_where_the_old_one_is(work):
+def test_an_overwrite_has_no_undo_so_nothing_is_deleted_behind_the_user(work):
     write(work / "src" / "a.txt", "NEW")
     write(work / "dst" / "a.txt", "OLD")
     log = UndoLog()
     execute(overwrite_plan(work), fs, trasher=Bin(work / "bin"), undo_log=log)
-    report = log.undo_last(fs)
-    assert not report.problems and not (work / "dst" / "a.txt").exists()
-    assert len(report.notes) == 1 and "a.txt.dossier-old" in report.notes[0] and "recycle bin" in report.notes[0]
-    assert "restore" in report.notes[0]
-
-
-def test_undoing_an_ordinary_copy_has_no_note(work):
-    write(work / "src" / "a.txt", "A")
-    log = UndoLog()
-    execute(plan_copy(fs, [str(work / "src" / "a.txt")], str(work / "dst")), fs, undo_log=log)
-    assert log.undo_last(fs).notes == []
+    assert len(log) == 0 and log.undo_last(fs) is None
+    assert read(work / "dst" / "a.txt") == "NEW"                              # the new file stays; the old is in the bin
+    assert read(work / "bin" / "a.txt.dossier-old") == "OLD"
 
 
 # a source that shrinks (finding 3) ----------------------------------------------------------------------------
@@ -305,7 +297,7 @@ def test_paste_and_the_other_placeholder_are_refused_too(world):
         win.right._pending = None
 
 
-def test_undo_in_the_window_tells_where_the_old_file_is(world):
+def test_undo_in_the_window_after_an_overwrite_says_there_is_nothing_to_undo(world):
     win, dialogs, left, right, tmp = world
     (left / "a.txt").write_text("NEW")
     (right / "a.txt").write_text("OLD")
@@ -317,5 +309,4 @@ def test_undo_in_the_window_tells_where_the_old_file_is(world):
     wait_planned(win)
     pump(win, lambda: (right / "a.txt").read_text() == "NEW")
     win.undo()
-    assert dialogs.infos and "restore it from there" in dialogs.infos[-1][1] and "a.txt.dossier-old" in dialogs.infos[-1][1]
-    assert not (right / "a.txt").exists()
+    assert "Nothing to undo" in win.status.text() and (right / "a.txt").read_text() == "NEW"

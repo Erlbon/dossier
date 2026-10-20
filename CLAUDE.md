@@ -33,6 +33,12 @@ The function list follows The Next Tool (Ebdac Software GmbH, discontinued 2007)
 - **Version bump at check-in (the user, 2026-10-19):** the build number is `YYYY-MM-DD#NN`, as in the Redactor apps (`dossier/core/version.py`, shown in the status line and Help > About). Any commit that changes real code runs `python bump_version.py` and adds a matching `CHANGELOG.md` section in the same check-in, before pushing, without being asked. Never edit `APP_VERSION` by hand. A test fails when the CHANGELOG has no section for the current build.
 - Edit code with the Edit/Write tools; tests are plain `pytest` (`python -m pytest -q`).
 
+## Decided (the owner, 2026-10-20)
+- **Undo is small on purpose.** Only renames, same-drive moves and new empty folders can be undone (`core/undo_log.py`). Never undo a copy by deleting what it made; an overwrite or a delete has no undo (older file in the recycle bin, or gone on a network drive). Do not grow it again without asking.
+- **Network drives have no recycle bin.** Delete there is permanent and an overwrite deletes the older file; both say so in the confirmation (`drives.is_network_path`).
+- **The window is split into mixins** (`gui/ops_queue.py`, `stall_log.py`, `going_places.py`, `folder_sizes.py`, `unpack.py`) and the one background-job helper `gui/background.py`. New background work uses `run_in_background`; do not hand-roll another holder/box/finished pattern. Sizes are formatted by `core/sizefmt.py`, a missing file is `vfs.stat_or_none`.
+- **The window's thread never touches the disk.** Listing, notes, sizes, planning, unpacking and the status line's sizes all run on threads.
+
 ## Lanes between sessions
 - A **local** session (the user's PC) owns everything that must be seen running: the GUI, the exe build, anything touching real folders, the Windows behaviour.
 - A **cloud** session may own the Qt-free core and its tests, specs and CI files.
