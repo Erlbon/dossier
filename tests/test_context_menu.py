@@ -223,3 +223,68 @@ def test_batch_rename_from_the_menu_works_on_the_clicked_item_even_when_nothing_
     find_sub = submenu(menu, "Batch Rename")
     next(a for a in find_sub.actions() if a.text().startswith("By Pattern")).trigger()
     assert seen == [["b.txt"]]                                          # the clicked item, not the marked a.txt
+
+
+# the Windows menu at the bottom -----------------------------------------------------------------------------------------------
+WIN_ENTRY = "More Options (Windows Menu)..."
+
+
+@pytest.mark.skipif(os.name != "nt", reason="the Windows shell menu")
+def test_the_windows_menu_is_the_last_entry_of_item_and_empty_space_menus(world):
+    win, d, left, *_ = world
+    filled(win, left)
+    t = texts(win.build_context_menu(win.left, row_of(win, "a.txt")))
+    assert t[-1] == WIN_ENTRY and t[-2] == "Properties"
+    assert texts(win.build_context_menu(win.left, -1))[-1] == WIN_ENTRY
+
+
+def test_it_is_not_offered_for_archives_search_results_or_the_home_page(world, monkeypatch):
+    win, d, left, *_ = world
+    filled(win, left)
+    monkeypatch.setattr("dossier.core.shellmenu.IS_WINDOWS", False)
+    assert WIN_ENTRY not in texts(win.build_context_menu(win.left, row_of(win, "a.txt")))
+    assert WIN_ENTRY not in texts(win.build_context_menu(win.left, -1))
+    monkeypatch.undo()
+    win.left.set_folder("home://")
+    pump(win, lambda: win.left.is_home)
+    assert WIN_ENTRY not in texts(win.build_context_menu(win.left, -1))
+
+
+@pytest.mark.skipif(os.name != "nt", reason="the Windows shell menu")
+def test_choosing_it_starts_the_shell_menu_on_those_items_and_our_own_verbs_run_here(world, monkeypatch):
+    win, d, left, right, tmp = world
+    filled(win, left)
+    started = []
+
+    def fake(self, paths, x, y, on_done, background, extended):
+        started.append((paths, background))
+        from dossier.core.shellmenu import Outcome
+        on_done(Outcome(verb=started_verb[0]))
+    started_verb = ["copy"]
+    monkeypatch.setattr(type(win), "_start_shell_menu", fake)
+    menu = win.build_context_menu(win.left, row_of(win, "b.txt"))
+    find(menu, WIN_ENTRY).trigger()
+    pump(win)
+    assert started == [([str(left / "b.txt")], False)]
+    from dossier.gui import file_clipboard
+    assert file_clipboard.get()[0] == [str(left / "b.txt")]                 # Copy ran as Dossier's own command, on that item
+    started_verb[0] = "delete"
+    find(win.build_context_menu(win.left, row_of(win, "c.txt")), WIN_ENTRY).trigger()
+    pump(win, lambda: d.confirms)
+    assert "c.txt" in d.confirms[-1][1]                                      # our own delete confirmation, not the shell's
+
+
+@pytest.mark.skipif(os.name != "nt", reason="the Windows shell menu")
+def test_what_the_shell_ran_refreshes_the_lists_and_errors_are_said(world, monkeypatch):
+    win, d, left, right, tmp = world
+    filled(win, left)
+    from dossier.core.shellmenu import Outcome
+    answers = [Outcome(ran=True), Outcome(error="The Windows menu failed: boom"), Outcome()]
+    monkeypatch.setattr(type(win), "_start_shell_menu", lambda self, p, x, y, done, bg, ext: done(answers.pop(0)))
+    (left / "new-from-shell.txt").write_text("n")                           # what a shell command may have created
+    find(win.build_context_menu(win.left, -1), WIN_ENTRY).trigger()
+    pump(win, lambda: win.left.model.row_of("new-from-shell.txt") >= 0)
+    find(win.build_context_menu(win.left, -1), WIN_ENTRY).trigger()
+    pump(win, lambda: "boom" in win.status.text())
+    find(win.build_context_menu(win.left, -1), WIN_ENTRY).trigger()
+    pump(win)

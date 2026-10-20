@@ -9,10 +9,11 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 
+from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QAction
-from PyQt6.QtWidgets import QMenu
+from PyQt6.QtWidgets import QApplication, QMenu
 
-from ..core import archives
+from ..core import archives, shellmenu
 from ..core.home import is_home
 from . import file_clipboard
 
@@ -63,6 +64,37 @@ class ContextMenuMixin:
     def _popup_menu(self, menu: QMenu, global_pos) -> None:      # a seam for tests
         menu.exec(global_pos)
 
+    # the Windows menu ---------------------------------------------------------------------------------------------------------
+    def _start_shell_menu(self, paths, x, y, on_done, background, extended) -> None:     # a seam for tests
+        shellmenu.show_in_thread(paths, x, y, on_done, background=background, extended=extended)
+
+    def _windows_menu(self, panel, paths, background: bool) -> None:
+        """The shell's own menu, built and shown on a thread of its own (a slow extension never freezes this window). Shift held shows
+        the extended entries. Cut, Copy, Paste, Delete and Rename come back here and run as Dossier's own commands."""
+        x, y = shellmenu.cursor_pos()
+        extended = bool(QApplication.keyboardModifiers() & Qt.KeyboardModifier.ShiftModifier)
+        self._say("Opening the Windows menu...")
+        self._start_shell_menu(list(paths), x, y, lambda outcome: self.dispatcher(lambda: self._windows_menu_done(panel, paths, background, outcome)),
+                               background, extended)
+
+    def _windows_menu_done(self, panel, paths, background: bool, outcome) -> None:
+        if outcome.error:
+            self._say(outcome.error)
+            return
+        if outcome.verb:
+            commands = {"cut": self.clip_cut, "copy": self.clip_copy, "paste": self.clip_paste, "delete": self.delete,
+                        "rename": self.rename}
+            run = commands.get(outcome.verb)
+            if run is not None and (not background or outcome.verb == "paste"):
+                self._set_active(panel)
+                with self._acting_on(panel, None if background else paths):
+                    run()
+            return
+        self._say("")
+        if outcome.ran:                                  # the shell may have made, extracted or changed files
+            self.left.refresh()
+            self.right.refresh()
+
     # the menus -----------------------------------------------------------------------------------------------------------
     def _item_menu(self, panel, entry, row: int = -1) -> QMenu:
         marked = panel.marked_here()
@@ -106,6 +138,9 @@ class ContextMenuMixin:
             add("Convert Archive to Zip", self.convert_archive_to_zip, enabled=not many)
         menu.addSeparator()
         add("Properties", self.show_properties, keys="Alt+Enter")
+        if shellmenu.can_show(paths):
+            menu.addSeparator()
+            add("More Options (Windows Menu)...", lambda: self._windows_menu(panel, paths, False))
         return menu
 
     def _empty_menu(self, panel) -> QMenu:
@@ -122,6 +157,9 @@ class ContextMenuMixin:
         add("Refresh", self.refresh, keys="Ctrl+R")
         menu.addSeparator()
         self._entry_action(menu, "Properties of This Folder", self.show_properties, panel, here, keys="Alt+Enter")
+        if shellmenu.folder_can_show(panel.path):
+            menu.addSeparator()
+            add("More Options (Windows Menu)...", lambda: self._windows_menu(panel, here, True))
         return menu
 
     def _home_menu(self, panel, entry, row: int = -1) -> QMenu:

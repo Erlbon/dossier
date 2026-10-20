@@ -2,6 +2,12 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-20#34 -- The Windows menu at the bottom of the right-click menu
+
+- **More Options (Windows Menu)...** is the last entry of our right-click menu, on an item and on empty space (Windows only, for real files and folders; not for items inside an archive, search results or the Home page). It opens the **full Windows menu** the shell builds for the same items: 7-Zip, Git, Defender, Open with, Send to, Share, PowerToys (File Locksmith, PowerRename) and everything else installed programs have added. **Hold Shift** when choosing it for the extended entries.
+- **Our own commands win:** if you pick Cut, Copy, Paste, Delete or Rename in the Windows menu, Windows is *not* asked to do it. Dossier runs its own command on the same items, with its own conflict dialog, progress, undo and tags. Everything else is run by Windows, and the lists refresh afterwards.
+- **A slow or stuck shell extension cannot freeze Dossier:** the menu is built and shown on a thread of its own, with its own hidden window, and the status line says "Opening the Windows menu..." while it works. The shell is called directly (no extra package is installed).
+
 ## 2026-10-20#33 -- Continue unfinished copies, moves and deletes after a restart
 
 - **Settings > Copy and Move > After a restart:** switch on *Remember copies, moves and deletes that were not finished*. It is **off by default**: the list names the folders and files you worked on, so nothing is written unless you ask for it.
