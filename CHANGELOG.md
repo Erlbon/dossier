@@ -2,6 +2,11 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-20#22 -- Fonts and Bold
+
+- **Settings > Fonts and Bold...** has two bold switches and a font. **Bold in the lists** covers folder names, marked items and the names and section titles on the Home page. **Bold in the bars** covers the address bar, the tabs and the buttons. Both are on by default, as before.
+- **Font:** one family and size for the whole program, or the system's own (the default). A sample line shows the choice before you save, and "Back to the defaults" undoes everything. The choice is kept in the settings file and applied at start-up.
+
 ## 2026-10-20#21 -- The Home page says why it ignores the column choice
 
 - Adding or removing columns (Settings > Columns, or a right-click on a column header) seemed to do nothing in a panel that was showing the Home page, because that page always has its own three columns (Name, Type, Details). The choice was kept all the time and applied to the folders you open, but nothing said so. Now the status line explains it whenever you change columns while the active panel shows the Home page. In a panel with a folder open the columns change at once.

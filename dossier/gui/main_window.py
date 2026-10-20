@@ -37,6 +37,7 @@ from .mounting import MountMixin
 from .properties import PropertiesMixin
 from .columns import ColumnsMixin
 from .archive_commands import ArchiveCommandsMixin
+from .look_settings import LookMixin
 from .zip_edit import ZipEditMixin, zip_parts
 from .copy_settings import CopySettingsMixin
 from .dialogs import Dialogs
@@ -62,7 +63,7 @@ SUMMARY_ITEMS = 12    # the confirmation lists this many items, then says how ma
 SIZE_LIMIT = 1000    # the status line sizes at most this many marked items
 
 
-class MainWindow(ZipEditMixin, ArchiveCommandsMixin, CopySettingsMixin, ColumnsMixin, PropertiesMixin, MountMixin, ChecksumMixin, MarksAndNotesMixin, SearchCommandMixin, BatchRenameMixin, OperationQueueMixin, StallLogMixin, GoingPlacesMixin, FolderSizesMixin, UnpackMixin, QMainWindow):
+class MainWindow(LookMixin, ZipEditMixin, ArchiveCommandsMixin, CopySettingsMixin, ColumnsMixin, PropertiesMixin, MountMixin, ChecksumMixin, MarksAndNotesMixin, SearchCommandMixin, BatchRenameMixin, OperationQueueMixin, StallLogMixin, GoingPlacesMixin, FolderSizesMixin, UnpackMixin, QMainWindow):
     def __init__(self, fs: Optional[FileSystem] = None, *, settings_path: Optional[str] = None, start=(None, None),
                  dialogs=None, trasher=None, terminal_launcher=None, which=None) -> None:
         super().__init__()
@@ -161,6 +162,7 @@ class MainWindow(ZipEditMixin, ArchiveCommandsMixin, CopySettingsMixin, ColumnsM
         self.selection.subscribe(lambda _s: self._update_status())
         self.theme.changed.connect(self._on_theme_changed)
         self.apply_columns_everywhere()              # the columns the user chose (Name and Type always)
+        self.apply_look()                            # the font and the bold the user chose
 
         self._restore(start)
         if self.act_stall_log.isChecked():
@@ -312,6 +314,7 @@ class MainWindow(ZipEditMixin, ArchiveCommandsMixin, CopySettingsMixin, ColumnsM
             group.addAction(act)
             scheme_menu.addAction(act)
             self.scheme_actions[key] = act
+        view.addAction(self._action("Fonts and Bold...", None, self.open_look_settings))
         view.addAction(self._action("Copy and Move...", None, self.open_copy_settings))
         # these two hold the state of the choices the dialog (and the confirmation box) change; they are not in a menu
         self.act_verify = QAction("Verify Copies After Copying", self)

@@ -16,7 +16,7 @@ from PyQt6.QtWidgets import QHBoxLayout, QMenu, QPushButton, QToolButton, QWidge
 
 from ..core.drives import Drive, drive_of, list_drives, usage_async
 from ..core.filetypes import DRIVE_ICONS
-from . import icon_set, theme
+from . import icon_set, look, theme
 from .models import human_size
 
 STYLES = ("menu", "strip")
@@ -66,7 +66,7 @@ class DriveBar(QObject):
             f"#drivestrip QPushButton{{border:1px solid {t['line']};border-radius:6px;padding:2px 8px;"
             f"color:{t['dim']};background:transparent;}}"
             f"#drivestrip QPushButton:checked{{background:{t['accent']};color:{t['accent_fg']};"
-            f"border-color:{t['accent']};font-weight:bold;}}")
+            f"border-color:{t['accent']};font-weight:{look.weight()};}}")
         self._rebuild_menu()
         self._refresh_current()
 

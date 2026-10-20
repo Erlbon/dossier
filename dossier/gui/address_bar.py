@@ -7,6 +7,8 @@ leftmost parts fold into a "..." button whose menu lists them.
 """
 from __future__ import annotations
 
+from . import look
+
 from PyQt6.QtCore import QEvent, QObject, Qt, pyqtSignal
 from PyQt6.QtGui import QFontMetrics
 from PyQt6.QtWidgets import QHBoxLayout, QLabel, QLineEdit, QMenu, QSizePolicy, QStackedLayout, QToolButton, QWidget
@@ -121,7 +123,7 @@ class AddressBar(QWidget):
         shown = list(self._parts)
         hidden: list = []
         bold = self.font()
-        bold.setBold(True)
+        bold.setBold(look.bold_bars)
         metrics = QFontMetrics(bold)
         room = max(0, self.width() - 40)
 

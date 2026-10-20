@@ -25,7 +25,7 @@ from ..core.drives import drive_of, probe_async, usage_async
 from ..core.lights import FAILED, OK, describe
 from ..core.home import HOME_URL, is_home
 from ..core.platform import has_scheme, path_key
-from . import icon_set, theme
+from . import icon_set, look, theme
 from .address_bar import AddressBar
 from .drive_bar import DriveBar
 from .models import FolderModel, human_size
@@ -353,7 +353,7 @@ class PanelTabBar(QTabBar):
             p.drawPath(path)
             text_rect = r.adjusted(12, 0, -26, 0)           # room for the close cross on the right
             font = p.font()
-            font.setBold(selected)
+            font.setBold(selected and look.bold_bars)
             p.setFont(font)
             p.setPen(QColor(text))
             p.drawText(text_rect, int(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft),
@@ -572,10 +572,10 @@ class Panel(QFrame):
         fill, text = (accent, on_accent) if active else (colors["dim_fill"], colors["dim_text"])
         self.bar.setStyleSheet(
             f"#pathbarbox{{background:{fill};}}"
-            f"#pathbarbox QLineEdit{{background:transparent;color:{text};border:none;font-weight:bold;}}"
+            f"#pathbarbox QLineEdit{{background:transparent;color:{text};border:none;font-weight:{look.weight()};}}"
             f"#pathbarbox QLabel{{color:{text};}}"
             f"#pathbarbox QToolButton{{color:{text};border:1px solid {text};border-radius:6px;"
-            f"padding:1px 6px;background:transparent;font-weight:bold;}}"
+            f"padding:1px 6px;background:transparent;font-weight:{look.weight()};}}"
             f"#pathbarbox QToolButton::menu-indicator{{image:none;}}"
             f"#pathbarbox QToolButton#homebtn{{border:none;padding:1px 3px;}}"
             f"#pathbarbox QToolButton#crumb{{border:none;border-radius:4px;padding:1px 4px;}}"
@@ -583,7 +583,7 @@ class Panel(QFrame):
             f"#pathbarbox QToolButton#crumb::menu-indicator{{image:none;}}"
             f"#pathbarbox QLabel#crumbsep{{color:{text};}}"
             f"#pathbarbox QToolButton#sizesbtn, #pathbarbox QToolButton#flatbtn"
-            f"{{border:none;border-radius:4px;padding:1px 6px;font-weight:bold;}}"
+            f"{{border:none;border-radius:4px;padding:1px 6px;font-weight:{look.weight()};}}"
             f"#pathbarbox QToolButton#sizesbtn:hover, #pathbarbox QToolButton#flatbtn:hover{{background:rgba(0,0,0,60);}}")
         palette = QPalette(QApplication.palette())
         if not active:
@@ -607,7 +607,7 @@ class Panel(QFrame):
         # close buttons, which are small and quiet until the pointer is on them.
         self.tab_row.setStyleSheet(
             f"#tabrow{{background:{t['card']};}}"
-            f"QToolButton{{color:{t['fg']};font-weight:bold;padding:0 8px;border:none;background:transparent;}}"
+            f"QToolButton{{color:{t['fg']};font-weight:{look.weight()};padding:0 8px;border:none;background:transparent;}}"
             f"QTabBar QToolButton{{padding:1px;border-radius:3px;}}"
             f"QTabBar QToolButton:hover{{background:{t['line']};}}")
         self.tabs.update()

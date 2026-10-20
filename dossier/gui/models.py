@@ -19,7 +19,7 @@ from ..core.filetypes import DRIVE_ICONS, icon_name
 from ..core.home import HOME_URL, TYPE_NAMES, USER_FOLDER_NOTE
 from ..core.selection import SelectionStore
 from ..core.vfs import Entry, FileSystem, natural_key
-from . import icon_set, theme
+from . import icon_set, look, theme
 
 COLUMNS = tuple(column_labels[k] for k in column_keys)       # one per logical column, see core/columns.py
 HOME_COLUMNS = ("Name", "Type", "Details")
@@ -121,6 +121,12 @@ class FolderModel(QAbstractTableModel):
 
     def _tag(self, path: str) -> tuple:
         return self._tag_info.get(path, ("", 0, ""))
+
+    def refresh_all(self) -> None:
+        """Every cell is drawn again (the font or bold was changed)."""
+        if self.rowCount():
+            self.dataChanged.emit(self.index(0, 0), self.index(self.rowCount() - 1, self.columnCount() - 1))
+        self.layoutChanged.emit()
 
     def set_tag_info(self, info: dict) -> None:
         """The tags, ratings and labels of the items on screen (``{path: (tags text, rating, label)}``): shown in the Tags,
@@ -330,7 +336,7 @@ class FolderModel(QAbstractTableModel):
             return QBrush(QColor(LABEL_COLORS[self._tag(entry.path)[2]]))
         if role == Qt.ItemDataRole.ForegroundRole and self.is_marked(entry):
             return QBrush(marked_color())
-        if role == Qt.ItemDataRole.FontRole and (self.is_marked(entry) or entry.is_dir):
+        if role == Qt.ItemDataRole.FontRole and look.bold_lists and (self.is_marked(entry) or entry.is_dir):
             font = QFont()
             font.setBold(True)
             return font
@@ -350,7 +356,7 @@ class FolderModel(QAbstractTableModel):
             return entry.note
         if role == Qt.ItemDataRole.FontRole:
             font = QFont()
-            font.setBold(entry.kind in ("header", "action") or col == 0)      # section titles, actions and names
+            font.setBold(look.bold_lists and (entry.kind in ("header", "action") or col == 0))      # section titles, actions, names
             return font
         if role == Qt.ItemDataRole.ForegroundRole:
             if entry.kind == "header":
