@@ -2,6 +2,16 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-20#28 -- Thumbnails
+
+- **View > Thumbnails (Ctrl+2)** shows the list as a grid of pictures with the names under them; **View > Details (Ctrl+1)** goes back. The choice belongs to each panel and is remembered, so the left panel can show photos while the right shows details. The Home page always shows details.
+- **What gets a picture:** image files (JPEG, PNG, GIF, BMP, WebP, TIFF, icons; photos turn upright), the **first page of a comic archive** (cbz), the **cover of an epub**, the **cover art inside audio files** (mp3, flac, m4a, ogg...), and a **folder gets the picture lying in it** (cover.jpg, folder.jpg, front.jpg, poster...). Everything else, and anything whose picture cannot be read, keeps its type icon, drawn smaller in the middle of its tile.
+- **View > Thumbnail Size** has five sizes (Small 64 to Huge 256); **Ctrl+mouse wheel** changes the size in the thumbnail view. **View > Arrange By** sorts the list by name, size, date, type, created or last opened, ascending or descending, in either view (the thumbnail view has no column headers to click).
+- **Made on the side, kept in memory:** the pictures are made by a few background threads, only for what is on screen, and appear one by one; the window never waits for a picture. They are kept in memory while the program runs (up to 800) and **nothing is written to disk**. A big folder costs what you can see.
+- **Settings > Thumbnails...:** pictures on **network drives** are off by default (each one has to be read over the network); a **frame from videos** is off by default and needs ffmpeg; a button forgets the pictures made so far.
+- The keyboard, marking, dragging, dropping and the right-click menu work in the thumbnail view exactly as in the table. The folder note is not shown in the thumbnail view.
+- Under the hood the details table and the thumbnail view share one list, one cursor and one set of marks.
+
 ## 2026-10-20#27 -- The tools bar
 
 - **A row of your own programs between the menu bar and the panels**, like the bookmarks bar in a browser. One click starts a program on the marked items (or the item under the cursor); the program's own icon is shown. **Folders** hold more programs, and more folders inside them, as a drop-down. View > Tools Bar shows or hides it.

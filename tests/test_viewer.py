@@ -313,9 +313,9 @@ def test_menus_view_has_modes_and_notes_while_settings_has_the_choices(commander
     assert titles == ["Files", "Mark", "View", "Go", "Commands", "Settings", "Help"]
     menus = {a.text().replace("&", ""): a.menu() for a in win.menuBar().actions()}
     view = [a.text() for a in menus["View"].actions() if not a.isSeparator()]
-    assert view == ["Details", "Folder Notes", "Home Page", "Quick Filter", "Open as Archive", "Folder Sizes", "Edit the Path", "Refresh", "Tools Bar", "Tabs"]
+    assert view == ["Details", "Thumbnails", "Thumbnail Size", "Arrange By", "Folder Notes", "Home Page", "Quick Filter", "Open as Archive", "Folder Sizes", "Edit the Path", "Refresh", "Tools Bar", "Tabs"]
     settings = [a.text() for a in menus["Settings"].actions()]
-    assert settings == ["Color Scheme", "Fonts and Bold...", "Copy and Move...", "Network Drives", "Drive Memory", "Slowness Log", "Icon Set", "Columns", "Drive Selector"]
+    assert settings == ["Color Scheme", "Fonts and Bold...", "Thumbnails...", "Copy and Move...", "Network Drives", "Drive Memory", "Slowness Log", "Icon Set", "Columns", "Drive Selector"]
 
 
 def test_folder_notes_can_be_switched_off_and_the_choice_is_kept(commander, tmp_path):

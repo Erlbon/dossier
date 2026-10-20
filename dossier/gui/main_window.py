@@ -40,6 +40,7 @@ from .archive_commands import ArchiveCommandsMixin
 from .look_settings import LookMixin
 from .context_menu import ContextMenuMixin
 from .tools_bar import ToolsBarMixin
+from .view_modes import ViewModesMixin
 from .drop_handler import DragDropMixin
 from .zip_edit import ZipEditMixin, zip_parts
 from .copy_settings import CopySettingsMixin
@@ -66,7 +67,7 @@ SUMMARY_ITEMS = 12    # the confirmation lists this many items, then says how ma
 SIZE_LIMIT = 1000    # the status line sizes at most this many marked items
 
 
-class MainWindow(ToolsBarMixin, ContextMenuMixin, DragDropMixin, LookMixin, ZipEditMixin, ArchiveCommandsMixin, CopySettingsMixin, ColumnsMixin, PropertiesMixin, MountMixin, ChecksumMixin, MarksAndNotesMixin, SearchCommandMixin, BatchRenameMixin, OperationQueueMixin, StallLogMixin, GoingPlacesMixin, FolderSizesMixin, UnpackMixin, QMainWindow):
+class MainWindow(ViewModesMixin, ToolsBarMixin, ContextMenuMixin, DragDropMixin, LookMixin, ZipEditMixin, ArchiveCommandsMixin, CopySettingsMixin, ColumnsMixin, PropertiesMixin, MountMixin, ChecksumMixin, MarksAndNotesMixin, SearchCommandMixin, BatchRenameMixin, OperationQueueMixin, StallLogMixin, GoingPlacesMixin, FolderSizesMixin, UnpackMixin, QMainWindow):
     def __init__(self, fs: Optional[FileSystem] = None, *, settings_path: Optional[str] = None, start=(None, None),
                  dialogs=None, trasher=None, terminal_launcher=None, which=None) -> None:
         super().__init__()
@@ -147,10 +148,11 @@ class MainWindow(ToolsBarMixin, ContextMenuMixin, DragDropMixin, LookMixin, ZipE
 
         for panel in (self.left, self.right):
             panel.activated.connect(self._set_active)
-            panel.table.switch_panel.connect(self.switch_panel)
-            panel.table.mark_toggle.connect(self.toggle_mark)
-            panel.table.space.connect(self._space_pressed)
-            panel.table.type_text.connect(self._type_to_command)
+            for view in (panel.table, panel.icons):          # the details table and the thumbnail view act the same
+                view.switch_panel.connect(self.switch_panel)
+                view.mark_toggle.connect(self.toggle_mark)
+                view.space.connect(self._space_pressed)
+                view.type_text.connect(self._type_to_command)
             panel.enter_hook = self._enter_runs_command
             panel.backspace_hook = self._backspace_edits_command
             panel.folder_changed.connect(lambda _p: self._update_prompt())
@@ -171,6 +173,7 @@ class MainWindow(ToolsBarMixin, ContextMenuMixin, DragDropMixin, LookMixin, ZipE
         self.theme.changed.connect(self._on_theme_changed)
         self.apply_columns_everywhere()              # the columns the user chose (Name and Type always)
         self.apply_look()                            # the font and the bold the user chose
+        self.build_thumbnails()                      # the thumbnail maker, and each panel's remembered view
 
         self._restore(start)
         if self.act_stall_log.isChecked():
@@ -178,7 +181,7 @@ class MainWindow(ToolsBarMixin, ContextMenuMixin, DragDropMixin, LookMixin, ZipE
         self.set_drive_style(str(self.settings.value("view/drive_selector", "menu")))
         self.set_notes_visible(self.act_notes.isChecked())
         self._set_active(self.left)
-        self.left.table.setFocus()
+        self.left.view.setFocus()
         self._update_status()
 
     # setup ---------------------------------------------------------------------------
@@ -243,7 +246,8 @@ class MainWindow(ToolsBarMixin, ContextMenuMixin, DragDropMixin, LookMixin, ZipE
         details.setChecked(True)
         mode_group.addAction(details)
         view_menu.addAction(details)
-        self.view_mode_actions["details"] = details          # List, Icons and Thumbnails join here when built
+        self.view_mode_actions["details"] = details
+        self.add_view_mode_actions(view_menu, mode_group)
         view_menu.addSeparator()
         self.act_notes = QAction("Folder Notes", self)
         self.act_notes.setCheckable(True)
@@ -328,6 +332,7 @@ class MainWindow(ToolsBarMixin, ContextMenuMixin, DragDropMixin, LookMixin, ZipE
             scheme_menu.addAction(act)
             self.scheme_actions[key] = act
         view.addAction(self._action("Fonts and Bold...", None, self.open_look_settings))
+        view.addAction(self._action("Thumbnails...", None, self.open_thumbnail_settings))
         view.addAction(self._action("Copy and Move...", None, self.open_copy_settings))
         # these two hold the state of the choices the dialog (and the confirmation box) change; they are not in a menu
         self.act_verify = QAction("Verify Copies After Copying", self)
@@ -449,7 +454,7 @@ class MainWindow(ToolsBarMixin, ContextMenuMixin, DragDropMixin, LookMixin, ZipE
 
     def switch_panel(self) -> None:
         target = self.other          # taken once: focusing it already makes it the active panel
-        target.table.setFocus()
+        target.view.setFocus()
         self._set_active(target)
 
     def swap_panels(self) -> None:
@@ -606,8 +611,8 @@ class MainWindow(ToolsBarMixin, ContextMenuMixin, DragDropMixin, LookMixin, ZipE
         self.prompt = QLabel(">")
         self.cmdline = CommandLine()
         self.cmdline.returnPressed.connect(self.run_command_line)
-        self.cmdline.escape_pressed.connect(lambda: self.active.table.setFocus())
-        self.cmdline.tab_pressed.connect(lambda: self.active.table.setFocus())
+        self.cmdline.escape_pressed.connect(lambda: self.active.view.setFocus())
+        self.cmdline.tab_pressed.connect(lambda: self.active.view.setFocus())
         self.term_button = QToolButton()
         self.term_button.setAutoRaise(True)
         self.term_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
@@ -1216,6 +1221,7 @@ class MainWindow(ToolsBarMixin, ContextMenuMixin, DragDropMixin, LookMixin, ZipE
             "The full credits are in CREDITS.md."]))
 
     def closeEvent(self, event) -> None:
+        self.thumbs.shutdown()                       # the thumbnail threads end before the window does
         watch = getattr(self, "_stall_watch", None)
         if watch is not None:
             watch.stop()

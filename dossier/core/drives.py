@@ -68,6 +68,21 @@ def is_network_path(path: str, drives: Optional[list] = None) -> bool:
     return drive is not None and drive.kind == "network"
 
 
+def is_remote_quick(path: str) -> bool:
+    """Whether ``path`` is on a network drive, from the drive type alone (one call, no look at the share, no drive list), for places
+    that ask for every folder that is shown. A path with a scheme (an archive, a result list) is not."""
+    if not path or has_scheme(path):
+        return False
+    if IS_WINDOWS:
+        import ctypes
+        p = strip_longpath(path)
+        if p.startswith(chr(92) * 2):
+            return True
+        root = os.path.splitdrive(p)[0]
+        return bool(root) and ctypes.windll.kernel32.GetDriveTypeW(root + chr(92)) == 4          # DRIVE_REMOTE
+    return is_network_path(path)
+
+
 def disk_usage(path: str) -> Optional[tuple]:
     """``(total, free)`` in bytes, or None. May block on a dead share: call it through ``usage_async``."""
     try:

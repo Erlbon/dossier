@@ -26,7 +26,7 @@ from . import painted_icons, theme
 
 BUILTIN_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "icons")
 DEFAULT_SET = "tabler"
-SIZES = (16, 20, 24, 32)
+SIZES = (16, 20, 24, 32, 48, 64, 96, 128, 192, 256)      # the big ones are for the thumbnail view
 
 
 @dataclass(frozen=True)

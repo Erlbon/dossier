@@ -9,7 +9,7 @@ from typing import Optional
 
 from PyQt6.QtCore import QModelIndex, QPoint, QRectF, QSize, Qt, QTimer, QUrl, pyqtSignal
 from PyQt6.QtGui import QColor, QContextMenuEvent, QDesktopServices, QDrag, QFontMetrics, QPainter, QPainterPath, QPalette, QPen, QPixmap
-from PyQt6.QtWidgets import (QAbstractItemView, QApplication, QFrame, QHBoxLayout, QHeaderView, QLabel, QLineEdit,
+from PyQt6.QtWidgets import (QAbstractItemView, QApplication, QFrame, QListView, QStackedWidget, QHBoxLayout, QHeaderView, QLabel, QLineEdit,
                              QTabBar, QToolButton,
                              QTableView, QTextBrowser, QVBoxLayout, QWidget)
 
@@ -78,21 +78,9 @@ class _FilterEdit(QLineEdit):
             super().keyPressEvent(event)
 
 
-class PanelTable(QTableView):
-    switch_panel = pyqtSignal()
-    mark_toggle = pyqtSignal()       # Insert
-    space = pyqtSignal()             # Space: marks, or types a space into a command being written
-    activate = pyqtSignal()
-    go_up = pyqtSignal()
-    focused = pyqtSignal()
-    type_text = pyqtSignal(str)      # a printable key: it starts (or continues) a command
-    activate_in_tab = pyqtSignal()   # Ctrl+Enter: open the folder in a new tab
-    escape = pyqtSignal()            # Esc: stop waiting for a slow folder
-    middle_clicked = pyqtSignal(int)  # middle click on a row: open that folder in a background tab
-    history_step = pyqtSignal(int)    # the mouse's back (-1) or forward (+1) button
-    dropped = pyqtSignal(list, int, int, object)   # (paths, row under the pointer or -1, keyboard modifiers, source panel)
-    drag_ended = pyqtSignal()                      # a drag that started here is over (the lists may have changed)
-    context_requested = pyqtSignal(object, int)    # a right-click, or the Menu key: (global position, row under it or -1)
+class _FileView:
+    """What a list of files does, for the details table and the icon view alike: marking, dragging, dropping, keys, the right-click
+    menu. A mixin before the Qt view class, so ``super()`` reaches the Qt view."""
 
     # Marking several items. The marks are the shared selection; the cursor is the current row.
     #   Space / Insert       mark the item and move down          Ctrl+Space   mark it, stay
@@ -345,6 +333,75 @@ class PanelTable(QTableView):
         return False   # Tab belongs to the commander, not to widget focus
 
 
+    zooms = False                # only the icon view zooms with Ctrl+wheel
+
+    def wheelEvent(self, event) -> None:
+        if self.zooms and event.modifiers() & Qt.KeyboardModifier.ControlModifier:
+            self.zoom.emit(1 if event.angleDelta().y() > 0 else -1)
+            event.accept()
+            return
+        super().wheelEvent(event)
+
+
+class PanelTable(_FileView, QTableView):
+    switch_panel = pyqtSignal()
+    mark_toggle = pyqtSignal()       # Insert
+    space = pyqtSignal()             # Space: marks, or types a space into a command being written
+    activate = pyqtSignal()
+    go_up = pyqtSignal()
+    focused = pyqtSignal()
+    type_text = pyqtSignal(str)      # a printable key: it starts (or continues) a command
+    activate_in_tab = pyqtSignal()   # Ctrl+Enter: open the folder in a new tab
+    escape = pyqtSignal()            # Esc: stop waiting for a slow folder
+    middle_clicked = pyqtSignal(int)  # middle click on a row: open that folder in a background tab
+    history_step = pyqtSignal(int)    # the mouse's back (-1) or forward (+1) button
+    dropped = pyqtSignal(list, int, int, object)   # (paths, row under the pointer or -1, keyboard modifiers, source panel)
+    drag_ended = pyqtSignal()                      # a drag that started here is over (the lists may have changed)
+    context_requested = pyqtSignal(object, int)    # a right-click, or the Menu key: (global position, row under it or -1)
+    zoom = pyqtSignal(int)                         # Ctrl+wheel in the icon view: +1 bigger, -1 smaller
+
+
+class PanelIcons(_FileView, QListView):
+    """The thumbnail view: the same list as the table, as a grid of pictures with the names under them."""
+    switch_panel = pyqtSignal()
+    mark_toggle = pyqtSignal()       # Insert
+    space = pyqtSignal()             # Space: marks, or types a space into a command being written
+    activate = pyqtSignal()
+    go_up = pyqtSignal()
+    focused = pyqtSignal()
+    type_text = pyqtSignal(str)      # a printable key: it starts (or continues) a command
+    activate_in_tab = pyqtSignal()   # Ctrl+Enter: open the folder in a new tab
+    escape = pyqtSignal()            # Esc: stop waiting for a slow folder
+    middle_clicked = pyqtSignal(int)  # middle click on a row: open that folder in a background tab
+    history_step = pyqtSignal(int)    # the mouse's back (-1) or forward (+1) button
+    dropped = pyqtSignal(list, int, int, object)   # (paths, row under the pointer or -1, keyboard modifiers, source panel)
+    drag_ended = pyqtSignal()                      # a drag that started here is over (the lists may have changed)
+    context_requested = pyqtSignal(object, int)    # a right-click, or the Menu key: (global position, row under it or -1)
+    zoom = pyqtSignal(int)                         # Ctrl+wheel in the icon view: +1 bigger, -1 smaller
+
+    zooms = True
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.setViewMode(QListView.ViewMode.IconMode)
+        self.setResizeMode(QListView.ResizeMode.Adjust)
+        self.setMovement(QListView.Movement.Static)
+        self.setUniformItemSizes(True)
+        self.setWrapping(True)
+        self.setWordWrap(True)
+        self.setTextElideMode(Qt.TextElideMode.ElideMiddle)
+        self.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.setVerticalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
+        self.setSpacing(4)
+
+    def set_size(self, px: int) -> None:
+        self.setIconSize(QSize(px, px))
+        line = self.fontMetrics().height()
+        self.setGridSize(QSize(px + 24, px + line * 2 + 16))
+
+
+
 NAV_BUDGET = 0.15      # seconds a folder gets to answer before the window stops waiting for it
 
 
@@ -486,6 +543,7 @@ class Panel(QFrame):
     activated = pyqtSignal(object)        # the user focused this panel
     message = pyqtSignal(str)
     context_requested = pyqtSignal(object, int)           # a right-click on this panel's list: (global position, row or -1)
+    mode_changed = pyqtSignal(object)                    # the view mode or the thumbnail size of this panel changed
     files_dropped = pyqtSignal(list, str, int, object)    # (paths, folder they were dropped on, key modifiers, source panel)
     column_menu_requested = pyqtSignal(object)    # a right-click on the header (its position)
     columns_reordered = pyqtSignal()              # the user dragged a column
@@ -615,6 +673,17 @@ class Panel(QFrame):
         self.table.setVerticalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
         self.table.setIconSize(QSize(16, 16))
 
+        self.icons = PanelIcons()                          # the thumbnail view: the same list, the same cursor and marks
+        self._setup_view(self.icons)
+        self.icons.setModel(self.model)
+        self.icons.setSelectionModel(self.table.selectionModel())
+        self.icons.setModelColumn(0)
+        self.icon_px = 128
+        self.view_mode = "details"
+        self.stack = QStackedWidget()
+        self.stack.addWidget(self.table)
+        self.stack.addWidget(self.icons)
+
         self.note = NoteView(self.table.viewport())
         self.note.edit_requested.connect(self.note_edit_requested.emit)
         self.note.hide()
@@ -631,7 +700,7 @@ class Panel(QFrame):
         body.setSpacing(0)
         body.addWidget(self.drive_bar.strip)
         body.addWidget(self.bar)
-        body.addWidget(self.table, 1)
+        body.addWidget(self.stack, 1)
         body.addWidget(self.filter_edit)
         layout.addWidget(self.tab_row)
         layout.addWidget(self.body, 1)
@@ -639,11 +708,11 @@ class Panel(QFrame):
         self.address.returnPressed.connect(self._address_entered)
         self.filter_edit.textChanged.connect(self._filter_changed)
         self.filter_edit.escaped.connect(self.clear_filter)
-        self.filter_edit.leave.connect(lambda: self.table.setFocus())
+        self.filter_edit.leave.connect(lambda: self.view.setFocus())
         self.table.history_step.connect(lambda step: self.history_back() if step < 0 else self.history_forward())
         self.address_bar.navigate.connect(self._crumb_clicked)
         self.address_bar.navigate_new_tab.connect(lambda target: self.new_tab(target, activate=False))
-        self.address_bar.escaped.connect(lambda: self.table.setFocus())
+        self.address_bar.escaped.connect(lambda: self.view.setFocus())
         self.enter_hook = None         # set by the window: Enter runs a command being written, if there is one
         self.backspace_hook = None     # likewise Backspace edits that command instead of going up
         self.table.activate.connect(self._enter)
@@ -665,6 +734,57 @@ class Panel(QFrame):
         self._add_tab_entry("")                  # the first tab; set_folder gives it its folder
         self._active = False
         self.restyle()
+
+    # the two views ------------------------------------------------------------------
+    @property
+    def view(self):
+        """The view that is showing: the details table or the thumbnails."""
+        return self.stack.currentWidget()
+
+    def _setup_view(self, view) -> None:
+        """Give a view the same wiring as the table has."""
+        view.selection = self.selection
+        view.drag_paths = self._paths_to_drag
+        view.drag_source = str(id(self))
+        view.drop_check = self._drop_target
+        view.setAcceptDrops(True)
+        view.setDragDropMode(QAbstractItemView.DragDropMode.DropOnly)
+        view.dropped.connect(self._table_dropped)
+        view.context_requested.connect(self.context_requested.emit)
+        view.drag_ended.connect(self.refresh)
+        view.history_step.connect(lambda step: self.history_back() if step < 0 else self.history_forward())
+        view.activate.connect(self._enter)
+        view.go_up.connect(self._backspace)
+        view.doubleClicked.connect(lambda _i: self.open_current())
+        view.focused.connect(lambda: self.activated.emit(self))
+        view.escape.connect(self._escape)
+        view.activate_in_tab.connect(lambda: self.open_current(new_tab=True))
+        view.middle_clicked.connect(self._middle_click_row)
+        view.zoom.connect(lambda step: self.zoom_icons(step))
+
+    def set_view_mode(self, mode: str, px: int = 0) -> None:
+        """``details`` or ``icons`` (the thumbnails) with a picture size. The Home page always shows details."""
+        from .thumbnails import nearest_step
+        self.view_mode = mode if mode in ("details", "icons") else "details"
+        if px:
+            self.icon_px = nearest_step(px)
+        self._apply_mode()
+        self.mode_changed.emit(self)
+
+    def zoom_icons(self, step: int) -> None:
+        from .thumbnails import step_by
+        self.set_view_mode("icons", step_by(self.icon_px, step))
+
+    def _apply_mode(self) -> None:
+        show_icons = self.view_mode == "icons" and not self.is_home and self.model.path != ""
+        had_focus = self.table.hasFocus() or self.icons.hasFocus()
+        self.model.icon_px = self.icon_px if show_icons else 0
+        self.icons.set_size(self.icon_px)
+        self.stack.setCurrentWidget(self.icons if show_icons else self.table)
+        self.model.refresh_all()
+        self._show_note(self._note_text)
+        if had_focus:
+            self.view.setFocus()
 
     # state ---------------------------------------------------------------------------
     @property
@@ -705,8 +825,9 @@ class Panel(QFrame):
             for group in (QPalette.ColorGroup.Active, QPalette.ColorGroup.Inactive):
                 palette.setColor(group, QPalette.ColorRole.Highlight, QColor(t["line"]))
                 palette.setColor(group, QPalette.ColorRole.HighlightedText, QColor(t["fg"]))
-        self.table.setPalette(palette)
-        self.table.viewport().setPalette(palette)   # the viewport keeps an old copy otherwise (white rows in dark)
+        for view in (self.table, self.icons):
+            view.setPalette(palette)
+            view.viewport().setPalette(palette)     # the viewport keeps an old copy otherwise (white rows in dark)
         self.drive_bar.set_chip_color(text)
         self.home_button.setIcon(icon_set.icon("home", text))
         self._style_close_buttons()
@@ -848,7 +969,7 @@ class Panel(QFrame):
     def clear_filter(self) -> None:
         self._hide_filter()
         self.model.set_filter("")
-        self.table.setFocus()
+        self.view.setFocus()
         if self.model.entry_count():
             first = 1 if self.model.is_up_row(0) and self.model.entry_count() > 1 else 0
             self.table.setCurrentIndex(self.model.index(first, 0))
@@ -1036,6 +1157,7 @@ class Panel(QFrame):
             self._hide_filter()                    # a filter belongs to one folder
         self._record_history(path)
         self._apply_columns()
+        self._apply_mode()
         self.address.setText(path)
         self.address_bar.set_path(path)
         self.drive_bar.set_current_path(path)
@@ -1056,7 +1178,7 @@ class Panel(QFrame):
             self.refresh_tags()
         if row >= 0:
             self.table.setCurrentIndex(self.model.index(row, 0))
-        self.table.scrollToTop() if not select else self.table.scrollTo(self.table.currentIndex())
+        self.view.scrollToTop() if not select else self.view.scrollTo(self.table.currentIndex())
         self._label_current_tab(path)
         self.folder_changed.emit(self)
         return True
@@ -1289,7 +1411,7 @@ class Panel(QFrame):
         if text and not self.set_folder(typed):
             self.address.setText(self.path)
         self.address_bar.finish_edit()
-        self.table.setFocus()
+        self.view.setFocus()
 
     def _crumb_clicked(self, target: str) -> None:
         """A part of the address was clicked: go there, and stand on the folder we came out of."""
@@ -1298,7 +1420,7 @@ class Panel(QFrame):
         if target in here and here.index(target) + 1 < len(here):
             came_from = self.fs.basename(here[here.index(target) + 1].rstrip(pathparts.SEPARATORS))
         self.set_folder(target, select=came_from)
-        self.table.setFocus()
+        self.view.setFocus()
 
     def _update_free(self, path: str) -> None:
         """Free space comes from a background thread: a dead network share must not freeze the window."""
@@ -1340,8 +1462,8 @@ class Panel(QFrame):
             self._show_note("")
 
     def _show_note(self, text: str) -> None:
-        self.model.set_has_note(bool(text))
-        if not text:
+        self.model.set_has_note(bool(text) and not self.model.icon_px)      # the thumbnail view has no note row
+        if not text or self.model.icon_px:
             self.note.hide()
             return
         self.note.setMarkdown(text)

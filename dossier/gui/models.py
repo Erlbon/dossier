@@ -10,11 +10,14 @@ from datetime import datetime
 from typing import Optional
 
 from PyQt6.QtCore import QAbstractTableModel, QModelIndex, Qt
-from PyQt6.QtCore import QPointF
-from PyQt6.QtGui import QBrush, QColor, QFont, QIcon, QPainter, QPen, QPixmap, QPolygonF
+from PyQt6.QtCore import QPointF, QSize
+from PyQt6.QtGui import QBrush, QColor, QFont, QFontMetrics, QIcon, QPainter, QPen, QPixmap, QPolygonF
+from PyQt6.QtWidgets import QApplication
 
 from ..core.columns import KEYS as column_keys, LABELS as column_labels, RIGHT_ALIGNED, attributes_text, location_text, type_text
 from ..core.columns import LABEL_COLORS, label_text, rating_text, when
+from ..core import covers
+from ..core.drives import is_remote_quick
 from ..core.filetypes import DRIVE_ICONS, icon_name
 from ..core.home import HOME_URL, TYPE_NAMES, USER_FOLDER_NOTE
 from ..core.selection import SelectionStore
@@ -100,6 +103,12 @@ class FolderModel(QAbstractTableModel):
         self._filter = ""
         self._tree_sizes: dict = {}
         self.drop_row = -1                       # the row a drag is hovering over (a folder that would take the drop)
+        self.icon_px = 0                         # 0: the details table; otherwise the thumbnail view, with pictures this big
+        self.thumbs = None                       # the Thumbnails that make the pictures, set by the window
+        self._network = False                    # the folder shown is on a network drive (no thumbnails unless allowed)
+        self._rc_key = None
+        self._rc: dict = {}
+        self._framed_cache: dict = {}
         self._tag_info: dict = {}                # path -> (tags text, rating, label), filled in on a thread when a column is on
         self._has_note = False
         self._sort_col = 0
@@ -173,6 +182,7 @@ class FolderModel(QAbstractTableModel):
         previous = self.path
         self.beginResetModel()
         self._tree_sizes = {}
+        self._network = is_remote_quick(path) if path and not path.startswith("home:") else False
         self.path = path
         self._up = up
         if path != previous:
@@ -334,7 +344,13 @@ class FolderModel(QAbstractTableModel):
                 return label_text(self._tag(entry.path)[2])
             return location_text(entry.path, self.fs.dirname)
         if role == Qt.ItemDataRole.DecorationRole and col == 0:
+            if self.icon_px:
+                if self.is_up_row(index.row()):
+                    return self._framed(self._icon(entry, True))
+                return self._thumb_icon(entry)
             return self._icon(entry, self.is_up_row(index.row()))
+        if role == Qt.ItemDataRole.SizeHintRole and self.icon_px and col == 0:
+            return QSize(self.icon_px + 24, self.icon_px + QFontMetrics(QApplication.font()).height() * 2 + 16)       # every tile alike
         if role == Qt.ItemDataRole.TextAlignmentRole and column_keys[col] in RIGHT_ALIGNED:
             return int(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         if role == Qt.ItemDataRole.ForegroundRole and col == 10 and self._tag(entry.path)[2] in LABEL_COLORS:
@@ -391,6 +407,58 @@ class FolderModel(QAbstractTableModel):
         if entry.kind == "action":
             return icon_set.icon("folder-plus", t["accent"])
         return None
+
+    def _thumb_icon(self, entry: Entry):
+        """The picture of an item in the thumbnail view: its thumbnail when there is one, its type icon until it is made (or if it has none)."""
+        base = self._framed(self._icon(entry, False))
+        provider = self.thumbs
+        kind = covers.kind_of(entry.name, entry.is_dir)
+        if provider is None or not provider.wanted(kind, self._network):
+            return base
+        key = provider.key(entry.path, entry.mtime, entry.size, self.icon_px)
+        known, pixmap = provider.get(key)
+        if known:
+            return QIcon(pixmap) if pixmap is not None else base
+        provider.request(key, kind, entry.path, self.icon_px)
+        return base
+
+    def _framed(self, icon: QIcon) -> QIcon:
+        """A type icon for the thumbnail view: in the middle of a tile-sized square, about half as big, so it reads as a symbol and
+        not as a picture."""
+        key = (icon.cacheKey(), self.icon_px)
+        cached = self._framed_cache.get(key)
+        if cached is not None:
+            return cached
+        app = QApplication.instance()
+        ratio = (app.devicePixelRatio() if app is not None else 1.0) or 1.0
+        side = int(self.icon_px * ratio)
+        inner = int(side * 0.55)
+        canvas = QPixmap(side, side)
+        canvas.fill(Qt.GlobalColor.transparent)
+        symbol = icon.pixmap(QSize(inner, inner))
+        painter = QPainter(canvas)
+        painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+        painter.drawPixmap((side - inner) // 2, (side - inner) // 2, inner, inner, symbol)
+        painter.end()
+        canvas.setDevicePixelRatio(ratio)
+        framed = QIcon(canvas)
+        if len(self._framed_cache) > 400:
+            self._framed_cache.clear()
+        self._framed_cache[key] = framed
+        return framed
+
+    def thumb_ready(self, path: str) -> None:
+        """A thumbnail was made: redraw that item."""
+        if not self.icon_px:
+            return
+        key = (id(self._rows), len(self._rows))
+        if self._rc_key != key:
+            self._rc = {e.path: i for i, e in enumerate(self._rows)}
+            self._rc_key = key
+        i = self._rc.get(path)
+        if i is not None:
+            row = i + (1 if self._up else 0)
+            self.dataChanged.emit(self.index(row, 0), self.index(row, 0))
 
     def _icon(self, entry: Entry, is_up: bool):
         """Gold for marked items and folders, the quiet text colour for the rest."""
