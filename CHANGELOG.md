@@ -2,6 +2,14 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-20#24 -- Drag and drop
+
+- **Drag files with the mouse.** Press on an item and drag: the item goes along, or all the marked items when you drag a marked one. Drop it on a folder row (that folder gets it), on the empty part of the other panel (that panel's folder gets it), on an open zip (the file is added to the zip), or on another program such as Explorer. The folder under the pointer is highlighted. Files dragged in from Explorer are taken too.
+- **Move or copy:** with no key, a drop moves on the same drive and copies to another drive; **Ctrl** always copies, **Shift** always moves. Something dragged out of an archive can only be copied out.
+- **It is the normal copy engine:** a name that is already taken opens the per-file conflict dialog, progress and Cancel work, a same-drive move can be undone, tags follow. A drop makes no confirmation box unless you ask for one (Settings > Copy and Move > Dragging with the mouse). Dropping on itself, into its own subfolder, on the Home page, or into a place that cannot take files is refused, and the pointer shows it.
+- **A plain drag no longer marks; Ctrl+click and drag does.** Before, dragging down the list marked every item the mouse passed. That was a misreading of the specification, which meant Ctrl+click and drag, and it would have fought with dragging files. Now Ctrl+click an item and keep the button down: every item from there to the pointer is marked (dragging back takes the far end off again; starting on a marked item unmarks instead). Space, Insert, Ctrl+click, Shift+click, Shift+arrows and Ctrl+F work as before.
+- Not tried against Explorer by hand: the drag to and from other programs uses the standard file-list format and is covered by tests only up to the point where the operating system takes over.
+
 ## 2026-10-20#23 -- Starting from source tells you what is missing
 
 - **A clear message instead of a traceback.** If PyQt6, send2trash or the shared Redactor package (redactor_common, tag 2026-10-20-02 or newer) is missing or too old in the Python you start with, Dossier now says which one and what to run (`python -m pip install -r requirements.txt`), in a box on Windows and on the console. A computer can have several Pythons; the message belongs to the one that was started.

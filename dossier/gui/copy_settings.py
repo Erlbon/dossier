@@ -9,7 +9,7 @@ from PyQt6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, QD
                              QSpinBox, QVBoxLayout)
 
 DEFAULTS = {"limit_mb": 0.0, "verify": False, "ask_on_error": False, "retries": 3, "retry_delay": 0.25, "workers": 0,
-            "native": True, "flush": "auto"}
+            "native": True, "flush": "auto", "ask_on_drop": False}
 FLUSH_CHOICES = (("Only for removable and network drives", "auto"), ("Always", "always"), ("Never", "never"))
 
 
@@ -32,7 +32,7 @@ def read_settings(settings) -> dict:
             "verify": _flag(g("verify"), False), "ask_on_error": _flag(g("ask_on_error"), False),
             "retries": _number(g("retries"), 3, 0, 20, int), "retry_delay": _number(g("retry_delay"), 0.25, 0.0, 30.0),
             "workers": _number(g("workers"), 0, 0, 32, int), "native": _flag(g("native"), True),
-            "flush": flush if flush in ("auto", "always", "never") else "auto"}
+            "flush": flush if flush in ("auto", "always", "never") else "auto", "ask_on_drop": _flag(g("ask_on_drop"), False)}
 
 
 def write_settings(settings, values: dict) -> None:
@@ -95,6 +95,13 @@ class CopySettingsDialog(QDialog):
         form.addRow("", self.ask)
         layout.addWidget(problems)
 
+        drop = QGroupBox("Dragging with the mouse")
+        form = QFormLayout(drop)
+        self.ask_drop = QCheckBox("Show the confirmation box before a drop copies or moves files (conflicts are always asked about)")
+        self.ask_drop.setChecked(values["ask_on_drop"])
+        form.addRow("", self.ask_drop)
+        layout.addWidget(drop)
+
         note = QLabel("A name that is already taken is asked about in its own dialog, one choice per file.")
         note.setWordWrap(True)
         layout.addWidget(note)
@@ -107,7 +114,8 @@ class CopySettingsDialog(QDialog):
     def values(self) -> dict:
         return {"limit_mb": float(self.limit.value()), "verify": self.verify.isChecked(), "ask_on_error": self.ask.isChecked(),
                 "retries": int(self.retries.value()), "retry_delay": float(self.retry_delay.value()),
-                "workers": int(self.workers.value()), "native": self.native.isChecked(), "flush": self.flush.currentData()}
+                "workers": int(self.workers.value()), "native": self.native.isChecked(), "flush": self.flush.currentData(),
+                "ask_on_drop": self.ask_drop.isChecked()}
 
 
 class CopySettingsMixin:

@@ -99,6 +99,7 @@ class FolderModel(QAbstractTableModel):
         self._source_rows: list = []             # the whole listing; _rows is what the quick filter lets through
         self._filter = ""
         self._tree_sizes: dict = {}
+        self.drop_row = -1                       # the row a drag is hovering over (a folder that would take the drop)
         self._tag_info: dict = {}                # path -> (tags text, rating, label), filled in on a thread when a column is on
         self._has_note = False
         self._sort_col = 0
@@ -302,6 +303,10 @@ class FolderModel(QAbstractTableModel):
         col = index.column()
         if self.is_home:
             return self._home_data(entry, col, role)
+        if role == Qt.ItemDataRole.BackgroundRole and index.row() == self.drop_row:
+            highlight = QColor(theme.current()["accent"])
+            highlight.setAlpha(110)
+            return QBrush(highlight)
         if role == Qt.ItemDataRole.DisplayRole:
             if col == 0:
                 return entry.name

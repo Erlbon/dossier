@@ -41,7 +41,8 @@ Selection is stored by path in one shared store, not inside a window, so it surv
 
 | ID | Requirement | Origin |
 | --- | --- | --- |
-| S1 | Click toggles an item; drag marks a range; keyboard equivalents | TNT |
+| S1 | Ctrl+click toggles an item, Ctrl+click and drag marks (or unmarks) a range, Shift+click marks a range, keyboard equivalents. A plain drag does not mark (owner 2026-10-20: the row meant Ctrl+click and drag; plain drag marking was a misreading); it carries files, see S1b | TNT |
+| S1b | Drag and drop: drag an item (or all marked items when you drag a marked one) onto a folder, the other panel, an open zip, or another program such as Explorer. No key: move on one drive, copy to another; Ctrl copies, Shift moves. Drops from other programs are taken too. The folder under the pointer is highlighted. Settings > Copy and Move can ask for a confirmation before a drop | Owner |
 | S2 | Select all, none, invert; select and deselect by pattern (name, date, size, attribute) | TNT |
 | S3 | The selection stays when the user changes folder or window; the status bar shows count and total size | TNT |
 | S4 | Every file command works on the selection when there is one, otherwise on the focused item | TNT |

@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 from PyQt6.QtCore import QModelIndex, QRectF, QSize, Qt, QTimer, QUrl, pyqtSignal
-from PyQt6.QtGui import QColor, QDesktopServices, QFontMetrics, QPainter, QPainterPath, QPalette, QPen
+from PyQt6.QtGui import QColor, QDesktopServices, QDrag, QFontMetrics, QPainter, QPainterPath, QPalette, QPen, QPixmap
 from PyQt6.QtWidgets import (QAbstractItemView, QApplication, QFrame, QHBoxLayout, QHeaderView, QLabel, QLineEdit,
                              QTabBar, QToolButton,
                              QTableView, QTextBrowser, QVBoxLayout, QWidget)
@@ -90,13 +90,26 @@ class PanelTable(QTableView):
     escape = pyqtSignal()            # Esc: stop waiting for a slow folder
     middle_clicked = pyqtSignal(int)  # middle click on a row: open that folder in a background tab
     history_step = pyqtSignal(int)    # the mouse's back (-1) or forward (+1) button
+    dropped = pyqtSignal(list, int, int, object)   # (paths, row under the pointer or -1, keyboard modifiers, source panel)
+    drag_ended = pyqtSignal()                      # a drag that started here is over (the lists may have changed)
 
     # Marking several items. The marks are the shared selection; the cursor is the current row.
     #   Space / Insert       mark the item and move down          Ctrl+Space   mark it, stay
     #   Shift+arrows, Page, Home, End   mark everything from where the Shift began to the cursor
     #   Ctrl+arrows          move the cursor only                 Ctrl+click   mark or unmark that item
-    #   Shift+click          mark from the cursor to the click    drag         mark every item the mouse passes
+    #   Shift+click          mark from the cursor to the click    Ctrl+click and drag   mark every item the mouse passes
+    #   drag (plain)         carry the item (or all marked items) away
     selection = None            # the SelectionStore, set by the panel
+    drag_paths = None           # set by the panel: row -> the paths a drag from that row carries
+    drag_source = ""            # set by the panel: its name in a drag, so a drop knows where it came from
+    drop_check = None           # set by the panel: (paths, source, row) -> whether a drop here would do something
+    _press = None               # where and on which row the left button went down
+
+    def _set_drop_row(self, row: int) -> None:
+        model = self.model()
+        if getattr(model, "drop_row", -1) != row:
+            model.drop_row = row
+            self.viewport().update()
 
     def _path_of(self, row: int):
         model = self.model()
@@ -144,10 +157,15 @@ class PanelTable(QTableView):
         row = index.row()
         if mods & Qt.KeyboardModifier.ControlModifier:
             path = self._path_of(row)
+            self._ctrl_drag = None
             if path and self.selection is not None:
+                base = set(self.selection.paths())
                 self.selection.toggle(path)
+                # Ctrl+click toggles the item; keep the button down and drag to mark (or, when the click took a mark off, to unmark)
+                # every item from here to the pointer
+                self._ctrl_drag = (row, base, path not in base)
             self.setCurrentIndex(self.model().index(row, 0))
-            self._drag_from = None
+            self._press = None
             return
         if mods & Qt.KeyboardModifier.ShiftModifier:
             self._end_range()
@@ -155,28 +173,100 @@ class PanelTable(QTableView):
             self.setCurrentIndex(self.model().index(row, 0))
             self._mark_range(row)
             self._end_range()
-            self._drag_from = None
+            self._press = None
             return
         super().mousePressEvent(event)
-        self._drag_from = row                      # a drag from here marks what the mouse passes over
+        self._press = (event.position().toPoint(), row)       # a drag from here carries the item (or the marked ones) away
+
+    def _ctrl_drag_to(self, row: int) -> None:
+        """Ctrl+click and drag: marks (or unmarks) the range from the clicked item to ``row`` on top of what was marked before."""
+        start, base, marking = self._ctrl_drag
+        lo, hi = sorted((start, row))
+        span = {p for p in (self._path_of(r) for r in range(lo, hi + 1)) if p}
+        wanted = (base | span) if marking else (base - span)
+        now = set(self.selection.paths())
+        self.selection.remove(now - wanted)
+        self.selection.add(wanted - now)
+        self.setCurrentIndex(self.model().index(row, 0))
 
     def mouseMoveEvent(self, event) -> None:
-        start = getattr(self, "_drag_from", None)
-        if start is not None and event.buttons() & Qt.MouseButton.LeftButton:
+        if getattr(self, "_ctrl_drag", None) is not None and event.buttons() & Qt.MouseButton.LeftButton:
             row = self.indexAt(event.position().toPoint()).row()
-            if row >= 0 and (row != start or getattr(self, "_anchor", None) is not None):
-                self._begin_range(start)
-                self.setCurrentIndex(self.model().index(row, 0))
-                self._mark_range(row)
+            if row >= 0:
+                self._ctrl_drag_to(row)
+            return
+        press = self._press
+        if press is not None and event.buttons() & Qt.MouseButton.LeftButton:
+            if (event.position().toPoint() - press[0]).manhattanLength() >= QApplication.startDragDistance():
+                self._press = None
+                self._start_drag(press[1])
                 return
         super().mouseMoveEvent(event)
+
+    def _start_drag(self, row: int) -> None:
+        """Carry the item under the press away, or all marked items when that one is marked."""
+        paths = self.drag_paths(row) if self.drag_paths is not None else []
+        if not paths:
+            return
+        from .dragdrop import label, make_mime
+        drag = QDrag(self)
+        drag.setMimeData(make_mime(paths, self.drag_source))
+        text = label(paths)
+        metrics = QFontMetrics(self.font())
+        pixmap = QPixmap(metrics.horizontalAdvance(text) + 24, metrics.height() + 10)
+        pixmap.fill(QColor(0, 0, 0, 200))
+        painter = QPainter(pixmap)
+        painter.setPen(QColor("#ffffff"))
+        painter.drawText(12, 5 + metrics.ascent(), text)
+        painter.end()
+        drag.setPixmap(pixmap)
+        drag.exec(Qt.DropAction.CopyAction | Qt.DropAction.MoveAction, Qt.DropAction.MoveAction)
+        self._set_drop_row(-1)
+        self.drag_ended.emit()
+
+    # taking drops ----------------------------------------------------------------------------------------------
+    def _drop_info(self, event):
+        from .dragdrop import read_paths
+        paths, source = read_paths(event.mimeData())
+        return paths, source, self.indexAt(event.position().toPoint()).row()
+
+    def dragEnterEvent(self, event) -> None:
+        paths, source, row = self._drop_info(event)
+        if paths and self.drop_check is not None and self.drop_check(paths, source, row) is not None:
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def dragMoveEvent(self, event) -> None:
+        paths, source, row = self._drop_info(event)
+        target = self.drop_check(paths, source, row) if paths and self.drop_check is not None else None
+        if target is None:
+            self._set_drop_row(-1)
+            event.ignore()
+            return
+        self._set_drop_row(row if target != "here" else -1)
+        event.acceptProposedAction()
+
+    def dragLeaveEvent(self, event) -> None:
+        self._set_drop_row(-1)
+        event.accept()
+
+    def dropEvent(self, event) -> None:
+        paths, source, row = self._drop_info(event)
+        self._set_drop_row(-1)
+        if not paths or self.drop_check is None or self.drop_check(paths, source, row) is None:
+            event.ignore()
+            return
+        event.acceptProposedAction()
+        self.dropped.emit(paths, row, int(event.modifiers().value), source)
 
     def mouseReleaseEvent(self, event) -> None:
         if event.button() == Qt.MouseButton.MiddleButton:
             self.middle_clicked.emit(self.indexAt(event.position().toPoint()).row())
             return
         if event.button() == Qt.MouseButton.LeftButton:
-            self._drag_from = None
+            self._ctrl_drag = None
+            self._press = None
             self._end_range()
         super().mouseReleaseEvent(event)
 
@@ -380,6 +470,7 @@ class Panel(QFrame):
     current_changed = pyqtSignal(object)  # the item under the cursor changed
     activated = pyqtSignal(object)        # the user focused this panel
     message = pyqtSignal(str)
+    files_dropped = pyqtSignal(list, str, int, object)    # (paths, folder they were dropped on, key modifiers, source panel)
     column_menu_requested = pyqtSignal(object)    # a right-click on the header (its position)
     columns_reordered = pyqtSignal()              # the user dragged a column
     note_edit_requested = pyqtSignal()    # the note was double-clicked
@@ -478,6 +569,13 @@ class Panel(QFrame):
         self.filter_edit.hide()
         self.table = PanelTable()
         self.table.selection = selection
+        self.table.drag_paths = self._paths_to_drag
+        self.table.drag_source = str(id(self))
+        self.table.drop_check = self._drop_target
+        self.table.setAcceptDrops(True)
+        self.table.setDragDropMode(QAbstractItemView.DragDropMode.DropOnly)
+        self.table.dropped.connect(self._table_dropped)
+        self.table.drag_ended.connect(self.refresh)
         self.table.setModel(self.model)
         self.table.setShowGrid(False)
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
@@ -811,6 +909,42 @@ class Panel(QFrame):
     def _column_moved(self, *_args) -> None:
         if not getattr(self, "_laying_out", False) and not self.is_home:
             self.columns_reordered.emit()
+
+    # dragging and dropping --------------------------------------------------------------------------------------------
+    def _paths_to_drag(self, row: int) -> list:
+        """What a drag from ``row`` carries: all the marked items when that row is marked, otherwise just that row."""
+        entry = self.model.entry_at(row)
+        if entry is None or self.model.is_up_row(row) or entry.kind in ("header", "action") or self.is_home:
+            return []
+        marked = self.marked_here()
+        return marked if entry.path in marked else [entry.path]
+
+    def _drop_target(self, paths: list, source, row: int):
+        """Where a drop on ``row`` would land: the folder (a path), ``"here"`` for this panel's own folder, or None when a drop
+        makes no sense there (the Home page, a read-only place, onto itself, into its own subfolder, nothing to move)."""
+        from .dragdrop import all_in_folder, can_drop
+        if self.is_home or not paths:
+            return None
+        entry = self.model.entry_at(row) if row >= 0 else None
+        if entry is not None and entry.is_dir and entry.kind not in ("header", "action"):
+            dest, on_row = entry.path, True
+        else:
+            dest, on_row = self.path, False
+        if not on_row and source == str(id(self)):
+            return None                                   # dropped on its own list: nothing to move
+        if not (self.fs.is_writable(dest) or dest.startswith("zip://")):
+            return None
+        if not can_drop(paths, dest, self.fs.sep):
+            return None
+        if source == str(id(self)) and all_in_folder(paths, dest, self.fs.dirname):
+            return None
+        return dest if on_row else "here"
+
+    def _table_dropped(self, paths: list, row: int, modifiers: int, source) -> None:
+        target = self._drop_target(paths, source, row)
+        if target is None:
+            return
+        self.files_dropped.emit(paths, self.path if target == "here" else target, modifiers, source)
 
     # the Tags and Rating columns --------------------------------------------------------------------------------------
     def tag_columns_visible(self) -> bool:
