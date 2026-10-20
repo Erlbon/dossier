@@ -2,6 +2,13 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-20#35 -- Folder layouts
+
+- **View > Folder Layout** lets a folder keep its own **columns, view (details or thumbnails), thumbnail size and sort order**: *Keep This Layout for This Folder Only*, *Keep This Layout for This Folder and Its Subfolders*, *Back to the Default for This Folder* and *Forget All Folder Layouts...*. A photo folder can be thumbnails sorted by date, newest first, while everything else stays as it was; a music folder can show columns the other folders do not.
+- **Which layout applies:** the rule of exactly that folder, else the nearest parent folder whose rule covers its subfolders, else the ordinary choice. Leaving the folder puts the panel back to the ordinary columns, view and sort; the ordinary choices are never overwritten by a folder's layout.
+- **While a folder has a layout, changing it changes that layout:** switching a column on or off, dragging columns, Details/Thumbnails, thumbnail size, a click on a column header or Arrange By. A small **Folder layout** note appears in the status line (with a tooltip saying which folder it comes from), so a column that "disappeared" is explained. The other panel is not affected unless it shows a folder under the same rule.
+- Only the folders you set are stored (in the settings file, at most 500); nothing is recorded about the folders you merely visit. The Home page, archives and search results have no layout of their own. This is also the base the metadata columns will be built on, so an expensive column can be on only where you work with that kind of file.
+
 ## 2026-10-20#34 -- The Windows menu at the bottom of the right-click menu
 
 - **More Options (Windows Menu)...** is the last entry of our right-click menu, on an item and on empty space (Windows only, for real files and folders; not for items inside an archive, search results or the Home page). It opens the **full Windows menu** the shell builds for the same items: 7-Zip, Git, Defender, Open with, Send to, Share, PowerToys (File Locksmith, PowerRename) and everything else installed programs have added. **Hold Shift** when choosing it for the extended entries.

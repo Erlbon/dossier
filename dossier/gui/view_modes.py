@@ -136,8 +136,13 @@ class ViewModesMixin:
 
     def _panel_mode_changed(self, panel) -> None:
         name = "left" if panel is self.left else "right"
-        self.settings.setValue(f"view/mode_{name}", panel.view_mode)
-        self.settings.setValue(f"view/size_{name}", panel.icon_px)
+        if getattr(panel, "_applying_layout", False):            # a folder layout is being applied: not the owner's own choice
+            pass
+        elif self._mode_changed_in_rule(panel):                  # the folder has a layout: the change belongs to it
+            pass
+        else:
+            self.settings.setValue(f"view/mode_{name}", panel.view_mode)
+            self.settings.setValue(f"view/size_{name}", panel.icon_px)
         if panel is self.active:
             self.sync_mode_actions()
 

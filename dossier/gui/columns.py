@@ -25,8 +25,13 @@ class ColumnsMixin:
         text = ",".join(value) if isinstance(value, list) else str(value)
         return [n for n in (p.strip() for p in text.split(",")) if n in KEYS]
 
-    def column_choice(self) -> tuple:
-        """``(hidden names, order of names)`` as the user left them (the defaults at first)."""
+    def column_choice(self, panel=None) -> tuple:
+        """``(hidden names, order of names)``: the folder layout in force for ``panel`` when it has one, else as the user left them
+        (the defaults at first)."""
+        rule = self.rule_for(panel) if panel is not None else None
+        if rule is not None:
+            layout = rule.layout.cleaned()
+            return sanitize_hidden_fields(set(layout.hidden), PROTECTED), list(layout.order)
         hidden = sanitize_hidden_fields(set(self._read_names(HIDDEN_KEY, DEFAULT_HIDDEN)), PROTECTED)
         order = self._read_names(ORDER_KEY, DEFAULT_ORDER)
         order += [k for k in DEFAULT_ORDER if k not in order]                 # a column added in a later version
@@ -36,22 +41,32 @@ class ColumnsMixin:
         self.settings.setValue(HIDDEN_KEY, ",".join(k for k in KEYS if k in hidden) or "-")
         self.settings.setValue(ORDER_KEY, ",".join(order))
 
+    def _store_columns_for(self, panel, hidden: set, order: list) -> None:
+        """A change of the columns goes to the folder layout in force for ``panel``, or to the default when it has none."""
+        rule = self.rule_for(panel)
+        if rule is None:
+            self._store_columns(hidden, order)
+            return
+        rule.layout.hidden = [k for k in KEYS if k in hidden]
+        rule.layout.order = list(order)
+        self._save_layouts()
+
     def apply_columns_everywhere(self) -> None:
-        hidden, order = self.column_choice()
         for panel in (self.left, self.right):
+            hidden, order = self.column_choice(panel)
             panel.set_column_layout(hidden, order)
 
     def _column_toggled(self, key: str, visible: bool) -> None:
-        hidden, order = self.column_choice()
+        hidden, order = self.column_choice(self.active)
         (hidden.discard if visible else hidden.add)(key)
-        self._store_columns(sanitize_hidden_fields(hidden, PROTECTED), order)
+        self._store_columns_for(self.active, sanitize_hidden_fields(hidden, PROTECTED), order)
         self.apply_columns_everywhere()
 
     def _columns_dragged(self, panel) -> None:
-        hidden, _old = self.column_choice()
+        hidden, _old = self.column_choice(panel)
         order = panel.column_keys_in_order()
-        self._store_columns(hidden, order)
-        self.apply_columns_everywhere()                        # the other panel follows
+        self._store_columns_for(panel, hidden, order)
+        self.apply_columns_everywhere()                        # the other panel follows (unless it has a layout of its own)
 
     HOME_NOTE = ("The Home page has its own three columns (Name, Type, Details). Your column choice applies to the folders you open; "
                  "it is kept.")
@@ -60,17 +75,17 @@ class ColumnsMixin:
         if panel.is_home:
             self._say(self.HOME_NOTE)
             return
-        hidden, order = self.column_choice()
+        hidden, order = self.column_choice(panel)
         show_column_header_context_menu(
             self, panel.table, pos, column_order=order, label_lookup=LABELS, protected_columns=PROTECTED,
             hidden_fields=hidden, is_visible=lambda k, h: is_column_visible(k, h, PROTECTED),
             on_toggle=self._column_toggled, open_column_settings_dialog=self.open_column_settings)
 
     def open_column_settings(self) -> None:
-        hidden, order = self.column_choice()
+        hidden, order = self.column_choice(self.active)
         dlg = ColumnSettingsDialog([(k, LABELS[k]) for k in order], hidden, PROTECTED, self)
         self._run_column_dialog(dlg)
-        self._store_columns(sanitize_hidden_fields(dlg.hidden_fields(), PROTECTED), dlg.column_order())
+        self._store_columns_for(self.active, sanitize_hidden_fields(dlg.hidden_fields(), PROTECTED), dlg.column_order())
         self.apply_columns_everywhere()
         if self.active.is_home:
             self._say(self.HOME_NOTE)
@@ -79,6 +94,6 @@ class ColumnsMixin:
         dlg.exec()
 
     def reset_columns(self) -> None:
-        self._store_columns(set(DEFAULT_HIDDEN), list(DEFAULT_ORDER))
+        self._store_columns_for(self.active, set(DEFAULT_HIDDEN), list(DEFAULT_ORDER))
         self.apply_columns_everywhere()
         self._say("Columns are back to the defaults")

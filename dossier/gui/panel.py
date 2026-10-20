@@ -544,6 +544,7 @@ class Panel(QFrame):
     message = pyqtSignal(str)
     context_requested = pyqtSignal(object, int)           # a right-click on this panel's list: (global position, row or -1)
     mode_changed = pyqtSignal(object)                    # the view mode or the thumbnail size of this panel changed
+    sort_changed = pyqtSignal(object)                    # the owner (not the program) changed the sort order of this panel
     files_dropped = pyqtSignal(list, str, int, object)    # (paths, folder they were dropped on, key modifiers, source panel)
     column_menu_requested = pyqtSignal(object)    # a right-click on the header (its position)
     columns_reordered = pyqtSignal()              # the user dragged a column
@@ -663,6 +664,10 @@ class Panel(QFrame):
         header.setSortIndicatorShown(True)
         self.table.setSortingEnabled(True)                                  # and sortable
         self.table.sortByColumn(0, Qt.SortOrder.AscendingOrder)             # the header defaults to descending
+        self.layout_rule_path = ""        # the folder whose layout rule is applied to this panel now ("" for none)
+        self._applying_layout = False     # the program is setting columns, mode or sort: not a choice of the owner
+        self.sort_before_rule = None      # the sort the panel had before a folder rule took over: (key, descending)
+        header.sortIndicatorChanged.connect(self._sort_indicator_changed)
         for key, width in DEFAULT_WIDTHS.items():
             self.table.setColumnWidth(column_index(key), width)
         header.setStretchLastSection(True)
@@ -770,6 +775,26 @@ class Panel(QFrame):
             self.icon_px = nearest_step(px)
         self._apply_mode()
         self.mode_changed.emit(self)
+
+    def current_sort(self) -> tuple:
+        """``(column name, descending)`` of the list as it is sorted now."""
+        header = self.table.horizontalHeader()
+        column = header.sortIndicatorSection()
+        key = COLUMN_KEYS[column] if 0 <= column < len(COLUMN_KEYS) else "name"
+        return key, header.sortIndicatorOrder() == Qt.SortOrder.DescendingOrder
+
+    def set_sort(self, key: str, descending: bool) -> None:
+        """Sort by a column on the program's own account (a layout), not as a choice of the owner."""
+        was, self._applying_layout = self._applying_layout, True
+        try:
+            self.table.sortByColumn(column_index(key) if key in COLUMN_KEYS else 0,
+                                    Qt.SortOrder.DescendingOrder if descending else Qt.SortOrder.AscendingOrder)
+        finally:
+            self._applying_layout = was
+
+    def _sort_indicator_changed(self, *_args) -> None:
+        if not self._applying_layout and not self.is_home:
+            self.sort_changed.emit(self)
 
     def zoom_icons(self, step: int) -> None:
         from .thumbnails import step_by
@@ -1267,7 +1292,11 @@ class Panel(QFrame):
         self._current_tab_id = tid
         st = self._tabs[tid]
         order = Qt.SortOrder.DescendingOrder if st.sort_desc else Qt.SortOrder.AscendingOrder
-        self.table.sortByColumn(st.sort_col, order)
+        was, self._applying_layout = self._applying_layout, True       # a tab brings its own sort: nobody's choice here
+        try:
+            self.table.sortByColumn(st.sort_col, order)
+        finally:
+            self._applying_layout = was
         path = st.path
         self._skip_history_for = path
         while path and not self.set_folder(path, select=st.current):     # a folder that is gone: nearest parent

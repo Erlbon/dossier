@@ -44,6 +44,7 @@ from .view_modes import ViewModesMixin
 from .drop_handler import DragDropMixin
 from .zip_edit import ZipEditMixin, zip_parts
 from .copy_settings import CopySettingsMixin
+from .folder_layouts import FolderLayoutsMixin
 from .queue_resume import QueueResumeMixin
 from .dialogs import Dialogs
 from .marks_and_notes import MarksAndNotesMixin
@@ -68,7 +69,7 @@ SUMMARY_ITEMS = 12    # the confirmation lists this many items, then says how ma
 SIZE_LIMIT = 1000    # the status line sizes at most this many marked items
 
 
-class MainWindow(ViewModesMixin, ToolsBarMixin, ContextMenuMixin, DragDropMixin, LookMixin, ZipEditMixin, ArchiveCommandsMixin, CopySettingsMixin, QueueResumeMixin, ColumnsMixin, PropertiesMixin, MountMixin, ChecksumMixin, MarksAndNotesMixin, SearchCommandMixin, BatchRenameMixin, OperationQueueMixin, StallLogMixin, GoingPlacesMixin, FolderSizesMixin, UnpackMixin, QMainWindow):
+class MainWindow(ViewModesMixin, ToolsBarMixin, ContextMenuMixin, DragDropMixin, LookMixin, ZipEditMixin, ArchiveCommandsMixin, CopySettingsMixin, FolderLayoutsMixin, QueueResumeMixin, ColumnsMixin, PropertiesMixin, MountMixin, ChecksumMixin, MarksAndNotesMixin, SearchCommandMixin, BatchRenameMixin, OperationQueueMixin, StallLogMixin, GoingPlacesMixin, FolderSizesMixin, UnpackMixin, QMainWindow):
     def __init__(self, fs: Optional[FileSystem] = None, *, settings_path: Optional[str] = None, start=(None, None),
                  dialogs=None, trasher=None, terminal_launcher=None, which=None) -> None:
         super().__init__()
@@ -127,6 +128,9 @@ class MainWindow(ViewModesMixin, ToolsBarMixin, ContextMenuMixin, DragDropMixin,
         self.queue_label.hide()
         status_row.addWidget(self.status, 1)
         status_row.addWidget(self.queue_label)
+        self.layout_label = QLabel("Folder layout")
+        self.layout_label.hide()
+        status_row.addWidget(self.layout_label)
         status_row.addWidget(self.hint)
         self.build_label = QLabel(f"build {APP_VERSION}")
         self.build_label.setEnabled(False)
@@ -176,6 +180,7 @@ class MainWindow(ViewModesMixin, ToolsBarMixin, ContextMenuMixin, DragDropMixin,
         self.apply_columns_everywhere()              # the columns the user chose (Name and Type always)
         self.apply_look()                            # the font and the bold the user chose
         self.build_thumbnails()                      # the thumbnail maker, and each panel's remembered view
+        self.build_layouts()                         # folder layouts: applied when a folder is shown
 
         self._restore(start)
         if self.act_stall_log.isChecked():
@@ -250,6 +255,7 @@ class MainWindow(ViewModesMixin, ToolsBarMixin, ContextMenuMixin, DragDropMixin,
         view_menu.addAction(details)
         self.view_mode_actions["details"] = details
         self.add_view_mode_actions(view_menu, mode_group)
+        self.add_layout_actions(view_menu)
         view_menu.addSeparator()
         self.act_notes = QAction("Folder Notes", self)
         self.act_notes.setCheckable(True)
@@ -453,6 +459,7 @@ class MainWindow(ViewModesMixin, ToolsBarMixin, ContextMenuMixin, DragDropMixin,
         if hasattr(self, "prompt"):
             self._update_prompt()
         self._update_title()
+        self.update_layout_label()
         if changed:                                  # the other panel's marks are what the line is about now
             self._update_status()
 
