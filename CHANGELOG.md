@@ -2,6 +2,11 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-20#31 -- Tools bar folders follow the colour scheme; Add Program fixed
+
+- **Folders on the tools bar** (and their drop-down menus) are now skinned by the dark/light scheme: the folder icon is drawn in the scheme's accent colour like the folders in the file lists, the drop-downs get the bar's background, border, selection colour and separators, and everything is redrawn when the scheme changes. Before, the folders were the plain system icon and the drop-downs had the default look.
+- **Fixed: Add Program failed** with "'CancelToken' object is not callable" when it looked at the Start menu. A test now runs the real flow on its thread.
+
 ## 2026-10-20#30 -- Add a Program starts in the Start menu
 
 - **Add Program** (the + on the tools bar, or right-click > Add Program) now **opens the Windows Start menu as a tree**, with its groups (PowerToys, 7-Zip...) and a search box. Double-click a program, or select it and press Add; its name and shortcut are filled in and you can still change the arguments, the start folder and where it goes. The shortcut is started the way the Start menu starts it, with its own settings.

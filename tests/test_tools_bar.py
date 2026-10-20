@@ -354,3 +354,39 @@ def test_other_program_and_an_empty_start_menu_go_to_the_plain_dialog(world, tmp
     monkeypatch.setattr(type(win), "_ask_start_menu", lambda self, dlg: False)
     win._programs_found((start_tree(tmp_path), []))
     assert seen == ["", ""]
+
+
+def test_add_program_really_scans_the_start_menu_on_its_thread_with_the_real_cancel_token(world, tmp_path, monkeypatch):
+    from dossier.core import startmenu as SM
+    from tests.test_gui_commander import pump
+    win, *_ = world
+    start_tree(tmp_path)
+    monkeypatch.setattr(SM, "roots", lambda environ=None: [str(tmp_path / "start")])
+    got = []
+    monkeypatch.setattr(type(win), "_ask_start_menu", lambda self, dlg: (got.append(dlg.tree.topLevelItemCount()), False)[1])
+    win.add_program()
+    pump(win, lambda: got)
+    assert got == [2]
+
+
+def test_the_bar_and_its_folders_follow_the_colour_scheme(world):
+    from dossier.gui import theme
+    win, *_ = world
+    win.set_tools([T.Folder("Media", [T.Tool("A", "C:\a.exe")])])
+    bar = win.tools_bar
+    sheet = bar.styleSheet()
+    t = theme.current()
+    assert t["card"] in sheet and t["accent"] in sheet and "QMenu" in sheet                   # the drop-downs are skinned too
+    before = [b.icon().cacheKey() for b in bar.buttons]
+    other = dict(t, accent="#ff0000", card="#101010")
+    import dossier.gui.theme as th
+    old = th.current
+    try:
+        th.current = lambda: other
+        from dossier.gui import icon_set
+        icon_set.clear_cache()
+        bar.restyle()
+    finally:
+        th.current = old
+    assert "#ff0000" in bar.styleSheet() and "#101010" in bar.styleSheet()
+    assert [b.icon().cacheKey() for b in bar.buttons] != before                                  # the folder was drawn again in the new accent

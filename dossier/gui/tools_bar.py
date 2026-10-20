@@ -12,13 +12,13 @@ from typing import Optional
 from PyQt6.QtCore import QFileInfo, Qt, pyqtSignal
 from PyQt6.QtGui import QAction, QIcon
 from PyQt6.QtWidgets import (QAbstractItemView, QComboBox, QDialog, QDialogButtonBox, QFileDialog, QFileIconProvider, QFormLayout,
-                             QFrame, QHBoxLayout, QLabel, QLineEdit, QMenu, QPushButton, QSizePolicy, QStyle, QToolButton,
+                             QFrame, QHBoxLayout, QLabel, QLineEdit, QMenu, QPushButton, QSizePolicy, QToolButton,
                              QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget)
 
 from ..core import startmenu as SM
 from ..core import tools as T
 from ..core.drives import is_network_path
-from . import theme
+from . import icon_set, theme
 from .background import run_in_background
 
 PROGRAM_EXTENSIONS = (".exe", ".com", ".bat", ".cmd", ".lnk", ".ps1", ".msi", ".appref-ms", ".jar", ".py", ".sh")
@@ -32,6 +32,11 @@ def program_icon(command: str) -> QIcon:
     except Exception:   # noqa: BLE001 -- an icon is a nicety
         pass
     return QIcon()
+
+
+def folder_icon() -> QIcon:
+    """The folder in the accent colour of the current scheme, like the folders in the file lists."""
+    return icon_set.icon("folder", theme.current()["accent"])
 
 
 class StartMenuDialog(QDialog):
@@ -77,7 +82,7 @@ class StartMenuDialog(QDialog):
                 item = QTreeWidgetItem(parent if parent is not None else self.tree, [n.name])
                 item.setData(0, Qt.ItemDataRole.UserRole, n)
                 if n.is_group:
-                    item.setIcon(0, self.style().standardIcon(QStyle.StandardPixmap.SP_DirIcon))
+                    item.setIcon(0, folder_icon())
                     add(item, n.children)
                     item.setExpanded(searching)
                 else:
@@ -270,7 +275,7 @@ class ManageDialog(QDialog):
             node.setFlags(node.flags() & ~Qt.ItemFlag.ItemIsDropEnabled)
         elif isinstance(it, T.Folder):
             node.setText(0, it.name)
-            node.setIcon(0, self.style().standardIcon(QStyle.StandardPixmap.SP_DirIcon))
+            node.setIcon(0, folder_icon())
         else:
             node.setText(0, "-------- separator --------")
             node.setFlags(node.flags() & ~Qt.ItemFlag.ItemIsDropEnabled)
@@ -355,7 +360,14 @@ class ToolsBar(QWidget):
                            f"#toolsbar QToolButton{{color:{t['fg']};padding:2px 8px;border:none;border-radius:4px;}}"
                            f"#toolsbar QToolButton:hover{{background:{t['line']};}}"
                            f"#toolsbar QToolButton::menu-indicator{{image:none;}}"
+                           f"#toolsbar QMenu{{background:{t['card']};color:{t['fg']};border:1px solid {t['line']};padding:3px;}}"
+                           f"#toolsbar QMenu::item{{padding:4px 22px 4px 8px;border-radius:3px;}}"
+                           f"#toolsbar QMenu::item:selected{{background:{t['accent']};color:{t['accent_fg']};}}"
+                           f"#toolsbar QMenu::item:disabled{{color:{t['dim']};}}"
+                           f"#toolsbar QMenu::separator{{height:1px;background:{t['line']};margin:3px 6px;}}"
                            f"#toolsbar QLabel{{color:{t['dim']};}}")
+        if self.buttons or self.items:                          # the folder icons are tinted with the scheme: make them again
+            self.set_items(self.items)
 
     def set_items(self, items: list) -> None:
         self.items = items
@@ -399,7 +411,7 @@ class ToolsBar(QWidget):
         b.customContextMenuRequested.connect(lambda pos, w=b, p=path: self.context_requested.emit(w.mapToGlobal(pos), p))
         if isinstance(it, T.Folder):
             b.setText(it.name)
-            b.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_DirIcon))
+            b.setIcon(folder_icon())
             b.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
             b.setMenu(self._menu_for(it.items))
             b.setToolTip(f"{it.name}: {len(it.items)} item{'s' if len(it.items) != 1 else ''}")
@@ -418,6 +430,7 @@ class ToolsBar(QWidget):
             elif isinstance(it, T.Folder):
                 sub = self._menu_for(it.items)
                 sub.setTitle(it.name)
+                sub.setIcon(folder_icon())
                 menu.addMenu(sub)
             else:
                 action = QAction(it.name, menu)
@@ -547,7 +560,7 @@ class ToolsBarMixin:
         """Start from the programs of the Windows Start menu (when there is one); "Other program..." goes on to the plain dialog."""
         def work(progress, cancel):
             progress(0, 0)
-            return SM.scan(SM.roots(), cancel), T.suggestions()
+            return SM.scan(SM.roots(), cancel.check), T.suggestions()
 
         run_in_background(self, self.cmd_runner, "Looking for programs", work, on_result=self._programs_found,
                           tracked=self._size_jobs, indeterminate=True, failed_title="Add a Program")
