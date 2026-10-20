@@ -2,6 +2,11 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-20#30 -- Add a Program starts in the Start menu
+
+- **Add Program** (the + on the tools bar, or right-click > Add Program) now **opens the Windows Start menu as a tree**, with its groups (PowerToys, 7-Zip...) and a search box. Double-click a program, or select it and press Add; its name and shortcut are filled in and you can still change the arguments, the start folder and where it goes. The shortcut is started the way the Start menu starts it, with its own settings.
+- **Other program...** goes on to the plain dialog (browse for a file, or start from the short list of suggestions). A computer without a Start menu goes straight to it. Uninstallers are left out of the list. The Start menu folders are read on a background thread.
+
 ## 2026-10-20#29 -- The tools bar can be seen
 
 - An **empty tools bar was almost invisible** (a greyed-out line of text on the menu bar's own colour), so it looked as if there was no bar. It now has its own background and a line under it, a plain hint ("Your programs go here: press + or right-click this bar to add one") and a **+ button** that is always at the end of the bar, like the + of a browser's bookmarks bar; it opens the same menu as a right-click (Add Program, Add Folder, Add Separator, Manage Tools, Hide the Tools Bar). View > Tools Bar shows or hides the bar.

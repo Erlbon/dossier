@@ -15,6 +15,7 @@ from PyQt6.QtWidgets import (QAbstractItemView, QComboBox, QDialog, QDialogButto
                              QFrame, QHBoxLayout, QLabel, QLineEdit, QMenu, QPushButton, QSizePolicy, QStyle, QToolButton,
                              QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget)
 
+from ..core import startmenu as SM
 from ..core import tools as T
 from ..core.drives import is_network_path
 from . import theme
@@ -31,6 +32,73 @@ def program_icon(command: str) -> QIcon:
     except Exception:   # noqa: BLE001 -- an icon is a nicety
         pass
     return QIcon()
+
+
+class StartMenuDialog(QDialog):
+    """The programs of the Windows Start menu as a tree with a search box; choose one, or go on to type the program in by hand."""
+
+    def __init__(self, parent, tree: list) -> None:
+        super().__init__(parent)
+        self.setWindowTitle("Add a Program")
+        self.setMinimumSize(480, 520)
+        self.tree_data = tree
+        self.other = False
+        self.picked: Optional[SM.Node] = None
+        layout = QVBoxLayout(self)
+        layout.addWidget(QLabel("Choose a program from the Start menu:"))
+        self.search = QLineEdit()
+        self.search.setPlaceholderText("Search")
+        self.search.setClearButtonEnabled(True)
+        self.search.textChanged.connect(self._fill)
+        layout.addWidget(self.search)
+        self.tree = QTreeWidget()
+        self.tree.setHeaderHidden(True)
+        self.tree.itemDoubleClicked.connect(lambda item, _c: self._choose(item))
+        self.tree.itemSelectionChanged.connect(self._selection)
+        layout.addWidget(self.tree, 1)
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Cancel)
+        self.ok = buttons.addButton("Add", QDialogButtonBox.ButtonRole.AcceptRole)
+        self.ok.setEnabled(False)
+        manual = buttons.addButton("Other program...", QDialogButtonBox.ButtonRole.ActionRole)
+        manual.setAutoDefault(False)
+        manual.clicked.connect(self._manual)
+        buttons.accepted.connect(lambda: self._choose(self.tree.currentItem()))
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+        self._fill("")
+
+    def _fill(self, text: str) -> None:
+        self.tree.clear()
+        shown = SM.filter_tree(self.tree_data, text)
+        searching = bool(text.strip())
+
+        def add(parent, nodes) -> None:
+            for n in nodes:
+                item = QTreeWidgetItem(parent if parent is not None else self.tree, [n.name])
+                item.setData(0, Qt.ItemDataRole.UserRole, n)
+                if n.is_group:
+                    item.setIcon(0, self.style().standardIcon(QStyle.StandardPixmap.SP_DirIcon))
+                    add(item, n.children)
+                    item.setExpanded(searching)
+                else:
+                    item.setIcon(0, program_icon(n.path))
+        add(None, shown)
+
+    def _selection(self) -> None:
+        item = self.tree.currentItem()
+        node = item.data(0, Qt.ItemDataRole.UserRole) if item is not None else None
+        self.ok.setEnabled(node is not None and not node.is_group)
+
+    def _choose(self, item) -> None:
+        node = item.data(0, Qt.ItemDataRole.UserRole) if item is not None else None
+        if node is None or node.is_group:
+            return
+        self.picked = node
+        self.accept()
+
+    def _manual(self) -> None:
+        self.other = True
+        self.accept()
 
 
 class ToolDialog(QDialog):
@@ -472,13 +540,28 @@ class ToolsBarMixin:
     def _ask_manage(self, dlg) -> bool:
         return dlg.exec() == QDialog.DialogCode.Accepted
 
+    def _ask_start_menu(self, dlg) -> bool:
+        return dlg.exec() == QDialog.DialogCode.Accepted
+
     def add_program(self) -> None:
+        """Start from the programs of the Windows Start menu (when there is one); "Other program..." goes on to the plain dialog."""
         def work(progress, cancel):
             progress(0, 0)
-            return T.suggestions()
+            return SM.scan(SM.roots(), cancel), T.suggestions()
 
-        run_in_background(self, self.cmd_runner, "Looking for programs", work, on_result=lambda found: self._add_program_dialog(None, found),
+        run_in_background(self, self.cmd_runner, "Looking for programs", work, on_result=self._programs_found,
                           tracked=self._size_jobs, indeterminate=True, failed_title="Add a Program")
+
+    def _programs_found(self, found) -> None:
+        tree, suggestions = found
+        if tree:
+            dlg = StartMenuDialog(self, tree)
+            if not self._ask_start_menu(dlg):
+                return
+            if dlg.picked is not None:
+                self._add_program_dialog(T.Tool(dlg.picked.name, dlg.picked.path), suggestions)
+                return
+        self._add_program_dialog(None, suggestions)
 
     def add_program_from_file(self, path: str) -> None:
         name = os.path.splitext(os.path.basename(path))[0]

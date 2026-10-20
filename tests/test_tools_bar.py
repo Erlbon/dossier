@@ -298,3 +298,59 @@ def test_the_plus_button_opens_the_same_menu_as_a_right_click_and_the_bar_has_it
     assert "#toolsbar" in sheet and "border-bottom" in sheet and win.tools_bar.minimumHeight() >= 30
     win.set_tools([T.Tool("A", "a.exe")])
     assert win.tools_bar.add_button.text() == "+"                          # still there with programs on the bar
+
+
+# the Start menu list -------------------------------------------------------------------------------------------------
+def start_tree(tmp_path):
+    from dossier.core import startmenu as SM
+    root = tmp_path / "start"
+    (root / "PowerToys").mkdir(parents=True, exist_ok=True)
+    (root / "PowerToys" / "File Locksmith.lnk").write_bytes(b"L")
+    (root / "Notepad.lnk").write_bytes(b"L")
+    return SM.scan([str(root)])
+
+
+def test_the_start_menu_dialog_lists_filters_and_returns_the_chosen_program(world, tmp_path):
+    from dossier.gui.tools_bar import StartMenuDialog
+    win, *_ = world
+    dlg = StartMenuDialog(win, start_tree(tmp_path))
+    assert dlg.tree.topLevelItemCount() == 2 and not dlg.ok.isEnabled()
+    dlg.search.setText("lock")
+    assert dlg.tree.topLevelItemCount() == 1 and dlg.tree.topLevelItem(0).child(0).text(0) == "File Locksmith"
+    dlg.tree.setCurrentItem(dlg.tree.topLevelItem(0))                        # a group cannot be chosen
+    assert not dlg.ok.isEnabled()
+    dlg.tree.setCurrentItem(dlg.tree.topLevelItem(0).child(0))
+    assert dlg.ok.isEnabled()
+    dlg._choose(dlg.tree.currentItem())
+    assert dlg.picked.name == "File Locksmith" and dlg.picked.path.endswith("File Locksmith.lnk")
+
+
+def test_add_a_program_starts_from_the_start_menu_and_fills_the_plain_dialog(world, tmp_path, monkeypatch):
+    win, *_ = world
+    tree = start_tree(tmp_path)
+    seen = []
+
+    def pick(self, dlg):
+        dlg.picked = dlg.tree_data[1]                                         # Notepad
+        return True
+
+    def fill(self, dlg):
+        seen.append((dlg.name.text(), dlg.command.text()))
+        return False
+    monkeypatch.setattr(type(win), "_ask_start_menu", pick)
+    monkeypatch.setattr(type(win), "_ask_tool", fill)
+    win._programs_found((tree, []))
+    assert seen == [("Notepad", tree[1].path)]
+
+
+def test_other_program_and_an_empty_start_menu_go_to_the_plain_dialog(world, tmp_path, monkeypatch):
+    win, *_ = world
+    seen = []
+    monkeypatch.setattr(type(win), "_ask_start_menu", lambda self, dlg: (setattr(dlg, "other", True), True)[1])
+    monkeypatch.setattr(type(win), "_ask_tool", lambda self, dlg: (seen.append(dlg.name.text()), False)[1])
+    win._programs_found((start_tree(tmp_path), []))
+    win._programs_found(([], []))                                              # no Start menu: straight to the plain dialog
+    assert seen == ["", ""]
+    monkeypatch.setattr(type(win), "_ask_start_menu", lambda self, dlg: False)
+    win._programs_found((start_tree(tmp_path), []))
+    assert seen == ["", ""]
