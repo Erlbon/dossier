@@ -17,7 +17,7 @@ from PyQt6.QtWidgets import (QApplication, QHBoxLayout, QLabel, QMainWindow, QMe
                              QToolButton, QVBoxLayout, QWidget)
 
 from ..core.ops import (Plan, check_name, conflict_rows, plan_copy, plan_delete, plan_move, plan_rename)
-from ..core.home import ADD_NETWORK, MOUNT_SHARE, HomeFileSystem, HomeProvider, RouterFileSystem, removable_from_home
+from ..core.home import ADD_NETWORK, HomeFileSystem, HomeProvider, RouterFileSystem, removable_from_home
 from ..core.commandline import Placeholders, expand, run_command
 from ..core import patterns
 from ..core.platform import IS_WINDOWS, has_scheme, is_elevated, machine_name, path_key, set_window_border
@@ -260,7 +260,6 @@ class MainWindow(CopySettingsMixin, ColumnsMixin, PropertiesMixin, MountMixin, C
             go.addAction(a)
         go.addSeparator()
         go.addAction(self._action("All Files Below This Folder", "Ctrl+Shift+B", self.show_all_files_below))
-        go.addAction(self._action("Mount Network Share...", None, self.mount_share))
         for a in (self._action("Open Folder in the Other Panel", ["Ctrl+Right", "Ctrl+Left"], self.open_in_other_panel),
                   self._action("Other Panel Shows This Folder", "Ctrl+Shift+O", self.same_in_other_panel)):
             go.addAction(a)
@@ -289,7 +288,7 @@ class MainWindow(CopySettingsMixin, ColumnsMixin, PropertiesMixin, MountMixin, C
             rename_menu.addAction(self._action(text, keys, slot))
         commands.addSeparator()
         for a in (self._action("Pin Folder to Home Page", "Ctrl+D", self.pin_folder),
-                  self._action("Add Network Location...", None, self.add_network_location)):
+                  self._action("Add Network Share...", None, self.add_network_share)):
             commands.addAction(a)
         commands.addSeparator()
         for a in (self._action("Terminal Here", "Ctrl+Shift+T", self.open_terminal),
@@ -752,9 +751,7 @@ class MainWindow(CopySettingsMixin, ColumnsMixin, PropertiesMixin, MountMixin, C
 
     def _home_action(self, path: str) -> None:
         if path == ADD_NETWORK:
-            self.add_network_location()
-        elif path == MOUNT_SHARE:
-            self.mount_share()
+            self.add_network_share()
 
     def pin_folder(self) -> None:
         """Pin the active panel's folder to the Home page."""
@@ -772,25 +769,25 @@ class MainWindow(CopySettingsMixin, ColumnsMixin, PropertiesMixin, MountMixin, C
         self._save_list("home/pins", pins + [path])
         self._say(f"Pinned {path} to the Home page")
 
-    def add_network_location(self) -> None:
+    def save_network_location(self, text: str) -> bool:
         """Save the address of a network folder on the Home page. Nothing is contacted: the address is only
-        stored, and opened when the user opens it."""
-        text = self.dialogs.ask_text("Add Network Location", "Address, for example \\\\server\\share:")
+        stored, and opened when the user opens it. Returns whether it was saved."""
         if not text or not text.strip():
-            return
+            return False
         address = text.strip()
         if IS_WINDOWS and address.startswith("//"):
             address = address.replace("/", "\\")
         if "://" in address:
             self.dialogs.info("Add Network Location", "Only addresses that open as a folder can be saved for now, "
                               "such as \\\\server\\share. Servers (SFTP, WebDAV, FTP) are planned.")
-            return
+            return False
         saved = self._saved_list("home/network")
         if any(path_key(a) == path_key(address) for a in saved):
             self._say(f"{address} is already on the Home page")
-            return
+            return False
         self._save_list("home/network", saved + [address])
         self._say(f"Saved {address} on the Home page")
+        return True
 
     def remove_from_home(self) -> None:
         """Take a pinned folder or a saved network location off the Home page. The folder itself is not touched."""
@@ -1076,7 +1073,7 @@ class MainWindow(CopySettingsMixin, ColumnsMixin, PropertiesMixin, MountMixin, C
 
     def new_folder(self) -> None:
         if self.active.is_home:
-            self.add_network_location()              # on the Home page F7 adds an entry instead of a folder
+            self.add_network_share()                 # on the Home page F7 adds an entry instead of a folder
             return
         if not self.fs.is_writable(self.active.path):
             self.dialogs.info("New Folder", "This folder is read-only here (an archive, a search result or a list of "

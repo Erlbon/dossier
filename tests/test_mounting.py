@@ -16,7 +16,7 @@ def test_share_addresses_are_cleaned_and_bad_ones_refused():
     assert clean_address(SMB, '"' + B * 2 + "nas" + B + "media" + B + "tv" + '"') == B * 2 + "nas" + B + "media" + B + "tv"
     assert clean_address(SMB, B * 2 + "nas") == ""                          # no share name
     assert clean_address(SMB, "https://nas/media") == "" and clean_address(SMB, "") == ""
-    assert clean_address(SMB, B * 2 + "nas" + B + "my media") == ""         # spaces are not accepted here
+    assert clean_address(SMB, B * 2 + "nas" + B + "my media") == B * 2 + "nas" + B + "my media"      # spaces are fine
     assert clean_address(NFS, "nas:/export/data") == "nas:/export/data"
     assert clean_address(SMB, "nas:/export") == ""                          # the server:/export form is NFS only
 
@@ -62,13 +62,59 @@ def test_a_run_reports_output_and_failure_without_raising():
 pytest.importorskip("PyQt6")
 from PyQt6.QtWidgets import QApplication  # noqa: E402
 
-from dossier.core.home import MOUNT_SHARE, HomeProvider, build_entries  # noqa: E402
+from PyQt6.QtWidgets import QDialog  # noqa: E402
+
+from dossier.core.home import ADD_NETWORK, HomeProvider, build_entries  # noqa: E402
 from tests.test_gui_commander import app, pump, world  # noqa: E402,F401
 
 
-def test_the_home_page_offers_the_mount_action(world):
+def test_the_home_page_has_one_entry_for_adding_a_share(world):
     entries = build_entries(HomeProvider(volumes=lambda: [], exists=lambda p: False, environ={}))
-    assert any(e.path == MOUNT_SHARE and e.kind == "action" for e in entries)
+    actions = [e for e in entries if e.kind == "action"]
+    assert [(e.path, e.name) for e in actions] == [(ADD_NETWORK, "Add a network share...")]
+
+
+def answer(win, monkeypatch, protocol=SMB, address="", mount=False, letter=""):
+    """Make the dialog answer: fill it in and press its default button."""
+    def fake(self, dlg):
+        dlg.protocol.setCurrentIndex(dlg.protocol.findData(protocol))
+        dlg.address.setText(address)
+        dlg.mount.setChecked(mount) if protocol == SMB else None
+        if letter:
+            dlg.letter.setCurrentIndex(dlg.letter.findData(letter))
+        return QDialog.DialogCode.Accepted
+    monkeypatch.setattr(type(win), "_ask_mount", fake)
+
+
+def test_an_smb_share_without_mounting_is_just_saved_on_the_home_page(world, monkeypatch):
+    win, d, *_ = world
+    win.mount_runner = lambda *a, **k: pytest.fail("must not mount")
+    answer(win, monkeypatch, SMB, "//nas/media", mount=False)
+    win.add_network_share()
+    assert win._saved_list("home/network") == [B * 2 + "nas" + B + "media"] and "Saved" in win.status.text()
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="the commands are built for Windows")
+def test_ticking_mount_runs_the_system_command_and_saves_nothing(world, monkeypatch):
+    win, d, *_ = world
+    seen = []
+    win.mount_runner = lambda argv, **k: (seen.append(argv), subprocess.CompletedProcess(argv, 0, "ok", ""))[1]
+    answer(win, monkeypatch, SMB, "//nas/media", mount=True, letter="Y:")
+    win.add_network_share()
+    pump(win, lambda: d.outputs)
+    assert seen and seen[0][:3] == ["net", "use", "Y:"] and win._saved_list("home/network") == []
+
+
+def test_nfs_is_always_mounted_and_the_dialog_says_so(world, monkeypatch):
+    from dossier.gui.mounting import MountDialog
+    win, d, *_ = world
+    dlg = MountDialog(win, ["Y:"], True)
+    dlg.protocol.setCurrentIndex(dlg.protocol.findData(NFS))
+    assert dlg.mount.isChecked() and not dlg.mount.isEnabled() and dlg.letter.isEnabled() and dlg.ok.text() == "Mount"
+    assert dlg.values()[3] is True
+    dlg.protocol.setCurrentIndex(dlg.protocol.findData(SMB))
+    dlg.mount.setChecked(False)
+    assert dlg.mount.isEnabled() and not dlg.letter.isEnabled() and dlg.ok.text() == "Add" and dlg.values()[3] is False
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="the commands are built for Windows")

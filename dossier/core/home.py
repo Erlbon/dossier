@@ -25,7 +25,6 @@ from .zipfs import ZipFileSystem
 HOME_URL = "home://"
 HEADER_PREFIX = "home://#"
 ADD_NETWORK = HEADER_PREFIX + "add-network"
-MOUNT_SHARE = HEADER_PREFIX + "mount-share"
 TYPE_NAMES = {"fixed": "Local disk", "removable": "Removable disk", "optical": "Optical disc", "other": "Disk",
               "network": "Network drive", "place": "Folder", "pin": "Pinned folder", "netloc": "Network location",
               "action": "", "header": ""}
@@ -118,8 +117,7 @@ def build_entries(p: HomeProvider) -> list:
         entries.append(_lit(p, Entry(name=name, path=root, is_dir=True, kind="network", detail=label)))
     for address in p.network():
         entries.append(_lit(p, Entry(name=address, path=address, is_dir=True, kind="netloc", detail="Saved network location")))
-    entries.append(Entry(name="Add a network location...", path=ADD_NETWORK, is_dir=False, kind="action"))
-    entries.append(Entry(name="Mount a network share (SMB or NFS)...", path=MOUNT_SHARE, is_dir=False, kind="action"))
+    entries.append(Entry(name="Add a network share...", path=ADD_NETWORK, is_dir=False, kind="action"))
     return entries
 
 

@@ -4,7 +4,7 @@ import os
 
 import pytest
 
-from dossier.core.home import (ADD_NETWORK, HOME_URL, MOUNT_SHARE, HomeFileSystem, HomeProvider, RouterFileSystem, build_entries,
+from dossier.core.home import (ADD_NETWORK, HOME_URL, HomeFileSystem, HomeProvider, RouterFileSystem, build_entries,
                                is_home, is_shortcut_kind, place_folders, removable_from_home)
 from dossier.core.vfs import LocalFileSystem, NotWritable
 
@@ -36,7 +36,7 @@ def test_is_home_recognises_the_page_and_nothing_else():
 def test_sections_come_in_order_with_headers():
     entries = build_entries(provider(pins=lambda: [PINNED], network=lambda: ["//nas/share"]))
     assert [e.name for e in entries if e.kind == "header"] == ["Local drives", "Places", "Pinned folders", "Network"]
-    assert kinds(entries)[0] == "header" and entries[-1].kind == "action" and [e.path for e in entries[-2:]] == [ADD_NETWORK, MOUNT_SHARE]
+    assert kinds(entries)[0] == "header" and entries[-1].kind == "action" and entries[-1].path == ADD_NETWORK and entries[-1].name == "Add a network share..."
 
 
 def test_local_drives_are_listed_with_labels_and_kinds_and_network_drives_go_to_the_network_section():

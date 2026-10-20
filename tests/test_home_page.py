@@ -205,18 +205,27 @@ def test_a_drive_or_a_place_cannot_be_removed_from_the_page(world):
 
 
 # network locations ------------------------------------------------------------------------------------------------------
-def test_f7_on_the_page_adds_a_network_location_and_the_entry_does_the_same(world):
+def _says(win, monkeypatch, address):
+    """Make the Add a Network Share dialog answer with ``address`` (an SMB share, saved, not mounted)."""
+    from PyQt6.QtWidgets import QDialog
+
+    def fake(self, dlg):
+        dlg.address.setText(address)
+        return QDialog.DialogCode.Accepted
+    monkeypatch.setattr(type(win), "_ask_mount", fake)
+
+
+def test_f7_on_the_page_adds_a_network_location_and_the_entry_does_the_same(world, monkeypatch):
     win, dialogs, drive, folder, tmp = world
     p = win.left
     p.set_folder(HOME_URL)
-    dialogs.texts = ["\\\\nas\\media"]
+    _says(win, monkeypatch, "\\\\nas\\media")
     QTest.keyClick(p.table, Qt.Key.Key_F7)
     assert ("netloc", "\\\\nas\\media") in rows(p)
-    dialogs.texts = ["\\\\nas\\media"]                         # the same address again: not added twice
-    win._home_action(ADD_NETWORK)
+    win._home_action(ADD_NETWORK)                               # the same address again: not added twice
     assert [k for k, _n in rows(p)].count("netloc") == 1 and "already" in win.status.text()
     p.table.setCurrentIndex(p.model.index(row_of_kind(p, "action"), 0))
-    dialogs.texts = ["\\\\other\\share"]
+    _says(win, monkeypatch, "\\\\other\\share")
     QTest.keyClick(p.table, Qt.Key.Key_Return)                  # opening the action entry asks for an address
     assert ("netloc", "\\\\other\\share") in rows(p)
 
@@ -224,8 +233,7 @@ def test_f7_on_the_page_adds_a_network_location_and_the_entry_does_the_same(worl
 def test_a_server_address_is_explained_not_saved(world):
     win, dialogs, *_ = world
     win.left.set_folder(HOME_URL)
-    dialogs.texts = ["sftp://host/path"]
-    win.add_network_location()
+    win.save_network_location("sftp://host/path")
     assert "SFTP" in dialogs.infos[-1][1] and not any(k == "netloc" for k, _n in rows(win.left))
 
 
@@ -233,8 +241,7 @@ def test_remove_a_saved_network_location(world):
     win, dialogs, *_ = world
     p = win.left
     p.set_folder(HOME_URL)
-    dialogs.texts = ["\\\\nas\\media"]
-    win.add_network_location()
+    win.save_network_location("\\\\nas\\media")
     p.table.setCurrentIndex(p.model.index(row_of_kind(p, "netloc"), 0))
     win.remove_from_home()
     assert not any(k == "netloc" for k, _n in rows(p))
@@ -304,5 +311,5 @@ def test_the_menus_offer_pin_add_and_the_home_page(world):
     win, *_ = world
     menus = {a.text().replace("&", ""): a.menu() for a in win.menuBar().actions()}
     assert "Pin Folder to Home Page" in [a.text() for a in menus["Commands"].actions()]
-    assert "Add Network Location..." in [a.text() for a in menus["Commands"].actions()]
+    assert "Add Network Share..." in [a.text() for a in menus["Commands"].actions()]
     assert "Home Page" in [a.text() for a in menus["View"].actions()]

@@ -2,6 +2,12 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-20#15 -- One way to add a network share
+
+- **"Add a network share..."** replaces the two Home page entries "Add a network location" and "Mount a network share". One dialog: pick SMB or NFS, type the address, and tick **Also mount it on a drive letter** (drive letter or the next free one). Without the tick an SMB address is only saved on the Home page and opened like a folder, nothing is contacted. With it, Windows mounts the share and it shows up under Network with a light. NFS is always mounted, because Windows cannot open an NFS share by its address; the tick is set and cannot be removed.
+- Commands > Add Network Share... and F7 on the Home page open the same dialog. The separate Go > Mount Network Share entry is gone.
+- Share names with spaces (`\\nas\my media`) now work for mounting.
+
 ## 2026-10-20#14 -- Tags in the lists, tag search, and a Flatten button
 
 - **Flatten button** (the three bars, right next to the sigma button in every panel's address row): every file below the folder as one list in a new tab. Same as Go > All Files Below This Folder (Ctrl+Shift+B).

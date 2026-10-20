@@ -62,7 +62,7 @@ def clean_address(protocol: str, text: str) -> str:
     if not text.startswith(back * 2):
         return ""
     parts = [p for p in text[2:].split(back) if p]
-    if len(parts) < 2 or any(c in text for c in ' \t"<>|*?'):
+    if len(parts) < 2 or any(c in text for c in '\t"<>|*?'):
         return ""
     return back * 2 + back.join(parts)
 
