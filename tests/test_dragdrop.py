@@ -235,7 +235,14 @@ def test_a_drop_into_an_open_zip_adds_to_the_zip(world):
     pump(win, lambda: win.right.path.startswith("zip://") and win.right.model.entry_count() >= 1)
     drop(win.right, [str(left / "new.txt")], source=str(id(win.left)), mods=Qt.KeyboardModifier.ControlModifier)
     pump(win, lambda: d.confirms)
-    pump(win, lambda: not win.busy and "new.txt" in (zipfile.ZipFile(z).namelist() if z.exists() else []))
+
+    def added():                                   # the window swaps the zip on a thread: read it once, and never while it is swapped
+        try:
+            with zipfile.ZipFile(z) as w:
+                return "new.txt" in w.namelist()
+        except (OSError, zipfile.BadZipFile):
+            return False
+    pump(win, lambda: not win.busy and added())
 
 
 def test_a_drag_out_of_an_archive_copies_out(world):
