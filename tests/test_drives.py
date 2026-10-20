@@ -12,7 +12,7 @@ def test_real_volumes_are_listed_and_never_empty():
     vols = list_volumes()
     assert vols and all(len(v) == 3 for v in vols)
     drives = list_drives()
-    assert drives[-1].kind == "home" and drives[-1].name == "Home"
+    assert drives[-1].kind == "home" and drives[-1].label == "(your folder)" and drives[-1].name == os.path.basename(drives[-1].path)
 
 
 def test_fake_volumes_become_drives_with_short_names_and_a_home_entry():

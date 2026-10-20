@@ -16,7 +16,7 @@ from PyQt6.QtGui import QBrush, QColor, QFont, QIcon, QPainter, QPen, QPixmap, Q
 from ..core.columns import KEYS as column_keys, LABELS as column_labels, RIGHT_ALIGNED, attributes_text, location_text, type_text
 from ..core.columns import LABEL_COLORS, label_text, rating_text, when
 from ..core.filetypes import DRIVE_ICONS, icon_name
-from ..core.home import HOME_URL, TYPE_NAMES
+from ..core.home import HOME_URL, TYPE_NAMES, USER_FOLDER_NOTE
 from ..core.selection import SelectionStore
 from ..core.vfs import Entry, FileSystem, natural_key
 from . import icon_set, theme
@@ -372,7 +372,7 @@ class FolderModel(QAbstractTableModel):
         if entry.kind in DRIVE_ICONS:
             return icon_set.icon(DRIVE_ICONS[entry.kind], t["dim"])
         if entry.kind == "place":
-            return icon_set.icon("home" if entry.name == "Home" else "folder", t["accent"])
+            return icon_set.icon("home" if entry.note == USER_FOLDER_NOTE else "folder", t["accent"])
         if entry.kind == "pin":
             return icon_set.icon("folder", t["accent"])
         if entry.kind == "netloc":

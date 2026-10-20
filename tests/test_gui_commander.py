@@ -354,7 +354,7 @@ def test_drive_list_marks_the_current_drive_and_lists_home(world):
     assert bar.current is not None and os.path.normcase(str(left)).startswith(os.path.normcase(bar.current.path))
     assert bar.chip.text() == bar.current.name
     names_ = [a.text().split("\t")[0] for a in bar.menu.actions()]
-    assert any(n.startswith("Home") for n in names_)
+    assert any("(your folder)" in n for n in names_)
     win.set_drive_style("strip")
     assert bar._strip_buttons[bar.current.path].isChecked()
 

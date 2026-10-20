@@ -33,7 +33,8 @@ def list_drives(volumes: Optional[list] = None, home: Optional[str] = None) -> l
     """Every drive, then the home folder. ``volumes`` and ``home`` are for tests."""
     drives = [Drive(root, _short_name(root, label), label, kind)
               for root, label, kind in (list_volumes() if volumes is None else volumes)]
-    drives.append(Drive(home or home_dir(), "Home", "", "home"))
+    folder = home or home_dir()
+    drives.append(Drive(folder, os.path.basename(folder.rstrip("/" + chr(92))) or "Home", "(your folder)", "home"))
     return drives
 
 

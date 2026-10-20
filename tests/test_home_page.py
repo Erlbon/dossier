@@ -137,7 +137,7 @@ def test_opening_entries_goes_to_their_folders(world):
     QTest.keyClick(p.table, Qt.Key.Key_Return)
     assert p.path == str(drive)
     p.set_folder(HOME_URL)
-    p.table.setCurrentIndex(p.model.index(row_of_kind(p, "place", "Home"), 0))
+    p.table.setCurrentIndex(p.model.index(row_of_kind(p, "place", os.path.basename(str(folder)) + " (your folder)"), 0))
     QTest.keyClick(p.table, Qt.Key.Key_Return)
     assert p.path == str(folder)
 

@@ -2,6 +2,10 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-20#18 -- "Home" means the Home page only
+
+- Your own folder (`C:\Users\<you>`) is now called **`<you> (your folder)`** in the Drive list and under Places on the Home page (with a tooltip, "Your user folder"). Before, three different things were all called Home: the Home page (the house button and the Home tab), the user folder in the Drive list, and the user folder under Places.
+
 ## 2026-10-20#17 -- Pack to zip, unpack, and convert other archives to zip
 
 - **Commands > Pack to Zip... (Alt+F5):** packs the marked items (or the one under the cursor) into a new zip, by default in the other panel's folder. Pick the name, the compression (normal, fast, maximum, store only), and whether files that are already compressed (pictures, music, video) are stored as they are. It never overwrites an existing zip, shows progress with Cancel, keeps each file's date, and writes under a temporary name that becomes the zip only when it is complete.

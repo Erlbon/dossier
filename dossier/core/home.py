@@ -60,10 +60,18 @@ class HomeProvider:
         return (self.environ if self.environ is not None else os.environ).get(name, "")
 
 
+USER_FOLDER_NOTE = "Your user folder"
+
+
+def user_folder_name(home: str) -> str:
+    """How the user's own folder is called in lists: ``erlbon (your folder)``. The word Home belongs to the Home page."""
+    return f"{os.path.basename(home.rstrip('/' + chr(92))) or 'Home'} (your folder)"
+
+
 def place_folders(p: HomeProvider) -> list:
     """``(title, path)`` of the user's own folders that exist, then the cloud sync folders that exist."""
     home = p.home()
-    out = [("Home", home)]
+    out = [(user_folder_name(home), home)]
     out += [(name, os.path.join(home, name)) for name in KNOWN_FOLDERS]
     for title, path in (("OneDrive", p.env("OneDrive") or p.env("OneDriveConsumer") or os.path.join(home, "OneDrive")),
                         ("Dropbox", os.path.join(home, "Dropbox")),
@@ -104,7 +112,8 @@ def build_entries(p: HomeProvider) -> list:
         entries.append(_lit(p, Entry(name=f"{name}  {label}".strip() if label else name, path=root, is_dir=True, kind=kind)))
     entries.append(_header("places"))
     for title, path in place_folders(p):
-        entries.append(Entry(name=title, path=path, is_dir=True, kind="place", detail=path))
+        entries.append(Entry(name=title, path=path, is_dir=True, kind="place", detail=path,
+                             note=USER_FOLDER_NOTE if title == user_folder_name(p.home()) else ""))
     pins = [x for x in p.pins() if x]
     if pins:
         entries.append(_header("pins"))

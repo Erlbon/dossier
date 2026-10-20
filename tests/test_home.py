@@ -52,7 +52,7 @@ def test_local_drives_are_listed_with_labels_and_kinds_and_network_drives_go_to_
 
 def test_places_list_only_folders_that_exist_and_cloud_folders_are_found_once():
     names = [t for t, _ in place_folders(provider())]
-    assert names == ["Home", "Documents", "Downloads", "OneDrive", "Dropbox"]
+    assert names == ["me (your folder)", "Documents", "Downloads", "OneDrive", "Dropbox"]       # the word Home is the Home page's
     via_env = place_folders(provider(environ={"OneDrive": J(ME, "OneDrive")}))
     assert [t for t, _ in via_env].count("OneDrive") == 1                       # the same folder is not listed twice
     cloud = J(BASE, "e", "Cloud")
