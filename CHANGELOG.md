@@ -2,6 +2,13 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-20#09 -- Properties, with the tags inside audio, comic and video files (read only)
+
+- **Files > Properties (Alt+Return)** for the marked items or the one under the cursor. General tab: name, place, type, size (a folder's size is everything below it), modified, created, last opened, attributes, link target. Several items give totals.
+- **A second tab with what is inside the file:** audio (title, artist, album, track, date, genre, comment, lyrics, cover art, length, bitrate, sample rate, channels), CBZ comics (ComicInfo: series, number, title, date, credits, genre, summary, page counts) and video (container, tags, every video, audio and subtitle track with codec, size, frame rate, language and flags, chapters). Copy All puts the text on the clipboard.
+- **Read only.** Nothing can be changed from this dialog yet; editing is a later step. The readers are new shared code in redactor_common (pinned at 2026-10-20-02), so the Redactor apps can use the same ones.
+- Video details need ffprobe; without it the tab says so.
+
 ## 2026-10-20#08 -- The Search dialog
 
 - **Commands > Search... (Alt+F7).** Where to look (the folder you are in; from a search result or a flat list it is the real folder behind it), the name (wildcards, `;` for alternatives, a plain word matches anywhere in the name, `!` in front leaves matches out), match case, files / folders / both, include subfolders, size at least / at most (KB, MB, GB or bytes), changed on or after / on or before, and text inside the files (plain or regular expression, with match case).

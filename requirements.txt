@@ -1,7 +1,7 @@
 # Qt-free core needs nothing beyond the standard library.
 # GUI and shared code (added when the GUI shell starts):
 PyQt6>=6.6
-redactor_common @ git+https://github.com/Erlbon/redactor_common.git@2026-10-19-01   # pin a tag, never @main
+redactor_common @ git+https://github.com/Erlbon/redactor_common.git@2026-10-20-02   # pin a tag, never @main
 send2trash>=1.8
 pytest
 PyQt6-QScintilla>=2.14

@@ -34,6 +34,7 @@ from .command_line import CommandLine
 from .batch_rename import BatchRenameMixin
 from .checksums import ChecksumMixin
 from .mounting import MountMixin
+from .properties import PropertiesMixin
 from .dialogs import Dialogs
 from .marks_and_notes import MarksAndNotesMixin
 from .search_command import SearchCommandMixin
@@ -57,7 +58,7 @@ SUMMARY_ITEMS = 12    # the confirmation lists this many items, then says how ma
 SIZE_LIMIT = 1000    # the status line sizes at most this many marked items
 
 
-class MainWindow(MountMixin, ChecksumMixin, MarksAndNotesMixin, SearchCommandMixin, BatchRenameMixin, OperationQueueMixin, StallLogMixin, GoingPlacesMixin, FolderSizesMixin, UnpackMixin, QMainWindow):
+class MainWindow(PropertiesMixin, MountMixin, ChecksumMixin, MarksAndNotesMixin, SearchCommandMixin, BatchRenameMixin, OperationQueueMixin, StallLogMixin, GoingPlacesMixin, FolderSizesMixin, UnpackMixin, QMainWindow):
     def __init__(self, fs: Optional[FileSystem] = None, *, settings_path: Optional[str] = None, start=(None, None),
                  dialogs=None, trasher=None, terminal_launcher=None, which=None) -> None:
         super().__init__()
@@ -190,10 +191,13 @@ class MainWindow(MountMixin, ChecksumMixin, MarksAndNotesMixin, SearchCommandMix
         self.act_mkdir = self._action("New Folder", "F7", self.new_folder)
         self.act_delete = self._action("Delete", ["F8", "Delete"], self.delete)
         self.act_delete_perm = self._action("Delete Permanently", "Shift+F8", lambda: self.delete(permanent=True))
+        self.act_properties = self._action("Properties", "Alt+Return", self.show_properties)
         quit_ = self._action("Quit", "Ctrl+Q", self.close)
         for a in (self.act_view, self.act_edit, self.act_rename, self.act_copy, self.act_move, self.act_mkdir, self.act_delete,
                   self.act_delete_perm):
             files.addAction(a)
+        files.addSeparator()
+        files.addAction(self.act_properties)
         files.addSeparator()
         files.addAction(quit_)
         mark = bar.addMenu("&Mark")
