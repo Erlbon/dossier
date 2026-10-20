@@ -11,7 +11,7 @@ import shutil
 import threading
 from typing import Optional
 
-from PyQt6.QtCore import QEvent, QObject, QSettings, QSize, QStandardPaths, Qt, QTimer
+from PyQt6.QtCore import QEvent, QObject, QPoint, QSettings, QSize, QStandardPaths, Qt, QTimer
 from PyQt6.QtGui import QAction, QActionGroup, QKeySequence
 from PyQt6.QtWidgets import (QApplication, QHBoxLayout, QLabel, QMainWindow, QMenu, QPushButton, QSplitter,
                              QToolButton, QVBoxLayout, QWidget)
@@ -226,6 +226,7 @@ class MainWindow(QMainWindow):
         self.act_notes.toggled.connect(self.set_notes_visible)
         view_menu.addAction(self.act_notes)
         view_menu.addAction(self._action("Home Page", "Alt+Home", lambda: self.active.go_home()))
+        view_menu.addAction(self._action("Quick Filter", "Ctrl+S", lambda: self.active.start_filter()))
         view_menu.addAction(self._action("Open as Archive", "Ctrl+PgDown", lambda: self.active.open_as_archive()))
         view_menu.addAction(self._action("Folder Sizes", "Alt+Shift+Return", lambda: self.calculate_folder_sizes()))
         view_menu.addAction(self._action("Edit the Path", "Ctrl+L", lambda: self.active.address_bar.start_edit()))
@@ -237,6 +238,17 @@ class MainWindow(QMainWindow):
                                  ("Previous Tab", "Ctrl+Shift+Tab", lambda: self.active.next_tab(-1)),
                                  ("Open Folder in New Tab", "Ctrl+Return", lambda: self.active.open_current(True))):
             tabs_menu.addAction(self._action(text, keys, slot))
+        go = bar.addMenu("&Go")
+        self.act_back = self._action("Back", "Alt+Left", lambda: self.active.history_back())
+        self.act_forward = self._action("Forward", "Alt+Right", lambda: self.active.history_forward())
+        for a in (self.act_back, self.act_forward,
+                  self._action("Folder History...", "Alt+Down", self.show_history),
+                  self._action("Hotlist...", "Ctrl+B", self.show_hotlist)):
+            go.addAction(a)
+        go.addSeparator()
+        for a in (self._action("Open Folder in the Other Panel", ["Ctrl+Right", "Ctrl+Left"], self.open_in_other_panel),
+                  self._action("Other Panel Shows This Folder", "Ctrl+Shift+O", self.same_in_other_panel)):
+            go.addAction(a)
         commands = bar.addMenu("&Commands")
         for a in (self._action("Undo", "Ctrl+Z", self.undo), self._action("Swap Panels", "Ctrl+U", self.swap_panels)):
             commands.addAction(a)
@@ -1283,6 +1295,76 @@ class MainWindow(QMainWindow):
             "Free software under the GPL, version 3 or later.",
             "Made with Python and Qt (PyQt6), the QScintilla editor component, and the Tabler and Lucide icon sets.",
             "The full credits are in CREDITS.md."]))
+
+    # going places: history, the hotlist, the other panel --------------------------------------------------------
+    def _popup_at_address(self, menu: QMenu) -> None:
+        bar = self.active.address_bar
+        menu.popup(bar.mapToGlobal(QPoint(0, bar.height())))
+
+    def build_history_menu(self) -> QMenu:
+        """The folders the active panel's tab has shown, newest first; the one it stands on is ticked."""
+        panel = self.active
+        menu = QMenu(self)
+        entries = panel.history_entries()
+        if not entries:
+            menu.addAction("No folders yet").setEnabled(False)
+        for index, path in entries[:30]:
+            label = path if len(path) <= 70 else path[:30] + "..." + path[-37:]
+            act = menu.addAction(label.replace("&", "&&"))
+            act.setData(path)
+            act.setToolTip(path)
+            act.setCheckable(True)
+            act.setChecked(index == panel.history_position)
+            act.triggered.connect(lambda _c=False, i=index: panel.history_go(i))
+        return menu
+
+    def show_history(self) -> None:
+        self._history_menu = self.build_history_menu()
+        self._popup_at_address(self._history_menu)
+
+    def build_hotlist_menu(self) -> QMenu:
+        """The pinned folders, numbered so a digit picks one, and the way to pin another."""
+        panel = self.active
+        menu = QMenu(self)
+        pins = self._saved_list("home/pins")
+        if not pins:
+            menu.addAction("No pinned folders yet").setEnabled(False)
+        for n, path in enumerate(pins[:9], start=1):
+            name = self.fs.basename(path.rstrip(chr(92) + "/")) or path
+            act = menu.addAction(f"&{n}  {name}".replace("&&", "&"))
+            act.setToolTip(path)
+            act.triggered.connect(lambda _c=False, p=path: self._go_to_pin(panel, p))
+        menu.addSeparator()
+        menu.addAction("Pin This Folder (Ctrl+D)").triggered.connect(lambda _c=False: self.pin_folder())
+        return menu
+
+    def _go_to_pin(self, panel, path: str) -> None:
+        if not panel.set_folder(path):
+            self._say(f"Cannot open {path}")
+
+    def show_hotlist(self) -> None:
+        if self.active.is_home:
+            self._say("Open a folder first")
+            return
+        self._hotlist_menu = self.build_hotlist_menu()
+        self._popup_at_address(self._hotlist_menu)
+
+    def open_in_other_panel(self) -> None:
+        """Ctrl+Left or Ctrl+Right: the other panel opens the folder under the cursor (the folder itself when the
+        cursor is on a file)."""
+        panel = self.active
+        if panel.is_home:
+            return
+        entry = panel.current_entry()
+        target = entry.path if entry is not None and entry.is_dir else panel.path
+        self.other.set_folder(target)
+        self._say(f"The other panel shows {target}")
+
+    def same_in_other_panel(self) -> None:
+        if self.active.is_home:
+            return
+        self.other.set_folder(self.active.path)
+        self._say(f"The other panel shows {self.active.path}")
 
     # folder sizes ------------------------------------------------------------------------------------------
     def calculate_folder_sizes(self, panel=None) -> None:

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 import threading
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional
 
 from PyQt6.QtCore import QModelIndex, QRectF, QSize, Qt, QTimer, QUrl, pyqtSignal
@@ -54,6 +54,20 @@ class NoteView(QTextBrowser):
         event.ignore()
 
 
+class _FilterEdit(QLineEdit):
+    """The quick filter's field: Esc clears the filter, Enter or Down goes back to the list."""
+    escaped = pyqtSignal()
+    leave = pyqtSignal()
+
+    def keyPressEvent(self, event) -> None:
+        if event.key() == Qt.Key.Key_Escape:
+            self.escaped.emit()
+        elif event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Down):
+            self.leave.emit()
+        else:
+            super().keyPressEvent(event)
+
+
 class PanelTable(QTableView):
     switch_panel = pyqtSignal()
     mark_toggle = pyqtSignal()       # Insert
@@ -65,6 +79,7 @@ class PanelTable(QTableView):
     activate_in_tab = pyqtSignal()   # Ctrl+Enter: open the folder in a new tab
     escape = pyqtSignal()            # Esc: stop waiting for a slow folder
     middle_clicked = pyqtSignal(int)  # middle click on a row: open that folder in a background tab
+    history_step = pyqtSignal(int)    # the mouse's back (-1) or forward (+1) button
 
     # Marking several items. The marks are the shared selection; the cursor is the current row.
     #   Space / Insert       mark the item and move down          Ctrl+Space   mark it, stay
@@ -105,6 +120,12 @@ class PanelTable(QTableView):
         super().keyReleaseEvent(event)
 
     def mousePressEvent(self, event) -> None:
+        if event.button() == Qt.MouseButton.BackButton:
+            self.history_step.emit(-1)
+            return
+        if event.button() == Qt.MouseButton.ForwardButton:
+            self.history_step.emit(1)
+            return
         index = self.indexAt(event.position().toPoint())
         if event.button() != Qt.MouseButton.LeftButton or not index.isValid():
             super().mousePressEvent(event)
@@ -239,8 +260,11 @@ class TabState:
     sort_col: int = 0
     sort_desc: bool = False
     scroll: int = 0
+    history: list = field(default_factory=list)     # the folders this tab has shown, oldest first
+    hpos: int = -1                                  # where in the history the tab stands (back and forward move it)
 
 
+HISTORY_MAX = 100                           # folders a tab remembers
 FRAME = 2                                   # width of the active panel's gold frame, in logical pixels
 
 
@@ -349,6 +373,7 @@ class Panel(QFrame):
     def __init__(self, fs: FileSystem, selection: SelectionStore, parent=None, dispatch=None) -> None:
         super().__init__(parent)
         self._active = False                          # set before the first tab is built: its close button reads it
+        self._skip_history_for = None                 # a folder shown by back/forward or a tab switch is not new history
         self.fs = fs
         self.selection = selection
         self._dispatch = dispatch
@@ -419,6 +444,10 @@ class Panel(QFrame):
         self.bar.setObjectName("pathbarbox")
         self.bar.setLayout(bar)
 
+        self.filter_edit = _FilterEdit()
+        self.filter_edit.setPlaceholderText("Filter: part of a name, or a pattern with * and ?   (Esc clears)")
+        self.filter_edit.setClearButtonEnabled(True)
+        self.filter_edit.hide()
         self.table = PanelTable()
         self.table.selection = selection
         self.table.setModel(self.model)
@@ -456,10 +485,15 @@ class Panel(QFrame):
         body.addWidget(self.drive_bar.strip)
         body.addWidget(self.bar)
         body.addWidget(self.table, 1)
+        body.addWidget(self.filter_edit)
         layout.addWidget(self.tab_row)
         layout.addWidget(self.body, 1)
 
         self.address.returnPressed.connect(self._address_entered)
+        self.filter_edit.textChanged.connect(self._filter_changed)
+        self.filter_edit.escaped.connect(self.clear_filter)
+        self.filter_edit.leave.connect(lambda: self.table.setFocus())
+        self.table.history_step.connect(lambda step: self.history_back() if step < 0 else self.history_forward())
         self.address_bar.navigate.connect(self._crumb_clicked)
         self.address_bar.navigate_new_tab.connect(lambda target: self.new_tab(target, activate=False))
         self.address_bar.escaped.connect(lambda: self.table.setFocus())
@@ -584,10 +618,101 @@ class Panel(QFrame):
     def pending_path(self) -> str:
         return self._pending[1] if self._pending else ""
 
+    # folder history: back, forward and a list, for each tab --------------------------------------------------------
+    def _record_history(self, path: str) -> None:
+        st = self._tabs.get(self._current_tab_id)
+        if st is None:
+            return
+        if self._skip_history_for is not None and self._skip_history_for == path:
+            self._skip_history_for = None            # we got here by going back or forward, or by switching tab
+            if not st.history:
+                st.history, st.hpos = [path], 0
+            return
+        if 0 <= st.hpos < len(st.history) and st.history[st.hpos] == path:
+            return                                   # a refresh of the same folder
+        del st.history[st.hpos + 1:]                 # a new place cuts off what was "forward"
+        st.history.append(path)
+        if len(st.history) > HISTORY_MAX:
+            del st.history[0]
+        st.hpos = len(st.history) - 1
+
+    def history_go(self, index: int) -> bool:
+        st = self._tabs.get(self._current_tab_id)
+        if st is None or not 0 <= index < len(st.history) or index == st.hpos:
+            return False
+        before, st.hpos = st.hpos, index
+        target = st.history[index]
+        self._skip_history_for = target
+        if self.set_folder(target):
+            return True
+        st.hpos = before                             # that folder cannot be opened: stay where we were
+        self._skip_history_for = None
+        return False
+
+    def history_back(self) -> bool:
+        st = self._tabs.get(self._current_tab_id)
+        return bool(st) and self.history_go(st.hpos - 1)
+
+    def history_forward(self) -> bool:
+        st = self._tabs.get(self._current_tab_id)
+        return bool(st) and self.history_go(st.hpos + 1)
+
+    def history_entries(self) -> list:
+        """``[(index, path), ...]`` newest first, for a list the user picks from."""
+        st = self._tabs.get(self._current_tab_id)
+        if st is None:
+            return []
+        return [(i, p) for i, p in reversed(list(enumerate(st.history)))]
+
+    @property
+    def history_position(self) -> int:
+        st = self._tabs.get(self._current_tab_id)
+        return st.hpos if st else -1
+
+    # the quick filter ------------------------------------------------------------------------------------------
+    @property
+    def filter_active(self) -> bool:
+        return bool(self.model.filter_text.strip())
+
+    def start_filter(self) -> None:
+        if self.is_home:
+            self.message.emit("The Home page has no list to filter")
+            return
+        self.filter_edit.show()
+        self.filter_edit.setFocus()
+        self.filter_edit.selectAll()
+
+    def _filter_changed(self, text: str) -> None:
+        self.model.set_filter(text)
+        shown, total = self.model.counts()
+        if text.strip():
+            self.message.emit(f"Filter: {shown} of {total} shown")
+        if self.model.entry_count():
+            first = 1 if self.model.is_up_row(0) and self.model.entry_count() > 1 else 0
+            self.table.setCurrentIndex(self.model.index(first, 0))
+
+    def _hide_filter(self) -> None:
+        blocked = self.filter_edit.blockSignals(True)
+        self.filter_edit.clear()
+        self.filter_edit.blockSignals(blocked)
+        self.filter_edit.hide()
+
+    def clear_filter(self) -> None:
+        self._hide_filter()
+        self.model.set_filter("")
+        self.table.setFocus()
+        if self.model.entry_count():
+            first = 1 if self.model.is_up_row(0) and self.model.entry_count() > 1 else 0
+            self.table.setCurrentIndex(self.model.index(first, 0))
+
     def _escape(self) -> None:
         """Esc stops a slow folder; when nothing is pending it clears the marks."""
-        if not self.cancel_navigation():
-            self.selection.clear()
+        if self.cancel_navigation():
+            return
+        if self.filter_active or self.filter_edit.isVisible():
+            self.clear_filter()
+            return
+        self.selection.clear()
 
     def cancel_navigation(self) -> bool:
         """Stop waiting for a slow folder. Returns True when there was one."""
@@ -644,7 +769,11 @@ class Panel(QFrame):
             e = listing.error
             self.message.emit(f"Cannot open {path}: {getattr(e, 'strerror', None) or e}")
             return False
+        moved_on = path != self.model.path
         self.model.set_entries(path, listing.entries)
+        if moved_on and (self.filter_edit.isVisible() or self.filter_edit.text()):
+            self._hide_filter()                    # a filter belongs to one folder
+        self._record_history(path)
         self._apply_columns()
         self.address.setText(path)
         self.address_bar.set_path(path)
@@ -753,6 +882,7 @@ class Panel(QFrame):
         order = Qt.SortOrder.DescendingOrder if st.sort_desc else Qt.SortOrder.AscendingOrder
         self.table.sortByColumn(st.sort_col, order)
         path = st.path
+        self._skip_history_for = path
         while path and not self.set_folder(path, select=st.current):     # a folder that is gone: nearest parent
             parent = self.fs.parent(path)
             if not parent or parent == path:
@@ -795,6 +925,7 @@ class Panel(QFrame):
             self._add_tab_entry(p)
         self.tabs.setCurrentIndex(0)
         st = first
+        self._skip_history_for = st.path
         while not self.set_folder(st.path):
             parent = self.fs.parent(st.path)
             if not parent or parent == st.path:

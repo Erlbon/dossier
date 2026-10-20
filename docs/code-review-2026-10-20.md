@@ -46,3 +46,11 @@ Made by an independent Fable-model reviewer, read-only, with small experiments a
 18. MCP or scripting front end over the core (list, plan with dry run, execute, selection). M.
 19. Remote sources, SFTP and WebDAV read-only first (Home page H2 and later). L, high risk.
 20. A per-file conflict dialog (this one: overwrite, skip, keep both, rename; sizes and dates side by side). M.
+
+## Status, 2026-10-20
+
+Fixed in build 2026-10-20#01: findings 1, 2, 3, 4, 9, 10 and 11 (overwrite order and undo note, short-copy check, the other panel still opening, Office files on Enter with Ctrl+PageDown to look inside, read-only delete, roots and trailing separators), each with a test that fails on the old code. The undo of an overwrite still removes the new file; it now says where the older one is (the recycle bin, as `name.dossier-old`) because the bin cannot be restored from by the program.
+
+Built in build 2026-10-20#02: features 2 (quick filter), 3 (folder history), 4 (hotlist) and 15 (the other panel).
+
+Still open: findings 5 to 8, 12 to 17; features 1 and 5 to 14 and 16 to 20.

@@ -2,6 +2,14 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-20#02 -- Quick filter, folder history, hotlist, the other panel
+
+- **Quick filter (Ctrl+S, View > Quick Filter):** a field under the list narrows it as you type: a part of a name, or a pattern with `*`, `?` and `[ ]`. Enter goes back to the list and keeps the filter; Esc clears it (a second Esc clears the marks). Marks stay on hidden items, but commands work only on what is shown. A refresh keeps the filter, going to another folder drops it.
+- **Folder history, per tab (new Go menu):** Back (Alt+Left or the mouse's back button), Forward (Alt+Right or the forward button), and Folder History... (Alt+Down), a list of the last 100 folders with the current one ticked. A new place cuts off what was forward; switching tabs adds nothing.
+- **Hotlist (Ctrl+B):** your pinned folders, numbered, so a digit goes there, and Pin This Folder.
+- **The other panel:** Ctrl+Right or Ctrl+Left opens the folder under the cursor in the other panel (the current folder when the cursor is on a file); Ctrl+Shift+O makes it show this folder.
+- Fixed on the way: folder sizes arriving while a sort was set no longer lose the cursor's place.
+
 ## 2026-10-20#01 -- Safer overwrites and other fixes from the code review
 
 - **Overwrite is safe now.** The older file is moved aside only when the new one is complete and goes to the recycle bin only when the new one is in place, so a copy or move that fails leaves the old file exactly where it was (before, it was already in the bin and you had neither). In the bin it is called `name.dossier-old`.

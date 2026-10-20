@@ -3,6 +3,7 @@ one last row that the panel fills with the rendered note (it scrolls with the li
 under a repository's file list)."""
 from __future__ import annotations
 
+import fnmatch
 import os
 from dataclasses import replace as dc_replace
 from datetime import datetime
@@ -37,6 +38,13 @@ def marked_color() -> QColor:
     return QColor(theme.current()["marked"])
 
 
+def name_fits(name: str, text: str) -> bool:
+    """The quick filter's test: a pattern when it has * ? or [, otherwise a part of the name, in either case ignoring case."""
+    if any(ch in text for ch in "*?["):
+        return fnmatch.fnmatch(name.lower(), text.lower())
+    return text.lower() in name.lower()
+
+
 class FolderModel(QAbstractTableModel):
     def __init__(self, fs: FileSystem, selection: SelectionStore, parent=None) -> None:
         super().__init__(parent)
@@ -45,6 +53,8 @@ class FolderModel(QAbstractTableModel):
         self.path = ""
         self._up: Optional[Entry] = None
         self._rows: list = []
+        self._source_rows: list = []             # the whole listing; _rows is what the quick filter lets through
+        self._filter = ""
         self._tree_sizes: dict = {}
         self._has_note = False
         self._sort_col = 0
@@ -85,6 +95,8 @@ class FolderModel(QAbstractTableModel):
         if self.is_home or not sizes:
             return
         self._tree_sizes.update(sizes)
+        self._source_rows = [dc_replace(e, size=sizes[e.path]) if e.is_dir and e.path in sizes else e
+                             for e in self._source_rows]
         self._rows = [dc_replace(e, size=sizes[e.path]) if e.is_dir and e.path in sizes else e for e in self._rows]
         self.sort(self._sort_col, self._sort_order)               # the cursor stays on its item, whatever the order
 
@@ -92,13 +104,42 @@ class FolderModel(QAbstractTableModel):
         """Show an already made listing of ``path`` (the panel lists on a worker thread and hands it over)."""
         parent = self.fs.parent(path)
         up = Entry("..", parent, True) if parent else None
+        previous = self.path
         self.beginResetModel()
         self._tree_sizes = {}
         self.path = path
         self._up = up
-        self._rows = entries
+        if path != previous:
+            self._filter = ""                    # a filter belongs to one folder; a refresh of it keeps the filter
+        self._source_rows = entries
+        self._rows = self._filtered(entries)
         self._resort()
         self.endResetModel()
+
+    # the quick filter -------------------------------------------------------------------------------------
+    @property
+    def filter_text(self) -> str:
+        return self._filter
+
+    def counts(self) -> tuple:
+        """(shown, all) items of the listing, not counting the up row."""
+        return len(self._rows), len(self._source_rows)
+
+    def set_filter(self, text: str) -> None:
+        """Show only the items whose name fits ``text``: a part of the name, or a pattern with * and ?. Marks stay."""
+        if self.is_home or text == self._filter:
+            return
+        self.beginResetModel()
+        self._filter = text
+        self._rows = self._filtered(self._source_rows)
+        self._resort()
+        self.endResetModel()
+
+    def _filtered(self, entries: list) -> list:
+        text = self._filter.strip()
+        if not text or self.is_home:
+            return entries
+        return [e for e in entries if name_fits(e.name, text)]
 
     def set_has_note(self, has: bool) -> None:
         if has != self._has_note:
