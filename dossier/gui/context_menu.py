@@ -111,6 +111,7 @@ class ContextMenuMixin:
             add("Open in the Other Panel", self.open_in_other_panel, keys="Ctrl+Left/Right")
             add("Terminal Here", lambda: self.open_terminal(folder=entry.path), enabled=not many, keys="Ctrl+Shift+T")
             add("Pin to the Home Page", lambda: self.pin_folder(entry.path), enabled=not many, keys="Ctrl+D")
+            add("Find Duplicate Files in This Folder...", lambda: self.find_duplicate_files(panel, entry.path), enabled=not many)
         else:
             add("View", self.view_file, enabled=not many, keys="F3")
             add("Edit", self.edit_file, enabled=not many, keys="F4")
@@ -153,6 +154,7 @@ class ContextMenuMixin:
         menu.addSeparator()
         add("Terminal Here", self.open_terminal, keys="Ctrl+Shift+T")
         add("Search...", self.search_files, keys="Alt+F7")
+        add("Find Duplicate Files...", self.find_duplicate_files, keys="Alt+Shift+F7")
         add("All Files Below This Folder", lambda: self.show_all_files_below(panel), keys="Ctrl+Shift+B")
         add("Refresh", self.refresh, keys="Ctrl+R")
         menu.addSeparator()

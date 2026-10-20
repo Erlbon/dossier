@@ -2,6 +2,13 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-20#37 -- Find Duplicate Files
+
+- **Commands > Find Duplicate Files... (Alt+Shift+F7)**, and in the right-click menu on a folder and on empty space. Choose where to look (this panel's folder and everything below it, and optionally the other panel's folder too, which finds the files that are in both places), the smallest file to bother with and, if you like, which file names. Files are duplicates when they hold **exactly the same bytes**, whatever they are called or where they are.
+- **Fast on a big library:** three steps, each throwing away what cannot be a duplicate. Files of different sizes are different (most files are done here and never opened); of the files that share a size only the first and last 64 KB are compared; only the files that still look identical are read completely (SHA-256). A reported group is therefore really identical, and a file that cannot be read is counted and left out, never reported. It runs on a thread with a Cancel; empty files are ignored.
+- **A box lists the groups**, biggest waste first: each group shows its copies with folder and date, and the summary says how much space the extra copies take. *In every group keep* the oldest, the newest or the one with the shortest path, then **Check the Others**; or check copies by hand. **Delete Checked...** goes through the ordinary Delete command (its confirmation, the recycle bin, the queue and Ctrl+Z are unchanged), **Mark Checked in the Panels** only marks them, and **Show All in a Tab** lists every copy as a normal file list.
+- **At least one copy of every group always stays:** the delete button is greyed out while all copies of a group are checked, and the command refuses it as well.
+
 ## 2026-10-20#36 -- Metadata columns
 
 - **Sixteen new columns that show what is inside the files** (Settings > Columns..., or right-click a column header): *Title (tag), Artist, Album, Track, Year, Genre, Length, Bitrate* (audio tags: mp3, flac, m4a, ogg and more), *Series, Issue, Writer, Publisher, Pages* (the ComicInfo of a CBZ) and *Resolution, Video codec, Audio languages* (video: mkv, mp4, avi and more, read through ffprobe). Length, Title, Year, Bitrate and Publisher come from whichever kind of file has them. They are **read-only** for now.
