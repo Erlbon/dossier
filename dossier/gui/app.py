@@ -25,6 +25,13 @@ def leave(code: int, grace: float = 2.0) -> int:
 
 
 def main(argv=None) -> int:
+    from .check_install import check_or_explain
+    args = list(sys.argv[1:] if argv is None else argv[1:])
+    if not check_or_explain():                    # a missing package gets a plain message, not a traceback
+        return 1
+    if "--check" in args:
+        print("Everything Dossier needs is installed.")
+        return 0
     from PyQt6.QtWidgets import QApplication
 
     from ..core.platform import set_app_id

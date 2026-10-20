@@ -2,6 +2,12 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-20#23 -- Starting from source tells you what is missing
+
+- **A clear message instead of a traceback.** If PyQt6, send2trash or the shared Redactor package (redactor_common, tag 2026-10-20-02 or newer) is missing or too old in the Python you start with, Dossier now says which one and what to run (`python -m pip install -r requirements.txt`), in a box on Windows and on the console. A computer can have several Pythons; the message belongs to the one that was started.
+- `python -m dossier --check` only checks and says what is missing. `python dossier/__main__.py` and `python path/to/dossier` start the program too, not only `python -m dossier`.
+- The package metadata (pyproject.toml) now lists everything the program imports (PyQt6, QScintilla and redactor_common were missing), so `pip install .` brings them. The README has the steps to run it from a checkout.
+
 ## 2026-10-20#22 -- Fonts and Bold
 
 - **Settings > Fonts and Bold...** has two bold switches and a font. **Bold in the lists** covers folder names, marked items and the names and section titles on the Home page. **Bold in the bars** covers the address bar, the tabs and the buttons. Both are on by default, as before.
