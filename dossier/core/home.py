@@ -17,6 +17,7 @@ from typing import Callable, Optional
 
 from .platform import home_dir, list_volumes
 from .vfs import Entry, FileSystem, NotWritable
+from .listings import FlatFileSystem, FoundFileSystem
 from .zipfs import ZipFileSystem
 
 HOME_URL = "home://"
@@ -147,13 +148,19 @@ class RouterFileSystem(FileSystem):
         self.local = local
         self.home = home
         self.zip = ZipFileSystem()
+        self.flat = FlatFileSystem(self)              # flat://<folder>: every file below a folder, as one list
+        self.found = FoundFileSystem(self)            # found://<n>: the result list of a search
         self.sep = local.sep
         self.case_sensitive = local.case_sensitive
 
     def fs_for(self, path: str) -> FileSystem:
         if path.startswith("home:"):
             return self.home
-        return self.zip if path.startswith("zip:") else self.local
+        if path.startswith("zip:"):
+            return self.zip
+        if path.startswith("flat:"):
+            return self.flat
+        return self.found if path.startswith("found:") else self.local
 
     def is_writable(self, path: str) -> bool:
         return self.fs_for(path).is_writable(path)

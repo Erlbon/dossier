@@ -44,7 +44,7 @@ Made by an independent Fable-model reviewer, read-only, with small experiments a
 16. Named selections with a menu (save, load, to clipboard as a list); the core already has it. S.
 17. Edit the folder note from the list (F4 on the note row, templates). S.
 18. MCP or scripting front end over the core (list, plan with dry run, execute, selection). M.
-19. Remote sources, SFTP and WebDAV read-only first (Home page H2 and later). L, high risk.
+19. Remote sources, SFTP, SCP (owner, 2026-10-20) and WebDAV read-only first (Home page H2 and later). L, high risk.
 20. A per-file conflict dialog (this one: overwrite, skip, keep both, rename; sizes and dates side by side). M.
 
 ## Status, 2026-10-20

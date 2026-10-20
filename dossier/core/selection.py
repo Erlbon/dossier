@@ -172,9 +172,18 @@ class SelectionStore:
         return gone
 
     # named selections (S6) -----------------------------------------------
-    def save(self, name: str) -> None:
+    def save(self, name: str, paths=None) -> None:
+        """Remember the current marks under ``name``, or only ``paths`` (the marks of one panel)."""
         with self._lock:
-            self._saved[name] = dict(self._items)
+            if paths is None:
+                self._saved[name] = dict(self._items)
+            else:
+                keep = {path_key(p) for p in paths}
+                self._saved[name] = {k: v for k, v in self._items.items() if k in keep}
+
+    def forget(self, name: str) -> None:
+        with self._lock:
+            self._saved.pop(name, None)
 
     def recall(self, name: str, combine: bool = False) -> None:
         with self._lock:

@@ -31,7 +31,11 @@ from ..core.vfs import FileSystem, LocalFileSystem
 from ..core.worker import Job, JobRunner, JobState
 from .appicon import app_icon
 from .command_line import CommandLine
+from .batch_rename import BatchRenameMixin
+from .checksums import ChecksumMixin
 from .dialogs import Dialogs
+from .marks_and_notes import MarksAndNotesMixin
+from .search_command import SearchCommandMixin
 from .folder_sizes import FolderSizesMixin
 from .going_places import GoingPlacesMixin
 from .ops_queue import OperationQueueMixin
@@ -51,7 +55,7 @@ SUMMARY_ITEMS = 12    # the confirmation lists this many items, then says how ma
 SIZE_LIMIT = 1000    # the status line sizes at most this many marked items
 
 
-class MainWindow(OperationQueueMixin, StallLogMixin, GoingPlacesMixin, FolderSizesMixin, UnpackMixin, QMainWindow):
+class MainWindow(ChecksumMixin, MarksAndNotesMixin, SearchCommandMixin, BatchRenameMixin, OperationQueueMixin, StallLogMixin, GoingPlacesMixin, FolderSizesMixin, UnpackMixin, QMainWindow):
     def __init__(self, fs: Optional[FileSystem] = None, *, settings_path: Optional[str] = None, start=(None, None),
                  dialogs=None, trasher=None, terminal_launcher=None, which=None) -> None:
         super().__init__()
@@ -138,6 +142,7 @@ class MainWindow(OperationQueueMixin, StallLogMixin, GoingPlacesMixin, FolderSiz
             panel.folder_changed.connect(self._remember_sizes)
             panel.message.connect(self._say)
             panel.home_action.connect(self._home_action)
+            panel.note_edit_requested.connect(self.edit_folder_note)
             panel.sizes_requested.connect(lambda p=panel: self.calculate_folder_sizes(p))
             panel.open_archived.connect(lambda path: self._unpack_then([path], lambda local: self._open_with_system(local[0])))
         self._sizes: dict = {}                       # path -> size (0 for a folder), from the listings on screen
@@ -194,6 +199,13 @@ class MainWindow(OperationQueueMixin, StallLogMixin, GoingPlacesMixin, FolderSiz
                   self._action("Invert Selection", "*", self.invert_selection),
                   self._action("Deselect All", "Ctrl+Shift+A", self.selection.clear)):
             mark.addAction(a)
+        mark.addSeparator()
+        mark.addAction(self._action("Save Selection As...", None, self.save_selection))
+        self._restore_menu, self._add_menu, self._forget_menu = (mark.addMenu("Restore Saved Selection"),
+                                                                 mark.addMenu("Add Saved Selection to Marks"),
+                                                                 mark.addMenu("Forget Saved Selection"))
+        mark.aboutToShow.connect(lambda: self.build_selection_menus(self._restore_menu, self._add_menu, self._forget_menu))
+        mark.addAction(self._action("Copy Marked Paths as Text", None, self.copy_marked_paths))
         view_menu = bar.addMenu("&View")
         self.view_mode_actions = {}
         mode_group = QActionGroup(self)
@@ -231,6 +243,7 @@ class MainWindow(OperationQueueMixin, StallLogMixin, GoingPlacesMixin, FolderSiz
                   self._action("Hotlist...", "Ctrl+B", self.show_hotlist)):
             go.addAction(a)
         go.addSeparator()
+        go.addAction(self._action("All Files Below This Folder", "Ctrl+Shift+B", self.show_all_files_below))
         for a in (self._action("Open Folder in the Other Panel", ["Ctrl+Right", "Ctrl+Left"], self.open_in_other_panel),
                   self._action("Other Panel Shows This Folder", "Ctrl+Shift+O", self.same_in_other_panel)):
             go.addAction(a)
@@ -246,6 +259,16 @@ class MainWindow(OperationQueueMixin, StallLogMixin, GoingPlacesMixin, FolderSiz
         for a in (self._action("Pause or Resume Operations", "Ctrl+Shift+P", self.toggle_pause),
                   self._action("Cancel Waiting Operations", None, self.cancel_waiting)):
             commands.addAction(a)
+        commands.addAction(self._action("Edit Folder Note", "Ctrl+Shift+E", self.edit_folder_note))
+        commands.addAction(self._action("Checksums of Marked Files", None, self.show_checksums))
+        commands.addAction(self._action("Verify Checksum...", None, self.verify_checksum))
+        commands.addSeparator()
+        rename_menu = commands.addMenu("Batch Rename")
+        for text, keys, slot in (("By Pattern...", "Ctrl+M", self.rename_by_pattern),
+                                 ("Search and Replace in Names...", None, self.rename_search_replace),
+                                 ("Change Case...", None, self.rename_case),
+                                 ("Number the Files...", None, self.rename_number)):
+            rename_menu.addAction(self._action(text, keys, slot))
         commands.addSeparator()
         for a in (self._action("Pin Folder to Home Page", "Ctrl+D", self.pin_folder),
                   self._action("Add Network Location...", None, self.add_network_location)):
@@ -631,7 +654,7 @@ class MainWindow(OperationQueueMixin, StallLogMixin, GoingPlacesMixin, FolderSiz
         entry = self.active.current_entry()
         ph = Placeholders(current_name=self.fs.basename(entry.path) if entry else "",
                           current_path=entry.path if entry else "",
-                          marked=tuple(self.active.marked_here()), folder=self.active.path, other=self.other.path)
+                          marked=tuple(self.active.marked_here()), folder=self.active.real_folder(), other=self.other.real_folder())
         try:
             command = expand(text, ph, self.profile)
         except (UnsafeArgument, ValueError) as e:
@@ -639,7 +662,7 @@ class MainWindow(OperationQueueMixin, StallLogMixin, GoingPlacesMixin, FolderSiz
             return                                             # the text stays so it can be corrected
         self.cmdline.remember(text)
         self.cmdline.clear()
-        cwd, profile = self.active.path, self.profile
+        cwd, profile = self.active.real_folder(), self.profile
         self._say(f"Running: {command}")
 
         def finished(job: Job) -> None:
@@ -676,17 +699,18 @@ class MainWindow(OperationQueueMixin, StallLogMixin, GoingPlacesMixin, FolderSiz
         if profile is None:
             self.dialogs.info("Terminal", "No command interpreter was found.")
             return
-        if "://" in panel.path:
+        folder = panel.real_folder()
+        if "://" in folder:
             self.dialogs.info("Terminal", "A terminal can only open in a folder on this computer.")
             return
         try:
-            launch = session_launch(profile, panel.path, admin=admin, windows_terminal=self.windows_terminal,
+            launch = session_launch(profile, folder, admin=admin, windows_terminal=self.windows_terminal,
                                     which=self._which)
             self.launch_terminal(launch)
         except (OSError, UnsafeArgument) as e:
             self.dialogs.info("Terminal", str(e))
             return
-        self._say(("Administrator terminal" if admin else "Terminal") + f" opened in {panel.path}")
+        self._say(("Administrator terminal" if admin else "Terminal") + f" opened in {folder}")
 
     # the Home page -------------------------------------------------------------------------------------
     def _saved_list(self, key: str) -> list:
@@ -716,6 +740,9 @@ class MainWindow(OperationQueueMixin, StallLogMixin, GoingPlacesMixin, FolderSiz
             self.dialogs.info("Pin", "Open the folder you want to pin first.")
             return
         path = self.active.path
+        if has_scheme(path):
+            self.dialogs.info("Pin", "This is a list or an archive, not a folder. Open the folder itself to pin it.")
+            return
         pins = self._saved_list("home/pins")
         if any(path_key(p) == path_key(path) for p in pins):
             self._say(f"{path} is already on the Home page")
@@ -939,7 +966,7 @@ class MainWindow(OperationQueueMixin, StallLogMixin, GoingPlacesMixin, FolderSiz
             self.dialogs.info("Copy" if not move else "Move", f"The other panel is still opening "
                               f"{self.other.pending_path}. Wait for it, or press Esc in that panel, and try again.")
             return
-        dest, origin = self.other.path, self.active.path
+        dest, origin = self.other.path, self.active.real_folder()
 
         def build(watch):
             return (plan_move if move else plan_copy)(self.fs, sources, dest, watch=watch)
@@ -1031,7 +1058,8 @@ class MainWindow(OperationQueueMixin, StallLogMixin, GoingPlacesMixin, FolderSiz
             self.add_network_location()              # on the Home page F7 adds an entry instead of a folder
             return
         if not self.fs.is_writable(self.active.path):
-            self.dialogs.info("New Folder", "This folder is read-only (an archive cannot be changed yet).")
+            self.dialogs.info("New Folder", "This folder is read-only here (an archive, a search result or a list of "
+                                            "all files cannot be added to).")
             return
         name = self.dialogs.ask_text("New Folder", "Folder name:")
         if not name:

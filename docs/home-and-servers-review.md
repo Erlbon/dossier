@@ -10,8 +10,8 @@ A virtual folder at the root of every panel (`home://`), the place Backspace rea
 | --- | --- | --- |
 | Local drives | Fixed, removable, optical drives with label and free space (already in `core/drives.py`) | done |
 | Places | Home folder, Documents, Downloads, user-pinned folders, cloud sync folders (OneDrive, Dropbox, Google Drive show up as ordinary local folders) | small |
-| Network drives | Mapped SMB drives and UNC shares (`\\server\share`), NFS and CIFS mounts, found without any protocol code | small |
-| Servers | Saved connections: SFTP, FTP/FTPS, WebDAV, SMB by address, later S3-compatible and others | the big one |
+| Network drives | **Shares the operating system handles** (decided with the owner, 2026-10-20): SMB (mapped drives, UNC `\\server\share`, CIFS mounts) and NFS (Windows Client for NFS, Linux mounts). Same label and free-space line as local drives, plus a "Mount..." button for NFS and SMB | small |
+| Remote sources | **Protocols Dossier speaks itself** (decided 2026-10-20): saved connections for SFTP, SCP, WebDAV, FTP/FTPS, later S3-compatible and others. SMB and NFS are not here: they are network drives | the big one |
 | Services | Catalogues that are not file systems: OPDS, Subsonic (spec R2, R3) | medium, read-only |
 
 The drive dropdown and button strip are the same list in a smaller form: **one registry of "places", two views of it**, so a connection added once appears in both.
@@ -21,12 +21,12 @@ The drive dropdown and button strip are the same list in a smaller form: **one r
 | Kind | Notes | Verdict |
 | --- | --- | --- |
 | SMB/CIFS | Windows speaks it natively: a UNC path works through the ordinary file APIs, so `LocalFileSystem` already handles it. Linux needs a mount (gvfs, cifs) or a pure-Python client (`smbprotocol`, MIT) | Windows: free. Listing shares is the only work |
-| NFS | Mounts only; appears as a mount point | Free through the drive list |
+| NFS | Mounts only; appears as a mount point. Goes under Network drives with a Mount helper (Windows `mount \\server\share Z:` once Client for NFS is enabled; Linux `mount`/gvfs). No native client. **Settings check (owner, 2026-10-20):** Settings shows whether Client for NFS is on. Test without admin rights: `mount.exe` exists in System32 only when the feature is installed (and the `NfsClnt` service is present). When it is off, the Mount button explains why and shows how to switch it on (Windows Features dialog, or `Enable-WindowsOptionalFeature -Online -FeatureName ServicesForNFS-ClientOnly` in an administrator PowerShell). Dossier never switches it on itself: that is a system setting | Free through the drive list |
 | SFTP (SSH) | The most useful server protocol for a developer. Needs `paramiko` (LGPL) or `asyncssh` | Phase 3, first server |
 | WebDAV | Spec R1 phase 1. HTTP plus XML; easy to read, uneven in write semantics between servers | Phase 3, with SFTP |
 | FTP, FTPS | `ftplib` in the standard library. Plain FTP is cleartext; listing formats are a swamp (prefer MLSD) | Phase 4, with a warning |
 | S3-compatible, Azure Blob, Backblaze B2, Google Drive, OneDrive, Dropbox | Cloud APIs, OAuth, rate limits | Through an `rclone` bridge, optional, later |
-| SCP | Legacy; SFTP replaces it | Skip |
+| SCP | Owner asked for it (2026-10-20). The SCP protocol only copies files (no listing, rename or delete), so it runs over the same SSH connection as SFTP: browse and change with SFTP, and use SCP as the transfer mode for servers where the SFTP subsystem is switched off (paramiko exec of `scp -t`/`scp -f`, or the `scp` module). Shown as its own scheme `scp://` in the connection list | Phase 3, with SFTP |
 | AFP | Dead | Skip |
 | iSCSI | Appears as a local disk | Free |
 | WebDAV mounted by Windows (`\\host@SSL\DavWWWRoot`) | Works, flaky, size limits | Do not rely on it |
@@ -91,7 +91,7 @@ The rule is that user-facing facilities never ship broken. A protocol without an
 | --- | --- | --- | --- |
 | H0 | Non-blocking navigation (job, loading row, cancel, rollback on failure); `FileSystem` path functions and capability flags; ops layer stops using `os.path` directly; entry kinds | large | nothing |
 | H1 | Home page: local drives, places, mapped and UNC network drives, user-pinned folders and typed addresses; same registry feeds the dropdown and strip | medium | H0 entry kinds |
-| H2 | SMB share listing on Windows (enumerate shares of a host, typed UNC addresses, a "browse network" button the user presses); Linux gvfs/cifs shown as mounts | medium | H1 |
+| H2 | Network drives section for SMB and NFS shares, with a Mount... button (runs the OS command on a thread, shows its output, never stores a password); SMB share listing on Windows (enumerate shares of a host, typed UNC addresses, a "browse network" button the user presses); Linux gvfs/cifs shown as mounts | medium | H1 |
 | H3 | Connection manager (add, edit, test, keyring) and SFTP and WebDAV file systems, read-only first, then writes with the capability-aware plans | large | H0, H1 |
 | H4 | FTP and FTPS, with warnings | medium | H3 |
 | H5 | Cross-file-system copy and move plans; permanent-delete confirmation; remote undo rules | large | H3 |
@@ -130,3 +130,13 @@ H0 and H1 are built and tested.
 - **H0b:** a panel lists a folder on a worker thread. One that answers within 150 ms (every local folder) appears at once; a slow one leaves the window alive, keeps the old folder, says what is being opened, and Esc cancels. A late or failed answer cannot change the wrong folder.
 - **H1:** the Home page (`home://`, the root of every panel): local drives with free space filled in the background, the user's places (home, Desktop, Documents, Downloads, Pictures, Music, Videos, OneDrive, Dropbox, Google Drive when they exist), pinned folders (Ctrl+D) and a network section (mapped drives, saved network locations, "Add a network location..."). Reached with the Home button, Alt+Home, Backspace above a drive root, or by typing `home`. Delete removes only a pin or saved location, never a folder; file commands on the page explain that these are shortcuts.
 - **Still to do:** H2 (browse the shares of a host, button only), H3 onwards (servers). Saved network locations are stored as typed and opened as folders; a server address is explained, not saved.
+
+## 9. Indicator lights and drive identity (owner, 2026-10-20)
+
+- **Always show** network drives and remote sources, with a light. Never hide an unavailable entry.
+- Lights: green connected, grey not checked, red last attempt failed or unavailable, amber (local drives) a different drive than last time. Shapes differ as well as colours (filled dot, hollow dot, cross).
+- Network drives: the OS state of mapped SMB/NFS drives is read at once, without touching the network. Remote sources stay grey until opened or until a Check button is pressed; the check runs on a thread with a timeout. No background pinging, no scan.
+- Local drives: live, from the Windows device-change message (no polling).
+- **Identity of a local drive** = volume GUID + volume serial (+ label, size, file system); the physical disk serial is added when Windows gives it without admin rights. A serial identifies a drive; it is not a checksum (integrity is the Checksums command).
+- The identity, not the letter, is the key, so a drive that returns on another letter is recognised as the same drive ("Seen before as E:"). With a changed letter Dossier offers to update pins, favourites and tab history that use the old letter, after asking.
+- The "seen before" list is stored data: opt-in, off by default, with a checkbox and a Delete button. Without it, changes are only noticed within one session.

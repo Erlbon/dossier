@@ -2,6 +2,16 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-20#04 -- Batch rename, search, all files below a folder, saved selections, checksums
+
+- **Batch rename** (Commands > Batch Rename): by pattern (Ctrl+M), search and replace in names, change case, number the files. These are the shared dialogs of redactor_common (pinned in requirements.txt), so the Redactor apps and Dossier rename the same way. A rename is one undo; names that would collide get a number.
+- **All Files Below This Folder** (Ctrl+Shift+B) lists every file below the folder in a new tab; the `..` row goes back to the real folder. Copy, move and delete work from the list.
+- **Search engine** (name with wildcards and `;` alternatives, size, dates, text or regex inside files); results open in a new tab. The search dialog itself follows.
+- **Marks:** Save Selection As..., Restore, Add to Marks and Forget (this session only), and Copy Marked Paths as Text.
+- **Edit Folder Note** (Ctrl+Shift+E, or double-click the note): edits the folder's note, or creates a README.md.
+- **Checksums:** Commands > Checksums of Marked Files (SHA-256, shown and copied as `hash *name` lines) and Verify Checksum... (paste a value, MD5/SHA-1/SHA-256/SHA-512 told by length). Nothing is ever written next to the files.
+- Plans for metadata (Properties dialog), remote sources and the Home page lights are in docs/.
+
 ## 2026-10-20#03 -- The rest of the review, and a much smaller undo
 
 - **Undo is small now.** Ctrl+Z puts back a rename, a move on the same drive and a new empty folder, and nothing else. A copy is never undone by deleting the files it made; an overwrite, a delete and a move to another drive have no undo (the older file is in the recycle bin).

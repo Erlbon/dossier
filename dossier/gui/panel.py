@@ -31,6 +31,8 @@ SAFE_SCHEMES = ("http", "https", "mailto")
 class NoteView(QTextBrowser):
     """The rendered note. It never scrolls by itself: it is as tall as its text and the list scrolls."""
 
+    edit_requested = pyqtSignal()                 # a double click on the note: edit it
+
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
         self.setOpenLinks(False)
@@ -52,6 +54,9 @@ class NoteView(QTextBrowser):
 
     def wheelEvent(self, event) -> None:   # let the list scroll instead
         event.ignore()
+
+    def mouseDoubleClickEvent(self, event) -> None:
+        self.edit_requested.emit()
 
 
 class _FilterEdit(QLineEdit):
@@ -370,6 +375,7 @@ class Panel(QFrame):
     current_changed = pyqtSignal(object)  # the item under the cursor changed
     activated = pyqtSignal(object)        # the user focused this panel
     message = pyqtSignal(str)
+    note_edit_requested = pyqtSignal()    # the note was double-clicked
     open_archived = pyqtSignal(str)       # Enter on a file inside an archive: unpack it, then open it
     sizes_requested = pyqtSignal()        # the button for folder sizes was pressed
     home_action = pyqtSignal(str)         # an action entry of the Home page was opened (its path says which)
@@ -383,6 +389,7 @@ class Panel(QFrame):
         self._dispatch = dispatch
         self._last: dict = {}          # drive root -> the folder this panel was in on that drive
         self.notes_enabled = True
+        self.note_paths: list = []                # the files those notes were read from
         self._note_text = ""                      # the Markdown of the folder's notes, as read with its listing
         self.model = FolderModel(fs, selection, self)
         self.setObjectName("panel")
@@ -475,6 +482,7 @@ class Panel(QFrame):
         self.table.setIconSize(QSize(16, 16))
 
         self.note = NoteView(self.table.viewport())
+        self.note.edit_requested.connect(self.note_edit_requested.emit)
         self.note.hide()
 
         layout = QVBoxLayout(self)
@@ -785,6 +793,7 @@ class Panel(QFrame):
         self.drive_bar.set_current_path(path)
         self._update_free(path)
         self._note_text = compose_markdown(listing.notes) if self.notes_enabled and not is_home(path) else ""
+        self.note_paths = [n.path for n in listing.notes] if self.notes_enabled and not is_home(path) else []
         self._show_note(self._note_text)
         row = self.model.row_of(select) if select else -1
         if row < 0 and self.is_home and select:                # coming up from a drive or a folder: land on it
@@ -916,8 +925,24 @@ class Panel(QFrame):
             self.new_tab(entry.path, activate=False)
 
     def tab_paths(self) -> list:
+        """The folders of the tabs, for the next session. A search result is not kept: its tab comes back as the folder
+        the search started in."""
         self._save_tab_state()
-        return [self._tabs[self.tabs.tabData(i)].path for i in range(self.tabs.count())]
+        paths = [self._tabs[self.tabs.tabData(i)].path for i in range(self.tabs.count())]
+        return [(self.fs.parent(p) or p) if p.startswith("found:") else p for p in paths]
+
+    def real_folder(self) -> str:
+        """The folder on a disk this panel stands in: its own path, or for an archive, a list of all files or a search
+        result the folder it was made from. A terminal or a command runs there."""
+        path = self.path
+        for _ in range(16):
+            if not path.startswith(("zip:", "flat:", "found:")):
+                break
+            above = self.fs.parent(path)
+            if not above or above == path:
+                break
+            path = above
+        return path
 
     def restore_tabs(self, paths: list, active: int = 0) -> None:
         """Replace the tabs by one tab per path (the saved session). Paths that cannot be opened are kept as
@@ -1108,6 +1133,18 @@ class Panel(QFrame):
         listed = {self.model.entry_at(r).path for r in range(self.model.entry_count())
                   if not self.model.is_up_row(r) and self.model.entry_at(r) is not None}
         return [p for p in marked if p in listed]
+
+    def marked_in_view_order(self) -> list:
+        """The marked entries of this panel in the order the list shows them (what a counter must count in)."""
+        marked = set(self.marked_here())
+        if not marked:
+            return []
+        out = []
+        for r in range(self.model.entry_count()):
+            e = self.model.entry_at(r)
+            if e is not None and not self.model.is_up_row(r) and e.path in marked:
+                out.append(e)
+        return out
 
     def targets(self) -> list:
         """The marked items, else the item under the cursor."""
