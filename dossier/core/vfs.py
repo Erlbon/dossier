@@ -31,6 +31,9 @@ class Entry:
     detail: str = ""     # the text for the third column of such a listing (free space, an address)
     status: str = ""     # the indicator light of a Home entry: ok, unchecked, failed, changed ("" = no light)
     note: str = ""       # what the light means, for its tooltip
+    ctime: float = 0.0   # created (Windows) or status changed (elsewhere); 0 = unknown
+    atime: float = 0.0   # last opened
+    attrs: int = 0       # Windows file attributes, elsewhere the mode bits; 0 = unknown
 
 
 class FileSystem(ABC):
@@ -212,6 +215,9 @@ class LocalFileSystem(FileSystem):
             size=0 if is_dir else st.st_size,
             mtime=st.st_mtime,
             is_link=is_link,
+            ctime=st.st_ctime,
+            atime=st.st_atime,
+            attrs=_attr_bits(st),
         )
 
     def open_read(self, path: str) -> BinaryIO:
@@ -222,8 +228,9 @@ class LocalFileSystem(FileSystem):
         try:
             st = de.stat()
             size, mtime = st.st_size, st.st_mtime
+            ctime, atime, bits = st.st_ctime, st.st_atime, _attr_bits(st)
         except OSError:  # broken link, permission denied: still list it
-            size, mtime = 0, 0.0
+            size, mtime, ctime, atime, bits = 0, 0.0, 0.0, 0.0, 0
         try:
             is_dir = de.is_dir()
         except OSError:
@@ -239,7 +246,16 @@ class LocalFileSystem(FileSystem):
             size=0 if is_dir else size,
             mtime=mtime,
             is_link=is_link_like(de.is_symlink(), attrs),
+            ctime=ctime,
+            atime=atime,
+            attrs=bits,
         )
+
+
+def _attr_bits(st) -> int:
+    """Windows file attributes, elsewhere the mode: the two are shown by ``core.columns.attributes_text``."""
+    found = getattr(st, "st_file_attributes", None)
+    return int(found) if found is not None else int(st.st_mode)
 
 
 _DIGITS = re.compile(r"(\d+)")

@@ -2,6 +2,13 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-20#10 -- Choose the columns of the folder lists
+
+- **Settings > Columns > Add or Remove Columns...** and a **right-click on any column header** show or hide columns and set their order. Both are the shared dialog and menu of redactor_common, so Dossier and the Redactor apps work the same way. Drag a header to move a column; the other panel follows.
+- **Name and Type always show.** The others can be switched on and off: Size, Date, **Created**, **Last opened**, **Attributes** (R read-only, H hidden, S system, A archive, C compressed, E encrypted; on Linux the permissions, rwxr-xr-x) and **Location** (the folder an item is in: useful in search results and the all-files list). By default you see Name, Type, Size and Date.
+- The new columns sort like the others. The choice is stored by name (both panels share it), so a column added later never changes what you hid. The Home page keeps its own three columns. Settings > Columns > Back to the Default Columns undoes it.
+- Still to come as columns: owner, size on disk, and values from inside files (artist, album, series, resolution), read in the background.
+
 ## 2026-10-20#09 -- Properties, with the tags inside audio, comic and video files (read only)
 
 - **Files > Properties (Alt+Return)** for the marked items or the one under the cursor. General tab: name, place, type, size (a folder's size is everything below it), modified, created, last opened, attributes, link target. Several items give totals.

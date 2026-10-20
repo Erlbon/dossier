@@ -13,13 +13,15 @@ from PyQt6.QtCore import QAbstractTableModel, QModelIndex, Qt
 from PyQt6.QtCore import QPointF
 from PyQt6.QtGui import QBrush, QColor, QFont, QIcon, QPainter, QPen, QPixmap, QPolygonF
 
+from ..core.columns import KEYS as column_keys, LABELS as column_labels, RIGHT_ALIGNED, attributes_text, location_text, type_text
+from ..core.columns import when
 from ..core.filetypes import DRIVE_ICONS, icon_name
 from ..core.home import HOME_URL, TYPE_NAMES
 from ..core.selection import SelectionStore
 from ..core.vfs import Entry, FileSystem, natural_key
 from . import icon_set, theme
 
-COLUMNS = ("Name", "Size", "Date")
+COLUMNS = tuple(column_labels[k] for k in column_keys)       # one per logical column, see core/columns.py
 HOME_COLUMNS = ("Name", "Type", "Details")
 ENTRY_ROLE = Qt.ItemDataRole.UserRole
 SORT_ROLE = Qt.ItemDataRole.UserRole + 1
@@ -235,7 +237,11 @@ class FolderModel(QAbstractTableModel):
         if self.is_home:
             return
         keys = {0: lambda e: natural_key(e.name), 1: lambda e: (e.size, natural_key(e.name)),
-                2: lambda e: (e.mtime, natural_key(e.name))}
+                2: lambda e: (e.mtime, natural_key(e.name)),
+                3: lambda e: (type_text(e.name, e.is_dir).lower(), natural_key(e.name)),
+                4: lambda e: (e.ctime, natural_key(e.name)), 5: lambda e: (e.atime, natural_key(e.name)),
+                6: lambda e: (attributes_text(e.attrs), natural_key(e.name)),
+                7: lambda e: (self.fs.dirname(e.path).lower(), natural_key(e.name))}
         reverse = self._sort_order == Qt.SortOrder.DescendingOrder
         folders = sorted((e for e in self._rows if e.is_dir), key=keys[self._sort_col], reverse=reverse)
         files = sorted((e for e in self._rows if not e.is_dir), key=keys[self._sort_col], reverse=reverse)
@@ -250,7 +256,9 @@ class FolderModel(QAbstractTableModel):
 
     def headerData(self, section, orientation, role=Qt.ItemDataRole.DisplayRole):
         if orientation == Qt.Orientation.Horizontal and role == Qt.ItemDataRole.DisplayRole:
-            return (HOME_COLUMNS if self.is_home else COLUMNS)[section]
+            if self.is_home:
+                return HOME_COLUMNS[section] if section < len(HOME_COLUMNS) else ""
+            return COLUMNS[section]
         return None
 
     def flags(self, index: QModelIndex):
@@ -281,10 +289,20 @@ class FolderModel(QAbstractTableModel):
                 if entry.is_dir:
                     return human_size(entry.size) if entry.path in self._tree_sizes else "DIR"
                 return human_size(entry.size)
-            return datetime.fromtimestamp(entry.mtime).strftime("%Y-%m-%d %H:%M") if entry.mtime else ""
+            if col == 2:
+                return datetime.fromtimestamp(entry.mtime).strftime("%Y-%m-%d %H:%M") if entry.mtime else ""
+            if col == 3:
+                return type_text(entry.name, entry.is_dir)
+            if col == 4:
+                return when(entry.ctime)
+            if col == 5:
+                return when(entry.atime)
+            if col == 6:
+                return attributes_text(entry.attrs)
+            return location_text(entry.path, self.fs.dirname)
         if role == Qt.ItemDataRole.DecorationRole and col == 0:
             return self._icon(entry, self.is_up_row(index.row()))
-        if role == Qt.ItemDataRole.TextAlignmentRole and col == 1:
+        if role == Qt.ItemDataRole.TextAlignmentRole and column_keys[col] in RIGHT_ALIGNED:
             return int(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         if role == Qt.ItemDataRole.ForegroundRole and self.is_marked(entry):
             return QBrush(marked_color())
@@ -298,6 +316,8 @@ class FolderModel(QAbstractTableModel):
 
     def _home_data(self, entry: Entry, col: int, role):
         t = theme.current()
+        if col > 2:
+            return None                                  # the Home page has three columns; the others are hidden there
         if role == Qt.ItemDataRole.DisplayRole:
             return entry.name if col == 0 else (TYPE_NAMES.get(entry.kind, "") if col == 1 else entry.detail)
         if role == Qt.ItemDataRole.DecorationRole and col == 0:

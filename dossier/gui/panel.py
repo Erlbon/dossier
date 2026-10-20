@@ -17,6 +17,10 @@ from ..core import archives, pathparts, zipfs
 from ..core.notes import compose_markdown, find_notes
 from ..core.selection import SelectionStore
 from ..core.vfs import Entry, FileSystem
+from ..core.columns import DEFAULT_HIDDEN, DEFAULT_ORDER, DEFAULT_WIDTHS, KEYS as COLUMN_KEYS, PROTECTED as PROTECTED_COLUMNS
+from ..core.columns import index_of as column_index
+from redactor_common.core.table_settings import is_column_visible
+from redactor_common.gui.column_order import apply_column_order, visual_column_keys
 from ..core.drives import drive_of, probe_async, usage_async
 from ..core.lights import FAILED, OK, describe
 from ..core.home import HOME_URL, is_home
@@ -376,6 +380,8 @@ class Panel(QFrame):
     current_changed = pyqtSignal(object)  # the item under the cursor changed
     activated = pyqtSignal(object)        # the user focused this panel
     message = pyqtSignal(str)
+    column_menu_requested = pyqtSignal(object)    # a right-click on the header (its position)
+    columns_reordered = pyqtSignal()              # the user dragged a column
     note_edit_requested = pyqtSignal()    # the note was double-clicked
     open_archived = pyqtSignal(str)       # Enter on a file inside an archive: unpack it, then open it
     sizes_requested = pyqtSignal()        # the button for folder sizes was pressed
@@ -475,10 +481,13 @@ class Panel(QFrame):
         header.setSortIndicatorShown(True)
         self.table.setSortingEnabled(True)                                  # and sortable
         self.table.sortByColumn(0, Qt.SortOrder.AscendingOrder)             # the header defaults to descending
-        self.table.setColumnWidth(0, 260)
-        self.table.setColumnWidth(1, 70)
-        self.table.setColumnWidth(2, 130)
+        for key, width in DEFAULT_WIDTHS.items():
+            self.table.setColumnWidth(column_index(key), width)
         header.setStretchLastSection(True)
+        header.setSectionsMovable(True)                                      # drag a column header to move the column
+        header.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)  # right-click: show or hide columns
+        header.customContextMenuRequested.connect(self.column_menu_requested.emit)
+        header.sectionMoved.connect(self._column_moved)
         self.table.setVerticalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
         self.table.setIconSize(QSize(16, 16))
 
@@ -755,14 +764,42 @@ class Panel(QFrame):
             self._finish_listing(listing, path, select)
 
     def _apply_columns(self) -> None:
-        """The Home page has its own three columns (name, type, details); folders have name, size, date."""
+        """The Home page has its own three columns (name, type, details); folders have the chosen columns."""
         home = self.is_home
         if home == getattr(self, "_columns_for_home", None):
             return
         self._columns_for_home = home
-        for i, w in enumerate((300, 130, 260) if home else (260, 70, 130)):
-            self.table.setColumnWidth(i, w)
+        if home:
+            for i, w in enumerate((300, 130, 260)):
+                self.table.setColumnWidth(i, w)
         self.table.horizontalHeader().setSortIndicatorShown(not home)
+        self.apply_column_layout()
+
+    # which columns are shown, and in which order (the window keeps the choice and hands it to both panels) -----
+    def set_column_layout(self, hidden: set, order: list) -> None:
+        self._col_hidden, self._col_order = set(hidden), list(order)
+        self.apply_column_layout()
+
+    def apply_column_layout(self) -> None:
+        header = self.table.horizontalHeader()
+        hidden = getattr(self, "_col_hidden", set(DEFAULT_HIDDEN))
+        order = getattr(self, "_col_order", list(DEFAULT_ORDER))
+        self._laying_out = True
+        try:
+            logical_of = {k: column_index(k) for k in COLUMN_KEYS}
+            apply_column_order(header, list(COLUMN_KEYS[:3]) if self.is_home else order, logical_of)
+            for key, idx in logical_of.items():
+                off = (idx > 2) if self.is_home else not is_column_visible(key, hidden, PROTECTED_COLUMNS)
+                header.setSectionHidden(idx, off)
+        finally:
+            self._laying_out = False
+
+    def column_keys_in_order(self) -> list:
+        return visual_column_keys(self.table.horizontalHeader(), list(COLUMN_KEYS))
+
+    def _column_moved(self, *_args) -> None:
+        if not getattr(self, "_laying_out", False) and not self.is_home:
+            self.columns_reordered.emit()
 
     def _fill_home_usage(self, entries: list) -> None:
         """Free space of the drives, asked on background threads: a dead network drive only delays its own row."""
