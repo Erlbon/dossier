@@ -20,6 +20,12 @@ def names(path):
         return []
 
 
+def ready(path, predicate):
+    """The zip as it is once the window has finished: read once, and never while it is being swapped for its new version."""
+    found = names(path)
+    return bool(found) and bool(predicate(found))
+
+
 def make_zip(path, entries=("keep.txt", "dir/one.txt", "dir/two.txt")):
     with zipfile.ZipFile(path, "w") as z:
         for n in entries:
@@ -52,7 +58,7 @@ def test_copying_into_the_open_zip_adds_files_and_folders_in_one_rewrite(world):
     win.copy()
     pump(win, lambda: d.confirms)
     assert "into a.zip" in d.confirms[-1][1] and "recycle bin" in d.confirms[-1][1]
-    pump(win, lambda: not win.busy and "dir/new.txt" in names(str(z)))
+    pump(win, lambda: not win.busy and ready(str(z), lambda n: "dir/new.txt" in n))
     assert {"dir/new.txt", "dir/album/", "dir/album/t.txt", "keep.txt", "dir/one.txt"} <= set(names(str(z)))
     assert (left / "new.txt").exists()                                          # a copy leaves the originals
     assert [n for n in os.listdir(tmp / "bin")]                                  # the old zip went to the bin
@@ -69,7 +75,7 @@ def test_a_clash_is_counted_and_the_new_file_replaces_the_old_one(world):
     win.copy()
     pump(win, lambda: d.confirms)
     assert "1 entry with the same name will be replaced" in d.confirms[-1][1]
-    pump(win, lambda: not win.busy and names(str(z)) and zipfile.ZipFile(z).read("keep.txt") == b"REPLACED")
+    pump(win, lambda: not win.busy and ready(str(z), lambda n: zipfile.ZipFile(z).read("keep.txt") == b"REPLACED"))
 
 
 def test_moving_into_the_zip_then_trashes_the_originals(world):
@@ -82,7 +88,7 @@ def test_moving_into_the_zip_then_trashes_the_originals(world):
     win.select_all()
     win.move()
     pump(win, lambda: d.confirms)
-    pump(win, lambda: not win.busy and "gone.txt" in names(str(z)) and not (left / "gone.txt").exists())
+    pump(win, lambda: not win.busy and ready(str(z), lambda n: "gone.txt" in n) and not (left / "gone.txt").exists())
     assert zipfile.ZipFile(z).read("gone.txt") == b"G"
 
 
@@ -112,7 +118,7 @@ def test_delete_inside_the_zip_removes_the_entries_after_a_confirmation(world):
     win.delete()
     pump(win, lambda: d.confirms)
     assert "Delete 1 item from a.zip" in d.confirms[-1][1]
-    pump(win, lambda: not win.busy and names(str(z)) and "dir/one.txt" not in names(str(z)))
+    pump(win, lambda: not win.busy and ready(str(z), lambda n: "dir/one.txt" not in n))
     assert {"keep.txt", "dir/two.txt"} <= set(names(str(z)))
 
 
@@ -125,11 +131,11 @@ def test_rename_and_new_folder_inside_the_zip(world):
     win.right.table.setCurrentIndex(win.right.model.index(win.right.model.row_of("keep.txt"), 0))
     d.texts.append("kept.txt")
     win.rename()
-    pump(win, lambda: not win.busy and "kept.txt" in names(str(z)))
+    pump(win, lambda: not win.busy and ready(str(z), lambda n: "kept.txt" in n))
     assert "keep.txt" not in names(str(z))
     d.texts.append("fresh")
     win.new_folder()
-    pump(win, lambda: not win.busy and "fresh/" in names(str(z)))
+    pump(win, lambda: not win.busy and ready(str(z), lambda n: "fresh/" in n))
 
 
 def test_other_archives_say_why_they_cannot_be_written_into(world):

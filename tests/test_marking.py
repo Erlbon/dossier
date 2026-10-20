@@ -108,18 +108,19 @@ def test_shift_click_marks_from_the_cursor_to_the_click(world):
     assert marked(win) == ["f0.txt", "f1.txt", "f2.txt", "f3.txt"]
 
 
-def test_dragging_over_rows_marks_them_and_back_again_unmarks(world):
+def test_ctrl_click_and_drag_over_rows_marks_them_and_back_again_unmarks(world):
+    """A plain drag now carries files (see test_dragdrop.py); Ctrl+click and drag marks the range, as in Explorer."""
     win, _d, left, *_ = world
     setup_files(win, left)
     vp = win.left.table.viewport()
-    QTest.mousePress(vp, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, row_pos(win, 2))
+    QTest.mousePress(vp, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.ControlModifier, row_pos(win, 2))
     for row in (3, 4, 5):
         QTest.mouseMove(vp, row_pos(win, row))
         # the move needs the button held: send it as a real event
         from PyQt6.QtGui import QMouseEvent
         from PyQt6.QtCore import QEvent, QPointF
         event = QMouseEvent(QEvent.Type.MouseMove, QPointF(row_pos(win, row)), vp.mapToGlobal(QPointF(row_pos(win, row))),
-                            Qt.MouseButton.NoButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
+                            Qt.MouseButton.NoButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.ControlModifier)
         win_app = __import__("PyQt6.QtWidgets", fromlist=["QApplication"]).QApplication
         win_app.sendEvent(vp, event)
     assert marked(win) == ["f1.txt", "f2.txt", "f3.txt", "f4.txt"]
