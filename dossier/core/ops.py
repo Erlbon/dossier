@@ -25,7 +25,7 @@ from typing import Callable, Iterable, Optional, Sequence
 from .drives import drive_of, list_drives
 from .platform import IS_WINDOWS, has_scheme, path_key, strip_longpath
 from .progress import Cancelled, CancelToken, ProgressFn, SpeedLimit, check
-from .transfer import copy_file, flush_file, move_item as _move_item, verify_copy
+from .transfer import Swap, copy_file, flush_file, move_item as _move_item, verify_copy
 from .undo_log import Step, UndoAction, UndoLog
 from .vfs import Entry, FileSystem, NotWritable, sort_entries
 
@@ -223,6 +223,22 @@ def _flat_files(fs: FileSystem, src: str, warnings: list) -> Iterable[Entry]:
             yield e
 
 
+_TRIM = chr(92) + "/"
+
+
+def _clean_sources(fs: FileSystem, sources: Sequence[str], what: str, blocking: list) -> list:
+    """The sources without trailing separators. An item that has no name of its own (a drive root, ``/``) cannot be
+    copied, moved or deleted as one item: it would pour its contents straight into the destination."""
+    out = []
+    for src in sources:
+        trimmed = src.rstrip(_TRIM) if not has_scheme(src) else src
+        if not has_scheme(src) and not fs.basename(trimmed):
+            blocking.append(f"cannot {what} {src or 'an empty path'} as one item: open it and mark what you need")
+            continue
+        out.append(trimmed if trimmed else src)
+    return out
+
+
 def _check_destination(fs: FileSystem, dest_dir: str, blocking: list) -> None:
     d = _stat(fs, dest_dir)
     if d is None or not d.is_dir:
@@ -245,7 +261,7 @@ def plan_copy(fs: FileSystem, sources: Sequence[str], dest_dir: str, *, flatten:
     skipped: list = []
     taken: set = set()
     _check_destination(fs, dest_dir, blocking)
-    for src in sources:
+    for src in _clean_sources(fs, sources, "copy", blocking):
         if watch is not None:
             watch(len(ops))
         e = _stat(fs, src)
@@ -292,7 +308,7 @@ def plan_move(fs: FileSystem, sources: Sequence[str], dest_dir: str, *, watch=No
     taken: set = set()
     _check_destination(fs, dest_dir, blocking)
     _check_sources_writable(fs, sources, "move", blocking)
-    for src in sources:
+    for src in _clean_sources(fs, sources, "move", blocking):
         if watch is not None:
             watch(len(ops))
         e = _stat(fs, src)
@@ -363,7 +379,7 @@ def plan_delete(fs: FileSystem, sources: Sequence[str], *, to_trash: bool = True
     skipped: list = []
     blocking: list = []
     _check_sources_writable(fs, sources, "delete", blocking)
-    for src in sources:
+    for src in _clean_sources(fs, sources, "delete", blocking):
         e = _stat(fs, src)
         if e is None:
             warnings.append(f"no longer there, left out: {src}")
@@ -736,10 +752,13 @@ def _run_op(op: Op, fs: FileSystem, steps: list, progress, cancel, trasher: Tras
         else:
             _remove_tree(fs, op.src)
         return
-    if op.overwrite and _stat(fs, op.dst) is not None:
-        trasher(op.dst)                       # the old target goes to the bin first: nothing is lost
+    # An existing target is replaced by a swap: it moves aside only when the new data is complete, and goes to the
+    # bin only when the new file is in place. Whatever fails before that leaves the old file where it was.
+    swap = Swap(fs, op.dst, trasher) if op.overwrite and _stat(fs, op.dst) is not None else None
+    replaced = swap.name_in_bin if swap is not None else ""
     if op.kind is Kind.COPY:
-        copy_file(fs, op.src, fs, op.dst, progress=progress, cancel=cancel, throttle=throttle, native=native)
+        copy_file(fs, op.src, fs, op.dst, progress=progress, cancel=cancel, throttle=throttle, native=native,
+                  overwrite=swap is not None, swap=swap)
         if verify is not False:
             try:
                 verify_copy(fs, op.src, fs, op.dst, progress=verify, cancel=cancel)
@@ -751,7 +770,7 @@ def _run_op(op: Op, fs: FileSystem, steps: list, progress, cancel, trasher: Tras
                 raise
         made = fs.stat(op.dst)
         if not op.group:
-            steps.append(Step("created_file", op.dst, size=made.size, mtime=made.mtime))
+            steps.append(Step("created_file", op.dst, size=made.size, mtime=made.mtime, replaced=replaced))
     else:                                     # MOVE or RENAME
-        _move_item(fs, op.src, op.dst, op.is_dir, cancel, progress=progress, throttle=throttle)
-        steps.append(Step("moved", op.src, op.dst))
+        _move_item(fs, op.src, op.dst, op.is_dir, cancel, progress=progress, throttle=throttle, swap=swap)
+        steps.append(Step("moved", op.src, op.dst, replaced=replaced))

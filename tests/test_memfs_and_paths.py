@@ -167,7 +167,7 @@ def test_delete_to_the_bin_goes_through_the_trasher_and_overwrite_uses_it(mem):
     mem.put("mem://dst/a.txt", b"OLD")
     plan = plan_copy(mem, ["mem://src/a.txt"], "mem://dst").resolve(Resolution.OVERWRITE, mem)
     execute(plan, mem, trasher=trasher)
-    assert binned == ["mem://dst/a.txt"] and mem.stat("mem://dst/a.txt").size == 4
+    assert binned == ["mem://dst/a.txt.dossier-old"] and mem.stat("mem://dst/a.txt").size == 4
 
 
 # notes and selection --------------------------------------------------------------------------------------------------

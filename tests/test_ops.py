@@ -106,7 +106,7 @@ def test_conflict_overwrite_sends_the_old_file_to_the_bin(work):
     run(plan.resolve(Resolution.OVERWRITE, fs), bin_)
     assert (work / "dst" / "a").read_text() == "NEW"
     assert len(bin_.items) == 1
-    assert (work / "bin" / "0-a").read_text() == "OLD"
+    assert (work / "bin" / "0-a.dossier-old").read_text() == "OLD"          # the older file, under its set-aside name
 
 
 def test_conflict_skip_leaves_the_target_alone(work):

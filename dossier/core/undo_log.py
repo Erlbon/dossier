@@ -30,6 +30,7 @@ class Step:
     b: str = ""          # moved: where it went
     size: int = 0
     mtime: float = 0.0
+    replaced: str = ""      # an older file this step replaced went to the recycle bin under this name
 
 
 @dataclass
@@ -46,6 +47,7 @@ class UndoReport:
     problems: list = field(default_factory=list)
     moved: dict = field(default_factory=dict)      # where reverted items are now: old path -> new path
     removed: list = field(default_factory=list)    # created items the undo removed
+    notes: list = field(default_factory=list)      # things the user should know although nothing went wrong
 
 
 class UndoLog:
@@ -82,6 +84,10 @@ class UndoLog:
                 left.append(step)
             else:
                 report.reverted += 1
+                if step.replaced:
+                    shown = step.replaced[:-len(".dossier-old")] if step.replaced.endswith(".dossier-old") else step.replaced
+                    report.notes.append(f"{shown} had replaced an older file, which is in the recycle bin as "
+                                        f"{step.replaced}: restore it from there.")
                 if step.kind == "moved":
                     report.moved[step.b] = step.a
                 else:

@@ -18,21 +18,80 @@ PART_SUFFIX = ".dossier-part"
 
 
 def move_item(fs: FileSystem, src: str, dst: str, is_dir: bool, cancel: Optional[CancelToken] = None, *,
-              progress: Optional[ProgressFn] = None, throttle=None) -> None:
-    """Rename in place; across drives a file is copied, verified by size, then removed."""
+              progress: Optional[ProgressFn] = None, throttle=None, swap=None) -> None:
+    """Rename in place; across drives a file is copied, verified by size, then removed. ``swap`` puts the item in
+    the place of an existing one without ever being without the old one (see ``Swap``)."""
+    if swap is not None:
+        swap.prepare()
     try:
         fs.rename(src, dst)
     except OSError as e:
+        if swap is not None:
+            swap.rollback()
         if isinstance(e, FileExistsError) or e.errno != errno.EXDEV:
             raise
         if is_dir:
             raise OSError("this folder is on another volume than its new place (a mount point or a link): copy it and delete "
                           "the original; nothing was changed") from e
-        copy_file(fs, src, fs, dst, cancel=cancel, progress=progress, throttle=throttle)
+        copy_file(fs, src, fs, dst, cancel=cancel, progress=progress, throttle=throttle, overwrite=swap is not None, swap=swap)
         if fs.stat(dst).size != fs.stat(src).size:
             fs.remove(dst)
             raise OSError("the copy does not match the original; the original was kept") from e
         fs.remove(src)
+        return
+    except BaseException:
+        if swap is not None:
+            swap.rollback()
+        raise
+    if swap is not None:
+        swap.commit()
+
+
+class Swap:
+    """Replace an existing file without a moment where neither exists. ``prepare`` moves the old file aside (same
+    folder, so it cannot fail for want of another drive), the caller puts the new one in place, and then either
+    ``commit`` sends the old one to the recycle bin or ``rollback`` puts it back. A copy that fails halfway therefore
+    leaves the old file exactly where it was. In the bin the old file is called ``<name>.dossier-old``."""
+
+    SUFFIX = ".dossier-old"
+
+    def __init__(self, fs: FileSystem, dst: str, trasher) -> None:
+        self.fs, self.dst, self.trasher = fs, dst, trasher
+        self.backup = ""
+
+    def prepare(self) -> None:
+        name = self.dst + self.SUFFIX
+        n = 1
+        while True:
+            try:
+                self.fs.stat(name)
+            except FileNotFoundError:
+                break
+            n += 1
+            name = f"{self.dst}{self.SUFFIX}{n}"
+        self.fs.rename(self.dst, name)
+        self.backup = name
+
+    def rollback(self) -> None:
+        if self.backup:
+            try:
+                self.fs.rename(self.backup, self.dst)
+            except OSError:
+                pass                                  # the old file is still there, under the backup name
+            self.backup = ""
+
+    def commit(self) -> None:
+        backup, self.backup = self.backup, ""
+        if backup:
+            try:
+                self.trasher(backup)
+            except OSError as e:
+                raise OSError(f"replaced, but the older version could not be sent to the recycle bin and was left as "
+                              f"{backup}: {e.strerror or e}") from e
+
+    @property
+    def name_in_bin(self) -> str:
+        return self.fs.basename(self.dst) + self.SUFFIX
 
 
 def copy_file(
@@ -47,6 +106,7 @@ def copy_file(
     chunk_size: int = 1 << 20,
     throttle=None,
     native: bool = True,
+    swap=None,
 ) -> None:
     check(cancel)
     if not overwrite:
@@ -65,7 +125,8 @@ def copy_file(
     try:
         if native and throttle is None and total >= fastcopy.FAST_MIN and _plain_local(src_fs, src) and _plain_local(dst_fs, dst):
             if fastcopy.fast_copy(src, part, total, progress, cancel):       # the system's own copy, in the kernel
-                _finish(dst_fs, part, dst, info, overwrite, cancel)
+                _check_whole(dst_fs.stat(part).size, total, src)
+                _finish(dst_fs, part, dst, info, overwrite, cancel, swap)
                 return
         with src_fs.open_read(src) as r, dst_fs.open_write(part) as w:
             while True:
@@ -81,7 +142,8 @@ def copy_file(
                     progress(done, total)
         if done == 0 and progress:
             progress(0, total)
-        _finish(dst_fs, part, dst, info, overwrite, cancel)
+        _check_whole(done, total, src)
+        _finish(dst_fs, part, dst, info, overwrite, cancel, swap)
     except BaseException:
         try:
             dst_fs.remove(part)
@@ -95,13 +157,30 @@ def _plain_local(fs: FileSystem, path: str) -> bool:
     return fs.scheme == "" and not has_scheme(path) and fs.writable
 
 
-def _finish(dst_fs: FileSystem, part: str, dst: str, info, overwrite: bool, cancel) -> None:
+def _check_whole(written: int, expected: int, src: str) -> None:
+    """A source that got shorter while it was copied (a file being rewritten, a truncated log) gives a short copy:
+    that is an error, not a success. A source that grew is copied as far as it was read."""
+    if written < expected:
+        raise OSError(f"the file changed while it was copied ({expected:,} bytes when it was listed, {written:,} "
+                      f"read): {os.path.basename(src)}")
+
+
+def _finish(dst_fs: FileSystem, part: str, dst: str, info, overwrite: bool, cancel, swap=None) -> None:
     check(cancel)
     try:
         dst_fs.set_mtime(part, info.mtime)
     except NotWritable:
         pass
-    dst_fs.rename(part, dst, overwrite=overwrite)
+    if swap is not None:
+        swap.prepare()                                # the old target moves aside only now, with the new data complete
+    try:
+        dst_fs.rename(part, dst, overwrite=overwrite)
+    except BaseException:
+        if swap is not None:
+            swap.rollback()
+        raise
+    if swap is not None:
+        swap.commit()
 
 
 class VerifyFailed(OSError):

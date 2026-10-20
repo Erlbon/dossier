@@ -27,6 +27,12 @@ EXTERNAL_EXTENSIONS = (".rar", ".cab", ".iso", ".tar", ".gz", ".tgz", ".bz2", ".
                        ".lha", ".cpio", ".wim", ".z")
 LIST_TIMEOUT = 300
 
+# Enter on a file with one of these names opens it as a folder. Content alone is not enough: a Word document, an
+# epub, a jar or a comic archive is a zip inside, but the user wants to open it, not to look inside. For those,
+# "Open as Archive" (Ctrl+PageDown) looks at the content.
+FOLDER_EXTENSIONS = (".zip", ".7z", ".rar", ".tar", ".gz", ".tgz", ".bz2", ".tbz2", ".xz", ".txz", ".cab", ".iso",
+                     ".arj", ".lzh", ".lha", ".cpio", ".wim", ".z")
+
 
 @dataclass
 class Member:
@@ -346,3 +352,13 @@ def missing_reader(path: str) -> str:
     if kind == "7z":
         return f"{name} is a 7z archive. Install the py7zr package (pip install py7zr) or 7-Zip to open it as a folder."
     return f"{name} is an archive Dossier can open with 7-Zip, which was not found. Install 7-Zip (7-zip.org) to open it as a folder."
+
+
+def opens_by_name(path: str) -> bool:
+    """Whether Enter opens this file as a folder: an archive by its name, and readable as one."""
+    return path.lower().endswith(FOLDER_EXTENSIONS) and backend_for(path) is not None
+
+
+def missing_reader_by_name(path: str) -> str:
+    """``missing_reader`` for a file whose name says archive; empty for every other file."""
+    return missing_reader(path) if path.lower().endswith(FOLDER_EXTENSIONS) else ""

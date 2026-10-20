@@ -177,7 +177,16 @@ class LocalFileSystem(FileSystem):
         elif os.path.isdir(p):
             os.rmdir(p)          # junctions too: removes the junction, never its target
         else:
-            os.remove(p)
+            try:
+                os.remove(p)
+            except PermissionError:
+                # a read-only file: Explorer clears the attribute and deletes it, so do we (the confirmation already
+                # said what is going to be deleted). A file that stays locked raises again, as before.
+                try:
+                    os.chmod(p, stat.S_IWRITE | stat.S_IREAD)
+                except OSError:
+                    raise
+                os.remove(p)
 
     def open_write(self, path: str, *, exclusive: bool = False) -> BinaryIO:
         return open(longpath(path), "xb" if exclusive else "wb")

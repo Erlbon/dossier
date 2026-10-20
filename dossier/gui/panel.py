@@ -848,10 +848,10 @@ class Panel(QFrame):
             self.new_tab(entry.path)
         elif entry.is_dir:
             self.set_folder(entry.path)
-        elif not has_scheme(entry.path) and zipfs.is_archive(entry.path):
+        elif not has_scheme(entry.path) and archives.opens_by_name(entry.path):
             self.set_folder(zipfs.archive_root(entry.path))          # an archive opens like a folder
-        elif not has_scheme(entry.path) and archives.missing_reader(entry.path):
-            self.message.emit(archives.missing_reader(entry.path))   # say what would open it, then let the system try
+        elif not has_scheme(entry.path) and archives.missing_reader_by_name(entry.path):
+            self.message.emit(archives.missing_reader_by_name(entry.path))   # say what would open it, then let the system try
             QDesktopServices.openUrl(QUrl.fromLocalFile(entry.path))
         elif has_scheme(entry.path):
             try:
@@ -860,6 +860,17 @@ class Panel(QFrame):
                 self.message.emit(f"Cannot open {entry.name}: {e.strerror or e}")
         else:
             QDesktopServices.openUrl(QUrl.fromLocalFile(entry.path))
+
+    def open_as_archive(self) -> None:
+        """Ctrl+PageDown: open the file under the cursor as a folder whatever it is called, when its content is an
+        archive (a Word document, an epub, a jar...)."""
+        entry = self.current_entry()
+        if entry is None or entry.is_dir or has_scheme(entry.path):
+            self.message.emit("Put the cursor on a file to open it as an archive")
+        elif zipfs.is_archive(entry.path):
+            self.set_folder(zipfs.archive_root(entry.path))
+        else:
+            self.message.emit(archives.missing_reader(entry.path) or f"{entry.name} is not an archive Dossier can read")
 
     def _address_entered(self) -> None:
         text = self.address.text().strip()

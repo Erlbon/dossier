@@ -226,6 +226,7 @@ class MainWindow(QMainWindow):
         self.act_notes.toggled.connect(self.set_notes_visible)
         view_menu.addAction(self.act_notes)
         view_menu.addAction(self._action("Home Page", "Alt+Home", lambda: self.active.go_home()))
+        view_menu.addAction(self._action("Open as Archive", "Ctrl+PgDown", lambda: self.active.open_as_archive()))
         view_menu.addAction(self._action("Folder Sizes", "Alt+Shift+Return", lambda: self.calculate_folder_sizes()))
         view_menu.addAction(self._action("Edit the Path", "Ctrl+L", lambda: self.active.address_bar.start_edit()))
         view_menu.addAction(self._action("Refresh", "Ctrl+R", self.refresh))
@@ -618,6 +619,10 @@ class MainWindow(QMainWindow):
         if self.profile is None:
             self.dialogs.info("Command", "No command interpreter was found.")
             return
+        if "%o" in text and self.other.loading:
+            self.dialogs.info("Command", f"The other panel is still opening {self.other.pending_path}: %o would be the "
+                                         "folder it showed before. Wait for it and try again.")
+            return
         entry = self.active.current_entry()
         ph = Placeholders(current_name=self.fs.basename(entry.path) if entry else "",
                           current_path=entry.path if entry else "",
@@ -953,6 +958,10 @@ class MainWindow(QMainWindow):
         sources = self.active.targets()
         if not sources:
             return                                   # a busy window queues the operation
+        if self.other.loading:                       # its path is still the old folder: the files would land there
+            self.dialogs.info("Copy" if not move else "Move", f"The other panel is still opening "
+                              f"{self.other.pending_path}. Wait for it, or press Esc in that panel, and try again.")
+            return
         dest, origin = self.other.path, self.active.path
 
         def build(watch):
@@ -1002,6 +1011,10 @@ class MainWindow(QMainWindow):
         sources, cut = file_clipboard.get()
         if not sources:
             self._say("The clipboard holds no files")
+            return
+        if self.active.loading:
+            self.dialogs.info("Paste", f"This panel is still opening {self.active.pending_path}. Wait for it, or press "
+                                       "Esc, and try again.")
             return
         dest = self.active.path
         def there(path: str) -> bool:
@@ -1106,7 +1119,9 @@ class MainWindow(QMainWindow):
         self.refresh()
         if report.problems:
             self.dialogs.info("Undo " + report.label.lower(),
-                              "Some steps could not be undone:\n" + "\n".join(report.problems[:10]))
+                              "Some steps could not be undone:" + chr(10) + chr(10).join(report.problems[:10]))
+        elif report.notes:
+            self.dialogs.info("Undid " + report.label.lower(), chr(10).join(report.notes[:10]))
         else:
             self._say(f"Undid: {report.label}")
 
