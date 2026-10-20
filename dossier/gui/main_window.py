@@ -151,6 +151,7 @@ class MainWindow(CopySettingsMixin, ColumnsMixin, PropertiesMixin, MountMixin, C
             panel.home_action.connect(self._home_action)
             panel.note_edit_requested.connect(self.edit_folder_note)
             panel.sizes_requested.connect(lambda p=panel: self.calculate_folder_sizes(p))
+            panel.flatten_requested.connect(lambda p=panel: self.show_all_files_below(p))
             panel.column_menu_requested.connect(lambda pos, p=panel: self.show_column_menu(p, pos))
             panel.columns_reordered.connect(lambda p=panel: self._columns_dragged(p))
             panel.open_archived.connect(lambda path: self._unpack_then([path], lambda local: self._open_with_system(local[0])))
@@ -218,6 +219,8 @@ class MainWindow(CopySettingsMixin, ColumnsMixin, PropertiesMixin, MountMixin, C
                                                                  mark.addMenu("Add Saved Selection to Marks"),
                                                                  mark.addMenu("Forget Saved Selection"))
         mark.aboutToShow.connect(lambda: self.build_selection_menus(self._restore_menu, self._add_menu, self._forget_menu))
+        mark.addAction(self._action("Mark by Tag...", None, self.mark_by_tag))
+        mark.addAction(self._action("Unmark by Tag...", None, lambda: self.mark_by_tag(False)))
         mark.addAction(self._action("Copy Marked Paths as Text", None, self.copy_marked_paths))
         view_menu = bar.addMenu("&View")
         self.view_mode_actions = {}

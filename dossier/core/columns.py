@@ -10,14 +10,14 @@ import os
 import sys
 from datetime import datetime
 
-KEYS = ("name", "size", "modified", "type", "created", "accessed", "attributes", "location")
+KEYS = ("name", "size", "modified", "type", "created", "accessed", "attributes", "location", "tags", "rating")
 LABELS = {"name": "Name", "size": "Size", "modified": "Date", "type": "Type", "created": "Created",
-          "accessed": "Last opened", "attributes": "Attributes", "location": "Location"}
+          "accessed": "Last opened", "attributes": "Attributes", "location": "Location", "tags": "Tags", "rating": "Rating"}
 PROTECTED = frozenset({"name", "type"})
-DEFAULT_ORDER = ("name", "type", "size", "modified", "created", "accessed", "attributes", "location")
-DEFAULT_HIDDEN = frozenset({"created", "accessed", "attributes", "location"})
+DEFAULT_ORDER = ("name", "type", "size", "modified", "created", "accessed", "attributes", "location", "tags", "rating")
+DEFAULT_HIDDEN = frozenset({"created", "accessed", "attributes", "location", "tags", "rating"})
 DEFAULT_WIDTHS = {"name": 260, "size": 80, "modified": 130, "type": 90, "created": 130, "accessed": 130, "attributes": 80,
-                  "location": 220}
+                  "location": 220, "tags": 200, "rating": 80}
 RIGHT_ALIGNED = frozenset({"size"})
 WINDOWS_ATTRIBUTES = ((0x1, "R"), (0x2, "H"), (0x4, "S"), (0x20, "A"), (0x800, "C"), (0x4000, "E"))
 
@@ -52,6 +52,10 @@ def attributes_text(attrs: int) -> str:
         return "".join(letter for flag, letter in WINDOWS_ATTRIBUTES if attrs & flag)
     import stat
     return stat.filemode(attrs)[1:]
+
+
+def rating_text(rating: int) -> str:
+    return chr(0x2605) * rating if rating else ""
 
 
 def location_text(path: str, sep_dirname) -> str:

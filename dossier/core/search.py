@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import fnmatch
 import re
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from typing import Optional
 
 from .listings import relative
@@ -34,6 +34,9 @@ class Criteria:
     text: str = ""                   # what the file must contain
     text_regex: bool = False
     text_case: bool = False
+    tags: list = field(default_factory=list)   # the file must carry all of these tags (kept on the file, see filetags.py)
+    min_rating: int = 0                        # and at least this many stars
+    label: str = ""                            # and this colour label
     max_results: int = 100_000
 
     def describe(self) -> str:
@@ -41,6 +44,12 @@ class Criteria:
         parts = []
         if self.name:
             parts.append(self.name)
+        if self.tags:
+            parts.append("tagged " + ", ".join(self.tags))
+        if self.min_rating:
+            parts.append(f"rated {self.min_rating}+")
+        if self.label:
+            parts.append(f"labelled {self.label}")
         if self.text:
             parts.append(f'containing "{self.text}"')
         if self.min_size is not None or self.max_size is not None:
@@ -153,11 +162,21 @@ def _iter_lines(f, head: bytes, wide: bool):
         buffer += chunk
 
 
+def _tags_ok(path: str, c: Criteria) -> bool:
+    """Whether the item carries what the criteria ask for: every tag, the rating and the label. Reads the item's tag
+    record, so it is tested after the cheap name, size and date tests."""
+    from .filetags import read_tags
+    t = read_tags(path)
+    return (all(t.has(x) for x in c.tags) and t.rating >= c.min_rating
+            and (not c.label or t.label.casefold() == c.label.casefold()))
+
+
 def search(fs: FileSystem, c: Criteria, cancel: Optional[CancelToken] = None, progress=None) -> SearchResult:
     """Run the search. Raises ``BadCriteria`` for criteria that cannot work, ``Cancelled`` when cancelled."""
     validate(c)
     name_ok = _name_test(c.name, c.case_sensitive)
     rx = _text_test(c)
+    wants_tags = bool(c.tags or c.min_rating or c.label)
     out = SearchResult(entries=[])
     want_files, want_folders = c.kinds in ("files", "both"), c.kinds in ("folders", "both")
     stack = [c.root]
@@ -184,6 +203,8 @@ def search(fs: FileSystem, c: Criteria, cancel: Optional[CancelToken] = None, pr
                 if c.min_size is not None and e.size < c.min_size or c.max_size is not None and e.size > c.max_size:
                     continue
             if c.newer_than is not None and e.mtime < c.newer_than or c.older_than is not None and e.mtime > c.older_than:
+                continue
+            if wants_tags and not _tags_ok(e.path, c):
                 continue
             detail = ""
             if rx is not None and not e.is_dir:

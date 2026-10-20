@@ -2,6 +2,13 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-20#14 -- Tags in the lists, tag search, and a Flatten button
+
+- **Flatten button** (the three bars, right next to the sigma button in every panel's address row): every file below the folder as one list in a new tab. Same as Go > All Files Below This Folder (Ctrl+Shift+B).
+- **Tags and Rating columns** (Settings > Columns, off by default): the tags and stars of the items in the list, read in the background and only while a tags column is on. They sort like the others and follow a save in Properties.
+- **Mark > Mark by Tag...**: marks the items of this list that carry every tag you type (several separated by commas). **Unmark by Tag...** takes the marks off again. The tags are read on a thread with a box.
+- **Search by tag:** the Search dialog has Tagged with, Rating (1 to 5 stars or more) and Label. The tag test runs after the cheap name, size and date tests, so only files that already fit are opened.
+
 ## 2026-10-20#13 -- Copy and move keep the tags
 
 - **Tags follow the file.** Dossier's copy, move to another drive and paste now put the tags of a file (and of a folder) on its copy. Before this, large files kept them (the system's own copy) but small files lost them, because Python's copy leaves the NTFS stream behind. Copying over an existing file gives it the new file's tags. A move on the same drive never lost them.

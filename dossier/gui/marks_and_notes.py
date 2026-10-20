@@ -6,6 +6,7 @@ from PyQt6.QtWidgets import QApplication, QMenu
 from ..core.notes import BOTTOM_NAMES
 from ..core.platform import has_scheme
 from .background import run_in_background
+from .background import run_in_background
 
 
 class MarksAndNotesMixin:
@@ -48,6 +49,43 @@ class MarksAndNotesMixin:
                 menu.addAction("Nothing saved yet").setEnabled(False)
             for n in names:
                 menu.addAction(n.replace("&", "&&")).triggered.connect(lambda _c=False, n=n, h=handler: h(n))
+
+    def mark_by_tag(self, mark: bool = True) -> None:
+        """Mark (or unmark) the items of the active panel that carry every tag typed in. Reading the tags is disk work, so
+        it runs on a thread with a box; nothing is marked until it has finished."""
+        panel = self.active
+        if panel.is_home:
+            return
+        title = "Mark by Tag" if mark else "Unmark by Tag"
+        text = self.dialogs.ask_text(title, "Tag (several, separated by commas: an item needs all of them):",
+                                     str(self.settings.value("mark/tag", "") or ""))
+        wanted = [t for t in (p.strip() for p in (text or "").replace(";", ",").split(",")) if t]
+        if not wanted:
+            return
+        self.settings.setValue("mark/tag", ", ".join(wanted))
+        model = panel.model
+        entries = [e for e in (model.entry_at(r) for r in range(model.entry_count()))
+                   if e is not None and e.name != ".." and not e.kind and not has_scheme(e.path)]
+
+        def work(progress, cancel):
+            from ..core.filetags import read_tags
+            hits = []
+            for i, e in enumerate(entries):
+                progress(i, len(entries))
+                t = read_tags(e.path)
+                if all(t.has(w) for w in wanted):
+                    hits.append(e.path)
+            return hits
+
+        def finished(hits: list) -> None:
+            (self.selection.add if mark else self.selection.remove)(hits)
+            n = len(hits)
+            what = ", ".join(wanted)
+            self._say(f"{'Marked' if mark else 'Unmarked'} {n} item{'s' if n != 1 else ''} tagged {what}" if n
+                      else f"Nothing here is tagged {what}")
+
+        run_in_background(self, self.cmd_runner, "Reading tags", work, on_result=finished, tracked=self._size_jobs,
+                          failed_title=title)
 
     def copy_marked_paths(self) -> None:
         """The full paths of the marked items (or the item under the cursor), one per line, as text on the clipboard."""

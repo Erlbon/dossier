@@ -385,6 +385,7 @@ class Panel(QFrame):
     note_edit_requested = pyqtSignal()    # the note was double-clicked
     open_archived = pyqtSignal(str)       # Enter on a file inside an archive: unpack it, then open it
     sizes_requested = pyqtSignal()        # the button for folder sizes was pressed
+    flatten_requested = pyqtSignal()      # the button for "all files below this folder" was pressed
     home_action = pyqtSignal(str)         # an action entry of the Home page was opened (its path says which)
 
     def __init__(self, fs: FileSystem, selection: SelectionStore, parent=None, dispatch=None) -> None:
@@ -457,8 +458,16 @@ class Panel(QFrame):
         self.sizes_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.sizes_button.setToolTip("Folder sizes: add up the folders in this list, or the marked ones (Alt+Shift+Enter)")
         self.sizes_button.clicked.connect(self.sizes_requested.emit)
+        self.flatten_button = QToolButton()
+        self.flatten_button.setObjectName("flatbtn")
+        self.flatten_button.setText(chr(0x2261))                                # three bars: every file in one list
+        self.flatten_button.setAutoRaise(True)
+        self.flatten_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.flatten_button.setToolTip("Flatten: every file below this folder as one list in a new tab (Ctrl+Shift+B)")
+        self.flatten_button.clicked.connect(self.flatten_requested.emit)
         bar.addWidget(self.free)
         bar.addWidget(self.sizes_button)
+        bar.addWidget(self.flatten_button)
         self.bar = QWidget()
         self.bar.setObjectName("pathbarbox")
         self.bar.setLayout(bar)
@@ -573,8 +582,9 @@ class Panel(QFrame):
             f"#pathbarbox QToolButton#crumb:hover{{background:rgba(0,0,0,60);}}"
             f"#pathbarbox QToolButton#crumb::menu-indicator{{image:none;}}"
             f"#pathbarbox QLabel#crumbsep{{color:{text};}}"
-            f"#pathbarbox QToolButton#sizesbtn{{border:none;border-radius:4px;padding:1px 6px;font-weight:bold;}}"
-            f"#pathbarbox QToolButton#sizesbtn:hover{{background:rgba(0,0,0,60);}}")
+            f"#pathbarbox QToolButton#sizesbtn, #pathbarbox QToolButton#flatbtn"
+            f"{{border:none;border-radius:4px;padding:1px 6px;font-weight:bold;}}"
+            f"#pathbarbox QToolButton#sizesbtn:hover, #pathbarbox QToolButton#flatbtn:hover{{background:rgba(0,0,0,60);}}")
         palette = QPalette(QApplication.palette())
         if not active:
             for group in (QPalette.ColorGroup.Active, QPalette.ColorGroup.Inactive):
@@ -793,6 +803,7 @@ class Panel(QFrame):
                 header.setSectionHidden(idx, off)
         finally:
             self._laying_out = False
+        self.refresh_tags()                                   # a tags column may just have been switched on
 
     def column_keys_in_order(self) -> list:
         return visual_column_keys(self.table.horizontalHeader(), list(COLUMN_KEYS))
@@ -800,6 +811,38 @@ class Panel(QFrame):
     def _column_moved(self, *_args) -> None:
         if not getattr(self, "_laying_out", False) and not self.is_home:
             self.columns_reordered.emit()
+
+    # the Tags and Rating columns --------------------------------------------------------------------------------------
+    def tag_columns_visible(self) -> bool:
+        header = self.table.horizontalHeader()
+        return not self.is_home and any(not header.isSectionHidden(column_index(k)) for k in ("tags", "rating"))
+
+    def refresh_tags(self) -> None:
+        """Read the tags of the listed items on a thread and show them. Only when a tags column is on, and only for items on
+        a drive of this computer; a newer call makes an older one stop."""
+        if not self.tag_columns_visible() or self._dispatch is None:
+            return
+        from ..core.filetags import read_tags
+        entries = [e for e in (self.model.entry_at(r) for r in range(self.model.entry_count()))
+                   if e is not None and e.name != ".." and not e.kind and not has_scheme(e.path)][:5000]
+        self._tag_gen = getattr(self, "_tag_gen", 0) + 1
+        gen, shown = self._tag_gen, self.model.path
+
+        def work() -> None:
+            info = {}
+            for e in entries:
+                if gen != self._tag_gen:
+                    return
+                t = read_tags(e.path)
+                if not t.is_empty():
+                    info[e.path] = (", ".join(t.tags), t.rating)
+
+            def show() -> None:
+                if gen == self._tag_gen and self.model.path == shown:
+                    self.model.set_tag_info(info)
+            self._dispatch(show)
+
+        threading.Thread(target=work, daemon=True, name="dossier-tags").start()
 
     def _fill_home_usage(self, entries: list) -> None:
         """Free space of the drives, asked on background threads: a dead network drive only delays its own row."""
@@ -858,6 +901,8 @@ class Panel(QFrame):
                    else 1 if self.model.is_up_row(0) and self.model.entry_count() > 1 else 0)
         if self.is_home:
             self._fill_home_usage(listing.entries)
+        else:
+            self.refresh_tags()
         if row >= 0:
             self.table.setCurrentIndex(self.model.index(row, 0))
         self.table.scrollToTop() if not select else self.table.scrollTo(self.table.currentIndex())

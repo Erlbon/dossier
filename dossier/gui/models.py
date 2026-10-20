@@ -14,7 +14,7 @@ from PyQt6.QtCore import QPointF
 from PyQt6.QtGui import QBrush, QColor, QFont, QIcon, QPainter, QPen, QPixmap, QPolygonF
 
 from ..core.columns import KEYS as column_keys, LABELS as column_labels, RIGHT_ALIGNED, attributes_text, location_text, type_text
-from ..core.columns import when
+from ..core.columns import rating_text, when
 from ..core.filetypes import DRIVE_ICONS, icon_name
 from ..core.home import HOME_URL, TYPE_NAMES
 from ..core.selection import SelectionStore
@@ -99,6 +99,7 @@ class FolderModel(QAbstractTableModel):
         self._source_rows: list = []             # the whole listing; _rows is what the quick filter lets through
         self._filter = ""
         self._tree_sizes: dict = {}
+        self._tag_info: dict = {}                # path -> (tags text, rating), filled in on a thread when the columns are on
         self._has_note = False
         self._sort_col = 0
         self._sort_order = Qt.SortOrder.AscendingOrder
@@ -117,6 +118,15 @@ class FolderModel(QAbstractTableModel):
             if self.entry_kind(r) != "header":
                 return r
         return -1
+
+    def set_tag_info(self, info: dict) -> None:
+        """The tags and ratings of the items on screen (``{path: (tags text, rating)}``): shown in the Tags and Rating columns,
+        and sortable. They arrive after the listing, from a thread."""
+        self._tag_info = dict(info)
+        if self._sort_col in (8, 9):
+            self.sort(self._sort_col, self._sort_order)
+        if self.entry_count():
+            self.dataChanged.emit(self.index(0, 8), self.index(self.entry_count() - 1, 9))
 
     def update_detail(self, path: str, detail: str, status: Optional[str] = None, note: str = "") -> None:
         """Fill in the third column of one Home entry (free space arrives after the page is shown), and its light."""
@@ -241,7 +251,9 @@ class FolderModel(QAbstractTableModel):
                 3: lambda e: (type_text(e.name, e.is_dir).lower(), natural_key(e.name)),
                 4: lambda e: (e.ctime, natural_key(e.name)), 5: lambda e: (e.atime, natural_key(e.name)),
                 6: lambda e: (attributes_text(e.attrs), natural_key(e.name)),
-                7: lambda e: (self.fs.dirname(e.path).lower(), natural_key(e.name))}
+                7: lambda e: (self.fs.dirname(e.path).lower(), natural_key(e.name)),
+                8: lambda e: (self._tag_info.get(e.path, ("", 0))[0].lower(), natural_key(e.name)),
+                9: lambda e: (self._tag_info.get(e.path, ("", 0))[1], natural_key(e.name))}
         reverse = self._sort_order == Qt.SortOrder.DescendingOrder
         folders = sorted((e for e in self._rows if e.is_dir), key=keys[self._sort_col], reverse=reverse)
         files = sorted((e for e in self._rows if not e.is_dir), key=keys[self._sort_col], reverse=reverse)
@@ -299,6 +311,10 @@ class FolderModel(QAbstractTableModel):
                 return when(entry.atime)
             if col == 6:
                 return attributes_text(entry.attrs)
+            if col == 8:
+                return self._tag_info.get(entry.path, ("", 0))[0]
+            if col == 9:
+                return rating_text(self._tag_info.get(entry.path, ("", 0))[1])
             return location_text(entry.path, self.fs.dirname)
         if role == Qt.ItemDataRole.DecorationRole and col == 0:
             return self._icon(entry, self.is_up_row(index.row()))

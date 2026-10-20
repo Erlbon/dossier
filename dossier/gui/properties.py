@@ -269,6 +269,8 @@ class PropertiesMixin:
                 text += f"; {len(failed)} could not be changed"
                 self.dialogs.info("Tags", chr(10).join(f"{self.fs.basename(p)}: {why}" for p, why in failed[:10]))
             self._say(text)
+            for panel in (self.left, self.right):
+                panel.refresh_tags()                     # the Tags and Rating columns show what was just saved
 
         run_in_background(self, self.cmd_runner, "Saving tags", work, on_result=finished, tracked=self._size_jobs,
                           failed_title="Tags")

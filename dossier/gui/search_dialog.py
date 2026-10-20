@@ -117,6 +117,23 @@ class SearchDialog(QDialog):
         t.addRow("", self.text_case)
         layout.addWidget(inside)
 
+        tagged = QGroupBox("Tags")
+        tf = QFormLayout(tagged)
+        self.tags = QLineEdit()
+        self.tags.setPlaceholderText("holiday, 2019   (the file needs all of them)")
+        self.min_rating = QComboBox()
+        self.min_rating.addItem("Any rating", 0)
+        for n in range(1, 6):
+            self.min_rating.addItem(chr(0x2605) * n + " or more", n)
+        self.label = QComboBox()
+        self.label.addItem("Any label", "")
+        for name in ("red", "orange", "yellow", "green", "blue", "purple", "grey"):
+            self.label.addItem(name.capitalize(), name)
+        tf.addRow("Tagged with", self.tags)
+        tf.addRow("Rating", self.min_rating)
+        tf.addRow("Label", self.label)
+        layout.addWidget(tagged)
+
         self.problem = QLabel()
         self.problem.setWordWrap(True)
         layout.addWidget(self.problem)
@@ -137,6 +154,9 @@ class SearchDialog(QDialog):
         self.text.setText(c.text)
         self.regex.setChecked(c.text_regex)
         self.text_case.setChecked(c.text_case)
+        self.tags.setText(", ".join(c.tags))
+        self.min_rating.setCurrentIndex(max(0, self.min_rating.findData(c.min_rating)))
+        self.label.setCurrentIndex(max(0, self.label.findData(c.label)))
 
     def criteria(self) -> Criteria:
         """The answers as Criteria; raises BadCriteria when something cannot be used."""
@@ -145,7 +165,9 @@ class SearchDialog(QDialog):
                      kinds=self.kinds.currentData(), subfolders=self.subfolders.isChecked(),
                      min_size=self.min_size.value(), max_size=self.max_size.value(),
                      newer_than=self.after.value(False), older_than=self.before.value(True),
-                     text=self.text.text(), text_regex=self.regex.isChecked(), text_case=self.text_case.isChecked())
+                     text=self.text.text(), text_regex=self.regex.isChecked(), text_case=self.text_case.isChecked(),
+                     tags=[t for t in (p.strip() for p in self.tags.text().replace(";", ",").split(",")) if t],
+                     min_rating=self.min_rating.currentData(), label=self.label.currentData())
         if not c.root:
             raise BadCriteria("say where to look")
         validate(c)
