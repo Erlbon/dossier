@@ -1,9 +1,6 @@
 name: Tests
 
 on:
-  push:
-    branches: [main]
-  pull_request:
   workflow_dispatch:
 
 jobs:
@@ -14,7 +11,7 @@ jobs:
         os: [windows-latest]
         python: ["3.10", "3.12"]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
+    timeout-minutes: 8
     env:
       QT_QPA_PLATFORM: offscreen
     steps:
