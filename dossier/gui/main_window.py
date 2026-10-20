@@ -36,6 +36,7 @@ from .checksums import ChecksumMixin
 from .mounting import MountMixin
 from .properties import PropertiesMixin
 from .columns import ColumnsMixin
+from .archive_commands import ArchiveCommandsMixin
 from .copy_settings import CopySettingsMixin
 from .dialogs import Dialogs
 from .marks_and_notes import MarksAndNotesMixin
@@ -60,7 +61,7 @@ SUMMARY_ITEMS = 12    # the confirmation lists this many items, then says how ma
 SIZE_LIMIT = 1000    # the status line sizes at most this many marked items
 
 
-class MainWindow(CopySettingsMixin, ColumnsMixin, PropertiesMixin, MountMixin, ChecksumMixin, MarksAndNotesMixin, SearchCommandMixin, BatchRenameMixin, OperationQueueMixin, StallLogMixin, GoingPlacesMixin, FolderSizesMixin, UnpackMixin, QMainWindow):
+class MainWindow(ArchiveCommandsMixin, CopySettingsMixin, ColumnsMixin, PropertiesMixin, MountMixin, ChecksumMixin, MarksAndNotesMixin, SearchCommandMixin, BatchRenameMixin, OperationQueueMixin, StallLogMixin, GoingPlacesMixin, FolderSizesMixin, UnpackMixin, QMainWindow):
     def __init__(self, fs: Optional[FileSystem] = None, *, settings_path: Optional[str] = None, start=(None, None),
                  dialogs=None, trasher=None, terminal_launcher=None, which=None) -> None:
         super().__init__()
@@ -276,6 +277,9 @@ class MainWindow(CopySettingsMixin, ColumnsMixin, PropertiesMixin, MountMixin, C
                   self._action("Cancel Waiting Operations", None, self.cancel_waiting)):
             commands.addAction(a)
         commands.addAction(self._action("Search...", "Alt+F7", self.search_files))
+        commands.addAction(self._action("Pack to Zip...", "Alt+F5", self.pack_to_zip))
+        commands.addAction(self._action("Unpack...", "Alt+F9", self.unpack_archive))
+        commands.addAction(self._action("Convert Archive to Zip", None, self.convert_archive_to_zip))
         commands.addAction(self._action("Edit Folder Note", "Ctrl+Shift+E", self.edit_folder_note))
         commands.addAction(self._action("Checksums of Marked Files", None, self.show_checksums))
         commands.addAction(self._action("Verify Checksum...", None, self.verify_checksum))

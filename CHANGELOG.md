@@ -2,6 +2,13 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-20#17 -- Pack to zip, unpack, and convert other archives to zip
+
+- **Commands > Pack to Zip... (Alt+F5):** packs the marked items (or the one under the cursor) into a new zip, by default in the other panel's folder. Pick the name, the compression (normal, fast, maximum, store only), and whether files that are already compressed (pictures, music, video) are stored as they are. It never overwrites an existing zip, shows progress with Cancel, keeps each file's date, and writes under a temporary name that becomes the zip only when it is complete.
+- **Commands > Unpack... (Alt+F9):** unpacks the archive under the cursor (zip, 7z, RAR and the others Dossier can open) into a folder named like it, in the other panel by default; you can change the folder. It goes through the normal copy engine, so the conflict dialog, progress, Cancel and undo behave as for any copy.
+- **Commands > Convert Archive to Zip:** writes a zip with the contents of a 7z, RAR, tar or other archive beside it. The original stays where it is.
+- **Writing is zip only** (zip, cbz, epub, docx and the other zip-based files; 7z and RAR stay read only). The engine that changes a zip safely is in place: it takes members out, renames them or adds files by writing a new archive beside the old one and swapping it in, so a failure leaves the original untouched; an epub's `mimetype` stays first and stored, comments and dates are kept. Using it from the file lists (copy into an open zip, delete and rename inside one) is the next step.
+
 ## 2026-10-20#16 -- The tag colour label in the list
 
 - **Label column** (Settings > Columns, off by default): a filled dot in the label's colour and its name (red, orange, yellow, green, blue, purple, grey). The name is there so the label can be told and sorted without telling colours apart. It is read in the background with the Tags and Rating columns, and any one of the three is enough to switch the reading on.
