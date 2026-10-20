@@ -2,6 +2,14 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-21#01 -- Compare Folders and Synchronize
+
+- **Commands > Compare Folders and Synchronize... (Alt+Shift+F8)**, also in the right-click menu of empty space (*Compare with the Other Panel...*): the folder of the left panel against the folder of the right. Choose whether to look in the subfolders, how two files are told apart (**size and time**, **size only** or **content**, which reads the files and stops at the first different byte), how close two times must be to be the same time (two seconds by default, as a FAT drive keeps them) and whether to ignore a difference of exactly one hour (summer time on FAT drives).
+- **The differences are listed**, nothing else: only on the left, only on the right, newer on the left, newer on the right, different at the same time, and a file against a folder. A folder that exists on both sides is entered, a folder on one side only is one row for everything in it. Filter the list by kind.
+- **Synchronize** in five directions: *update the right* or *the left* (copy what is new or newer, never replace a newer file, never delete), *both ways* (the newer version wins; what cannot be decided is left alone), and *make the right the same as the left* or the other way (replaces files that differ and moves the extras to the recycle bin). Each row shows what will happen to it and has a check box to leave it out; the line below says what the checked rows add up to. A confirmation lists it all before anything runs.
+- **It uses the ordinary copy and delete plans**: progress, the queue, pause and cancel, verify, the recycle bin and Ctrl+Z work as they do for every copy. **Mark the Differences in the Panels** marks each side's differing files instead, so you can use any command on them.
+- **Commands > Compare the Two Current Files:** the file under the cursor in each panel, byte by byte: identical, or the byte where they first differ, with sizes and dates.
+
 ## 2026-10-20#37 -- Find Duplicate Files
 
 - **Commands > Find Duplicate Files... (Alt+Shift+F7)**, and in the right-click menu on a folder and on empty space. Choose where to look (this panel's folder and everything below it, and optionally the other panel's folder too, which finds the files that are in both places), the smallest file to bother with and, if you like, which file names. Files are duplicates when they hold **exactly the same bytes**, whatever they are called or where they are.

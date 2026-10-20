@@ -155,6 +155,7 @@ class ContextMenuMixin:
         add("Terminal Here", self.open_terminal, keys="Ctrl+Shift+T")
         add("Search...", self.search_files, keys="Alt+F7")
         add("Find Duplicate Files...", self.find_duplicate_files, keys="Alt+Shift+F7")
+        add("Compare with the Other Panel...", self.compare_folders, keys="Alt+Shift+F8")
         add("All Files Below This Folder", lambda: self.show_all_files_below(panel), keys="Ctrl+Shift+B")
         add("Refresh", self.refresh, keys="Ctrl+R")
         menu.addSeparator()

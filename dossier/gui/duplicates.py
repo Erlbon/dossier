@@ -206,7 +206,7 @@ class DuplicatesResultDialog(QDialog):
 class DuplicatesMixin:
     """Part of ``MainWindow``."""
 
-    def _duplicates_here(self, panel) -> str:
+    def _disk_folder_of(self, panel) -> str:
         """The folder on a disk that ``panel`` stands in, or "" for the Home page and for archives."""
         if panel.is_home or zip_parts(panel.path) is not None:
             return ""
@@ -221,11 +221,11 @@ class DuplicatesMixin:
     def find_duplicate_files(self, panel=None, folder: str = "") -> None:
         """Commands > Find Duplicate Files: choose where to look, search on a thread, then go through the groups."""
         panel = panel or self.active
-        here = folder or self._duplicates_here(panel)
+        here = folder or self._disk_folder_of(panel)
         if not here:
             self._say("Open a folder first: duplicates are looked for inside a folder")
             return
-        other = self._duplicates_here(self.other) if self.other is not panel else ""
+        other = self._disk_folder_of(self.other) if self.other is not panel else ""
         try:
             min_kb = int(self.settings.value("duplicates/min_kb", 1))
         except (TypeError, ValueError):
