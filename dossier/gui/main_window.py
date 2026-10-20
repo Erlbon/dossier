@@ -721,7 +721,7 @@ class MainWindow(ContextMenuMixin, DragDropMixin, LookMixin, ZipEditMixin, Archi
                                lambda progress, cancel: run_command(profile, command, cwd, on_finish=ended_later),
                                on_done=finished)
 
-    def open_terminal(self, admin: bool = False, profile=None) -> None:
+    def open_terminal(self, admin: bool = False, profile=None, folder: str = "") -> None:
         """Open an interactive session in the panel's folder. Administrator (the right-click menu of the
         Terminal button) means the system's own permission prompt (Windows) or ``sudo -s`` typed inside the
         terminal: Dossier never sees a password and never raises its own rights."""
@@ -730,7 +730,7 @@ class MainWindow(ContextMenuMixin, DragDropMixin, LookMixin, ZipEditMixin, Archi
         if profile is None:
             self.dialogs.info("Terminal", "No command interpreter was found.")
             return
-        folder = panel.real_folder()
+        folder = folder or panel.real_folder()
         if "://" in folder:
             self.dialogs.info("Terminal", "A terminal can only open in a folder on this computer.")
             return
@@ -765,12 +765,12 @@ class MainWindow(ContextMenuMixin, DragDropMixin, LookMixin, ZipEditMixin, Archi
         if path == ADD_NETWORK:
             self.add_network_share()
 
-    def pin_folder(self) -> None:
-        """Pin the active panel's folder to the Home page."""
-        if self.active.is_home or not self.active.path:
+    def pin_folder(self, folder: str = "") -> None:
+        """Pin a folder (the active panel's, or the one given) to the Home page."""
+        if not folder and (self.active.is_home or not self.active.path):
             self.dialogs.info("Pin", "Open the folder you want to pin first.")
             return
-        path = self.active.path
+        path = folder or self.active.path
         if has_scheme(path):
             self.dialogs.info("Pin", "This is a list or an archive, not a folder. Open the folder itself to pin it.")
             return

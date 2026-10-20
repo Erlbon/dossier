@@ -65,6 +65,10 @@ class BatchRenameMixin:
         if panel.is_home:
             return None
         entries = panel.marked_in_view_order()
+        if panel.target_override is not None:                       # started from the right-click menu: the items it was on
+            wanted = set(panel.target_override)
+            entries = [e for e in (panel.model.entry_at(r) for r in range(panel.model.entry_count()))
+                       if e is not None and e.path in wanted and e.name != ".."]
         skipped = 0
         if files_only:
             skipped = sum(1 for e in entries if e.is_dir)

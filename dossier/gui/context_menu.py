@@ -77,6 +77,8 @@ class ContextMenuMixin:
         if entry.is_dir:
             add("Open in a New Tab", lambda: panel.open_current(new_tab=True), keys="Ctrl+Enter")
             add("Open in the Other Panel", self.open_in_other_panel, keys="Ctrl+Left/Right")
+            add("Terminal Here", lambda: self.open_terminal(folder=entry.path), enabled=not many, keys="Ctrl+Shift+T")
+            add("Pin to the Home Page", lambda: self.pin_folder(entry.path), enabled=not many, keys="Ctrl+D")
         else:
             add("View", self.view_file, enabled=not many, keys="F3")
             add("Edit", self.edit_file, enabled=not many, keys="F4")
@@ -90,6 +92,11 @@ class ContextMenuMixin:
         add("Copy the Path as Text", self.copy_marked_paths)
         menu.addSeparator()
         add("Rename", self.rename, enabled=not many, keys="F2")
+        batch = menu.addMenu("Batch Rename")
+        for text, slot, keys in (("By Pattern...", self.rename_by_pattern, "Ctrl+M"),
+                                 ("Search and Replace in Names...", self.rename_search_replace, ""),
+                                 ("Change Case...", self.rename_case, ""), ("Number the Files...", self.rename_number, "")):
+            self._entry_action(batch, text, slot, panel, paths, True, keys, row)
         add("Delete", self.delete, keys="F8")
         menu.addSeparator()
         add("Pack to Zip...", self.pack_to_zip, keys="Alt+F5")

@@ -172,3 +172,54 @@ def test_inside_an_open_zip_the_item_menu_still_works(world):
     pump(win, lambda: win.left.path.startswith("zip://") and win.left.model.entry_count() >= 2)
     t = texts(win.build_context_menu(win.left, row_of(win, "in.txt")))
     assert "Copy to the Other Panel" in t and "Delete" in t
+
+
+# Batch Rename, Terminal Here and Pin on the menu ---------------------------------------------------------------------------
+def submenu(menu, text):
+    return next(a for a in menu.actions() if a.text() == text).menu()
+
+
+def test_the_item_menu_has_batch_rename_and_a_folder_has_terminal_and_pin(world):
+    win, d, left, *_ = world
+    filled(win, left, ("a.txt",))
+    (left / "box").mkdir()
+    win.left.refresh()
+    pump(win, lambda: row_of(win, "box") >= 0)
+    file_menu = win.build_context_menu(win.left, row_of(win, "a.txt"))
+    assert [a.text().split("\t")[0] for a in submenu(file_menu, "Batch Rename").actions()] == [
+        "By Pattern...", "Search and Replace in Names...", "Change Case...", "Number the Files..."]
+    assert "Terminal Here" not in texts(file_menu) and "Pin to the Home Page" not in texts(file_menu)
+    folder_menu = win.build_context_menu(win.left, row_of(win, "box"))
+    assert "Terminal Here" in texts(folder_menu) and "Pin to the Home Page" in texts(folder_menu)
+
+
+def test_terminal_here_opens_in_the_folder_that_was_clicked_not_the_one_shown(world):
+    win, d, left, *_ = world
+    (left / "box").mkdir()
+    win.left.refresh()
+    pump(win, lambda: row_of(win, "box") >= 0)
+    seen = []
+    win.open_terminal = lambda admin=False, profile=None, folder="": seen.append(folder)
+    find(win.build_context_menu(win.left, row_of(win, "box")), "Terminal Here").trigger()
+    assert seen == [str(left / "box")]
+
+
+def test_pin_from_the_menu_pins_the_clicked_folder(world):
+    win, d, left, *_ = world
+    (left / "box").mkdir()
+    win.left.refresh()
+    pump(win, lambda: row_of(win, "box") >= 0)
+    find(win.build_context_menu(win.left, row_of(win, "box")), "Pin to the Home Page").trigger()
+    assert win._saved_list("home/pins") == [str(left / "box")]
+
+
+def test_batch_rename_from_the_menu_works_on_the_clicked_item_even_when_nothing_is_marked(world):
+    win, d, left, *_ = world
+    filled(win, left, ("a.txt", "b.txt"))
+    win.selection.add([str(left / "a.txt")])
+    seen = []
+    win.rename_by_pattern = lambda: seen.append([e.name for e in win._entries_to_rename()])
+    menu = win.build_context_menu(win.left, row_of(win, "b.txt"))
+    find_sub = submenu(menu, "Batch Rename")
+    next(a for a in find_sub.actions() if a.text().startswith("By Pattern")).trigger()
+    assert seen == [["b.txt"]]                                          # the clicked item, not the marked a.txt
