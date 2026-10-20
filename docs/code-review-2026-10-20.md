@@ -66,3 +66,5 @@ Fixed in build 2026-10-20#03 (all remaining findings):
 - 17 structure: main_window.py went from 1580 to 1160 lines (five mixins and one background helper), one size formatter, one stat helper.
 
 Still open: features 5 to 14 and 16 to 20 (batch rename, search, compare, checksums, duplicates, pack and unpack, resume, thumbnails, properties, viewer modes, named selections, note editing, MCP, remote sources, the per-file conflict dialog).
+
+Status 2026-10-20 (builds #16-#19): feature 10 is built: Pack to Zip (Alt+F5), Unpack (Alt+F9), Convert Archive to Zip, and copy, move, delete, rename and New Folder inside an open zip or zip-based file, all through one safe rewrite (core/zipwrite.py, gui/zip_edit.py). Writing into 7z and RAR is not offered.

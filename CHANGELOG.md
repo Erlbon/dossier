@@ -2,6 +2,13 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-20#19 -- Change a zip from the file lists
+
+- **Copy and move into an open zip:** open a zip or zip-based file (zip, cbz, epub, docx and the like) in one panel, mark files in the other and press F5 or F6. All of them are added in one go. The confirmation says how many files and bytes go in, how many existing entries are replaced, and what happens to the old zip. A move trashes the originals after the zip is written.
+- **Delete, rename and New Folder inside an open zip** work with F8, F2 and F7. Each one writes the zip again as a new file that replaces the old one; the old one goes to the recycle bin (a network drive has none, and the confirmation says the old file is deleted there).
+- **Safe by construction:** the new zip is written beside the old one under a temporary name and read back before it replaces anything; a failure or a Cancel leaves the original untouched. Entries that stay keep their dates, their method (an epub's `mimetype` stays first and stored), their order and the archive comment. A name that would clash is refused before anything is written.
+- Archives Dossier can only read (7z, RAR, tar) say so and point to Convert Archive to Zip. Encrypted zips are not rewritten.
+
 ## 2026-10-20#18 -- "Home" means the Home page only
 
 - Your own folder (`C:\Users\<you>`) is now called **`<you> (your folder)`** in the Drive list and under Places on the Home page (with a tooltip, "Your user folder"). Before, three different things were all called Home: the Home page (the house button and the Home tab), the user folder in the Drive list, and the user folder under Places.

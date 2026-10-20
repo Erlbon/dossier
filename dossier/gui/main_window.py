@@ -37,6 +37,7 @@ from .mounting import MountMixin
 from .properties import PropertiesMixin
 from .columns import ColumnsMixin
 from .archive_commands import ArchiveCommandsMixin
+from .zip_edit import ZipEditMixin, zip_parts
 from .copy_settings import CopySettingsMixin
 from .dialogs import Dialogs
 from .marks_and_notes import MarksAndNotesMixin
@@ -61,7 +62,7 @@ SUMMARY_ITEMS = 12    # the confirmation lists this many items, then says how ma
 SIZE_LIMIT = 1000    # the status line sizes at most this many marked items
 
 
-class MainWindow(ArchiveCommandsMixin, CopySettingsMixin, ColumnsMixin, PropertiesMixin, MountMixin, ChecksumMixin, MarksAndNotesMixin, SearchCommandMixin, BatchRenameMixin, OperationQueueMixin, StallLogMixin, GoingPlacesMixin, FolderSizesMixin, UnpackMixin, QMainWindow):
+class MainWindow(ZipEditMixin, ArchiveCommandsMixin, CopySettingsMixin, ColumnsMixin, PropertiesMixin, MountMixin, ChecksumMixin, MarksAndNotesMixin, SearchCommandMixin, BatchRenameMixin, OperationQueueMixin, StallLogMixin, GoingPlacesMixin, FolderSizesMixin, UnpackMixin, QMainWindow):
     def __init__(self, fs: Optional[FileSystem] = None, *, settings_path: Optional[str] = None, start=(None, None),
                  dialogs=None, trasher=None, terminal_launcher=None, which=None) -> None:
         super().__init__()
@@ -989,6 +990,9 @@ class MainWindow(ArchiveCommandsMixin, CopySettingsMixin, ColumnsMixin, Properti
                               f"{self.other.pending_path}. Wait for it, or press Esc in that panel, and try again.")
             return
         dest, origin = self.other.path, self.active.real_folder()
+        if zip_parts(dest) is not None:                  # into an open zip: one rewrite of the archive, not a copy per file
+            self._into_zip(sources, dest, move)
+            return
 
         def build(watch):
             return (plan_move if move else plan_copy)(self.fs, sources, dest, watch=watch)
@@ -1063,6 +1067,9 @@ class MainWindow(ArchiveCommandsMixin, CopySettingsMixin, ColumnsMixin, Properti
         entry = self.active.current_entry()
         if entry is None or self.busy:
             return
+        if zip_parts(entry.path) is not None:
+            self._rename_in_zip(entry)
+            return
         old = self.fs.basename(entry.path)
         new = self.dialogs.ask_text("Rename", "New name:", old)
         if not new or new == old:
@@ -1078,6 +1085,9 @@ class MainWindow(ArchiveCommandsMixin, CopySettingsMixin, ColumnsMixin, Properti
     def new_folder(self) -> None:
         if self.active.is_home:
             self.add_network_share()                 # on the Home page F7 adds an entry instead of a folder
+            return
+        if zip_parts(self.active.path) is not None:
+            self._new_folder_in_zip()
             return
         if not self.fs.is_writable(self.active.path):
             self.dialogs.info("New Folder", "This folder is read-only here (an archive, a search result or a list of "
@@ -1110,6 +1120,9 @@ class MainWindow(ArchiveCommandsMixin, CopySettingsMixin, ColumnsMixin, Properti
             return
         sources = self.active.targets()
         if not sources:
+            return
+        if zip_parts(self.active.path) is not None:     # inside an open zip: the zip is written again without them
+            self._delete_in_zip(sources)
             return
         plan = plan_delete(self.fs, sources, to_trash=not permanent)
         if plan.blocking or not plan.ops:
