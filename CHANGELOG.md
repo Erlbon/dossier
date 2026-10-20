@@ -2,6 +2,11 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-20#32 -- The test suite runs in 2 minutes instead of 48
+
+- **Tests only, nothing changes in the program.** The tests never deleted the windows they opened, so hundreds of closed windows and thousands of menus kept receiving events and every later test got slower (a window that opened in 1 second took 15 at the end of a run). A shared test fixture now deletes them after each test: the full suite (1036 tests) runs in about 2 minutes, and the check before each push no longer takes most of an hour.
+- The in-memory test file system (`memfs`) no longer trips when worker threads add files while another thread lists or renames; the faster run made that race show.
+
 ## 2026-10-20#31 -- Tools bar folders follow the colour scheme; Add Program fixed
 
 - **Folders on the tools bar** (and their drop-down menus) are now skinned by the dark/light scheme: the folder icon is drawn in the scheme's accent colour like the folders in the file lists, the drop-downs get the bar's background, border, selection colour and separators, and everything is redrawn when the scheme changes. Before, the folders were the plain system icon and the drop-downs had the default look.

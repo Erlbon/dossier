@@ -83,7 +83,7 @@ class MemoryFileSystem(FileSystem):
 
     def _children(self, key: str) -> Iterator[str]:
         prefix = key + "/" if key else ""
-        for k in self._nodes:
+        for k in list(self._nodes):                  # a snapshot: worker threads may be adding files meanwhile
             if k and k.startswith(prefix) and "/" not in k[len(prefix):]:
                 yield k
 
@@ -129,7 +129,7 @@ class MemoryFileSystem(FileSystem):
             raise FileNotFoundError(self.root + parent)
         if node.is_dir and (d == s or d.startswith(s + "/")):
             raise OSError("a folder cannot be moved into itself")
-        moved = {k: v for k, v in self._nodes.items() if k == s or k.startswith(s + "/")}
+        moved = {k: v for k, v in list(self._nodes.items()) if k == s or k.startswith(s + "/")}
         for k in moved:
             del self._nodes[k]
         for k, v in moved.items():
