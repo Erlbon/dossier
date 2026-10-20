@@ -103,13 +103,12 @@ class OperationQueueMixin:
         self.queue_label.setVisible(bool(parts))
 
     def _exec_options(self, on_item=None) -> ExecOptions:
-        """The copy settings: the speed limit and whether a failing file asks what to do."""
-        try:
-            limit = int(float(self.settings.value("copy/limit_mb", 0) or 0) * 1024 * 1024) or None
-        except (TypeError, ValueError):
-            limit = None
-        options = ExecOptions(limit_bps=limit, on_item=on_item, verify=str(self.settings.value("copy/verify", "false")).lower() == "true")
-        if str(self.settings.value("copy/ask_on_error", "false")).lower() == "true":
+        """The run options from Settings > Copy and Move (gui/copy_settings.py)."""
+        s = self.copy_settings()
+        options = ExecOptions(limit_bps=int(s["limit_mb"] * 1024 * 1024) or None, on_item=on_item, verify=s["verify"],
+                              retries=s["retries"], retry_delay=s["retry_delay"], workers=s["workers"] or None,
+                              native_copy=s["native"], flush={"auto": None, "always": True, "never": False}[s["flush"]])
+        if s["ask_on_error"]:
             skip_all = []
 
             def on_error(op, text: str) -> str:

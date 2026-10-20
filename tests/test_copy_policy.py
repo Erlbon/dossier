@@ -263,7 +263,7 @@ def test_the_window_passes_the_copy_settings_to_the_run(tmp_path):
     win = MainWindow(settings_path=str(tmp_path / "s.ini"), start=(str(tmp_path), str(tmp_path)), dialogs=FakeDialogs())
     try:
         assert win._exec_options().limit_bps is None and win._exec_options().on_error is None
-        win.limit_actions[5].trigger()
+        win.settings.setValue("copy/limit_mb", 5)
         win.act_ask_error.setChecked(True)
         options = win._exec_options()
         assert options.limit_bps == 5 * 1024 * 1024 and options.on_error is not None

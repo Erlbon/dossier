@@ -36,6 +36,7 @@ from .checksums import ChecksumMixin
 from .mounting import MountMixin
 from .properties import PropertiesMixin
 from .columns import ColumnsMixin
+from .copy_settings import CopySettingsMixin
 from .dialogs import Dialogs
 from .marks_and_notes import MarksAndNotesMixin
 from .search_command import SearchCommandMixin
@@ -59,7 +60,7 @@ SUMMARY_ITEMS = 12    # the confirmation lists this many items, then says how ma
 SIZE_LIMIT = 1000    # the status line sizes at most this many marked items
 
 
-class MainWindow(ColumnsMixin, PropertiesMixin, MountMixin, ChecksumMixin, MarksAndNotesMixin, SearchCommandMixin, BatchRenameMixin, OperationQueueMixin, StallLogMixin, GoingPlacesMixin, FolderSizesMixin, UnpackMixin, QMainWindow):
+class MainWindow(CopySettingsMixin, ColumnsMixin, PropertiesMixin, MountMixin, ChecksumMixin, MarksAndNotesMixin, SearchCommandMixin, BatchRenameMixin, OperationQueueMixin, StallLogMixin, GoingPlacesMixin, FolderSizesMixin, UnpackMixin, QMainWindow):
     def __init__(self, fs: Optional[FileSystem] = None, *, settings_path: Optional[str] = None, start=(None, None),
                  dialogs=None, trasher=None, terminal_launcher=None, which=None) -> None:
         super().__init__()
@@ -304,29 +305,16 @@ class MainWindow(ColumnsMixin, PropertiesMixin, MountMixin, ChecksumMixin, Marks
             group.addAction(act)
             scheme_menu.addAction(act)
             self.scheme_actions[key] = act
-        limit_menu = view.addMenu("Copy Speed Limit")
-        limit_group = QActionGroup(self)
-        limit_group.setExclusive(True)
-        self.limit_actions = {}
-        current = str(self.settings.value("copy/limit_mb", "0") or "0")
-        for mb, label in ((0, "Unlimited"), (1, "1 MB/s"), (5, "5 MB/s"), (20, "20 MB/s"), (50, "50 MB/s")):
-            act = QAction(label, self)
-            act.setCheckable(True)
-            act.setChecked(float(current) == mb)
-            act.triggered.connect(lambda _c=False, m=mb: self.settings.setValue("copy/limit_mb", m))
-            limit_group.addAction(act)
-            limit_menu.addAction(act)
-            self.limit_actions[mb] = act
+        view.addAction(self._action("Copy and Move...", None, self.open_copy_settings))
+        # these two hold the state of the choices the dialog (and the confirmation box) change; they are not in a menu
         self.act_verify = QAction("Verify Copies After Copying", self)
         self.act_verify.setCheckable(True)
-        self.act_verify.setChecked(str(self.settings.value("copy/verify", "false")).lower() == "true")
+        self.act_verify.setChecked(self.copy_settings()["verify"])
         self.act_verify.toggled.connect(lambda on: self.settings.setValue("copy/verify", "true" if on else "false"))
-        view.addAction(self.act_verify)
         self.act_ask_error = QAction("Ask When a File Cannot Be Copied", self)
         self.act_ask_error.setCheckable(True)
-        self.act_ask_error.setChecked(str(self.settings.value("copy/ask_on_error", "false")).lower() == "true")
+        self.act_ask_error.setChecked(self.copy_settings()["ask_on_error"])
         self.act_ask_error.toggled.connect(lambda on: self.settings.setValue("copy/ask_on_error", "true" if on else "false"))
-        view.addAction(self.act_ask_error)
         net_menu = view.addMenu("Network Drives")
         self._nfs_status = net_menu.addAction(self.nfs_status_text())
         self._nfs_status.setEnabled(False)
