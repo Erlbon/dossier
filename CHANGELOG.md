@@ -2,6 +2,11 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-20#20 -- A zip that is open elsewhere for a moment is waited for
+
+- Changing a zip (delete, rename, copy in) swaps the new file in for the old one. If another program has the old one open at that moment (the panel's own listing, a virus scanner, a preview), Windows refuses the swap. Dossier now waits for up to a few seconds and tries again; only if the file stays in use does it stop, say "the archive is in use by another program" and leave everything as it was. Found by a full test run in which three tests failed this way.
+- The old test that expected Delete and New Folder inside an open zip to be refused now expects the confirmation instead.
+
 ## 2026-10-20#19 -- Change a zip from the file lists
 
 - **Copy and move into an open zip:** open a zip or zip-based file (zip, cbz, epub, docx and the like) in one panel, mark files in the other and press F5 or F6. All of them are added in one go. The confirmation says how many files and bytes go in, how many existing entries are replaced, and what happens to the old zip. A move trashes the originals after the zip is written.

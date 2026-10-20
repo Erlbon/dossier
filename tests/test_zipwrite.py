@@ -227,3 +227,42 @@ def test_the_convert_temp_folder_is_gone_after_a_failure(tmp_path, monkeypatch):
     with pytest.raises(OSError):
         convert_to_zip(str(bad))
     assert not [n for n in set(os.listdir(tempfile.gettempdir())) - before if n.startswith("dossier-convert")]
+
+
+def test_a_program_that_has_the_archive_open_for_a_moment_is_waited_for(tmp_path, monkeypatch):
+    z = str(tmp_path / "a.zip")
+    with zipfile.ZipFile(z, "w") as w:
+        w.writestr("a.txt", "1")
+        w.writestr("b.txt", "2")
+    real = os.replace
+    refused = []
+
+    def busy_twice(src, dst):
+        if src == z and len(refused) < 2:
+            refused.append(1)
+            raise PermissionError(13, "in use")
+        return real(src, dst)
+
+    monkeypatch.setattr(zipwrite.os, "replace", busy_twice)
+    monkeypatch.setattr(zipwrite, "REPLACE_WAIT", 0.01)
+    rewrite(z, remove=["a.txt"], trasher=lambda p: os.remove(p))
+    assert refused == [1, 1] and names(z) == ["b.txt"]
+
+
+def test_an_archive_that_stays_in_use_is_reported_and_left_as_it_was(tmp_path, monkeypatch):
+    z = str(tmp_path / "a.zip")
+    with zipfile.ZipFile(z, "w") as w:
+        w.writestr("a.txt", "1")
+    before = open(z, "rb").read()
+    real = os.replace
+
+    def always_busy(src, dst):
+        if src == z:
+            raise PermissionError(13, "in use")
+        return real(src, dst)
+
+    monkeypatch.setattr(zipwrite.os, "replace", always_busy)
+    monkeypatch.setattr(zipwrite, "REPLACE_WAIT", 0.0)
+    with pytest.raises(ZipWriteError, match="in use by another program"):
+        rewrite(z, remove=["a.txt"], trasher=lambda p: None)
+    assert open(z, "rb").read() == before and sorted(os.listdir(tmp_path)) == ["a.zip"]

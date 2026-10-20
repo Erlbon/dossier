@@ -220,12 +220,17 @@ def test_enter_opens_a_zip_like_a_folder_and_dotdot_leaves_it(tmp_path):
         key(win, Qt.Key.Key_Return)
         pump(win, lambda: win.left.path.endswith("docs"))
         assert panel_names(win.left) == ["..", "one.txt"]
-        # editing commands are refused with a reason, nothing changes
+        # a zip can be changed now (see test_zip_edit.py): delete asks first, and a "no" changes nothing; opening a member for
+        # editing is still refused with a reason
         win.left.table.setCurrentIndex(win.left.model.index(win.left.model.row_of("one.txt"), 0))
-        for command in (win.delete, win.new_folder, win.edit_file):
-            dialogs.infos.clear()
-            command()
-            assert dialogs.infos, command
+        dialogs.confirm_answer = False
+        dialogs.confirms.clear()
+        win.delete()
+        assert dialogs.confirms and "Delete 1 item from" in dialogs.confirms[-1][1]
+        dialogs.confirm_answer = True
+        dialogs.infos.clear()
+        win.edit_file()
+        assert dialogs.infos
         # copying out works from the window
         win.copy()                                            # the left panel is active, the target is the right one
         wait_planned(win)

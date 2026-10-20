@@ -12,8 +12,12 @@ from tests.test_gui_commander import app, pump, world  # noqa: E402,F401
 
 
 def names(path):
-    with zipfile.ZipFile(path) as z:
-        return sorted(z.namelist())
+    """The entries of the zip, or nothing while it is being swapped for its new version (the window does that on a thread)."""
+    try:
+        with zipfile.ZipFile(path) as z:
+            return sorted(z.namelist())
+    except (OSError, zipfile.BadZipFile):
+        return []
 
 
 def make_zip(path, entries=("keep.txt", "dir/one.txt", "dir/two.txt")):
@@ -65,7 +69,7 @@ def test_a_clash_is_counted_and_the_new_file_replaces_the_old_one(world):
     win.copy()
     pump(win, lambda: d.confirms)
     assert "1 entry with the same name will be replaced" in d.confirms[-1][1]
-    pump(win, lambda: not win.busy and zipfile.ZipFile(z).read("keep.txt") == b"REPLACED")
+    pump(win, lambda: not win.busy and names(str(z)) and zipfile.ZipFile(z).read("keep.txt") == b"REPLACED")
 
 
 def test_moving_into_the_zip_then_trashes_the_originals(world):
@@ -108,7 +112,7 @@ def test_delete_inside_the_zip_removes_the_entries_after_a_confirmation(world):
     win.delete()
     pump(win, lambda: d.confirms)
     assert "Delete 1 item from a.zip" in d.confirms[-1][1]
-    pump(win, lambda: not win.busy and "dir/one.txt" not in names(str(z)))
+    pump(win, lambda: not win.busy and names(str(z)) and "dir/one.txt" not in names(str(z)))
     assert {"keep.txt", "dir/two.txt"} <= set(names(str(z)))
 
 

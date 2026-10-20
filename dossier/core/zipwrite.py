@@ -286,14 +286,30 @@ def rewrite(archive: str, *, remove: Sequence[str] = (), rename: Optional[dict] 
     return result
 
 
+REPLACE_TRIES = 12                       # a program that has the archive open for a moment (the panel's listing, a virus
+REPLACE_WAIT = 0.1                       # scanner, a preview) lets go within a second or two: wait for it, do not give up
+
+
+def _replace(src: str, dst: str) -> None:
+    """``os.replace`` that waits a little when another program has either file open (a sharing violation on Windows)."""
+    for attempt in range(REPLACE_TRIES):
+        try:
+            os.replace(src, dst)
+            return
+        except PermissionError as e:
+            if attempt == REPLACE_TRIES - 1:
+                raise ZipWriteError(f"the archive is in use by another program ({e.strerror or e}); nothing was changed") from e
+            time.sleep(REPLACE_WAIT * min(attempt + 1, 5))
+
+
 def _swap_in(archive: str, part: str, trasher: Optional[Callable]) -> None:
     """Put the new file in the old one's place; the old one is set aside first and sent to the bin once the new one is there."""
     old = unique_path(archive + ".dossier-old")
-    os.replace(archive, old)
+    _replace(archive, old)
     try:
-        os.replace(part, archive)
+        _replace(part, archive)
     except BaseException:
-        os.replace(old, archive)
+        _replace(old, archive)
         raise
     try:
         if trasher is not None:
