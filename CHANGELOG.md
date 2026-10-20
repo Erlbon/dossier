@@ -2,6 +2,12 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-20#25 -- The right-click menu
+
+- **Right-click (or the Menu key, or Shift+F10) opens a menu** in the file lists. On a **file**: Open, View, Edit, Copy to and Move to the other panel, Copy, Cut, Paste, Copy the Path as Text, Rename, Delete, Pack to Zip, Properties. On a **folder**: Open, Open in a New Tab, Open in the Other Panel instead of View and Edit. On an **archive** also Unpack, and Convert Archive to Zip for 7z, RAR, tar and the like. On **empty space**: New Folder, Paste, Select All, Terminal Here, Search, All Files Below This Folder, Refresh, Properties of This Folder. On the **Home page**: Open and Open in a New Tab for a drive, place, pin or network location, Remove from the Home Page for a pin or saved location, and Add a Network Share on empty space.
+- **Which items it works on:** right-click a marked item and the menu works on all the marked items; right-click an unmarked item and it works on that item alone, while the marks stay as they are. The same rule as dragging. Entries that need one item (Rename, View, Edit, Unpack) are greyed out when several are marked.
+- Every entry runs the command the program already has, the same one as its menu entry and key, so the conflict dialog, progress, undo, tags and the zip edits all behave as usual. Nothing in the menu reads the disk: whether an entry shows is judged from the name.
+
 ## 2026-10-20#24 -- Drag and drop
 
 - **Drag files with the mouse.** Press on an item and drag: the item goes along, or all the marked items when you drag a marked one. Drop it on a folder row (that folder gets it), on the empty part of the other panel (that panel's folder gets it), on an open zip (the file is added to the zip), or on another program such as Explorer. The folder under the pointer is highlighted. Files dragged in from Explorer are taken too.

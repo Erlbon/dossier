@@ -7,8 +7,8 @@ import threading
 from dataclasses import dataclass, field
 from typing import Optional
 
-from PyQt6.QtCore import QModelIndex, QRectF, QSize, Qt, QTimer, QUrl, pyqtSignal
-from PyQt6.QtGui import QColor, QDesktopServices, QDrag, QFontMetrics, QPainter, QPainterPath, QPalette, QPen, QPixmap
+from PyQt6.QtCore import QModelIndex, QPoint, QRectF, QSize, Qt, QTimer, QUrl, pyqtSignal
+from PyQt6.QtGui import QColor, QContextMenuEvent, QDesktopServices, QDrag, QFontMetrics, QPainter, QPainterPath, QPalette, QPen, QPixmap
 from PyQt6.QtWidgets import (QAbstractItemView, QApplication, QFrame, QHBoxLayout, QHeaderView, QLabel, QLineEdit,
                              QTabBar, QToolButton,
                              QTableView, QTextBrowser, QVBoxLayout, QWidget)
@@ -92,6 +92,7 @@ class PanelTable(QTableView):
     history_step = pyqtSignal(int)    # the mouse's back (-1) or forward (+1) button
     dropped = pyqtSignal(list, int, int, object)   # (paths, row under the pointer or -1, keyboard modifiers, source panel)
     drag_ended = pyqtSignal()                      # a drag that started here is over (the lists may have changed)
+    context_requested = pyqtSignal(object, int)    # a right-click, or the Menu key: (global position, row under it or -1)
 
     # Marking several items. The marks are the shared selection; the cursor is the current row.
     #   Space / Insert       mark the item and move down          Ctrl+Space   mark it, stay
@@ -104,6 +105,20 @@ class PanelTable(QTableView):
     drag_source = ""            # set by the panel: its name in a drag, so a drop knows where it came from
     drop_check = None           # set by the panel: (paths, source, row) -> whether a drop here would do something
     _press = None               # where and on which row the left button went down
+
+    def contextMenuEvent(self, event) -> None:
+        """Right-click, or the Menu key / Shift+F10 (then the menu opens at the cursor row)."""
+        if event.reason() == QContextMenuEvent.Reason.Keyboard:
+            row = self.currentIndex().row()
+            spot = self.viewport().mapToGlobal(self.visualRect(self.model().index(max(row, 0), 0)).center()) if row >= 0 \
+                else self.viewport().mapToGlobal(QPoint(20, 20))
+        else:
+            row = self.indexAt(event.pos()).row()
+            spot = event.globalPos()
+            if row >= 0:
+                self.setCurrentIndex(self.model().index(row, 0))        # the item under the pointer; the marks stay as they are
+        self.context_requested.emit(spot, row)
+        event.accept()
 
     def _set_drop_row(self, row: int) -> None:
         model = self.model()
@@ -470,6 +485,7 @@ class Panel(QFrame):
     current_changed = pyqtSignal(object)  # the item under the cursor changed
     activated = pyqtSignal(object)        # the user focused this panel
     message = pyqtSignal(str)
+    context_requested = pyqtSignal(object, int)           # a right-click on this panel's list: (global position, row or -1)
     files_dropped = pyqtSignal(list, str, int, object)    # (paths, folder they were dropped on, key modifiers, source panel)
     column_menu_requested = pyqtSignal(object)    # a right-click on the header (its position)
     columns_reordered = pyqtSignal()              # the user dragged a column
@@ -575,6 +591,7 @@ class Panel(QFrame):
         self.table.setAcceptDrops(True)
         self.table.setDragDropMode(QAbstractItemView.DragDropMode.DropOnly)
         self.table.dropped.connect(self._table_dropped)
+        self.table.context_requested.connect(self.context_requested.emit)
         self.table.drag_ended.connect(self.refresh)
         self.table.setModel(self.model)
         self.table.setShowGrid(False)
@@ -1379,8 +1396,12 @@ class Panel(QFrame):
                 out.append(e)
         return out
 
+    target_override = None      # set while a context menu command runs: exactly the items that were right-clicked
+
     def targets(self) -> list:
-        """The marked items, else the item under the cursor."""
+        """The marked items, else the item under the cursor (or, during a right-click command, the items it was on)."""
+        if self.target_override is not None:
+            return list(self.target_override)
         if self.is_home:
             return []                                        # the Home page lists shortcuts, not files
         marked = self.marked_here()

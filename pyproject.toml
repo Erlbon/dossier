@@ -1,6 +1,6 @@
 [project]
 name = "dossier"
-version = "2026.10.20.24"
+version = "2026.10.20.25"
 description = "Multi-window file manager with a shared selection, Markdown notes and file metadata"
 readme = "README.md"
 requires-python = ">=3.10"

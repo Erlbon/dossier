@@ -38,6 +38,7 @@ from .properties import PropertiesMixin
 from .columns import ColumnsMixin
 from .archive_commands import ArchiveCommandsMixin
 from .look_settings import LookMixin
+from .context_menu import ContextMenuMixin
 from .drop_handler import DragDropMixin
 from .zip_edit import ZipEditMixin, zip_parts
 from .copy_settings import CopySettingsMixin
@@ -64,7 +65,7 @@ SUMMARY_ITEMS = 12    # the confirmation lists this many items, then says how ma
 SIZE_LIMIT = 1000    # the status line sizes at most this many marked items
 
 
-class MainWindow(DragDropMixin, LookMixin, ZipEditMixin, ArchiveCommandsMixin, CopySettingsMixin, ColumnsMixin, PropertiesMixin, MountMixin, ChecksumMixin, MarksAndNotesMixin, SearchCommandMixin, BatchRenameMixin, OperationQueueMixin, StallLogMixin, GoingPlacesMixin, FolderSizesMixin, UnpackMixin, QMainWindow):
+class MainWindow(ContextMenuMixin, DragDropMixin, LookMixin, ZipEditMixin, ArchiveCommandsMixin, CopySettingsMixin, ColumnsMixin, PropertiesMixin, MountMixin, ChecksumMixin, MarksAndNotesMixin, SearchCommandMixin, BatchRenameMixin, OperationQueueMixin, StallLogMixin, GoingPlacesMixin, FolderSizesMixin, UnpackMixin, QMainWindow):
     def __init__(self, fs: Optional[FileSystem] = None, *, settings_path: Optional[str] = None, start=(None, None),
                  dialogs=None, trasher=None, terminal_launcher=None, which=None) -> None:
         super().__init__()
@@ -156,6 +157,7 @@ class MainWindow(DragDropMixin, LookMixin, ZipEditMixin, ArchiveCommandsMixin, C
             panel.note_edit_requested.connect(self.edit_folder_note)
             panel.sizes_requested.connect(lambda p=panel: self.calculate_folder_sizes(p))
             panel.flatten_requested.connect(lambda p=panel: self.show_all_files_below(p))
+            panel.context_requested.connect(lambda pos, row, p=panel: self.show_context_menu(p, pos, row))
             panel.files_dropped.connect(lambda paths, dest, mods, source: self._files_dropped(paths, dest, mods, source))
             panel.column_menu_requested.connect(lambda pos, p=panel: self.show_column_menu(p, pos))
             panel.columns_reordered.connect(lambda p=panel: self._columns_dragged(p))
