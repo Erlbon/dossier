@@ -147,3 +147,36 @@ def test_the_flatten_button_sits_right_next_to_the_sigma_button_and_opens_the_fl
     pump(win, lambda: win.left.path.startswith("flat:") and win.left.model.entry_count() >= 2)
     got = sorted(win.left.model.entry_at(r).name for r in range(win.left.model.entry_count()) if win.left.model.entry_at(r).name != "..")
     assert got == [os.path.join("sub", "deep.txt"), "top.txt"] or got == ["sub/deep.txt", "top.txt"]
+
+
+# the Label column -------------------------------------------------------------------------------------------------
+def test_the_label_column_shows_a_coloured_dot_and_the_name_and_sorts(world):
+    win, d, left, *_ = world
+    tagged_folder(left)
+    from PyQt6.QtCore import Qt
+    from dossier.core.columns import LABEL_COLORS, index_of
+    assert "label" in __import__("dossier.core.columns", fromlist=["x"]).DEFAULT_HIDDEN
+    win._column_toggled("label", True)
+    win.left.refresh()
+    pump(win, lambda: shown(win, "a.jpg", index_of("label")) == chr(0x25CF) + " Green")
+    m = win.left.model
+    row = next(r for r in range(m.entry_count()) if m.entry_at(r).name == "a.jpg")
+    brush = m.index(row, index_of("label")).data(Qt.ItemDataRole.ForegroundRole)
+    assert brush.color().name() == LABEL_COLORS["green"]
+    assert shown(win, "b.jpg", index_of("label")) == ""
+    m.sort(index_of("label"), Qt.SortOrder.DescendingOrder)
+    assert [e.name for e in (m.entry_at(r) for r in range(m.entry_count())) if not e.is_dir][0] == "a.jpg"
+
+
+def test_the_label_column_alone_is_enough_to_read_the_tags(world, monkeypatch):
+    win, d, left, *_ = world
+    tagged_folder(left)
+    reads = []
+    real = filetags.read_tags
+    monkeypatch.setattr(filetags, "read_tags", lambda p, backend=None: (reads.append(p), real(p, backend))[1])
+    win.left.refresh()
+    pump(win, lambda: win.left.model.entry_count() >= 5)
+    assert not win.left.tag_columns_visible() and reads == []
+    win._column_toggled("label", True)
+    pump(win, lambda: len(reads) >= 4)
+    assert win.left.tag_columns_visible()

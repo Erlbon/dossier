@@ -10,14 +10,14 @@ import os
 import sys
 from datetime import datetime
 
-KEYS = ("name", "size", "modified", "type", "created", "accessed", "attributes", "location", "tags", "rating")
+KEYS = ("name", "size", "modified", "type", "created", "accessed", "attributes", "location", "tags", "rating", "label")
 LABELS = {"name": "Name", "size": "Size", "modified": "Date", "type": "Type", "created": "Created",
-          "accessed": "Last opened", "attributes": "Attributes", "location": "Location", "tags": "Tags", "rating": "Rating"}
+          "accessed": "Last opened", "attributes": "Attributes", "location": "Location", "tags": "Tags", "rating": "Rating", "label": "Label"}
 PROTECTED = frozenset({"name", "type"})
-DEFAULT_ORDER = ("name", "type", "size", "modified", "created", "accessed", "attributes", "location", "tags", "rating")
-DEFAULT_HIDDEN = frozenset({"created", "accessed", "attributes", "location", "tags", "rating"})
+DEFAULT_ORDER = ("name", "type", "size", "modified", "created", "accessed", "attributes", "location", "tags", "rating", "label")
+DEFAULT_HIDDEN = frozenset({"created", "accessed", "attributes", "location", "tags", "rating", "label"})
 DEFAULT_WIDTHS = {"name": 260, "size": 80, "modified": 130, "type": 90, "created": 130, "accessed": 130, "attributes": 80,
-                  "location": 220, "tags": 200, "rating": 80}
+                  "location": 220, "tags": 200, "rating": 80, "label": 90}
 RIGHT_ALIGNED = frozenset({"size"})
 WINDOWS_ATTRIBUTES = ((0x1, "R"), (0x2, "H"), (0x4, "S"), (0x20, "A"), (0x800, "C"), (0x4000, "E"))
 
@@ -52,6 +52,15 @@ def attributes_text(attrs: int) -> str:
         return "".join(letter for flag, letter in WINDOWS_ATTRIBUTES if attrs & flag)
     import stat
     return stat.filemode(attrs)[1:]
+
+
+LABEL_COLORS = {"red": "#d64545", "orange": "#e08a20", "yellow": "#c9a800", "green": "#2e9e5b", "blue": "#3a7bd5",
+                "purple": "#8a5cc8", "grey": "#8a8f98"}
+
+
+def label_text(label: str) -> str:
+    """A filled dot and the colour's name: the name tells it without the colour (and sorts)."""
+    return f"{chr(0x25CF)} {label.capitalize()}" if label else ""
 
 
 def rating_text(rating: int) -> str:

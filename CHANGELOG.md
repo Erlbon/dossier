@@ -2,6 +2,10 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-20#16 -- The tag colour label in the list
+
+- **Label column** (Settings > Columns, off by default): a filled dot in the label's colour and its name (red, orange, yellow, green, blue, purple, grey). The name is there so the label can be told and sorted without telling colours apart. It is read in the background with the Tags and Rating columns, and any one of the three is enough to switch the reading on.
+
 ## 2026-10-20#15 -- One way to add a network share
 
 - **"Add a network share..."** replaces the two Home page entries "Add a network location" and "Mount a network share". One dialog: pick SMB or NFS, type the address, and tick **Also mount it on a drive letter** (drive letter or the next free one). Without the tick an SMB address is only saved on the Home page and opened like a folder, nothing is contacted. With it, Windows mounts the share and it shows up under Network with a light. NFS is always mounted, because Windows cannot open an NFS share by its address; the tick is set and cannot be removed.

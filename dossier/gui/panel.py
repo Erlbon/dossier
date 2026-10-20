@@ -815,7 +815,7 @@ class Panel(QFrame):
     # the Tags and Rating columns --------------------------------------------------------------------------------------
     def tag_columns_visible(self) -> bool:
         header = self.table.horizontalHeader()
-        return not self.is_home and any(not header.isSectionHidden(column_index(k)) for k in ("tags", "rating"))
+        return not self.is_home and any(not header.isSectionHidden(column_index(k)) for k in ("tags", "rating", "label"))
 
     def refresh_tags(self) -> None:
         """Read the tags of the listed items on a thread and show them. Only when a tags column is on, and only for items on
@@ -835,7 +835,7 @@ class Panel(QFrame):
                     return
                 t = read_tags(e.path)
                 if not t.is_empty():
-                    info[e.path] = (", ".join(t.tags), t.rating)
+                    info[e.path] = (", ".join(t.tags), t.rating, t.label)
 
             def show() -> None:
                 if gen == self._tag_gen and self.model.path == shown:
