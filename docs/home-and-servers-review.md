@@ -169,3 +169,7 @@ Built (H3, SFTP part): `sftp://user@host:port/path` is a file system behind the 
 - **Nothing is contacted on its own:** the Home page lists saved servers (light grey until connected) and connects only when one is opened.
 - **Tested** against OpenSSH's real `sftp-server` over pipes (all of the protocol, copy trees both ways, overwrite, permanent delete, moves across file systems) and against a fake `ssh` that serves it (the command line, the password handling, refused logins). A real `sshd` is not available in the test environment: the whole chain through real ssh has to be tried by hand on a real server.
 - Not yet: SCP (shell-based browsing, `scp` for contents), WebDAV, FTP, OPDS and Subsonic, remote undo rules, free space on a server, a progress bar for a listing of a huge remote folder.
+
+## 13. SCP (2026-10-21)
+
+The `scp` kind of connection is a shell session, not the `scp` program: `ssh -T host sh` stays open and `core/shellclient.py` sends POSIX commands with an end marker and the exit status after each. Listing is `ls -la` (parsed, with the server's time zone from `date +%z`), contents are read with `dd` in 64 KB blocks and written as base64, names are quoted with `shlex.quote`. `ShellClient` offers the same calls as `SftpClient`, so `SftpFileSystem("scp")` and the plans above it are unchanged. A server that permits only `scp -t` and no shell cannot be browsed; that case stays out. Tested against a real POSIX shell on pipes and through a fake ssh.

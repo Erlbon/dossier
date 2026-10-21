@@ -30,6 +30,8 @@ def main() -> int:
     if mode == "silent":
         time.sleep(3)
         return 1
+    if mode == "shell":                                  # ssh host sh: a real POSIX shell on the streams
+        return subprocess.call([os.environ["FAKE_SH"]])
     return subprocess.call([os.environ["FAKE_SFTP_SERVER"]])
 
 

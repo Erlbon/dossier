@@ -10,7 +10,7 @@ from dossier.core.sshlink import HostKey  # noqa: E402
 from PyQt6.QtWidgets import QLabel  # noqa: E402
 
 from dossier.gui.servers import ConnectionDialog, HostKeyDialog, PasswordDialog  # noqa: E402
-from tests.sftp_server import find_sftp_server, make_fake_ssh  # noqa: E402
+from tests.sftp_server import find_sftp_server, find_sh, make_fake_ssh  # noqa: E402
 from tests.test_gui_commander import app, pump, world  # noqa: E402,F401
 
 KEY = HostKey("ssh-ed25519", "AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl")
@@ -320,3 +320,24 @@ def test_closing_ends_every_session(lab):
     win.fs.sftp.add_session(Session("me@x", client))
     win.disconnect_all_servers()
     assert closed == [True] and not win.fs.sftp.sessions
+
+
+@pytest.mark.skipif(find_sh() is None, reason="no POSIX shell on this computer")
+def test_a_server_of_the_scp_kind_connects_through_a_shell_and_its_folders_are_listed(lab, tmp_path, monkeypatch):
+    win, d, left, right, tmp = lab
+    make_fake_ssh(tmp_path, monkeypatch, "shell")
+    folder = tmp_path / "boxfiles"
+    folder.mkdir()
+    (folder / "readme.txt").write_text("hi")
+    c = save(win, name="Old box", host="old.example.com", user="root", protocol="scp", start_dir=msys(folder), read_only=False)
+    win.open_server(c.url("/"), False, win.left)
+    wait(win, lambda: win.left.path == c.url(msys(folder)) and win.left.model.row_of("readme.txt") >= 0)
+    assert c.url("/").startswith("scp://") and win.fs.scp.connected(c.authority()) and not win.fs.sftp.connected(c.authority())
+    assert win.server_connected(c) and "Connected to Old box" in win.status.text()
+    win.left.table.setCurrentIndex(win.left.model.index(win.left.model.row_of("readme.txt"), 0))
+    win.copy()                                                                   # to the other panel (a local folder)
+    pump(win)
+    wait(win, lambda: (right / "readme.txt").exists())
+    assert (right / "readme.txt").read_text() == "hi"
+    win.disconnect_server(c)
+    assert not win.server_connected(c)

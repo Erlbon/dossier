@@ -2,6 +2,13 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-21#04 -- SCP: servers that have a shell but no SFTP
+
+- **A second kind of server, SCP,** for servers that offer only a command line over SSH (old routers and NAS boxes, restricted accounts). Choose *SCP* as the type when you add the server. Its folders are `scp://user@host/path` and work like any other: list, copy in both directions, move, rename, delete, new folder, F3, compare and sync, with the same host-key question, login (keys, ssh-agent, then a password) and **read-only until you switch it off**.
+- **How it works:** Dossier keeps one `sh` running over the connection and sends it ordinary POSIX commands (`ls -la`, `mkdir`, `mv`, `rm`...), each followed by a marker that carries its exit status, so the end of every answer is known exactly. File contents are read with `dd` (any size, any starting point) and written as base64 text that the server decodes. It needs only the tools such servers have (`sh`, `ls`, `dd`, `mkdir`, `mv`, `rm`, `rmdir`, `touch`, `base64`). Every name goes through the shell quoted, so nothing a file is called can run as a command.
+- **Slower than SFTP** (a command is a round trip and base64 is a third larger): use SFTP when the server has it. A server that allows only `scp -t` and no shell at all cannot be browsed. Times shown by `ls` are to the minute (to the day for files older than half a year), converted from the server's own time zone.
+- The type box in the server dialog says so. SFTP and SCP entries for the same address are kept apart.
+
 ## 2026-10-21#03 -- SFTP servers
 
 - **Servers on the Home page.** A new *Servers* section lists your saved servers and ends with *Add a server...* (also Commands > Add a Server...). A server has a name, host, port, user, an optional key file and start folder, and two choices: **read-only** (the default: nothing on the server can be changed from Dossier until you switch it off for that server) and *keep the password in the system's password store*. Right-click a server for Connect/Open, Open in a New Tab, Disconnect, Edit and Remove. **Nothing is contacted until you open a server**: the list never pings, scans or connects on its own.

@@ -20,7 +20,7 @@ from PyQt6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, QF
 
 from ..core import servers, sshlink
 from ..core.home import ADD_SERVER, ServerItem
-from ..core.sftpfs import Session, split_path
+from ..core.sftpfs import Session, scheme_of, split_path
 from .background import run_in_background
 
 SETTINGS_KEY = "servers/list"
@@ -61,8 +61,12 @@ class ConnectionDialog(QDialog):
         self.read_only.setChecked(c.read_only)
         self.remember = QCheckBox("Keep the password in the system's password store (otherwise it is asked for when needed)")
         self.remember.setChecked(c.save_password)
+        self.type_note = QLabel()
+        self.type_note.setWordWrap(True)
+        self.protocol.currentIndexChanged.connect(self._type_changed)
         form.addRow("Name", self.name)
         form.addRow("Type", self.protocol)
+        form.addRow("", self.type_note)
         form.addRow("Host", self.host)
         form.addRow("Port", self.port)
         form.addRow("User", self.user)
@@ -76,11 +80,16 @@ class ConnectionDialog(QDialog):
         self.problem = QLabel()
         self.problem.setWordWrap(True)
         layout.addWidget(self.problem)
+        self._type_changed()
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Cancel)
         buttons.addButton("Save", QDialogButtonBox.ButtonRole.AcceptRole)
         buttons.accepted.connect(self._accept)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
+
+    def _type_changed(self, *_args) -> None:
+        self.type_note.setText("Works through a shell on the server (ls, dd, mv...), so it is slower than SFTP: use it only when the server "
+                               "has no SFTP service." if self.protocol.currentData() == "scp" else "")
 
     def _browse(self) -> None:
         path, _filter = QFileDialog.getOpenFileName(self, "Choose a private key file", self.key_file.text())
@@ -177,11 +186,19 @@ class ServersMixin:
                 panel.refresh()
 
     def connection_for(self, path_or_authority: str) -> Optional[servers.Connection]:
-        authority = split_path(path_or_authority)[0] if "://" in path_or_authority else path_or_authority
-        return servers.find(self.connections(), authority)
+        if "://" in path_or_authority:
+            return servers.find(self.connections(), split_path(path_or_authority)[0], scheme_of(path_or_authority))
+        return servers.find(self.connections(), path_or_authority)
+
+    def server_fs(self, conn: servers.Connection):
+        """The file system that holds the sessions of this kind of connection."""
+        return self.fs.scp if conn.protocol == "scp" else self.fs.sftp
+
+    def server_connected(self, conn: servers.Connection) -> bool:
+        return self.server_fs(conn).connected(conn.authority())
 
     def server_items(self) -> list:
-        return [ServerItem(c.name, c.url("/"), c.describe(), self.fs.sftp.connected(c.authority())) for c in self.connections()]
+        return [ServerItem(c.name, c.url("/"), c.describe(), self.server_connected(c)) for c in self.connections()]
 
     def ssh_folder(self) -> str:
         return os.path.join(os.path.dirname(self.settings.fileName()), "ssh")
@@ -206,7 +223,7 @@ class ServersMixin:
             return
         new = dlg.connection()
         items = self.connections()
-        if servers.find(items, new.authority()) is not None:
+        if servers.find(items, new.authority(), new.protocol) is not None:
             self.dialogs.info("Add a Server", f"{new.authority()} is already on the Home page.")
             return
         self._save_connections(items + [new])
@@ -217,12 +234,12 @@ class ServersMixin:
         if not self._ask_server(dlg):
             return
         changed = dlg.connection()
-        if changed.authority() != conn.authority() and self.fs.sftp.connected(conn.authority()):
-            self.fs.sftp.drop(conn.authority())
+        if (changed.authority(), changed.protocol) != (conn.authority(), conn.protocol) and self.server_connected(conn):
+            self.server_fs(conn).drop(conn.authority())
         if not changed.save_password:
             servers.forget_password(conn)
         self._save_connections([changed if c.id == conn.id else c for c in self.connections()])
-        session = self.fs.sftp.sessions.get(changed.authority())
+        session = self.server_fs(changed).sessions.get(changed.authority())
         if session is not None:
             session.read_only = changed.read_only                    # the switch takes effect at once
 
@@ -264,10 +281,7 @@ class ServersMixin:
         self.connect_server(conn, lambda session: panel.set_folder(path))
 
     def connect_server(self, conn: servers.Connection, then: Callable[[Session], None]) -> None:
-        if conn.protocol != "sftp":
-            self.dialogs.info("Connect", f"{conn.protocol.upper()} connections are not supported yet.")
-            return
-        existing = self.fs.sftp.sessions.get(conn.authority())
+        existing = self.server_fs(conn).sessions.get(conn.authority())
         if existing is not None and existing.alive:
             existing.read_only = conn.read_only
             then(existing)
@@ -332,9 +346,9 @@ class ServersMixin:
                           indeterminate=True, failed_title="Connect")
 
     def _connected(self, conn, link, home: str, password: str, remember: bool, then) -> None:
-        session = Session(conn.authority(), link.client, read_only=conn.read_only, home=home)
-        self.fs.sftp.add_session(session)
-        self._links[conn.authority()] = link
+        session = Session(conn.authority(), link.client, read_only=conn.read_only, home=home, scheme=conn.protocol)
+        self.server_fs(conn).add_session(session)
+        self._links[(conn.protocol, conn.authority())] = link
         if password:
             if remember and not conn.save_password:
                 if servers.set_password(conn, password):
@@ -350,13 +364,14 @@ class ServersMixin:
 
     def disconnect_server(self, conn: servers.Connection) -> None:
         authority = conn.authority()
-        if not self.fs.sftp.connected(authority):
+        if not self.server_connected(conn):
             return
+        root = f"{conn.protocol}://{authority}"
         for panel in (self.left, self.right):                   # a panel standing in the server goes back to the Home page
-            if panel.path.startswith("sftp://" + authority + "/") or panel.path == "sftp://" + authority:
+            if panel.path.startswith(root + "/") or panel.path == root:
                 panel.set_folder("home://")
-        self.fs.sftp.drop(authority)
-        self._links.pop(authority, None)
+        self.server_fs(conn).drop(authority)
+        self._links.pop((conn.protocol, authority), None)
         self._say(f"Disconnected from {conn.name}")
         for panel in (self.left, self.right):
             if panel.is_home:
@@ -364,13 +379,14 @@ class ServersMixin:
 
     def disconnect_active_server(self) -> None:
         path = self.active.path
-        conn = self.connection_for(path) if path.startswith("sftp://") else None
+        conn = self.connection_for(path) if path.startswith(("sftp://", "scp://")) else None
         if conn is None:
             self._say("This panel is not on a server")
             return
         self.disconnect_server(conn)
 
     def disconnect_all_servers(self) -> None:
-        for authority in list(self.fs.sftp.sessions):
-            self.fs.sftp.drop(authority)
+        for fs in (self.fs.sftp, self.fs.scp):
+            for authority in list(fs.sessions):
+                fs.drop(authority)
         self._links.clear()

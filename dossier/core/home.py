@@ -194,6 +194,7 @@ class RouterFileSystem(FileSystem):
         self.home = home
         self.zip = ZipFileSystem()
         self.sftp = SftpFileSystem()                  # sftp://user@host/path: servers, once connected
+        self.scp = SftpFileSystem("scp")              # scp://user@host/path: servers reached through a shell
         self.flat = FlatFileSystem(self)              # flat://<folder>: every file below a folder, as one list
         self.found = FoundFileSystem(self)            # found://<n>: the result list of a search
         self.sep = local.sep
@@ -206,6 +207,8 @@ class RouterFileSystem(FileSystem):
             return self.zip
         if path.startswith("sftp:"):
             return self.sftp
+        if path.startswith("scp:"):
+            return self.scp
         if path.startswith("flat:"):
             return self.flat
         return self.found if path.startswith("found:") else self.local
@@ -251,7 +254,7 @@ class RouterFileSystem(FileSystem):
 
     def rename(self, src: str, dst: str, *, overwrite: bool = False) -> None:
         a, b = self.fs_for(src), self.fs_for(dst)
-        if a is not b or (src.startswith("sftp:") and src.partition("://")[2].split("/", 1)[0] != dst.partition("://")[2].split("/", 1)[0]):
+        if a is not b or (a is not self.local and src.partition("://")[2].split("/", 1)[0] != dst.partition("://")[2].split("/", 1)[0]):
             raise OSError(errno.EXDEV, "cannot rename from one file system or server to another")      # the caller copies and removes
         a.rename(src, dst, overwrite=overwrite)
 

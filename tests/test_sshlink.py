@@ -9,7 +9,7 @@ import pytest
 
 from dossier.core import askpass, sshlink
 from dossier.core.servers import Connection
-from tests.sftp_server import find_sftp_server, make_fake_ssh
+from tests.sftp_server import find_sftp_server, find_sh, make_fake_ssh
 
 ED25519 = "AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl"
 RSA_LIKE = "AAAAB3NzaC1yc2EAAAADAQABAAABgQC" + "A" * 80
@@ -155,3 +155,25 @@ def test_a_refused_login_a_refused_connection_and_a_silent_server_become_plain_s
     make_fake_ssh(tmp_path, monkeypatch, "silent")
     with pytest.raises(sshlink.ConnectError):
         sshlink.connect(Connection("T", "h", "me"), "", str(tmp_path / "kh"), str(tmp_path / "ssh"), timeout=1)
+
+
+def test_the_scp_kind_asks_ssh_for_a_shell_not_for_the_sftp_service(monkeypatch):
+    monkeypatch.setattr(sshlink, "find_tool", lambda name: "/usr/bin/ssh")
+    c = Connection("Old box", "old.example.com", "root", 22, protocol="scp")
+    cmd = sshlink.ssh_command(c, "/cfg/known_hosts", shell=True)
+    assert cmd[-3:] == ["-T", "root@old.example.com", "sh"] and "-s" not in cmd
+    assert c.url("/etc") == "scp://root@old.example.com/etc"
+
+
+@pytest.mark.skipif(find_sh() is None, reason="no POSIX shell on this computer")
+def test_a_connect_of_the_scp_kind_gives_a_working_shell_session(tmp_path, monkeypatch):
+    log = tmp_path / "call.json"
+    make_fake_ssh(tmp_path, monkeypatch, "shell", str(log))
+    c = Connection("Old", "old.example.com", "root", protocol="scp")
+    link = sshlink.connect(c, "", str(tmp_path / "kh"), str(tmp_path / "ssh"))
+    try:
+        out, status = link.client.run("echo hello")
+        assert out.strip() == b"hello" and status == 0
+    finally:
+        link.client.close()
+    assert "-T" in json.loads(log.read_text())["args"]

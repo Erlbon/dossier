@@ -20,6 +20,7 @@ from .vfs import Entry, FileSystem, NotWritable
 
 SCHEME = "sftp"
 ROOT = "sftp://"
+SCHEMES = ("sftp", "scp")           # sftp: the SFTP service of the server; scp: a shell on the server (see shellclient.py)
 
 
 class NotConnected(ConnectionError):
@@ -30,15 +31,21 @@ class NotConnected(ConnectionError):
         self.authority = authority
 
 
+def scheme_of(path: str) -> str:
+    """``sftp`` or ``scp`` for the path of a server (``sftp`` when it names neither)."""
+    head = path.partition("://")[0]
+    return head if head in SCHEMES else SCHEME
+
+
 def split_path(path: str) -> tuple:
-    """``(authority, remote path)`` of ``sftp://user@host:22/a/b``; the remote path always starts with ``/``."""
-    rest = path[len(ROOT):] if path.startswith(ROOT) else path
+    """``(authority, remote path)`` of ``sftp://user@host:22/a/b`` (or ``scp://...``); the remote path always starts with ``/``."""
+    rest = path.partition("://")[2] if path.partition("://")[0] in SCHEMES else path
     authority, slash, tail = rest.partition("/")
     return authority, posixpath.normpath("/" + tail) if tail.strip("/") else "/"
 
 
-def make_path(authority: str, remote: str) -> str:
-    return ROOT + authority + (remote if remote.startswith("/") else "/" + remote)
+def make_path(authority: str, remote: str, scheme: str = SCHEME) -> str:
+    return f"{scheme}://" + authority + (remote if remote.startswith("/") else "/" + remote)
 
 
 @dataclass
@@ -48,6 +55,7 @@ class Session:
     read_only: bool = True
     base: str = ""                    # a prefix put before every remote path (a fixed folder the whole session lives in)
     home: str = "/"                   # where the server put us at login: where the connection opens
+    scheme: str = SCHEME              # which kind of connection: sftp, or scp (a shell)
 
     def remote(self, remote_path: str) -> str:
         return (self.base.rstrip("/") + remote_path) if self.base else remote_path
@@ -66,19 +74,19 @@ class Session:
 def _entry(session: Session, folder: str, name: str, attrs, size_of_link=None) -> Entry:
     is_link = attrs.is_link
     is_dir = attrs.is_dir
-    path = make_path(session.authority, posixpath.join(folder, name))
+    path = make_path(session.authority, posixpath.join(folder, name), session.scheme)
     return Entry(name, path, is_dir, 0 if is_dir else attrs.size, float(attrs.mtime), is_link, attrs=attrs.perm & 0o7777,
                  atime=float(attrs.atime))
 
 
 class SftpFileSystem(FileSystem):
     writable = True
-    scheme = SCHEME
     sep = "/"
     case_sensitive = True
     is_remote = True                  # no recycle bin, slow, may drop: the operations layer asks
 
-    def __init__(self) -> None:
+    def __init__(self, scheme: str = SCHEME) -> None:
+        self.scheme = scheme
         self.sessions: dict = {}
 
     # sessions -------------------------------------------------------------------------------------------------------------------------
@@ -118,14 +126,14 @@ class SftpFileSystem(FileSystem):
     # path functions ---------------------------------------------------------------------------------------------------------------------
     @property
     def root(self) -> str:
-        return ROOT
+        return f"{self.scheme}://"
 
     def join(self, base: str, *parts: str) -> str:
         authority, remote = split_path(base)
         for part in parts:
             if part.strip("/"):
                 remote = posixpath.join(remote, part.strip("/"))
-        return make_path(authority, remote)
+        return make_path(authority, remote, self.scheme)
 
     def basename(self, path: str) -> str:
         authority, remote = split_path(path)
@@ -133,7 +141,7 @@ class SftpFileSystem(FileSystem):
 
     def dirname(self, path: str) -> str:
         authority, remote = split_path(path)
-        return make_path(authority, posixpath.dirname(remote) or "/")
+        return make_path(authority, posixpath.dirname(remote) or "/", self.scheme)
 
     def is_root(self, path: str) -> bool:
         return split_path(path)[1] == "/"
@@ -163,7 +171,7 @@ class SftpFileSystem(FileSystem):
         attrs = session.client.stat(session.remote(remote))
         name = posixpath.basename(remote) or session.authority
         return _entry(session, posixpath.dirname(remote), name, attrs) if remote != "/" else \
-            Entry(name, make_path(session.authority, "/"), True, 0, float(attrs.mtime), False, attrs=attrs.perm & 0o7777)
+            Entry(name, make_path(session.authority, "/", session.scheme), True, 0, float(attrs.mtime), False, attrs=attrs.perm & 0o7777)
 
     def open_read(self, path: str):
         session, remote = self._session(path)

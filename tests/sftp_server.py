@@ -53,6 +53,20 @@ class LocalServer:
             self.process.kill()
 
 
+def find_sh() -> Optional[str]:
+    """A POSIX shell for the tests of the ``scp`` kind of connection (the one in Git for Windows, or the system's)."""
+    found = shutil.which("sh")
+    if found:
+        return found
+    git = shutil.which("git")
+    if git:
+        for rel in (("usr", "bin", "sh.exe"), ("bin", "sh.exe")):
+            near = os.path.join(os.path.dirname(os.path.dirname(git)), *rel)
+            if os.path.isfile(near):
+                return near
+    return "/bin/sh" if os.path.isfile("/bin/sh") else None
+
+
 def make_fake_ssh(folder, monkeypatch, mode: str = "serve", log: str = "") -> str:
     """Put a fake ``ssh`` (see ``fake_ssh.py``) where ``sshlink.find_tool`` will find it, and return its path."""
     here = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fake_ssh.py")
@@ -70,6 +84,7 @@ def make_fake_ssh(folder, monkeypatch, mode: str = "serve", log: str = "") -> st
     monkeypatch.setattr(sshlink, "find_tool", lambda name: path if name == "ssh" else "")
     monkeypatch.setenv("FAKE_SSH_MODE", mode)
     monkeypatch.setenv("FAKE_SFTP_SERVER", find_sftp_server() or "")
+    monkeypatch.setenv("FAKE_SH", find_sh() or "")
     if log:
         monkeypatch.setenv("FAKE_SSH_LOG", log)
     return path

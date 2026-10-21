@@ -173,7 +173,7 @@ class ContextMenuMixin:
                 add(entry.name.rstrip("."), panel.open_current)
             elif entry.kind == "server":
                 conn = self.connection_for(entry.path)
-                live = conn is not None and self.fs.sftp.connected(conn.authority())
+                live = conn is not None and self.server_connected(conn)
                 add("Open" if live else "Connect", panel.open_current)
                 add("Open in a New Tab", lambda: panel.open_current(new_tab=True))
                 if conn is not None:

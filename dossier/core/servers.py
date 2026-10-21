@@ -13,7 +13,8 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Optional
 
-PROTOCOLS = (("sftp", "SFTP (a file service over SSH)"), ("scp", "SCP (copy only, over SSH)"))
+PROTOCOLS = (("sftp", "SFTP (the server's file service, over SSH)"),
+             ("scp", "SCP (a shell over SSH, for servers that have no SFTP service)"))
 DEFAULT_PORT = 22
 SERVICE = "Dossier"
 MAX_CONNECTIONS = 200
@@ -37,7 +38,7 @@ class Connection:
         return (f"{self.user}@" if self.user else "") + host + (f":{self.port}" if self.port != DEFAULT_PORT else "")
 
     def url(self, path: str = "/") -> str:
-        return "sftp://" + self.authority() + (path if path.startswith("/") else "/" + path)
+        return f"{self.protocol}://" + self.authority() + (path if path.startswith("/") else "/" + path)
 
     def describe(self) -> str:
         return f"{self.protocol.upper()}  {self.authority()}" + ("  (read-only)" if self.read_only else "")
@@ -131,5 +132,6 @@ def forget_password(c: Connection) -> None:
         pass
 
 
-def find(connections: list, authority: str) -> Optional[Connection]:
-    return next((c for c in connections if c.authority() == authority), None)
+def find(connections: list, authority: str, protocol: str = "") -> Optional[Connection]:
+    """The saved connection with this address (and kind, when given: the same address can be saved as SFTP and as SCP)."""
+    return next((c for c in connections if c.authority() == authority and (not protocol or c.protocol == protocol)), None)

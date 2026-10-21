@@ -27,6 +27,7 @@ from typing import Optional
 from .askpass import VARIABLE
 from .servers import Connection
 from .sftp_proto import SftpClient
+from .shellclient import ShellClient
 
 WINDOWS_OPENSSH = os.path.join(os.environ.get("SystemRoot", r"C:\Windows"), "System32", "OpenSSH")
 CONNECT_TIMEOUT = 20
@@ -202,7 +203,7 @@ def short_path(path: str) -> str:
         return path
 
 
-def ssh_command(c: Connection, known_hosts: str, subsystem: str = "sftp", *, with_password: bool = False) -> list:
+def ssh_command(c: Connection, known_hosts: str, subsystem: str = "sftp", *, with_password: bool = False, shell: bool = False) -> list:
     """The ``ssh`` command line that runs ``subsystem`` of the server (``-s``): strict host-key checking against Dossier's file only."""
     exe = find_tool("ssh")
     if not exe:
@@ -215,7 +216,8 @@ def ssh_command(c: Connection, known_hosts: str, subsystem: str = "sftp", *, wit
         cmd += ["-o", "BatchMode=yes"]
     if c.key_file:
         cmd += ["-i", c.key_file, "-o", "IdentitiesOnly=yes"]
-    cmd += ["-s", f"{c.user}@{c.host}" if c.user else c.host, subsystem]
+    target = f"{c.user}@{c.host}" if c.user else c.host
+    cmd += ["-T", target, "sh"] if shell else ["-s", target, subsystem]       # a shell to send commands to, or the server's SFTP service
     return cmd
 
 
@@ -276,7 +278,8 @@ def _drain(stream, sink: list) -> None:
 
 def connect(c: Connection, password: str, known_hosts: str, askpass_folder: str, timeout: int = CONNECT_TIMEOUT + 5) -> Link:
     """Start ``ssh -s sftp`` for ``c`` and shake hands. Raises ``ConnectError`` with a sentence for the owner on any failure."""
-    cmd = ssh_command(c, known_hosts, "sftp", with_password=bool(password))
+    shell = c.protocol == "scp"
+    cmd = ssh_command(c, known_hosts, "sftp", with_password=bool(password), shell=shell)
     env = environment(askpass_shim(askpass_folder), password)
     try:
         process = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env,
@@ -300,7 +303,7 @@ def connect(c: Connection, password: str, known_hosts: str, askpass_folder: str,
             process.kill()
 
     try:
-        client = SftpClient(process.stdout, process.stdin, stop)
+        client = (ShellClient if shell else SftpClient)(process.stdout, process.stdin, stop)
     except (ConnectionError, OSError):
         watchdog.cancel()
         try:
