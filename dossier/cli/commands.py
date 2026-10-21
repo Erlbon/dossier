@@ -100,6 +100,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--same", action="store_true", help="also list the files that are alike")
     p.add_argument("--sync", choices=[k for k, _t in sync.MODES], help="make the folders alike: copy and delete in this direction")
     p.add_argument("--dry-run", action="store_true", help="with --sync: show what would be done and do nothing")
+    sub.add_parser("mcp", help="run the MCP server for an AI assistant on standard input and output (see docs/assistant.md)",
+                   description="Starts the MCP server. The assistant's program starts it and talks to it through the pipes; there is no network "
+                               "listener. What an assistant may do is set in Dossier: Settings > Assistant Access.")
     return parser
 
 
@@ -113,6 +116,9 @@ def run_command(argv: Optional[Sequence[str]] = None) -> int:
     if not args.command:
         parser.print_help()
         return EXIT_USAGE
+    if args.command == "mcp":
+        from ..assistant.server import serve
+        return serve()
     out = make_output(args)
     try:
         return int(COMMAND_FUNCTIONS[args.command](args, out, make_fs()) or EXIT_OK)
@@ -387,6 +393,6 @@ def cmd_compare(args, out, fs) -> int:
     return code
 
 
-COMMAND_FUNCTIONS = {"ls": cmd_ls, "info": cmd_info, "find": cmd_find, "checksum": cmd_checksum, "copy": cmd_transfer, "move": cmd_transfer,
+COMMAND_FUNCTIONS = {"mcp": None, "ls": cmd_ls, "info": cmd_info, "find": cmd_find, "checksum": cmd_checksum, "copy": cmd_transfer, "move": cmd_transfer,
                      "delete": cmd_delete, "dups": cmd_dups, "compare": cmd_compare}
 assert set(COMMAND_FUNCTIONS) == set(COMMANDS)

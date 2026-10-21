@@ -35,7 +35,7 @@ class OperationQueueMixin:
         run_in_background(self, self.cmd_runner, title, work, on_result=then, tracked=self._plans,
                           detail=lambda: f"{count['n']:,} items found so far", indeterminate=True)
 
-    def _run(self, plan: Plan, *, unmark: Optional[list] = None, select: str = "", remember=None) -> None:
+    def _run(self, plan: Plan, *, unmark: Optional[list] = None, select: str = "", remember=None, on_done=None) -> None:
         """Queue a plan. Plans run one after the other (one disk is never fought over); the progress box of a
         plan appears when it starts, and a queued plan waits until the ones before it are done. ``remember`` (an
         ``Entry``) is kept in the journal while the operation is unfinished, when the owner switched that on."""
@@ -72,6 +72,8 @@ class OperationQueueMixin:
             keep = select or self.active.current_name()
             self.active.set_folder(self.active.path, select=keep)
             self.other.refresh()
+            if on_done is not None:                      # whoever asked for the run (the assistant's request) is told how it ended
+                on_done(job)
 
         job = run_plan_job(self.runner, plan, self.fs, selection=self.selection, undo_log=self.undo_log,
                            on_progress=progress, on_done=finished, options=self._exec_options(on_item),

@@ -2,6 +2,15 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-21#08 -- An assistant can use Dossier (MCP)
+
+- **`dossier mcp` is a local MCP server**, so an AI assistant such as Claude can look at your files and propose changes. It is **off until you switch it on** in Settings > Assistant Access, and it only sees the folders you list there (paths are resolved first, so `..` and links cannot get out). [docs/assistant.md](docs/assistant.md) lists every tool and setting.
+- **Looking is read-only:** list a folder, stat, read text, read tags and EXIF, read folder notes, search, find duplicates, compare folders, see what the panels show and which files you have marked. The assistant can also mark files for you in the window.
+- **Changing needs two keys.** `allow_file_changes` must be on, and every change (copy, move, delete, rename, sync) is only a *plan* until the assistant asks to commit it: then the Dossier window shows the change in words and **you press Run or Reject**. The window makes the plan again itself and checks the folders again. With no window open, nothing happens.
+- File names, text and tags are marked as untrusted content, every call is logged (opt-out, never file contents, one megabyte at most), and the settings dialog opens and clears the log.
+- Removed the "Tab switches panel, Space marks" hint from the status line.
+- Tests now give every test its own assistant folder, so a test window never touches the real settings.
+
 ## 2026-10-21#07 -- The command line
 
 - **`dossier <command>` runs without the window**, in the same program (the same exe once it is built): the first argument decides, a command name runs the command and anything else starts the window as before. The commands: **`ls`** (a folder, or what is inside an archive), **`info`** (size, times, tags and what is inside audio, comics, video and photos), **`find`** (by name, size, date, text and tag), **`checksum`** (in the format of `sha256sum`, and `--check` against such a list), **`copy`**, **`move`**, **`delete`**, **`dups`** (files with exactly the same content, and delete the extras) and **`compare`** (two folders, and `--sync` to make them alike). `dossier help` and `dossier <command> --help` list the options; [docs/cli.md](docs/cli.md) has them all with examples.

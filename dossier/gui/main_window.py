@@ -43,6 +43,7 @@ from .tools_bar import ToolsBarMixin
 from .view_modes import ViewModesMixin
 from .drop_handler import DragDropMixin
 from .zip_edit import ZipEditMixin, zip_parts
+from .assistant import AssistantMixin
 from .compare_folders import CompareFoldersMixin
 from .servers import ServersMixin
 from .copy_settings import CopySettingsMixin
@@ -72,7 +73,7 @@ SUMMARY_ITEMS = 12    # the confirmation lists this many items, then says how ma
 SIZE_LIMIT = 1000    # the status line sizes at most this many marked items
 
 
-class MainWindow(ViewModesMixin, ToolsBarMixin, ContextMenuMixin, DragDropMixin, LookMixin, ZipEditMixin, ArchiveCommandsMixin, CopySettingsMixin, CompareFoldersMixin, ServersMixin, DuplicatesMixin, FolderLayoutsMixin, QueueResumeMixin, ColumnsMixin, PropertiesMixin, MountMixin, ChecksumMixin, MarksAndNotesMixin, SearchCommandMixin, BatchRenameMixin, OperationQueueMixin, StallLogMixin, GoingPlacesMixin, FolderSizesMixin, UnpackMixin, QMainWindow):
+class MainWindow(ViewModesMixin, ToolsBarMixin, ContextMenuMixin, DragDropMixin, LookMixin, ZipEditMixin, ArchiveCommandsMixin, CopySettingsMixin, AssistantMixin, CompareFoldersMixin, ServersMixin, DuplicatesMixin, FolderLayoutsMixin, QueueResumeMixin, ColumnsMixin, PropertiesMixin, MountMixin, ChecksumMixin, MarksAndNotesMixin, SearchCommandMixin, BatchRenameMixin, OperationQueueMixin, StallLogMixin, GoingPlacesMixin, FolderSizesMixin, UnpackMixin, QMainWindow):
     def __init__(self, fs: Optional[FileSystem] = None, *, settings_path: Optional[str] = None, start=(None, None),
                  dialogs=None, trasher=None, terminal_launcher=None, which=None) -> None:
         super().__init__()
@@ -125,8 +126,6 @@ class MainWindow(ViewModesMixin, ToolsBarMixin, ContextMenuMixin, DragDropMixin,
 
         self.fkeys = self._build_fkey_bar()
         self.status = QLabel()
-        self.hint = QLabel("Tab switches panel, Space marks")
-        self.hint.setEnabled(False)
         status_row = QHBoxLayout()
         status_row.setContentsMargins(8, 2, 8, 2)
         self.queue_label = QLabel()
@@ -136,7 +135,6 @@ class MainWindow(ViewModesMixin, ToolsBarMixin, ContextMenuMixin, DragDropMixin,
         self.layout_label = QLabel("Folder layout")
         self.layout_label.hide()
         status_row.addWidget(self.layout_label)
-        status_row.addWidget(self.hint)
         self.build_label = QLabel(f"build {APP_VERSION}")
         self.build_label.setEnabled(False)
         self.build_label.setToolTip(f"{APP_NAME} build {APP_VERSION}")
@@ -188,6 +186,7 @@ class MainWindow(ViewModesMixin, ToolsBarMixin, ContextMenuMixin, DragDropMixin,
         self.apply_look()                            # the font and the bold the user chose
         self.build_thumbnails()                      # the thumbnail maker, and each panel's remembered view
         self.build_layouts()                         # folder layouts: applied when a folder is shown
+        self.build_assistant()                       # the assistant feature (off until the owner switches it on)
 
         self._restore(start)
         if self.act_stall_log.isChecked():
@@ -354,6 +353,7 @@ class MainWindow(ViewModesMixin, ToolsBarMixin, ContextMenuMixin, DragDropMixin,
         view.addAction(self._action("Fonts and Bold...", None, self.open_look_settings))
         view.addAction(self._action("Thumbnails...", None, self.open_thumbnail_settings))
         view.addAction(self._action("Copy and Move...", None, self.open_copy_settings))
+        view.addAction(self._action("Assistant Access...", None, self.open_assistant_settings))
         # these two hold the state of the choices the dialog (and the confirmation box) change; they are not in a menu
         self.act_verify = QAction("Verify Copies After Copying", self)
         self.act_verify.setCheckable(True)
@@ -1278,6 +1278,9 @@ class MainWindow(ViewModesMixin, ToolsBarMixin, ContextMenuMixin, DragDropMixin,
         for job in list(self._jobs) + list(self._size_jobs) + list(self._plans):
             job.cancel()
         self.disconnect_all_servers()                # the ssh processes end with the program
+        if self.assistant_config().enabled:
+            from ..assistant import bridge as assistant_bridge
+            assistant_bridge.clear_state()           # an assistant must not think the window is still there
         self.cmd_runner.shutdown(wait=False, cancel_futures=True)   # a listing stuck on a dead share must not hold us
         self.settings.setValue("window/geometry", self.saveGeometry())
         self.settings.setValue("window/split", self.split.sizes())
