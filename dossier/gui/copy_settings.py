@@ -5,7 +5,7 @@ kept in the settings file under ``copy/``; ``ExecOptions`` for a run is built fr
 """
 from __future__ import annotations
 
-from PyQt6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, QDoubleSpinBox, QFormLayout, QGroupBox, QLabel,
+from PyQt6.QtWidgets import (QHBoxLayout, QCheckBox, QComboBox, QDialog, QDialogButtonBox, QDoubleSpinBox, QFormLayout, QGroupBox, QLabel,
                              QPushButton, QSpinBox, QVBoxLayout)
 
 DEFAULTS = {"limit_mb": 0.0, "verify": False, "ask_on_error": False, "retries": 3, "retry_delay": 0.25, "workers": 0,
@@ -64,7 +64,7 @@ class CopySettingsDialog(QDialog):
         self.native.setChecked(values["native"])
         form.addRow("Speed limit", self.limit)
         form.addRow("Small files at the same time", self.workers)
-        form.addRow("", self.native)
+        form.addRow(self.native)
         layout.addWidget(speed)
 
         safe = QGroupBox("Safety")
@@ -75,7 +75,7 @@ class CopySettingsDialog(QDialog):
         for label, key in FLUSH_CHOICES:
             self.flush.addItem(label, key)
         self.flush.setCurrentIndex(max(0, self.flush.findData(values["flush"])))
-        form.addRow("", self.verify)
+        form.addRow(self.verify)
         form.addRow("Push the data to the drive at the end", self.flush)
         layout.addWidget(safe)
 
@@ -93,14 +93,14 @@ class CopySettingsDialog(QDialog):
         self.ask.setChecked(values["ask_on_error"])
         form.addRow("Extra tries for a file another program holds", self.retries)
         form.addRow("Wait before the first retry (doubles each time)", self.retry_delay)
-        form.addRow("", self.ask)
+        form.addRow(self.ask)
         layout.addWidget(problems)
 
         drop = QGroupBox("Dragging with the mouse")
         form = QFormLayout(drop)
         self.ask_drop = QCheckBox("Show the confirmation box before a drop copies or moves files (conflicts are always asked about)")
         self.ask_drop.setChecked(values["ask_on_drop"])
-        form.addRow("", self.ask_drop)
+        form.addRow(self.ask_drop)
         layout.addWidget(drop)
 
         resume = QGroupBox("After a restart")
@@ -112,8 +112,11 @@ class CopySettingsDialog(QDialog):
         self.forget = QPushButton("Forget the remembered list now")
         self.forget.setAutoDefault(False)
         self.forget.clicked.connect(self._forget)
-        form.addRow("", self.remember)
-        form.addRow("", self.forget)
+        form.addRow(self.remember)
+        forget_row = QHBoxLayout()
+        forget_row.addWidget(self.forget)
+        forget_row.addStretch(1)                     # the button keeps its own width, at the left edge like the check box above
+        form.addRow(forget_row)
         layout.addWidget(resume)
         self.forgotten = False
 

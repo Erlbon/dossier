@@ -307,6 +307,9 @@ class FolderModel(QAbstractTableModel):
         return 0 if parent.isValid() else len(COLUMNS)
 
     def headerData(self, section, orientation, role=Qt.ItemDataRole.DisplayRole):
+        if orientation == Qt.Orientation.Horizontal and role == Qt.ItemDataRole.TextAlignmentRole:
+            right = not self.is_home and section < len(column_keys) and column_keys[section] in RIGHT_ALIGNED
+            return int((Qt.AlignmentFlag.AlignRight if right else Qt.AlignmentFlag.AlignLeft) | Qt.AlignmentFlag.AlignVCenter)   # as its values
         if orientation == Qt.Orientation.Horizontal and role == Qt.ItemDataRole.DisplayRole:
             if self.is_home:
                 return HOME_COLUMNS[section] if section < len(HOME_COLUMNS) else ""

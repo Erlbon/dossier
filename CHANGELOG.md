@@ -2,6 +2,15 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-21#13 -- Tidier details
+
+- **Folder tabs are shorter:** the height now follows the text (a few pixels above and below the letters) instead of Fusion's roomy default.
+- **Column headers line up with their values:** Size is right-aligned over its numbers, the others are left-aligned (they were all centred).
+- **The headings in a folder note are smaller** (a first-level heading is about one and a third times the text, not twice).
+- **The main button of every dialog is gold and is the one Enter presses** (Save, Find, Add, Run...). One filter on the application does it, so a dialog added later gets it too.
+- **Check boxes line up** at the left edge in the Copy and Move, Assistant Access and Fonts dialogs (they were indented under empty labels), and the "Forget the remembered list" button keeps its own width.
+- The cursor colours of the two panels are unchanged on purpose: the active panel must be told from the other one.
+
 ## 2026-10-21#12 -- Quieter folder rows
 
 - **No more "UP" and "DIR" in the lists.** The ".." row is just "..", and a folder's Size cell is empty until its size has been calculated (Alt+Shift+Return); the Type column already says Folder. Sorting is unchanged.

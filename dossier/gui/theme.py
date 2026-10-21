@@ -134,6 +134,10 @@ class ThemeManager(QObject):
             app.styleHints().colorSchemeChanged.connect(lambda _s: self.apply() if self.scheme == "auto" else None)
         except AttributeError:
             pass
+        from .primary_button import PrimaryButtons       # imported here: that module needs this one
+        if getattr(app, "_dossier_primary_buttons", None) is None:        # one filter for the application, however many windows
+            app._dossier_primary_buttons = PrimaryButtons(app)
+            app.installEventFilter(app._dossier_primary_buttons)
         self.apply()
 
     def tokens(self) -> dict:

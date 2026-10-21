@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 from PyQt6.QtCore import QModelIndex, QPoint, QRectF, QSize, Qt, QTimer, QUrl, pyqtSignal
-from PyQt6.QtGui import QColor, QContextMenuEvent, QDesktopServices, QDrag, QFontMetrics, QPainter, QPainterPath, QPalette, QPen, QPixmap
+from PyQt6.QtGui import QColor, QContextMenuEvent, QDesktopServices, QDrag, QFontMetrics, QPainter, QPainterPath, QPalette, QPen, QPixmap, QTextCharFormat, QTextCursor
 from PyQt6.QtWidgets import (QAbstractItemView, QApplication, QFrame, QListView, QStackedWidget, QHBoxLayout, QHeaderView, QLabel, QLineEdit,
                              QTabBar, QToolButton,
                              QTableView, QTextBrowser, QVBoxLayout, QWidget)
@@ -52,6 +52,26 @@ class NoteView(QTextBrowser):
     def _open_link(url: QUrl) -> None:
         if url.scheme() in SAFE_SCHEMES:   # V4: links limited to http, https and mailto
             QDesktopServices.openUrl(url)
+
+    HEADING_SCALE = {1: 1.35, 2: 1.2, 3: 1.08}        # the Markdown default (about twice the text) outweighs the file list
+
+    def setMarkdown(self, text: str) -> None:
+        super().setMarkdown(text)
+        base = self.font().pointSizeF()
+        if base <= 0:
+            return
+        cursor = QTextCursor(self.document())
+        block = self.document().begin()
+        while block.isValid():
+            level = block.blockFormat().headingLevel()
+            if level > 0:
+                scale = self.HEADING_SCALE.get(level, 1.0)
+                cursor.setPosition(block.position())
+                cursor.setPosition(block.position() + max(block.length() - 1, 0), QTextCursor.MoveMode.KeepAnchor)
+                fmt = QTextCharFormat()
+                fmt.setFontPointSize(base * scale)
+                cursor.mergeCharFormat(fmt)
+            block = block.next()
 
     def fit(self, width: int) -> int:
         self.document().setTextWidth(max(width - 24, 80))
@@ -462,7 +482,8 @@ class PanelTabBar(QTabBar):
 
     def tabSizeHint(self, index: int) -> QSize:
         hint = super().tabSizeHint(index)
-        return QSize(max(96, min(220, hint.width() + 14)), hint.height() + 6)
+        # the height follows the text: 4 px gap above the tab, then 5 px above and 5 below the letters (Fusion's own hint added far more)
+        return QSize(max(96, min(220, hint.width() + 14)), self.fontMetrics().height() + 14)
 
     def mouseMoveEvent(self, event) -> None:
         hover = self.tabAt(event.position().toPoint())
