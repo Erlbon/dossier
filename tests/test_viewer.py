@@ -100,9 +100,12 @@ def test_an_empty_file_is_fine(viewer):
     assert win.view.total == 0 and "Line 1 of 1" not in win.position.text()
 
 
-def test_binary_files_are_flagged(viewer):
+def test_binary_files_open_as_hex_and_the_text_view_still_flags_them(viewer):
     win = viewer({"b.bin": b"MZ\x00\x01\x02" * 100})
-    assert "binary" in win.status.text()
+    assert win.mode == "hex" and win.stack.currentWidget() is win.hex
+    win.enter_mode("text")
+    settle(win)
+    assert win.mode == "text" and "binary" in win.status.text()
 
 
 # find ---------------------------------------------------------------------------------------------

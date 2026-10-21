@@ -19,7 +19,7 @@ from PyQt6.QtWidgets import (QApplication, QHBoxLayout, QLabel, QMainWindow, QMe
 from ..core.ops import (Plan, check_name, conflict_rows, plan_copy, plan_delete, plan_move, plan_rename)
 from ..core.home import ADD_NETWORK, HomeFileSystem, HomeProvider, RouterFileSystem, removable_from_home
 from ..core.commandline import Placeholders, expand, run_command
-from ..core import patterns
+from ..core import patterns, viewmodes
 from ..core.platform import IS_WINDOWS, has_scheme, is_elevated, machine_name, path_key, set_window_border
 from ..core.selection import SelectionStore
 from ..core.version import APP_NAME, APP_REPO_URL, APP_VERSION
@@ -534,7 +534,10 @@ class MainWindow(ViewModesMixin, ToolsBarMixin, ContextMenuMixin, DragDropMixin,
         archived = [p for p in ordered if has_scheme(p)]       # the viewer reads real files: these are unpacked first
 
         def open_viewer(unpacked: dict) -> None:
-            win = TextViewerWindow([unpacked.get(p, p) for p in ordered], 0, dispatch=self.dispatcher)
+            shown, first = [unpacked.get(p, p) for p in ordered], 0
+            if len(shown) == 1 and not archived and viewmodes.mode_for(shown[0]) == "image":     # a picture: its folder's pictures follow
+                shown, first = self._pictures_around(shown[0])
+            win = TextViewerWindow(shown, first, dispatch=self.dispatcher)
             self.viewers.append(win)
             win.edit_requested.connect(lambda p, replace: self.edit_file(p, replace))
             win.destroyed.connect(lambda _o=None, w=win: self.viewers.remove(w) if w in self.viewers else None)
@@ -544,6 +547,21 @@ class MainWindow(ViewModesMixin, ToolsBarMixin, ContextMenuMixin, DragDropMixin,
             self._unpack_then(archived, lambda local: open_viewer(dict(zip(archived, local))))
         else:
             open_viewer({})
+
+    def _pictures_around(self, path: str) -> tuple:
+        """The pictures in the folder of ``path`` in natural order, and the place of ``path`` among them (so next and previous
+        step through the folder)."""
+        folder = self.fs.dirname(path)
+        try:
+            names = viewmodes.image_siblings([e.name for e in self.fs.list(folder) if not e.is_dir])
+        except OSError:
+            return [path], 0
+        paths = [self.fs.join(folder, n) for n in names]
+        key = os.path.normcase(os.path.normpath(path))
+        for i, p in enumerate(paths):
+            if os.path.normcase(os.path.normpath(p)) == key:
+                return paths, i
+        return [path], 0
 
     def edit_file(self, path: Optional[str] = None, show_replace: bool = False) -> None:
         """F4: open one file in the notepad. A file that is already open is brought forward, not opened twice."""
