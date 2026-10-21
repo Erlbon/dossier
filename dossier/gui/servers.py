@@ -18,7 +18,7 @@ from typing import Callable, Optional
 from PyQt6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFileDialog, QFormLayout, QHBoxLayout, QLabel, QLineEdit,
                              QPushButton, QSpinBox, QVBoxLayout)
 
-from ..core import davclient, servers, sshlink
+from ..core import davclient, ftpclient, servers, sshlink
 from ..core.home import ADD_SERVER, ServerItem
 from ..core.sftpfs import Session, scheme_of, split_path
 from .background import run_in_background
@@ -100,11 +100,15 @@ class ConnectionDialog(QDialog):
         notes = {"scp": "Works through a shell on the server (ls, dd, mv...), so it is slower than SFTP: use it only when the server "
                         "has no SFTP service.",
                  "webdav": "A web folder: Nextcloud and ownCloud (https://host/remote.php/dav/files/you), a NAS, Apache, nginx. You can "
-                           "paste the whole address into Host."}
+                           "paste the whole address into Host.",
+                 "ftp": "Plain FTP sends the password and the files as readable text. Keep Encrypted (FTPS) ticked when the server "
+                        "offers it. You can paste a whole address (ftp://host/folder or ftps://host/folder) into Host."}
         self.type_note.setText(notes.get(kind, ""))
         dav = kind == "webdav"
-        self._form.setRowVisible(self.secure, dav)
-        self._form.setRowVisible(self._key_row, not dav)
+        web = kind in ("webdav", "ftp")
+        self.secure.setText("Encrypted (FTPS)" if kind == "ftp" else "Encrypted (HTTPS)")
+        self._form.setRowVisible(self.secure, web)
+        self._form.setRowVisible(self._key_row, not web)
         if self.port.value() == self._last_default:                      # a port nobody changed follows the type
             self.port.setValue(servers.default_port(kind, self.secure.isChecked()))
         self._last_default = servers.default_port(kind, self.secure.isChecked())
@@ -112,9 +116,9 @@ class ConnectionDialog(QDialog):
                                           if dav else "empty: the folder the server opens on login")
         self.remember.setText("Keep the password in the system's password store (otherwise it is asked for when needed)")
         self.note.setText("This connection is NOT encrypted: a password and every file travel as plain text. Use it only inside a network "
-                          "you trust." if dav and not self.secure.isChecked() else
+                          "you trust." if web and not self.secure.isChecked() else
                           ("Nothing is contacted until you open the server. A certificate that is not from a known authority is shown to you "
-                           "and asked about." if dav else
+                           "and asked about." if web else
                            "Nothing is contacted until you open the server. The first time, you are shown the server's key and asked whether "
                            "to trust it."))
 
@@ -123,7 +127,7 @@ class ConnectionDialog(QDialog):
         parsed = servers.from_url(self.host.text())
         if parsed is None:
             return
-        self.protocol.setCurrentIndex(self.protocol.findData("webdav"))
+        self.protocol.setCurrentIndex(self.protocol.findData(parsed["protocol"]))
         self.secure.setChecked(parsed["secure"])
         self.host.setText(parsed["host"])
         self.port.setValue(parsed["port"])
@@ -270,7 +274,7 @@ class ServersMixin:
 
     def server_fs(self, conn: servers.Connection):
         """The file system that holds the sessions of this kind of connection."""
-        return {"scp": self.fs.scp, "webdav": self.fs.dav}.get(conn.protocol, self.fs.sftp)
+        return {"scp": self.fs.scp, "webdav": self.fs.dav, "ftp": self.fs.ftp}.get(conn.protocol, self.fs.sftp)
 
     def server_connected(self, conn: servers.Connection) -> bool:
         return self.server_fs(conn).connected(conn.authority())
@@ -351,7 +355,7 @@ class ServersMixin:
             return
 
         def go(session: Session) -> None:
-            target = conn.url("/" if conn.protocol == "webdav" else (conn.start_dir or session.home))
+            target = conn.url("/" if conn.protocol == "webdav" else (conn.start_dir or session.home))   # a web folder's base is its top
             panel.new_tab(target) if new_tab else panel.set_folder(target)
         self.connect_server(conn, go)
 
@@ -371,7 +375,7 @@ class ServersMixin:
             existing.read_only = conn.read_only
             then(existing)
             return
-        if conn.protocol == "webdav":
+        if conn.protocol in ("webdav", "ftp"):
             saved = servers.get_password(conn) if conn.save_password else ""
             self._try_dav(conn, saved, then, asked=bool(saved))
             return
@@ -438,7 +442,8 @@ class ServersMixin:
     def _try_dav(self, conn, password: str, then, asked: bool, remember: bool = False) -> None:
         def login(progress, cancel):
             progress(0, 0)
-            client = davclient.DavClient(conn.host, conn.port, conn.secure, conn.user, password, conn.cert)
+            maker = ftpclient.FtpClient if conn.protocol == "ftp" else davclient.DavClient
+            client = maker(conn.host, conn.port, conn.secure, conn.user, password, conn.cert)
             try:
                 client.connect()
             except davclient.CertificateError as e:
@@ -487,8 +492,9 @@ class ServersMixin:
         self._try_dav(updated, password, then, asked, remember)
 
     def _connected_dav(self, conn, client, password: str, remember: bool, then) -> None:
-        base = "/" + conn.start_dir.strip("/") if conn.start_dir.strip("/") else ""
-        session = Session(conn.authority(), client, read_only=conn.read_only, home="/", base=base, scheme="webdav")
+        base = "/" + conn.start_dir.strip("/") if conn.protocol == "webdav" and conn.start_dir.strip("/") else ""
+        session = Session(conn.authority(), client, read_only=conn.read_only, home=getattr(client, "home", "/") if conn.protocol == "ftp" else "/",
+                          base=base, scheme=conn.protocol)
         self.server_fs(conn).add_session(session)
         if password and remember and not conn.save_password:
             if servers.set_password(conn, password):
@@ -497,6 +503,9 @@ class ServersMixin:
             else:
                 self._say("The password could not be stored: this computer has no password store")
         self._say(f"Connected to {conn.name}" + (" (read-only)" if conn.read_only else ""))
+        if not getattr(client, "exact_listings", True):                  # said once, in words, because the status line is soon overwritten
+            self.dialogs.info("Connect", f"{conn.name} cannot give exact listings (it has no MLSD). Sizes and times are read from its text "
+                                         "listing and may be wrong; names with unusual characters may not show correctly.")
         for panel in (self.left, self.right):
             if panel.is_home:
                 panel.refresh()
@@ -536,14 +545,14 @@ class ServersMixin:
 
     def disconnect_active_server(self) -> None:
         path = self.active.path
-        conn = self.connection_for(path) if path.startswith(("sftp://", "scp://", "webdav://")) else None
+        conn = self.connection_for(path) if path.startswith(("sftp://", "scp://", "webdav://", "ftp://")) else None
         if conn is None:
             self._say("This panel is not on a server")
             return
         self.disconnect_server(conn)
 
     def disconnect_all_servers(self) -> None:
-        for fs in (self.fs.sftp, self.fs.scp, self.fs.dav):
+        for fs in (self.fs.sftp, self.fs.scp, self.fs.dav, self.fs.ftp):
             for authority in list(fs.sessions):
                 fs.drop(authority)
         self._links.clear()

@@ -20,7 +20,7 @@ from .vfs import Entry, FileSystem, NotWritable
 
 SCHEME = "sftp"
 ROOT = "sftp://"
-SCHEMES = ("sftp", "scp", "webdav")   # sftp: the SFTP service; scp: a shell on the server (shellclient.py); webdav: davclient.py
+SCHEMES = ("sftp", "scp", "webdav", "ftp")   # sftp: the SFTP service; scp: a shell on the server (shellclient.py); webdav: davclient.py
 
 
 class NotConnected(ConnectionError):

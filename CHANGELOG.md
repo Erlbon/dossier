@@ -2,6 +2,15 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-21#06 -- FTP and FTPS servers
+
+- **A fourth kind of server: FTP and FTPS.** Choose *FTP or FTPS* as the type, or paste an `ftp://` or `ftps://` address into Host. **Encrypted (FTPS) is ticked by default**; plain FTP sends the password and every file as readable text, which the dialog and the server's description (*not encrypted*) say plainly. Folders are `ftp://user@host/path` and work like any other, **read-only until you switch it off**. A server with no user name is logged into as anonymous.
+- **FTPS is checked like the web:** the system's certificates decide; a server with a certificate of its own shows its SHA-256 fingerprint and asks once, and a changed certificate stops the connection (Cancel is the default). The data connections resume the control connection's TLS session, which many servers (vsftpd) demand.
+- **Exact listings:** the machine-readable `MLSD` is used when the server has it. A server without it is read from its text listing (Unix and DOS/IIS styles) and **you are told once that sizes and times may be wrong**.
+- **Several connections, a few at a time:** a transfer keeps an FTP connection busy, so every open file gets a connection of its own (kept and reused), at most two for reading and two for writing at once, because servers limit them. Listing a folder while a big file is copied therefore works. A straight read of a file is one transfer, a jump in a file asks the server to start there (`REST`).
+- Modified times are set on uploaded files where the server has `MFMT`, and kept as the server dates them where it has not. A replaced file is deleted before the new one takes its name (FTP has no replace). Deleting is permanent and says so: there is no recycle bin on a server. Names are UTF-8 (negotiated); a server that cannot be read that way is read as Latin-1.
+- Not in this build: implicit FTPS on port 990 (explicit TLS on the usual port only), resuming a failed upload.
+
 ## 2026-10-21#05 -- WebDAV servers
 
 - **A third kind of server: WebDAV** (a web folder over HTTPS or HTTP): Nextcloud and ownCloud (`https://host/remote.php/dav/files/you`), a NAS, Apache, nginx, Pluteus. Choose *WebDAV* as the type when you add a server, or **paste the whole web address into Host**: the encryption, port, user and base folder are filled in for you. The base folder is the top of the connection, so a Nextcloud account shows your files and not the server's internals. Folders are `webdav://user@host/path`; everything that works on a folder works there (copy in both directions, move, rename, delete, F3, search, compare, duplicates), **read-only until you switch it off** for that server.

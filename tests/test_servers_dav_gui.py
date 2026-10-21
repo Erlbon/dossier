@@ -51,7 +51,7 @@ def test_the_dialog_takes_a_whole_web_address_and_follows_the_secure_switch(lab)
     assert c.authority() == "me@cloud.example.com:8443" and c.url("/x") == "webdav://me@cloud.example.com:8443/x"
     plain = servers.Connection("p", "h", port=80, protocol="webdav", secure=False)
     assert plain.authority() == "h" and "not encrypted" in plain.describe()
-    assert servers.from_url("ftp://x") is None and servers.from_url("not a url") is None
+    assert servers.from_url("gopher://x") is None and servers.from_url("not a url") is None
 
 
 def test_a_pinned_certificate_is_kept_only_while_the_address_is_the_same(lab):

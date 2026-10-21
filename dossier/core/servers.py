@@ -15,14 +15,17 @@ from typing import Optional
 
 PROTOCOLS = (("sftp", "SFTP (the server's file service, over SSH)"),
              ("scp", "SCP (a shell over SSH, for servers that have no SFTP service)"),
-             ("webdav", "WebDAV (a web folder, over HTTPS or HTTP)"))
-NAMES = {"sftp": "SFTP", "scp": "SCP", "webdav": "WebDAV"}
+             ("webdav", "WebDAV (a web folder, over HTTPS or HTTP)"),
+             ("ftp", "FTP or FTPS (the old file transfer service)"))
+NAMES = {"sftp": "SFTP", "scp": "SCP", "webdav": "WebDAV", "ftp": "FTP"}
 DEFAULT_PORT = 22
 SERVICE = "Dossier"
 MAX_CONNECTIONS = 200
 
 
 def default_port(protocol: str, secure: bool = True) -> int:
+    if protocol == "ftp":
+        return 21                                              # FTPS here is explicit TLS on the same port
     return (443 if secure else 80) if protocol == "webdav" else DEFAULT_PORT
 
 
@@ -50,8 +53,9 @@ class Connection:
 
     def describe(self) -> str:
         where = self.authority() + (self.start_dir if self.protocol == "webdav" and self.start_dir else "")
-        plain = "  (not encrypted)" if self.protocol == "webdav" and not self.secure else ""
-        return f"{NAMES.get(self.protocol, self.protocol)}  {where}{plain}" + ("  (read-only)" if self.read_only else "")
+        plain = "  (not encrypted)" if self.protocol in ("webdav", "ftp") and not self.secure else ""
+        name = "FTPS" if self.protocol == "ftp" and self.secure else NAMES.get(self.protocol, self.protocol)
+        return f"{name}  {where}{plain}" + ("  (read-only)" if self.read_only else "")
 
     def problem(self) -> str:
         """Why this connection cannot be saved, or an empty string."""
@@ -86,19 +90,23 @@ def parse_authority(authority: str) -> tuple:
 
 
 def from_url(text: str) -> Optional[dict]:
-    """The parts of a web address such as ``https://cloud.example.com:8443/remote.php/dav/files/me/`` that a WebDAV connection holds
-    (``host``, ``port``, ``secure``, ``user``, ``base``), or None when it is not an ``http`` or ``https`` address."""
+    """The parts of an address such as ``https://cloud.example.com:8443/remote.php/dav/files/me/`` or ``ftps://user@host/pub`` that a
+    connection holds (``protocol``, ``host``, ``port``, ``secure``, ``user``, ``base``), or None when it is not an ``http``, ``https``,
+    ``ftp`` or ``ftps`` address."""
     from urllib.parse import unquote, urlsplit
     try:
         parts = urlsplit(text.strip())
-        secure = parts.scheme.lower() == "https"
-        if parts.scheme.lower() not in ("http", "https") or not parts.hostname:
+        scheme = parts.scheme.lower()
+        if scheme not in ("http", "https", "ftp", "ftps") or not parts.hostname:
             return None
-        port = parts.port or (443 if secure else 80)
+        protocol = "ftp" if scheme.startswith("ftp") else "webdav"
+        secure = scheme in ("https", "ftps")
+        port = parts.port or default_port(protocol, secure)
     except ValueError:
         return None
     base = unquote(parts.path).rstrip("/")
-    return {"host": parts.hostname, "port": port, "secure": secure, "user": unquote(parts.username or ""), "base": base}
+    return {"protocol": protocol, "host": parts.hostname, "port": port, "secure": secure, "user": unquote(parts.username or ""),
+            "base": base}
 
 
 def to_json(connections: list) -> str:

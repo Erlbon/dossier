@@ -196,6 +196,7 @@ class RouterFileSystem(FileSystem):
         self.sftp = SftpFileSystem()                  # sftp://user@host/path: servers, once connected
         self.scp = SftpFileSystem("scp")              # scp://user@host/path: servers reached through a shell
         self.dav = SftpFileSystem("webdav")           # webdav://user@host/path: WebDAV servers
+        self.ftp = SftpFileSystem("ftp")              # ftp://user@host/path: FTP and FTPS servers
         self.flat = FlatFileSystem(self)              # flat://<folder>: every file below a folder, as one list
         self.found = FoundFileSystem(self)            # found://<n>: the result list of a search
         self.sep = local.sep
@@ -212,6 +213,8 @@ class RouterFileSystem(FileSystem):
             return self.scp
         if path.startswith("webdav:"):
             return self.dav
+        if path.startswith("ftp:"):
+            return self.ftp
         if path.startswith("flat:"):
             return self.flat
         return self.found if path.startswith("found:") else self.local
