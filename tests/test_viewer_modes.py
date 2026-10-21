@@ -356,3 +356,112 @@ def test_small_touchpad_steps_add_up_to_one_picture(viewer, tmp_path):
     assert win.index == 0                                # 90 so far: not yet a notch
     wheel(view, -30)
     wait(lambda: win.index == 1)
+
+
+# the setting ----------------------------------------------------------------------------------------------------------------------------
+def test_the_wheel_table_falls_back_to_the_defaults_for_anything_unknown():
+    from dossier.core import wheel
+    assert wheel.clean(None) == wheel.DEFAULTS
+    assert wheel.clean({"plain": "zoom", "ctrl": "bogus"}) == {"plain": "zoom", "ctrl": "zoom", "shift": "scroll"}
+    assert wheel.key_for(True, True) == "ctrl" and wheel.key_for(False, True) == "shift" and wheel.key_for(False, False) == "plain"
+
+
+def test_the_viewer_does_what_the_table_says(viewer, tmp_path):
+    paths = [picture(tmp_path / f"w{n}.png", 400, 300) for n in range(2)]
+    win = viewer(paths)
+    wait(lambda: win.image_page.view.has_image())
+    view = win.image_page.view
+    win.set_wheel_map({"plain": "zoom", "ctrl": "step", "shift": "none"})
+    before = view.zoom
+    wheel(view, 120)
+    assert win.index == 0 and view.zoom > before                          # plain wheel zooms now
+    wheel(view, -120, Qt.KeyboardModifier.ControlModifier)
+    wait(lambda: win.index == 1 and view.has_image())                     # Ctrl+wheel steps
+    zoom = view.zoom
+    wheel(view, 120, Qt.KeyboardModifier.ShiftModifier)
+    assert win.index == 1 and view.zoom == zoom                           # nothing
+
+
+def test_scrolling_actions_move_the_bars_of_a_zoomed_picture(viewer, tmp_path):
+    win = viewer([picture(tmp_path / "big.png", 800, 600)])
+    wait(lambda: win.image_page.view.has_image())
+    view = win.image_page.view
+    view.actual_size()
+    view.zoom_by(4)
+    win.set_wheel_map({"plain": "scroll", "ctrl": "scroll_sideways", "shift": "none"})
+    vbar, hbar = view.verticalScrollBar(), view.horizontalScrollBar()
+    vbar.setValue(vbar.maximum() // 2)
+    hbar.setValue(hbar.maximum() // 2)
+    v0, h0 = vbar.value(), hbar.value()
+    wheel(view, -120)
+    assert vbar.value() > v0 and abs(hbar.value() - h0) < 20          # (the view recentres a few pixels sideways)
+    wheel(view, -120, Qt.KeyboardModifier.ControlModifier)
+    assert hbar.value() > h0
+
+
+def test_the_wheel_dialog_keeps_the_choices_and_open_viewers_follow(world, tmp_path, monkeypatch):
+    from dossier.gui.wheel_settings import WheelDialog
+    win, _d, left, _r, _t = world
+    picture(left / "a.png")
+    picture(left / "b.png")
+    win.left.refresh()
+    pump(win, lambda: win.left.model.row_of("a.png") >= 0)
+    win.left.table.setCurrentIndex(win.left.model.index(win.left.model.row_of("a.png"), 0))
+    win.view_file()
+    wait(lambda: win.viewers and win.viewers[0].image_page.view.has_image())
+    assert win.wheel_map() == {"plain": "scroll_step", "ctrl": "zoom", "shift": "scroll"}
+    assert win.viewers[0].image_page.view.wheel_map == win.wheel_map()
+
+    def choose(self, dlg):
+        dlg.boxes["plain"].setCurrentIndex(dlg.boxes["plain"].findData("zoom"))
+        dlg.boxes["ctrl"].setCurrentIndex(dlg.boxes["ctrl"].findData("step"))
+        return True
+    monkeypatch.setattr(type(win), "_run_wheel_dialog", choose)
+    win.open_wheel_settings()
+    assert win.wheel_map() == {"plain": "zoom", "ctrl": "step", "shift": "scroll"}
+    assert win.viewers[0].image_page.view.wheel_map["plain"] == "zoom"
+    dlg = WheelDialog(win, win.wheel_map())
+    dlg.defaults.click()
+    assert dlg.values() == {"plain": "scroll_step", "ctrl": "zoom", "shift": "scroll"}
+
+
+def test_the_default_wheel_scrolls_a_zoomed_picture_and_steps_at_its_end(viewer, tmp_path, monkeypatch):
+    from dossier.gui import image_view
+    monkeypatch.setattr(image_view, "SETTLE", 0.0)
+    paths = [picture(tmp_path / f"s{n}.png", 800, 600) for n in range(2)]
+    win = viewer(paths)
+    wait(lambda: win.image_page.view.has_image())
+    view = win.image_page.view
+    wheel(view, -120)                                    # the picture fits the window: the first notch steps at once
+    wait(lambda: win.index == 1 and view.has_image())
+    wheel(view, 120)
+    wait(lambda: win.index == 0 and view.has_image())
+    view.actual_size()
+    view.zoom_by(4)
+    bar = view.verticalScrollBar()
+    assert bar.maximum() > bar.minimum()
+    bar.setValue(bar.minimum())
+    wheel(view, -120)                                    # zoomed: it scrolls down, and stays on this picture
+    assert bar.value() > bar.minimum() and win.index == 0
+    bar.setValue(bar.maximum())
+    wheel(view, -120)                                    # at the bottom: the next picture
+    wait(lambda: win.index == 1 and view.has_image())
+    view.actual_size()
+    view.zoom_by(4)
+    bar.setValue(bar.minimum())
+    wheel(view, 120)                                     # at the top, wheel up: the previous picture
+    wait(lambda: win.index == 0 and view.has_image())
+
+
+def test_a_spin_that_is_still_scrolling_does_not_jump_to_the_next_picture(viewer, tmp_path):
+    paths = [picture(tmp_path / f"t{n}.png", 800, 600) for n in range(2)]
+    win = viewer(paths)
+    wait(lambda: win.image_page.view.has_image())
+    view = win.image_page.view
+    view.actual_size()
+    view.zoom_by(4)
+    bar = view.verticalScrollBar()
+    bar.setValue(bar.maximum() - 50)
+    wheel(view, -120)                                    # reaches the bottom, still scrolling
+    wheel(view, -120)                                    # the same spin goes on: not a step yet
+    assert win.index == 0

@@ -7,6 +7,7 @@ read.
 """
 from __future__ import annotations
 
+import time
 from typing import Optional
 
 from PyQt6.QtCore import QRectF, Qt, pyqtSignal
@@ -14,10 +15,12 @@ from PyQt6.QtGui import QColor, QImage, QImageReader, QPainter, QPixmap, QTransf
 from PyQt6.QtWidgets import (QAbstractItemView, QGraphicsPixmapItem, QGraphicsScene, QGraphicsView, QHeaderView, QSplitter,
                              QTreeWidget, QTreeWidgetItem, QWidget)
 
+from ..core import wheel
 from ..core.exif import Exif
 from . import theme
 
 MIN_ZOOM, MAX_ZOOM = 0.02, 32.0
+SETTLE = 0.35        # seconds after the wheel last scrolled the picture before the same spin may step to the next one
 
 
 def read_image(path: str) -> QImage:
@@ -34,6 +37,8 @@ class ImageView(QGraphicsView):
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
         self._wheel_steps = 0
+        self._scrolled_at = 0.0
+        self.wheel_map = dict(wheel.DEFAULTS)           # what the wheel does, set by the viewer from the settings
         self._scene = QGraphicsScene(self)
         self.setScene(self._scene)
         self._item: Optional[QGraphicsPixmapItem] = None
@@ -130,19 +135,41 @@ class ImageView(QGraphicsView):
             self.fit()
 
     def wheelEvent(self, event) -> None:
-        """Wheel: the next or previous picture of the folder. Ctrl+wheel zooms; Shift+wheel moves a zoomed picture."""
+        """The action the owner chose for this key combination (Settings > Mouse Wheel...). By default the wheel scrolls a zoomed
+        picture and steps to the next or previous one when the picture is at its end (or fits), Ctrl+wheel zooms and Shift+wheel
+        scrolls."""
         mods = event.modifiers()
-        if mods & Qt.KeyboardModifier.ControlModifier:
-            self.zoom_by(1.25 if event.angleDelta().y() > 0 else 0.8)
-            event.accept()
-        elif mods & Qt.KeyboardModifier.ShiftModifier:
-            super().wheelEvent(event)
-        else:
-            self._wheel_steps += event.angleDelta().y()          # a notch is 120; a touchpad sends many small ones
-            while abs(self._wheel_steps) >= 120:
-                self.step_requested.emit(-1 if self._wheel_steps > 0 else 1)
-                self._wheel_steps -= 120 if self._wheel_steps > 0 else -120
-            event.accept()
+        action = self.wheel_map[wheel.key_for(bool(mods & Qt.KeyboardModifier.ControlModifier),
+                                              bool(mods & Qt.KeyboardModifier.ShiftModifier))]
+        delta = event.angleDelta()
+        amount = delta.y() or delta.x()                          # some mice send Shift+wheel as a sideways wheel
+        if action == "zoom":
+            self.zoom_by(1.25 if amount > 0 else 0.8)
+        elif action == "step":
+            self._step_by_wheel(amount)
+        elif action == "scroll_step":
+            bar = self.verticalScrollBar()
+            can_scroll = bar.maximum() > bar.minimum()
+            at_end = bar.value() >= bar.maximum() if amount < 0 else bar.value() <= bar.minimum()
+            if can_scroll and not at_end:
+                bar.setValue(bar.value() - amount)
+                self._scrolled_at = time.monotonic()
+                self._wheel_steps = 0
+            elif not (can_scroll and time.monotonic() - self._scrolled_at < SETTLE):   # not while the wheel is still spinning past the end
+                self._step_by_wheel(amount)
+        elif action == "scroll":
+            bar = self.verticalScrollBar()
+            bar.setValue(bar.value() - amount)
+        elif action == "scroll_sideways":
+            bar = self.horizontalScrollBar()
+            bar.setValue(bar.value() - amount)
+        event.accept()
+
+    def _step_by_wheel(self, amount: int) -> None:
+        self._wheel_steps += amount                              # a notch is 120; a touchpad sends many small ones
+        while abs(self._wheel_steps) >= 120:
+            self.step_requested.emit(-1 if self._wheel_steps > 0 else 1)
+            self._wheel_steps -= 120 if self._wheel_steps > 0 else -120
 
     def mouseDoubleClickEvent(self, event) -> None:
         self.toggle_fit()

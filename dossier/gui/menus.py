@@ -227,6 +227,7 @@ class MenusMixin:
         settings.addSeparator()
         settings.addAction(self._action("Copy and Move...", None, self.open_copy_settings))
         self.build_open_menu(settings)
+        settings.addAction(self._action("Mouse Wheel...", None, self.open_wheel_settings))
         drives_menu = settings.addMenu("Drive Memory")
         self.act_remember_drives = QAction("Remember Drives Between Sessions (to notice a different drive under a letter)", self)
         self.act_remember_drives.setCheckable(True)

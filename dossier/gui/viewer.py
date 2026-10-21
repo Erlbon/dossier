@@ -327,6 +327,9 @@ class TextViewerWindow(QMainWindow):
         if self.mode == "image":
             self.image_info.setChecked(not self.image_info.isChecked())
 
+    def set_wheel_map(self, wheel_map: dict) -> None:
+        self.image_page.view.wheel_map = dict(wheel_map)
+
     def step(self, delta: int) -> None:
         if len(self.paths) > 1:
             self.load((self.index + delta) % len(self.paths))
