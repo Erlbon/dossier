@@ -14,10 +14,16 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 PROTOCOLS = (("sftp", "SFTP (the server's file service, over SSH)"),
-             ("scp", "SCP (a shell over SSH, for servers that have no SFTP service)"))
+             ("scp", "SCP (a shell over SSH, for servers that have no SFTP service)"),
+             ("webdav", "WebDAV (a web folder, over HTTPS or HTTP)"))
+NAMES = {"sftp": "SFTP", "scp": "SCP", "webdav": "WebDAV"}
 DEFAULT_PORT = 22
 SERVICE = "Dossier"
 MAX_CONNECTIONS = 200
+
+
+def default_port(protocol: str, secure: bool = True) -> int:
+    return (443 if secure else 80) if protocol == "webdav" else DEFAULT_PORT
 
 
 @dataclass
@@ -32,16 +38,20 @@ class Connection:
     read_only: bool = True
     save_password: bool = False
     id: str = field(default_factory=lambda: uuid.uuid4().hex)
+    secure: bool = True                # WebDAV: HTTPS (else plain HTTP, where a password is sent in the clear)
+    cert: str = ""                     # WebDAV: the fingerprint of a certificate the owner approved for this server
 
     def authority(self) -> str:
         host = f"[{self.host}]" if ":" in self.host and not self.host.startswith("[") else self.host
-        return (f"{self.user}@" if self.user else "") + host + (f":{self.port}" if self.port != DEFAULT_PORT else "")
+        return (f"{self.user}@" if self.user else "") + host + (f":{self.port}" if self.port != default_port(self.protocol, self.secure) else "")
 
     def url(self, path: str = "/") -> str:
         return f"{self.protocol}://" + self.authority() + (path if path.startswith("/") else "/" + path)
 
     def describe(self) -> str:
-        return f"{self.protocol.upper()}  {self.authority()}" + ("  (read-only)" if self.read_only else "")
+        where = self.authority() + (self.start_dir if self.protocol == "webdav" and self.start_dir else "")
+        plain = "  (not encrypted)" if self.protocol == "webdav" and not self.secure else ""
+        return f"{NAMES.get(self.protocol, self.protocol)}  {where}{plain}" + ("  (read-only)" if self.read_only else "")
 
     def problem(self) -> str:
         """Why this connection cannot be saved, or an empty string."""
@@ -75,6 +85,22 @@ def parse_authority(authority: str) -> tuple:
     return user, host, number
 
 
+def from_url(text: str) -> Optional[dict]:
+    """The parts of a web address such as ``https://cloud.example.com:8443/remote.php/dav/files/me/`` that a WebDAV connection holds
+    (``host``, ``port``, ``secure``, ``user``, ``base``), or None when it is not an ``http`` or ``https`` address."""
+    from urllib.parse import unquote, urlsplit
+    try:
+        parts = urlsplit(text.strip())
+        secure = parts.scheme.lower() == "https"
+        if parts.scheme.lower() not in ("http", "https") or not parts.hostname:
+            return None
+        port = parts.port or (443 if secure else 80)
+    except ValueError:
+        return None
+    base = unquote(parts.path).rstrip("/")
+    return {"host": parts.hostname, "port": port, "secure": secure, "user": unquote(parts.username or ""), "base": base}
+
+
 def to_json(connections: list) -> str:
     return json.dumps([c.__dict__ for c in connections[:MAX_CONNECTIONS]], ensure_ascii=False)
 
@@ -93,7 +119,7 @@ def from_json(text) -> list:
             c = Connection(str(item.get("name", "")), str(item.get("host", "")), str(item.get("user", "")),
                            int(item.get("port", DEFAULT_PORT)), str(item.get("protocol", "sftp")), str(item.get("key_file", "")),
                            str(item.get("start_dir", "")), bool(item.get("read_only", True)), bool(item.get("save_password", False)),
-                           str(item.get("id") or uuid.uuid4().hex))
+                           str(item.get("id") or uuid.uuid4().hex), bool(item.get("secure", True)), str(item.get("cert", "")))
         except (TypeError, ValueError):
             continue
         if not c.problem():

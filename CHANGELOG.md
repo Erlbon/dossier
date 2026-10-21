@@ -2,6 +2,15 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-21#05 -- WebDAV servers
+
+- **A third kind of server: WebDAV** (a web folder over HTTPS or HTTP): Nextcloud and ownCloud (`https://host/remote.php/dav/files/you`), a NAS, Apache, nginx, Pluteus. Choose *WebDAV* as the type when you add a server, or **paste the whole web address into Host**: the encryption, port, user and base folder are filled in for you. The base folder is the top of the connection, so a Nextcloud account shows your files and not the server's internals. Folders are `webdav://user@host/path`; everything that works on a folder works there (copy in both directions, move, rename, delete, F3, search, compare, duplicates), **read-only until you switch it off** for that server.
+- **The certificate is checked.** HTTPS is verified against the certificates this computer trusts. A server with a certificate of its own (a NAS, a home server) shows you its **SHA-256 fingerprint** and asks once; from then on the connection is made only to a server that shows exactly that certificate, and a changed certificate stops the connection with a warning (Cancel is the default). There is no "ignore certificate errors" switch.
+- **Login:** none (a public folder), Basic or Digest, as the server asks. The password is asked for only when the server wants one, can be kept in the system's password store, and on a connection that is **not encrypted** (plain HTTP) the dialogs and the server's description say that the password and every file travel as plain text.
+- **Safe reading of the server's answers:** a reply with a document type declaration (the "billion laughs" attack) is refused and a reply is capped in size. A folder is deleted only when it is empty (a DELETE on a collection would remove everything in it on the server), so deleting a tree is planned and confirmed by Dossier like on any other server, and it is permanent: a web folder has no recycle bin.
+- **Files:** read in ranges (any size, any starting point); written in one go when the file is closed, as WebDAV works. A server dates a file when it is uploaded: the modified time of a copy to a web folder is the time of the copy (compare and sync by time keep that in mind).
+- **Fixed:** closing the window while a panel was on a server could end the program with an error (the panel asked to reconnect after the connections had been closed on purpose).
+
 ## 2026-10-21#04 -- SCP: servers that have a shell but no SFTP
 
 - **A second kind of server, SCP,** for servers that offer only a command line over SSH (old routers and NAS boxes, restricted accounts). Choose *SCP* as the type when you add the server. Its folders are `scp://user@host/path` and work like any other: list, copy in both directions, move, rename, delete, new folder, F3, compare and sync, with the same host-key question, login (keys, ssh-agent, then a password) and **read-only until you switch it off**.

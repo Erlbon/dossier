@@ -355,7 +355,7 @@ def _place(path: str) -> str:
     if not has_scheme(path):
         return ""
     scheme, _sep, rest = path.partition("://")
-    return scheme + "://" + (rest.split("/", 1)[0] if scheme in ("sftp", "scp") else "")
+    return scheme + "://" + (rest.split("/", 1)[0] if scheme in ("sftp", "scp", "webdav") else "")
 
 
 def plan_move(fs: FileSystem, sources: Sequence[str], dest_dir: str, *, watch=None) -> Plan:

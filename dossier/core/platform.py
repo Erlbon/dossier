@@ -28,7 +28,7 @@ def has_scheme(path: str) -> bool:
     return bool(_SCHEME.match(path))
 
 
-SERVER_SCHEMES = ("sftp://", "scp://")
+SERVER_SCHEMES = ("sftp://", "scp://", "webdav://")
 
 
 def is_server_path(path: str) -> bool:
