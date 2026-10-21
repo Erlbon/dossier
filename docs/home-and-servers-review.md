@@ -157,3 +157,15 @@ opt-in storage), View > Drive Memory (Remember Drives Between Sessions, off by d
 How the lights get their state: a drive answers its free-space probe (green) or does not (red); a panel that opens a path
 records it (green) or fails to (red); nothing is pinged. Not built yet: the Mount... button, the Client for NFS check in
 Settings, the "update pins to the new letter" offer, the Check button for remote sources (there are none yet).
+
+## 12. Status of SFTP (2026-10-21)
+
+Built (H3, SFTP part): `sftp://user@host:port/path` is a file system behind the common interface, so every command works on it.
+
+- **No SSH library.** The operating system's OpenSSH does the encryption and the login: `ssh -s host sftp`, whose standard streams carry the SFTP protocol, written here in `core/sftp_proto.py` (version 3, pipelined reads and writes, the `posix-rename` extension where the server has it). Nothing is bundled and the exe does not grow; OpenSSH comes with Windows 10/11, macOS and Linux. Without it the connect says so and what to install.
+- **Host keys:** fetched with `ssh-keyscan`, shown with their SHA-256 fingerprint, written to Dossier's own known-hosts file only after approval; `ssh` runs with strict checking against that file only. A changed key stops the connection with a warning (replacing it is a separate, explicit button; Cancel is the default).
+- **Passwords:** never on a command line, in a file or in a log. They reach the one `ssh` process through its environment and a small helper (`core/askpass.py`) answers its prompt. Keys and the ssh-agent work without one. The login is first tried with what is at hand (a saved password, else keys and the agent); a password is asked for only when the server refuses that. Saved passwords go to the system's store (`keyring`) only when the owner ticks it.
+- **Read-only by default** for a new connection (decision S3); the switch is per connection and takes effect at once. Deleting on a server is permanent and the confirmation says so (`is_server_path` makes a server count as "no recycle bin").
+- **Nothing is contacted on its own:** the Home page lists saved servers (light grey until connected) and connects only when one is opened.
+- **Tested** against OpenSSH's real `sftp-server` over pipes (all of the protocol, copy trees both ways, overwrite, permanent delete, moves across file systems) and against a fake `ssh` that serves it (the command line, the password handling, refused logins). A real `sshd` is not available in the test environment: the whole chain through real ssh has to be tried by hand on a real server.
+- Not yet: SCP (shell-based browsing, `scp` for contents), WebDAV, FTP, OPDS and Subsonic, remote undo rules, free space on a server, a progress bar for a listing of a huge remote folder.

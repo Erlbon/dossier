@@ -171,6 +171,16 @@ class ContextMenuMixin:
         if entry is not None and entry.kind not in ("header",):
             if entry.kind == "action":
                 add(entry.name.rstrip("."), panel.open_current)
+            elif entry.kind == "server":
+                conn = self.connection_for(entry.path)
+                live = conn is not None and self.fs.sftp.connected(conn.authority())
+                add("Open" if live else "Connect", panel.open_current)
+                add("Open in a New Tab", lambda: panel.open_current(new_tab=True))
+                if conn is not None:
+                    menu.addSeparator()
+                    add("Disconnect", lambda: self.disconnect_server(conn), enabled=live)
+                    add("Edit...", lambda: self.edit_server(conn))
+                    add("Remove from the Home Page", lambda: self.remove_server(conn))
             else:
                 add("Open", panel.open_current)
                 add("Open in a New Tab", lambda: panel.open_current(new_tab=True))

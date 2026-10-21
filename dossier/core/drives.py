@@ -8,7 +8,7 @@ import threading
 from dataclasses import dataclass
 from typing import Callable, Optional
 
-from .platform import IS_WINDOWS, has_scheme, home_dir, list_volumes, path_key, strip_longpath
+from .platform import IS_WINDOWS, has_scheme, home_dir, is_server_path, list_volumes, path_key, strip_longpath
 
 
 @dataclass(frozen=True)
@@ -56,6 +56,8 @@ def is_network_path(path: str, drives: Optional[list] = None) -> bool:
     """Whether ``path`` is on a network drive or share. Those have no recycle bin: a delete there is for good, and
     so is the older file an overwrite replaces. A network path (``\\\\server\\share``) is recognised by its form, a
     mapped drive or a mount by the drive list. Never touches the share, so it cannot hang on a dead one."""
+    if path and is_server_path(path):
+        return True                                  # a server has no recycle bin either
     if not path or has_scheme(path):
         return False
     p = strip_longpath(path) if IS_WINDOWS else path
@@ -71,6 +73,8 @@ def is_network_path(path: str, drives: Optional[list] = None) -> bool:
 def is_remote_quick(path: str) -> bool:
     """Whether ``path`` is on a network drive, from the drive type alone (one call, no look at the share, no drive list), for places
     that ask for every folder that is shown. A path with a scheme (an archive, a result list) is not."""
+    if path and is_server_path(path):
+        return True
     if not path or has_scheme(path):
         return False
     if IS_WINDOWS:

@@ -26,6 +26,7 @@ from ..core.drives import drive_of, probe_async, usage_async
 from ..core.lights import FAILED, OK, describe
 from ..core.home import HOME_URL, is_home
 from ..core.platform import has_scheme, path_key
+from ..core.sftpfs import NotConnected
 from . import icon_set, look, theme
 from .address_bar import AddressBar
 from .drive_bar import DriveBar
@@ -554,6 +555,8 @@ class Panel(QFrame):
     sizes_requested = pyqtSignal()        # the button for folder sizes was pressed
     flatten_requested = pyqtSignal()      # the button for "all files below this folder" was pressed
     home_action = pyqtSignal(str)         # an action entry of the Home page was opened (its path says which)
+    server_requested = pyqtSignal(str, bool)   # a server of the Home page was opened: (its address, in a new tab)
+    connect_needed = pyqtSignal(str)      # a folder of a server that is not connected was asked for (its address)
 
     def __init__(self, fs: FileSystem, selection: SelectionStore, parent=None, dispatch=None) -> None:
         super().__init__(parent)
@@ -1202,6 +1205,9 @@ class Panel(QFrame):
         provider = getattr(getattr(self.fs, "home", None), "provider", None)
         if listing.error is not None:
             e = listing.error
+            if isinstance(e, NotConnected):                  # the window offers to connect, and comes back here
+                self.connect_needed.emit(path)
+                return False
             if provider is not None and not is_home(path):
                 provider.board.record(path, FAILED, str(getattr(e, "strerror", None) or e))
             self.message.emit(f"Cannot open {path}: {getattr(e, 'strerror', None) or e}")
@@ -1440,6 +1446,8 @@ class Panel(QFrame):
             return
         elif entry.kind == "action":
             self.home_action.emit(entry.path)
+        elif entry.kind == "server":
+            self.server_requested.emit(entry.path, new_tab)
         elif entry.is_dir and new_tab:
             self.new_tab(entry.path)
         elif entry.is_dir:

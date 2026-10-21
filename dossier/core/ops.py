@@ -135,8 +135,8 @@ class Plan:
         kept = tuple(op for i, op in enumerate(ops) if i not in drop)
         warnings = self.warnings
         gone = sum(1 for op in kept if op.overwrite and is_network_path(op.dst))
-        note = (f"{gone} older file{'s' if gone != 1 else ''} on a network drive will be deleted permanently when "
-                "replaced: a network drive has no recycle bin, and this cannot be undone")
+        note = (f"{gone} older file{'s' if gone != 1 else ''} on a network drive or server will be deleted permanently when "
+                "replaced: a network drive or server has no recycle bin, and this cannot be undone")
         if gone and note not in warnings:
             warnings = warnings + (note,)
         return replace(self, ops=kept, skipped=tuple(skipped), warnings=warnings)
@@ -335,16 +335,27 @@ def plan_copy(fs: FileSystem, sources: Sequence[str], dest_dir: str, *, flatten:
 
 
 def same_volume(fs: FileSystem, a: str, b: str) -> bool:
-    """Whether a rename from ``a`` to ``b`` stays on one drive. Anything that is not the local disk counts as
-    one volume (the file system itself decides whether it can rename); a failed look counts as one too."""
-    if fs.scheme or has_scheme(a) or has_scheme(b):
+    """Whether a rename from ``a`` to ``b`` stays on one drive. A virtual file system counts as one volume (it decides whether it
+    can rename), but not the same one as another file system or another server: that is a copy and a delete. A failed look counts
+    as one drive too."""
+    if fs.scheme:
         return True
+    if has_scheme(a) or has_scheme(b):
+        return _place(a) == _place(b)
     try:
         if IS_WINDOWS:
             return os.path.splitdrive(os.path.abspath(a))[0].lower() == os.path.splitdrive(os.path.abspath(b))[0].lower()
         return os.stat(a).st_dev == os.stat(b).st_dev
     except OSError:
         return True
+
+
+def _place(path: str) -> str:
+    """Which file system (and, for a server, which one) a path is on: the part before the first slash after ``scheme://``."""
+    if not has_scheme(path):
+        return ""
+    scheme, _sep, rest = path.partition("://")
+    return scheme + "://" + (rest.split("/", 1)[0] if scheme == "sftp" else "")
 
 
 def plan_move(fs: FileSystem, sources: Sequence[str], dest_dir: str, *, watch=None) -> Plan:
@@ -440,7 +451,7 @@ def plan_delete(fs: FileSystem, sources: Sequence[str], *, to_trash: bool = True
     if ops and not to_trash:
         warnings.append("these items will be deleted permanently and cannot be brought back")
     elif no_bin:
-        warnings.append(f"{no_bin} item{'s are' if no_bin != 1 else ' is'} on a network drive, which has no recycle bin: "
+        warnings.append(f"{no_bin} item{'s are' if no_bin != 1 else ' is'} on a network drive or server, which has no recycle bin: "
                         f"{'they' if no_bin != 1 else 'it'} will be deleted permanently and cannot be brought back")
     return Plan("Delete" if not to_trash else "Delete to the recycle bin", tuple(ops), tuple(warnings), tuple(blocking), tuple(skipped))
 

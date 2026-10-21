@@ -70,8 +70,8 @@ from tests.test_gui_commander import app, pump, world  # noqa: E402,F401
 
 def test_the_home_page_has_one_entry_for_adding_a_share(world):
     entries = build_entries(HomeProvider(volumes=lambda: [], exists=lambda p: False, environ={}))
-    actions = [e for e in entries if e.kind == "action"]
-    assert [(e.path, e.name) for e in actions] == [(ADD_NETWORK, "Add a network share...")]
+    shares = [e for e in entries if e.kind == "action" and e.path == ADD_NETWORK]
+    assert [(e.path, e.name) for e in shares] == [(ADD_NETWORK, "Add a network share...")]
 
 
 def answer(win, monkeypatch, protocol=SMB, address="", mount=False, letter=""):

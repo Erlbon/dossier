@@ -2,6 +2,17 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-21#03 -- SFTP servers
+
+- **Servers on the Home page.** A new *Servers* section lists your saved servers and ends with *Add a server...* (also Commands > Add a Server...). A server has a name, host, port, user, an optional key file and start folder, and two choices: **read-only** (the default: nothing on the server can be changed from Dossier until you switch it off for that server) and *keep the password in the system's password store*. Right-click a server for Connect/Open, Open in a New Tab, Disconnect, Edit and Remove. **Nothing is contacted until you open a server**: the list never pings, scans or connects on its own.
+- **Opening a server** shows its folders like any other (`sftp://user@host/path`, also typed in the address bar). Copy, move, delete, rename, new folder, search, find duplicates, compare and F3 all work there, in either direction between a server and your disks, with the usual conflict dialog, progress, queue and cancel.
+- **The server's key is never trusted silently.** The first time you are shown its fingerprint and asked; the key you approve is remembered. If it later differs you get a plain warning (a server that was reinstalled, or somebody in the middle) and the connection is stopped; replacing the key is a separate, deliberate button and Cancel is the default.
+- **Login:** your keys and the ssh-agent are tried first. Only if the server refuses them are you asked for a password (or the passphrase of your key), with a box to keep it in the Windows credential manager (or the macOS keychain or the Linux secret service). The password never appears on a command line, in a file or in a log.
+- **A server has no recycle bin:** deleting there is permanent, and the confirmation says so. Replacing a file on a server overwrites it for good, which the plan warns about.
+- **No extra program or library is installed:** Dossier uses the OpenSSH that comes with Windows 10/11, macOS and Linux (`ssh -s host sftp`) and speaks the SFTP protocol itself, so the program does not grow. If OpenSSH is missing the connect says so and where to get it (Windows: Settings > System > Optional features > OpenSSH Client).
+- **Disconnect** (Commands, or the server's menu) ends the connection; closing Dossier ends every connection. A connection that drops says so and can be opened again.
+- Not in this build: SCP (next), WebDAV and FTP.
+
 ## 2026-10-21#02 -- Viewer modes: pictures, hex and Markdown
 
 - **F3 now looks at what a file is, not only its name.** The viewer has four modes and opens the one that fits; the **View as** box in its toolbar switches a file to any other sensible mode (Markdown as its source, any file as hex, a binary file as text).

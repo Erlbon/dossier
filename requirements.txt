@@ -3,5 +3,6 @@
 PyQt6>=6.6
 redactor_common @ git+https://github.com/Erlbon/redactor_common.git@2026-10-20-02   # pin a tag, never @main
 send2trash>=1.8
+keyring>=24                     # saved passwords go to the system's password store, only when the owner asks for it
 pytest
 PyQt6-QScintilla>=2.14

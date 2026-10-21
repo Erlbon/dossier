@@ -4,7 +4,7 @@ import os
 
 import pytest
 
-from dossier.core.home import (ADD_NETWORK, HOME_URL, HomeFileSystem, HomeProvider, RouterFileSystem, build_entries,
+from dossier.core.home import (ADD_NETWORK, ADD_SERVER, HOME_URL, HomeFileSystem, HomeProvider, RouterFileSystem, build_entries,
                                is_home, is_shortcut_kind, place_folders, removable_from_home)
 from dossier.core.vfs import LocalFileSystem, NotWritable
 
@@ -35,8 +35,10 @@ def test_is_home_recognises_the_page_and_nothing_else():
 
 def test_sections_come_in_order_with_headers():
     entries = build_entries(provider(pins=lambda: [PINNED], network=lambda: ["//nas/share"]))
-    assert [e.name for e in entries if e.kind == "header"] == ["Local drives", "Places", "Pinned folders", "Network"]
-    assert kinds(entries)[0] == "header" and entries[-1].kind == "action" and entries[-1].path == ADD_NETWORK and entries[-1].name == "Add a network share..."
+    assert [e.name for e in entries if e.kind == "header"] == ["Local drives", "Places", "Pinned folders", "Network", "Servers"]
+    actions = [e for e in entries if e.kind == "action"]
+    assert kinds(entries)[0] == "header" and [(e.path, e.name) for e in actions] == [(ADD_NETWORK, "Add a network share..."), (ADD_SERVER, "Add a server...")]
+    assert entries[-1] is actions[-1]                                              # the Servers section is last, its action at the end
 
 
 def test_local_drives_are_listed_with_labels_and_kinds_and_network_drives_go_to_the_network_section():
@@ -123,3 +125,15 @@ def test_a_drive_root_has_no_parent_on_the_local_system(tmp_path):
     root = tmp_path.anchor
     assert local.is_root(root) and local.parent(root) is None
     assert local.parent(str(tmp_path)) is not None
+
+
+def test_saved_servers_are_listed_with_a_light_and_never_contacted():
+    from dossier.core.home import ServerItem
+    items = [ServerItem("The NAS", "sftp://me@nas/", "SFTP  me@nas  (read-only)", False),
+             ServerItem("Work", "sftp://me@work.example.com:2222/", "SFTP  me@work.example.com:2222", True)]
+    entries = build_entries(provider(servers=lambda: items))
+    servers = [e for e in entries if e.kind == "server"]
+    assert [(e.name, e.path, e.status) for e in servers] == [("The NAS", "sftp://me@nas/", "unchecked"),
+                                                            ("Work", "sftp://me@work.example.com:2222/", "ok")]
+    assert "Not connected" in servers[0].note and servers[1].note == "Connected" and servers[0].detail.startswith("SFTP")
+    assert entries.index(servers[0]) > next(i for i, e in enumerate(entries) if e.name == "Servers")

@@ -28,6 +28,14 @@ def has_scheme(path: str) -> bool:
     return bool(_SCHEME.match(path))
 
 
+SERVER_SCHEMES = ("sftp://",)
+
+
+def is_server_path(path: str) -> bool:
+    """True for a path on a server that is reached over the network (``sftp://user@host/dir``): no recycle bin, slow, may drop."""
+    return path.startswith(SERVER_SCHEMES)
+
+
 def strip_longpath(path: str) -> str:
     """Remove the Windows extended-length prefix so one file has one spelling."""
     if not IS_WINDOWS:

@@ -44,6 +44,7 @@ from .view_modes import ViewModesMixin
 from .drop_handler import DragDropMixin
 from .zip_edit import ZipEditMixin, zip_parts
 from .compare_folders import CompareFoldersMixin
+from .servers import ServersMixin
 from .copy_settings import CopySettingsMixin
 from .duplicates import DuplicatesMixin
 from .folder_layouts import FolderLayoutsMixin
@@ -71,7 +72,7 @@ SUMMARY_ITEMS = 12    # the confirmation lists this many items, then says how ma
 SIZE_LIMIT = 1000    # the status line sizes at most this many marked items
 
 
-class MainWindow(ViewModesMixin, ToolsBarMixin, ContextMenuMixin, DragDropMixin, LookMixin, ZipEditMixin, ArchiveCommandsMixin, CopySettingsMixin, CompareFoldersMixin, DuplicatesMixin, FolderLayoutsMixin, QueueResumeMixin, ColumnsMixin, PropertiesMixin, MountMixin, ChecksumMixin, MarksAndNotesMixin, SearchCommandMixin, BatchRenameMixin, OperationQueueMixin, StallLogMixin, GoingPlacesMixin, FolderSizesMixin, UnpackMixin, QMainWindow):
+class MainWindow(ViewModesMixin, ToolsBarMixin, ContextMenuMixin, DragDropMixin, LookMixin, ZipEditMixin, ArchiveCommandsMixin, CopySettingsMixin, CompareFoldersMixin, ServersMixin, DuplicatesMixin, FolderLayoutsMixin, QueueResumeMixin, ColumnsMixin, PropertiesMixin, MountMixin, ChecksumMixin, MarksAndNotesMixin, SearchCommandMixin, BatchRenameMixin, OperationQueueMixin, StallLogMixin, GoingPlacesMixin, FolderSizesMixin, UnpackMixin, QMainWindow):
     def __init__(self, fs: Optional[FileSystem] = None, *, settings_path: Optional[str] = None, start=(None, None),
                  dialogs=None, trasher=None, terminal_launcher=None, which=None) -> None:
         super().__init__()
@@ -87,6 +88,7 @@ class MainWindow(ViewModesMixin, ToolsBarMixin, ContextMenuMixin, DragDropMixin,
         self.settings = self._open_settings(settings_path)
         self.home_provider = HomeProvider(pins=lambda: self._saved_list("home/pins"),
                                           network=lambda: self._saved_list("home/network"),
+                                          servers=lambda: self.server_items(),
                                           memory=DriveMemory(load=self._load_seen_drives, save=self._save_seen_drives,
                                                              persist=lambda: self._remember_drives()))
         self.fs = RouterFileSystem(self.fs, HomeFileSystem(self.home_provider))     # home:// and the disk as one
@@ -106,6 +108,7 @@ class MainWindow(ViewModesMixin, ToolsBarMixin, ContextMenuMixin, DragDropMixin,
         self.paused = False
         self._closing = False                      # the program is being closed: unfinished jobs stay in the journal
         self._jobs: list = []                      # running first, then the ones waiting
+        self._links: dict = {}                     # the ssh process of each connected server
         self._size_jobs: list = []                 # folder size walks in the background
         self._size_thread = None                   # the thread that looks up sizes for the status line
         self._job: Optional[Job] = None
@@ -168,6 +171,8 @@ class MainWindow(ViewModesMixin, ToolsBarMixin, ContextMenuMixin, DragDropMixin,
             panel.folder_changed.connect(self._remember_sizes)
             panel.message.connect(self._say)
             panel.home_action.connect(self._home_action)
+            panel.server_requested.connect(lambda path, new_tab, p=panel: self.open_server(path, new_tab, p))
+            panel.connect_needed.connect(lambda path, p=panel: self._connect_needed(path, p))
             panel.note_edit_requested.connect(self.edit_folder_note)
             panel.sizes_requested.connect(lambda p=panel: self.calculate_folder_sizes(p))
             panel.flatten_requested.connect(lambda p=panel: self.show_all_files_below(p))
@@ -308,6 +313,8 @@ class MainWindow(ViewModesMixin, ToolsBarMixin, ContextMenuMixin, DragDropMixin,
             commands.addAction(a)
         commands.addAction(self._action("Search...", "Alt+F7", self.search_files))
         commands.addAction(self._action("Find Duplicate Files...", "Alt+Shift+F7", self.find_duplicate_files))
+        commands.addAction(self._action("Add a Server...", None, self.add_server))
+        commands.addAction(self._action("Disconnect from the Server of This Panel", None, self.disconnect_active_server))
         commands.addAction(self._action("Compare Folders and Synchronize...", "Alt+Shift+F8", self.compare_folders))
         commands.addAction(self._action("Compare the Two Current Files", None, self.compare_files))
         commands.addAction(self._action("Pack to Zip...", "Alt+F5", self.pack_to_zip))
@@ -812,6 +819,8 @@ class MainWindow(ViewModesMixin, ToolsBarMixin, ContextMenuMixin, DragDropMixin,
     def _home_action(self, path: str) -> None:
         if path == ADD_NETWORK:
             self.add_network_share()
+        elif self._home_server_action(path):
+            return
 
     def pin_folder(self, folder: str = "") -> None:
         """Pin a folder (the active panel's, or the one given) to the Home page."""
@@ -1191,7 +1200,7 @@ class MainWindow(ViewModesMixin, ToolsBarMixin, ContextMenuMixin, DragDropMixin,
         elif any(not op.to_trash for op in plan.ops):
             lost = [op for op in plan.ops if not op.to_trash]
             rest = len(plan.ops) - len(lost)
-            text = (f"{len(lost)} of {len(plan.ops)} item(s) are on a network drive, which has no {BIN}: "
+            text = (f"{len(lost)} of {len(plan.ops)} item(s) are on a network drive or server, which has no {BIN}: "
                     f"{'they' if len(lost) != 1 else 'it'} will be deleted permanently and cannot be brought back."
                     + (f" The other {rest} go to the {BIN}." if rest else ""))
             ok = self.dialogs.confirm("Delete from a Network Drive", f"{text}{chr(10) * 2}{names}{more}", "Delete permanently")
@@ -1268,6 +1277,7 @@ class MainWindow(ViewModesMixin, ToolsBarMixin, ContextMenuMixin, DragDropMixin,
         self._closing = True
         for job in list(self._jobs) + list(self._size_jobs) + list(self._plans):
             job.cancel()
+        self.disconnect_all_servers()                # the ssh processes end with the program
         self.cmd_runner.shutdown(wait=False, cancel_futures=True)   # a listing stuck on a dead share must not hold us
         self.settings.setValue("window/geometry", self.saveGeometry())
         self.settings.setValue("window/split", self.split.sizes())

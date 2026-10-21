@@ -11,25 +11,28 @@ and the drive menu treat it like any other place; opening an entry goes to its r
 """
 from __future__ import annotations
 
+import errno
 import os
 from dataclasses import dataclass, replace as dc_replace
 from typing import Callable, Optional
 
 from .drive_identity import DriveMemory
-from .lights import LIT_KINDS, UNCHECKED, LightBoard, describe
+from .lights import LIT_KINDS, OK, UNCHECKED, LightBoard, describe
 from .platform import home_dir, list_volumes
 from .vfs import Entry, FileSystem, NotWritable
 from .listings import FlatFileSystem, FoundFileSystem
+from .sftpfs import SftpFileSystem
 from .zipfs import ZipFileSystem
 
 HOME_URL = "home://"
 HEADER_PREFIX = "home://#"
 ADD_NETWORK = HEADER_PREFIX + "add-network"
+ADD_SERVER = HEADER_PREFIX + "add-server"
 TYPE_NAMES = {"fixed": "Local disk", "removable": "Removable disk", "optical": "Optical disc", "other": "Disk",
-              "network": "Network drive", "place": "Folder", "pin": "Pinned folder", "netloc": "Network location",
+              "network": "Network drive", "place": "Folder", "pin": "Pinned folder", "netloc": "Network location", "server": "Server",
               "action": "", "header": ""}
-SECTIONS = ("drives", "places", "pins", "network")
-SECTION_TITLES = {"drives": "Local drives", "places": "Places", "pins": "Pinned folders", "network": "Network"}
+SECTIONS = ("drives", "places", "pins", "network", "servers")
+SECTION_TITLES = {"drives": "Local drives", "places": "Places", "pins": "Pinned folders", "network": "Network", "servers": "Servers"}
 
 # the user's folders, by their usual name under the home folder
 KNOWN_FOLDERS = ("Desktop", "Documents", "Downloads", "Pictures", "Music", "Videos")
@@ -37,6 +40,15 @@ KNOWN_FOLDERS = ("Desktop", "Documents", "Downloads", "Pictures", "Music", "Vide
 
 def is_home(path: str) -> bool:
     return path.rstrip("/") == "home:"
+
+
+@dataclass
+class ServerItem:
+    """A saved server as the Home page shows it (the window makes these from its saved connections)."""
+    name: str
+    path: str                  # sftp://user@host/ : where it opens once connected
+    detail: str
+    connected: bool = False
 
 
 @dataclass
@@ -49,6 +61,7 @@ class HomeProvider:
     environ: Optional[dict] = None
     pins: Callable[[], list] = lambda: []
     network: Callable[[], list] = lambda: []
+    servers: Callable[[], list] = lambda: []      # ServerItem objects: the saved servers (nothing is contacted to list them)
     board: LightBoard = None                      # what the panels found out about places (set in __post_init__)
     memory: DriveMemory = None                    # which drive each letter held
 
@@ -127,12 +140,18 @@ def build_entries(p: HomeProvider) -> list:
     for address in p.network():
         entries.append(_lit(p, Entry(name=address, path=address, is_dir=True, kind="netloc", detail="Saved network location")))
     entries.append(Entry(name="Add a network share...", path=ADD_NETWORK, is_dir=False, kind="action"))
+    entries.append(_header("servers"))
+    for item in p.servers():
+        entries.append(Entry(name=item.name, path=item.path, is_dir=True, kind="server", detail=item.detail,
+                             status=OK if item.connected else UNCHECKED,
+                             note="Connected" if item.connected else "Not connected: nothing is contacted until you open it"))
+    entries.append(Entry(name="Add a server...", path=ADD_SERVER, is_dir=False, kind="action"))
     return entries
 
 
 def is_shortcut_kind(kind: str) -> bool:
     """Entries that open a folder (as against headers and actions)."""
-    return kind in ("fixed", "removable", "optical", "other", "network", "place", "pin", "netloc")
+    return kind in ("fixed", "removable", "optical", "other", "network", "place", "pin", "netloc", "server")
 
 
 def removable_from_home(kind: str) -> bool:
@@ -174,6 +193,7 @@ class RouterFileSystem(FileSystem):
         self.local = local
         self.home = home
         self.zip = ZipFileSystem()
+        self.sftp = SftpFileSystem()                  # sftp://user@host/path: servers, once connected
         self.flat = FlatFileSystem(self)              # flat://<folder>: every file below a folder, as one list
         self.found = FoundFileSystem(self)            # found://<n>: the result list of a search
         self.sep = local.sep
@@ -184,6 +204,8 @@ class RouterFileSystem(FileSystem):
             return self.home
         if path.startswith("zip:"):
             return self.zip
+        if path.startswith("sftp:"):
+            return self.sftp
         if path.startswith("flat:"):
             return self.flat
         return self.found if path.startswith("found:") else self.local
@@ -228,7 +250,10 @@ class RouterFileSystem(FileSystem):
         self.fs_for(path).mkdir(path, parents=parents, exist_ok=exist_ok)
 
     def rename(self, src: str, dst: str, *, overwrite: bool = False) -> None:
-        self.fs_for(src).rename(src, dst, overwrite=overwrite)
+        a, b = self.fs_for(src), self.fs_for(dst)
+        if a is not b or (src.startswith("sftp:") and src.partition("://")[2].split("/", 1)[0] != dst.partition("://")[2].split("/", 1)[0]):
+            raise OSError(errno.EXDEV, "cannot rename from one file system or server to another")      # the caller copies and removes
+        a.rename(src, dst, overwrite=overwrite)
 
     def remove(self, path: str) -> None:
         self.fs_for(path).remove(path)
