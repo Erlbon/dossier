@@ -16,6 +16,7 @@ python -m dossier
 with Python 3.10 or newer. If you install with `pip install .` the same packages come with it, and `dossier` starts the program.
 Updating after a new version: `git pull` and the pip line again, since the shared Redactor package is pinned to a tag that moves.
 
+- Command line: `dossier ls`, `info`, `find`, `checksum`, `copy`, `move`, `delete`, `dups`, `compare` (with `--dry-run` and `--json`); see [docs/cli.md](docs/cli.md)
 - Feature specification: [docs/spec.md](docs/spec.md)
 - Working notes and decisions: [CLAUDE.md](CLAUDE.md)
 

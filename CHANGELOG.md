@@ -2,6 +2,14 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-21#07 -- The command line
+
+- **`dossier <command>` runs without the window**, in the same program (the same exe once it is built): the first argument decides, a command name runs the command and anything else starts the window as before. The commands: **`ls`** (a folder, or what is inside an archive), **`info`** (size, times, tags and what is inside audio, comics, video and photos), **`find`** (by name, size, date, text and tag), **`checksum`** (in the format of `sha256sum`, and `--check` against such a list), **`copy`**, **`move`**, **`delete`**, **`dups`** (files with exactly the same content, and delete the extras) and **`compare`** (two folders, and `--sync` to make them alike). `dossier help` and `dossier <command> --help` list the options; [docs/cli.md](docs/cli.md) has them all with examples.
+- **The same rules as the window, made for scripts:** everything that changes files has **`--dry-run`** (the plan, and nothing else); **nothing is overwritten** unless `--on-conflict overwrite` says so; what is deleted or replaced goes to the **recycle bin** (`delete --permanent` is the only way for good); one copy of every duplicate group always stays. Wildcards are expanded by Dossier, since the Windows command prompt does not.
+- **Output a script can read:** text on stdout, or with **`--json`** one JSON document and nothing else there; progress and warnings on stderr (`-q` silences them); **`--output FILE`** writes the result to a file that is complete when the program ends. Exit codes: 0 all went well, 1 some items failed, 2 a mistake in the command or a path that does not exist, 70 a bug, 130 Ctrl+C.
+- It uses the Redactor apps' shared command-line skeleton, so it behaves like theirs. Servers (SFTP, SCP, WebDAV, FTP) are not reachable from the command line: they need a login and a key or certificate question that only the window asks.
+- Also: `dossier --askpass` (the built exe answering ssh's request for a password, with no window), which the SFTP and SCP connections need once Dossier is built as an exe.
+
 ## 2026-10-21#06 -- FTP and FTPS servers
 
 - **A fourth kind of server: FTP and FTPS.** Choose *FTP or FTPS* as the type, or paste an `ftp://` or `ftps://` address into Host. **Encrypted (FTPS) is ticked by default**; plain FTP sends the password and every file as readable text, which the dialog and the server's description (*not encrypted*) say plainly. Folders are `ftp://user@host/path` and work like any other, **read-only until you switch it off**. A server with no user name is logged into as anonymous.
