@@ -60,6 +60,7 @@ class TextViewerWindow(QMainWindow):
         self.view.changed.connect(self._update_status)
         self.hex.changed.connect(self._update_status)
         self.image_page.view.changed.connect(self._update_status)
+        self.image_page.view.step_requested.connect(self.step)        # the wheel turns the pages of a folder of pictures
         self.markdown.open_file_requested.connect(self._open_linked)
         self.markdown.refused.connect(lambda text: self.status.setText(f"This link is not opened: {text}"))
 

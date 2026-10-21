@@ -316,3 +316,43 @@ def test_f3_on_one_picture_steps_through_the_pictures_of_its_folder(world, tmp_p
     assert [p.rsplit("\\", 1)[-1].rsplit("/", 1)[-1] for p in viewer.paths] == ["img1.png", "img2.png", "img10.png"]
     assert viewer.index == 1 and viewer.mode == "image"
     viewer.close()
+
+
+# the wheel -------------------------------------------------------------------------------------------------------------------------------
+def wheel(view, delta, mods=Qt.KeyboardModifier.NoModifier):
+    from PyQt6.QtCore import QPoint, QPointF
+    from PyQt6.QtGui import QWheelEvent
+    pos = QPointF(10, 10)
+    ev = QWheelEvent(pos, view.viewport().mapToGlobal(pos), QPoint(0, 0), QPoint(0, delta), Qt.MouseButton.NoButton, mods,
+                     Qt.ScrollPhase.NoScrollPhase, False)
+    QApplication.sendEvent(view.viewport(), ev)
+    QApplication.processEvents()
+
+
+def test_the_wheel_steps_to_the_next_and_previous_picture_and_ctrl_wheel_still_zooms(viewer, tmp_path):
+    paths = [picture(tmp_path / f"p{n}.png", 40 + n, 20) for n in range(3)]
+    win = viewer(paths)
+    wait(lambda: win.image_page.view.has_image())
+    view = win.image_page.view
+    assert win.index == 0
+    wheel(view, -120)                                    # one notch down: the next picture
+    wait(lambda: win.index == 1 and view.has_image())
+    wheel(view, -120)
+    wait(lambda: win.index == 2 and view.has_image())
+    wheel(view, 120)                                     # up: back
+    wait(lambda: win.index == 1 and view.has_image())
+    before = view.zoom
+    wheel(view, 120, Qt.KeyboardModifier.ControlModifier)
+    assert win.index == 1 and view.zoom > before        # Ctrl+wheel zooms and does not step
+
+
+def test_small_touchpad_steps_add_up_to_one_picture(viewer, tmp_path):
+    paths = [picture(tmp_path / f"q{n}.png") for n in range(2)]
+    win = viewer(paths)
+    wait(lambda: win.image_page.view.has_image())
+    view = win.image_page.view
+    for _ in range(3):
+        wheel(view, -30)
+    assert win.index == 0                                # 90 so far: not yet a notch
+    wheel(view, -30)
+    wait(lambda: win.index == 1)

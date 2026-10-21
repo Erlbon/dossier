@@ -2,6 +2,10 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-21#14 -- The wheel changes pictures
+
+- **In the viewer, the mouse wheel steps to the next or previous picture** (down is next, up is previous), through the pictures of the folder, like the arrow keys. **Ctrl+wheel still zooms** and **Shift+wheel moves** a zoomed picture. A touchpad's many small steps are added up, so one notch of movement is one picture.
+
 ## 2026-10-21#13 -- Tidier details
 
 - **Folder tabs are shorter:** the height now follows the text (a few pixels above and below the letters) instead of Fusion's roomy default.

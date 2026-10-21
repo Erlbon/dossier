@@ -1,7 +1,7 @@
 """The picture view of the F3 viewer: fit to the window or zoom, turn, and an information panel with the EXIF of a photo.
 
 The picture is decoded on a thread by the window (``read_image``); this file only shows it. Zoom: ``+`` and ``-`` or Ctrl+wheel, ``0`` fits
-the window, ``1`` shows every pixel, double-click toggles between the two; ``L`` and ``R`` turn the picture a quarter (the file is
+the window, the wheel steps to the next or previous picture, ``1`` shows every pixel, double-click toggles between the two; ``L`` and ``R`` turn the picture a quarter (the file is
 never changed); dragging moves a zoomed picture. A photo taken upright but stored sideways is turned by its EXIF orientation when it is
 read.
 """
@@ -29,9 +29,11 @@ def read_image(path: str) -> QImage:
 
 class ImageView(QGraphicsView):
     changed = pyqtSignal()
+    step_requested = pyqtSignal(int)                    # the wheel asks for the next (1) or previous (-1) picture
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
+        self._wheel_steps = 0
         self._scene = QGraphicsScene(self)
         self.setScene(self._scene)
         self._item: Optional[QGraphicsPixmapItem] = None
@@ -128,11 +130,19 @@ class ImageView(QGraphicsView):
             self.fit()
 
     def wheelEvent(self, event) -> None:
-        if event.modifiers() & Qt.KeyboardModifier.ControlModifier:
+        """Wheel: the next or previous picture of the folder. Ctrl+wheel zooms; Shift+wheel moves a zoomed picture."""
+        mods = event.modifiers()
+        if mods & Qt.KeyboardModifier.ControlModifier:
             self.zoom_by(1.25 if event.angleDelta().y() > 0 else 0.8)
             event.accept()
-        else:
+        elif mods & Qt.KeyboardModifier.ShiftModifier:
             super().wheelEvent(event)
+        else:
+            self._wheel_steps += event.angleDelta().y()          # a notch is 120; a touchpad sends many small ones
+            while abs(self._wheel_steps) >= 120:
+                self.step_requested.emit(-1 if self._wheel_steps > 0 else 1)
+                self._wheel_steps -= 120 if self._wheel_steps > 0 else -120
+            event.accept()
 
     def mouseDoubleClickEvent(self, event) -> None:
         self.toggle_fit()
