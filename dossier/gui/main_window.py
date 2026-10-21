@@ -44,6 +44,7 @@ from .view_modes import ViewModesMixin
 from .drop_handler import DragDropMixin
 from .zip_edit import ZipEditMixin, zip_parts
 from .assistant import AssistantMixin
+from .open_files import OpenFilesMixin
 from .compare_folders import CompareFoldersMixin
 from .servers import ServersMixin
 from .copy_settings import CopySettingsMixin
@@ -73,7 +74,7 @@ SUMMARY_ITEMS = 12    # the confirmation lists this many items, then says how ma
 SIZE_LIMIT = 1000    # the status line sizes at most this many marked items
 
 
-class MainWindow(ViewModesMixin, ToolsBarMixin, ContextMenuMixin, DragDropMixin, LookMixin, ZipEditMixin, ArchiveCommandsMixin, CopySettingsMixin, AssistantMixin, CompareFoldersMixin, ServersMixin, DuplicatesMixin, FolderLayoutsMixin, QueueResumeMixin, ColumnsMixin, PropertiesMixin, MountMixin, ChecksumMixin, MarksAndNotesMixin, SearchCommandMixin, BatchRenameMixin, OperationQueueMixin, StallLogMixin, GoingPlacesMixin, FolderSizesMixin, UnpackMixin, QMainWindow):
+class MainWindow(ViewModesMixin, ToolsBarMixin, ContextMenuMixin, DragDropMixin, LookMixin, ZipEditMixin, ArchiveCommandsMixin, CopySettingsMixin, AssistantMixin, OpenFilesMixin,CompareFoldersMixin, ServersMixin, DuplicatesMixin, FolderLayoutsMixin, QueueResumeMixin, ColumnsMixin, PropertiesMixin, MountMixin, ChecksumMixin, MarksAndNotesMixin, SearchCommandMixin, BatchRenameMixin, OperationQueueMixin, StallLogMixin, GoingPlacesMixin, FolderSizesMixin, UnpackMixin, QMainWindow):
     def __init__(self, fs: Optional[FileSystem] = None, *, settings_path: Optional[str] = None, start=(None, None),
                  dialogs=None, trasher=None, terminal_launcher=None, which=None) -> None:
         super().__init__()
@@ -163,6 +164,7 @@ class MainWindow(ViewModesMixin, ToolsBarMixin, ContextMenuMixin, DragDropMixin,
                 view.space.connect(self._space_pressed)
                 view.type_text.connect(self._type_to_command)
             panel.enter_hook = self._enter_runs_command
+            panel.file_hook = self._open_file
             panel.backspace_hook = self._backspace_edits_command
             panel.folder_changed.connect(lambda _p: self._update_prompt())
             panel.folder_changed.connect(lambda _p: self._update_title())
@@ -353,6 +355,7 @@ class MainWindow(ViewModesMixin, ToolsBarMixin, ContextMenuMixin, DragDropMixin,
         view.addAction(self._action("Fonts and Bold...", None, self.open_look_settings))
         view.addAction(self._action("Thumbnails...", None, self.open_thumbnail_settings))
         view.addAction(self._action("Copy and Move...", None, self.open_copy_settings))
+        self.build_open_menu(view)
         view.addAction(self._action("Assistant Access...", None, self.open_assistant_settings))
         # these two hold the state of the choices the dialog (and the confirmation box) change; they are not in a menu
         self.act_verify = QAction("Verify Copies After Copying", self)
@@ -524,12 +527,12 @@ class MainWindow(ViewModesMixin, ToolsBarMixin, ContextMenuMixin, DragDropMixin,
             panel.set_notes_enabled(on)
         self.settings.setValue("view/notes", "true" if on else "false")
 
-    def view_file(self) -> None:
+    def view_file(self, paths=None) -> None:
         """F3: view the marked files (or the one under the cursor), stepping through them in one window."""
         if self._home_blocked("View"):
             return
         ordered = []
-        for p in self.active.targets():
+        for p in (paths if paths else self.active.targets()):
             try:
                 if not self.fs.stat(p).is_dir:
                     ordered.append(p)

@@ -69,6 +69,33 @@ def modes_for(path: str, head: Optional[bytes] = None) -> list:
     return [first] + others
 
 
+OPEN_CHOICES = (("viewer", "Pictures, text and Markdown in the viewer, the rest in the Windows program"),
+                ("system", "Always in the Windows program"),
+                ("all", "Everything in the viewer"))
+TEXT_EXTENSIONS = (".txt", ".log", ".json", ".xml", ".csv", ".tsv", ".ini", ".cfg", ".conf", ".yaml", ".yml", ".toml", ".py", ".js",
+                   ".html", ".htm", ".css", ".c", ".h", ".cpp", ".cs", ".java", ".sh", ".bat", ".ps1", ".sql", ".nfo", ".srt")
+
+
+def viewable_by_name(path: str) -> bool:
+    """A file inside an archive is not read just to decide: its name says whether the viewer shows it well."""
+    return path.lower().endswith(IMAGE_EXTENSIONS + MARKDOWN_EXTENSIONS + TEXT_EXTENSIONS)
+
+
+def opens_in_viewer(path: str, choice: str, alternate: bool = False, local: bool = True) -> bool:
+    """Whether Enter or a double-click on ``path`` shows it in the viewer (True) or hands it to the program Windows has for it (False).
+
+    ``choice`` is the setting (``viewer``, ``system`` or ``all``); ``alternate`` (Ctrl+Enter) does the other thing. Under ``viewer`` a
+    binary file goes to the system program, so a Word document or a program is not shown as hex by accident.
+    """
+    if choice == "system":
+        wanted = False
+    elif choice == "all":
+        wanted = True
+    else:
+        wanted = mode_for(path) != "hex" if local else viewable_by_name(path)
+    return wanted != alternate
+
+
 def image_siblings(names: list) -> list:
     """The picture files among ``names`` (plain file names), in the order a person counts them: ``img2`` before ``img10``."""
     return sorted((n for n in names if n.lower().endswith(IMAGE_EXTENSIONS)), key=natural_key)

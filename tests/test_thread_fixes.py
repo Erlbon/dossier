@@ -125,6 +125,7 @@ def test_enter_on_a_file_inside_an_archive_unpacks_it_and_hands_it_to_the_system
     win, dialogs, left, right, tmp = world
     from dossier.gui import unpack as mw
     opened = []
+    win.set_open_choice("system")                 # a text file would otherwise be shown in the viewer
     monkeypatch.setattr(mw.QDesktopServices, "openUrl", staticmethod(lambda url: opened.append(url.toLocalFile()) or True))
     make_zip(left / "a.zip", {"x.txt": "xx"})
     win.left.set_folder(zipfs.archive_root(str(left / "a.zip")))

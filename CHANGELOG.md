@@ -2,6 +2,12 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-21#09 -- Enter opens pictures and text in the viewer
+
+- **Enter and double-click on a file now show it in Dossier's own viewer** when it is a picture, text or Markdown (a binary file, such as a Word document or a program, still goes to the program Windows has for it, so it is not shown as hex by accident). **Ctrl+Enter does the other thing**: the Windows program for a picture or text file, the viewer for a binary one. Marking is unchanged (Ctrl+click and Ctrl+Space still mark).
+- **Settings > Opening Files** changes what Enter and double-click do: *pictures, text and Markdown in the viewer* (the default), *always in the Windows program* (the old behaviour) or *everything in the viewer*. Ctrl+Enter always does the opposite of the setting.
+- A file inside an archive is judged by its name (it is not unpacked just to decide).
+
 ## 2026-10-21#08 -- An assistant can use Dossier (MCP)
 
 - **`dossier mcp` is a local MCP server**, so an AI assistant such as Claude can look at your files and propose changes. It is **off until you switch it on** in Settings > Assistant Access, and it only sees the folders you list there (paths are resolved first, so `..` and links cannot get out). [docs/assistant.md](docs/assistant.md) lists every tool and setting.

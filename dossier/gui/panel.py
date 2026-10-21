@@ -723,6 +723,7 @@ class Panel(QFrame):
         self.address_bar.navigate_new_tab.connect(lambda target: self.new_tab(target, activate=False))
         self.address_bar.escaped.connect(lambda: self.view.setFocus())
         self.enter_hook = None         # set by the window: Enter runs a command being written, if there is one
+        self.file_hook = None          # set by the window: Enter on a file (Ctrl+Enter: the other way) goes through the open setting
         self.backspace_hook = None     # likewise Backspace edits that command instead of going up
         self.table.activate.connect(self._enter)
         self.table.go_up.connect(self._backspace)
@@ -1457,6 +1458,8 @@ class Panel(QFrame):
         elif not has_scheme(entry.path) and archives.missing_reader_by_name(entry.path):
             self.message.emit(archives.missing_reader_by_name(entry.path))   # say what would open it, then let the system try
             QDesktopServices.openUrl(QUrl.fromLocalFile(entry.path))
+        elif self.file_hook and self.file_hook(entry.path, new_tab):
+            return                                            # the window opened it (in the viewer, or in the Windows program)
         elif has_scheme(entry.path):
             self.open_archived.emit(entry.path)               # the window unpacks it on a thread, then opens it
         else:
