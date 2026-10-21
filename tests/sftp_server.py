@@ -17,15 +17,14 @@ CANDIDATES = (r"C:\Program Files\Git\usr\lib\ssh\sftp-server.exe", r"C:\Windows\
 
 
 def find_sftp_server() -> Optional[str]:
-    found = shutil.which("sftp-server")
-    if found:
-        return found
+    """Git for Windows' build first: the tests spell paths for it (``/c/Users/...``), which the Windows OpenSSH build, the first one on the
+    path of a GitHub runner, does not understand (it wants ``/C:/Users/...``). Then the usual places, then whatever is on the path."""
     git = shutil.which("git")
     if git:
         near = os.path.join(os.path.dirname(os.path.dirname(git)), "usr", "lib", "ssh", "sftp-server.exe")
         if os.path.isfile(near):
             return near
-    return next((p for p in CANDIDATES if os.path.isfile(p)), None)
+    return next((p for p in CANDIDATES if os.path.isfile(p)), None) or shutil.which("sftp-server")
 
 
 class LocalServer:

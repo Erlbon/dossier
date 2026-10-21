@@ -2,6 +2,10 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-21#21 -- The release build's tests pass on the GitHub runner
+
+- The first run of the release workflow stopped at the tests: four tests of SFTP connections failed on the GitHub runner, because there the Windows OpenSSH `sftp-server` comes first on the path and the tests spell their paths for the one in Git for Windows. The test helper now looks for Git's build first. (Test code only; the program is unchanged.)
+
 ## 2026-10-21#20 -- Version 0.4, the first release
 
 - **Dossier has a release version: 0.4.** It is `RELEASE` in `dossier/core/version.py`, shown in Help > About and in `dossier --version` (`Dossier 0.4 (build 2026-10-21#20)`); the build number is still there to say which check-in a program is made from. A release is made by pushing the tag `v0.4`.
