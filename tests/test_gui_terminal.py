@@ -225,7 +225,7 @@ def test_there_is_one_plain_terminal_button_next_to_the_command_line(world):
     assert not win.term_button.icon().isNull()
     win.term_button.click()
     assert rec.launches[-1].cwd == str(left) and not rec.launches[-1].elevate
-    commands = {a.text().replace("&", ""): a.menu() for a in win.menuBar().actions()}["Commands"]
+    commands = {a.text().replace("&", ""): a.menu() for a in win.menuBar().actions()}["Tools"]
     texts = [a.text() for a in commands.actions() if not a.isSeparator()]
     assert "Terminal Here" in texts and "Administrator Terminal Here" in texts
 
@@ -240,7 +240,7 @@ def test_right_click_offers_only_administrator_and_the_interpreter(world):
         assert rec.launches[-1].elevate and rec.launches[-1].cwd == str(left)
     else:
         assert rec.launches[-1].argv[-2:] == ["sudo", "-s"]
-    commands = {a.text().replace("&", ""): a.menu() for a in win.menuBar().actions()}["Commands"]
+    commands = {a.text().replace("&", ""): a.menu() for a in win.menuBar().actions()}["Tools"]
     assert not any("Other Panel" in a.text() for a in commands.actions())
 
 

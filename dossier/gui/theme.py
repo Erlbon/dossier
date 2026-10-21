@@ -11,8 +11,8 @@ from __future__ import annotations
 from typing import Optional
 
 from PyQt6.QtCore import QObject, Qt, pyqtSignal
-from PyQt6.QtGui import QColor, QPalette
-from PyQt6.QtWidgets import QApplication
+from PyQt6.QtGui import QColor, QPalette, QPen
+from PyQt6.QtWidgets import QApplication, QProxyStyle, QStyle
 
 LIGHT = {
     "bg": "#ffffff", "fg": "#1d2330", "dim": "#636b7d", "line": "#d9dde7", "card": "#f5f6fa",
@@ -100,6 +100,27 @@ def system_is_dark(app: QApplication) -> bool:
         return False
 
 
+class FusionEdges(QProxyStyle):
+    """Fusion, with an outline on check boxes and radio buttons: in the light scheme an unchecked box is white on a pale card and
+    Fusion draws no edge there, so it could not be seen at all."""
+
+    def drawPrimitive(self, element, option, painter, widget=None) -> None:
+        super().drawPrimitive(element, option, painter, widget)
+        P = QStyle.PrimitiveElement
+        if element not in (P.PE_IndicatorCheckBox, P.PE_IndicatorRadioButton):
+            return
+        painter.save()
+        painter.setRenderHint(painter.RenderHint.Antialiasing)
+        painter.setPen(QPen(option.palette.color(QPalette.ColorRole.PlaceholderText), 1))
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        rect = option.rect.adjusted(0, 0, -1, -1)
+        if element == P.PE_IndicatorRadioButton:
+            painter.drawEllipse(rect)
+        else:
+            painter.drawRoundedRect(rect, 2, 2)
+        painter.restore()
+
+
 class ThemeManager(QObject):
     """Owns the chosen scheme (auto, light, dark), applies it, and follows the system in auto."""
 
@@ -127,6 +148,6 @@ class ThemeManager(QObject):
     def apply(self) -> None:
         global _current
         _current = dict(self.tokens())
-        self.app.setStyle("Fusion")   # draws from the palette alone, immune to native dark-mode quirks
+        self.app.setStyle(FusionEdges("Fusion"))   # draws from the palette alone, immune to native dark-mode quirks
         self.app.setPalette(build_palette(_current))
         self.changed.emit()

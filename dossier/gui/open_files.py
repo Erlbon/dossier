@@ -15,7 +15,7 @@ class OpenFilesMixin:
     """Part of ``MainWindow``."""
 
     def build_open_menu(self, parent_menu) -> None:
-        menu = parent_menu.addMenu("Opening Files (Enter and Double-Click)")
+        menu = parent_menu.addMenu("Opening Files")
         group = QActionGroup(self)
         group.setExclusive(True)
         self.open_actions = {}
@@ -28,7 +28,7 @@ class OpenFilesMixin:
             menu.addAction(act)
             self.open_actions[key] = act
         menu.addSeparator()
-        menu.addAction("Ctrl+Enter always does the other thing").setEnabled(False)
+        menu.addAction("What Enter and double-click do. Ctrl+Enter does the other thing.").setEnabled(False)
 
     def open_choice(self) -> str:
         value = str(self.settings.value("open/files", "viewer"))

@@ -161,7 +161,7 @@ def test_the_home_page_has_a_single_part_and_the_menu_item_exists(world):
     pump(win, lambda: win.left.is_home)
     assert [b.text() for b in crumb_buttons(win.left)] == ["Home"]
     menus = {a.text().replace("&", ""): a.menu() for a in win.menuBar().actions()}
-    assert "Edit the Path" in [a.text() for a in menus["View"].actions()]
+    assert "Edit the Path" in [a.text() for a in menus["Go"].actions()]
 
 
 def test_rebuilding_the_parts_leaves_no_stray_windows_behind(world):

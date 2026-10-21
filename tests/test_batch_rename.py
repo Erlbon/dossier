@@ -210,6 +210,6 @@ def test_numbering_puts_a_number_in_front_of_the_name_in_list_order(world, monke
 def test_the_menu_has_the_four_commands(world):
     win, *_ = world
     menus = {a.text().replace("&", ""): a.menu() for a in win.menuBar().actions()}
-    sub = [a for a in menus["Commands"].actions() if a.text() == "Batch Rename"][0].menu()
+    sub = [a for a in menus["Tools"].actions() if a.text() == "Batch Rename"][0].menu()
     assert [a.text() for a in sub.actions()] == ["By Pattern...", "Search and Replace in Names...", "Change Case...",
                                                  "Number the Files..."]

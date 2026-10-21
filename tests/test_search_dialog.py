@@ -86,4 +86,4 @@ def test_cancelling_starts_nothing(world, monkeypatch):
 def test_the_menu_has_search(world):
     win, *_ = world
     menus = {a.text().replace("&", ""): a.menu() for a in win.menuBar().actions()}
-    assert "Search..." in [a.text() for a in menus["Commands"].actions()]
+    assert "Search..." in [a.text() for a in menus["Tools"].actions()]

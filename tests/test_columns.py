@@ -121,7 +121,8 @@ def test_the_home_page_keeps_its_own_three_columns_and_the_choice_returns_after_
 def test_the_menu_entries_exist_and_defaults_come_back(world):
     win, *_ = world
     menus = {a.text().replace("&", ""): a.menu() for a in win.menuBar().actions()}
-    sub = [a for a in menus["Settings"].actions() if a.text() == "Columns"][0].menu()
+    look = [a for a in menus["Settings"].actions() if a.text() == "Appearance"][0].menu()
+    sub = [a for a in look.actions() if a.text() == "Columns"][0].menu()
     assert [a.text() for a in sub.actions()] == ["Add or Remove Columns...", "Back to the Default Columns"]
     win._column_toggled("created", True)
     win.reset_columns()

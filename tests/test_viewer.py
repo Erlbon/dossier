@@ -313,12 +313,34 @@ def test_closing_the_commander_closes_its_viewers(commander):
 def test_menus_view_has_modes_and_notes_while_settings_has_the_choices(commander):
     win, _d = commander
     titles = [a.text().replace("&", "") for a in win.menuBar().actions()]
-    assert titles == ["Files", "Mark", "View", "Go", "Commands", "Settings", "Help"]
+    assert titles == ["Files", "Edit", "Mark", "View", "Go", "Tools", "Network", "Settings", "Help"]
     menus = {a.text().replace("&", ""): a.menu() for a in win.menuBar().actions()}
-    view = [a.text() for a in menus["View"].actions() if not a.isSeparator()]
-    assert view == ["Details", "Thumbnails", "Thumbnail Size", "Arrange By", "Folder Layout", "Folder Notes", "Home Page", "Quick Filter", "Open as Archive", "Folder Sizes", "Edit the Path", "Refresh", "Tools Bar", "Tabs"]
-    settings = [a.text() for a in menus["Settings"].actions()]
-    assert settings == ["Color Scheme", "Fonts and Bold...", "Thumbnails...", "Copy and Move...", "Opening Files (Enter and Double-Click)", "Assistant Access...", "Network Drives", "Drive Memory", "Slowness Log", "Icon Set", "Columns", "Drive Selector"]
+    texts = lambda name: [a.text() for a in menus[name].actions() if not a.isSeparator()]       # noqa: E731
+    assert texts("Edit") == ["Undo", "Copy Files to Clipboard", "Cut Files to Clipboard", "Paste Files Here", "Copy Marked Paths as Text"]
+    assert texts("Mark") == ["Select All", "Mark by Pattern...", "Unmark by Pattern...", "Invert Selection", "Deselect All", "Mark by Tag...",
+                             "Unmark by Tag...", "Saved Selections"]
+    assert texts("View") == ["Details", "Thumbnails", "Thumbnail Size", "Arrange By", "Folder Layout", "Folder Notes", "Tools Bar", "Tabs",
+                             "Quick Filter", "Folder Sizes", "Refresh"]
+    assert texts("Tools") == ["Search...", "Find Duplicate Files...", "Compare Folders and Synchronize...", "Compare the Two Current Files",
+                              "Batch Rename", "Archives", "Checksums of Marked Files", "Verify Checksum...", "Edit Folder Note", "Operations",
+                              "Terminal Here", "Administrator Terminal Here"]
+    assert texts("Network") == ["Add a Server...", "Disconnect from the Server of This Panel", "Add Network Share...", "Network Drives"]
+    assert texts("Settings") == ["Appearance", "Copy and Move...", "Opening Files", "Drive Memory", "Assistant Access..."]
+    look = [a for a in menus["Settings"].actions() if a.text() == "Appearance"][0].menu()
+    assert [a.text() for a in look.actions()] == ["Color Scheme", "Icon Set", "Fonts and Bold...", "Thumbnails...", "Columns", "Drive Selector"]
+    # every command is in exactly one place
+    seen = []
+
+    def walk(menu):
+        for a in menu.actions():
+            if a.menu():
+                walk(a.menu())
+            elif not a.isSeparator() and a.isEnabled():
+                seen.append(a.text())
+    for m in menus.values():
+        walk(m)
+    duplicated = {t for t in seen if seen.count(t) > 1}
+    assert not duplicated, duplicated
 
 
 def test_folder_notes_can_be_switched_off_and_the_choice_is_kept(commander, tmp_path):

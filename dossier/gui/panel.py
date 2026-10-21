@@ -693,6 +693,7 @@ class Panel(QFrame):
         self.stack.addWidget(self.table)
         self.stack.addWidget(self.icons)
 
+        self._note_row_set = -1                    # the row whose span and height were set for a note
         self.note = NoteView(self.table.viewport())
         self.note.edit_requested.connect(self.note_edit_requested.emit)
         self.note.hide()
@@ -1535,6 +1536,10 @@ class Panel(QFrame):
             self._show_note("")
 
     def _show_note(self, text: str) -> None:
+        if self._note_row_set >= 0:                # the row that held the last folder's note keeps its span and height by number:
+            self.table.clearSpans()                # give them back, or the next listing shows a tall row there (Home had two)
+            self.table.setRowHeight(self._note_row_set, self.table.verticalHeader().defaultSectionSize())
+            self._note_row_set = -1
         self.model.set_has_note(bool(text) and not self.model.icon_px)      # the thumbnail view has no note row
         if not text or self.model.icon_px:
             self.note.hide()
@@ -1547,6 +1552,7 @@ class Panel(QFrame):
         if row < 0:
             return
         self.table.setSpan(row, 0, 1, self.model.columnCount())
+        self._note_row_set = row
         height = self.note.fit(self.table.viewport().width())
         self.table.setRowHeight(row, height)   # the row is empty space; the note is laid over it
         self._position_note()

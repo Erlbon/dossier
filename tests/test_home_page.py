@@ -310,6 +310,6 @@ def test_a_tab_can_show_the_page_and_it_is_restored_with_the_session(world):
 def test_the_menus_offer_pin_add_and_the_home_page(world):
     win, *_ = world
     menus = {a.text().replace("&", ""): a.menu() for a in win.menuBar().actions()}
-    assert "Pin Folder to Home Page" in [a.text() for a in menus["Commands"].actions()]
-    assert "Add Network Share..." in [a.text() for a in menus["Commands"].actions()]
-    assert "Home Page" in [a.text() for a in menus["View"].actions()]
+    assert "Pin Folder to Home Page" in [a.text() for a in menus["Go"].actions()]
+    assert "Add Network Share..." in [a.text() for a in menus["Network"].actions()]
+    assert "Home Page" in [a.text() for a in menus["Go"].actions()]

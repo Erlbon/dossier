@@ -2,6 +2,15 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-21#10 -- A new menu layout, and two visual fixes
+
+- **The menus are sorted by what they are for.** *Files* (what can I do to the files), *Edit* (new: Undo and the clipboard), *Mark*, *View* (how a folder is shown), *Go* (where am I and where to next), *Tools* (replaces *Commands*: search, duplicates, compare, batch rename, archives, checksums, the operation queue, terminals), *Network* (new: servers, shares, network drives), *Settings* and *Help*. Every command keeps its shortcut and is in exactly one place; a test checks that.
+- Moved: *Home Page*, *Edit the Path* and *Pin Folder to Home Page* to **Go**; *Swap Panels* to **Go**; *Open as Archive*, *Pack*, *Unpack* and *Convert* to **Tools > Archives**; *Pause or Resume* and *Cancel Waiting Operations* to **Tools > Operations**; *Copy Marked Paths as Text* to **Edit**; the three saved-selection submenus into one **Mark > Saved Selections**; *Add a Server*, *Disconnect* and *Add Network Share* and *Network Drives* to **Network**; the slowness log to **Help > Slowness Log**.
+- **Settings** now holds only settings: **Appearance** (Color Scheme, Icon Set, Fonts and Bold, Thumbnails, Columns, Drive Selector), Copy and Move, Opening Files (renamed from "Opening Files (Enter and Double-Click)"), Drive Memory and Assistant Access.
+- **Fixed: an unchecked check box could not be seen in the light scheme** (white on a pale card, no edge); check boxes and radio buttons now have an outline in both schemes.
+- **Fixed: the Home page showed one or two tall, half-empty rows** after a folder with a note (README) was shown in the same panel: the row that had held the note kept its height and span. It is reset now.
+- The menu code moved out of the window file into `gui/menus.py`.
+
 ## 2026-10-21#09 -- Enter opens pictures and text in the viewer
 
 - **Enter and double-click on a file now show it in Dossier's own viewer** when it is a picture, text or Markdown (a binary file, such as a Word document or a program, still goes to the program Windows has for it, so it is not shown as hex by accident). **Ctrl+Enter does the other thing**: the Windows program for a picture or text file, the viewer for a binary one. Marking is unchanged (Ctrl+click and Ctrl+Space still mark).

@@ -119,5 +119,6 @@ def test_a_7z_is_converted_to_a_zip_beside_it(world):
 def test_the_menu_has_the_three_commands(world):
     win, *_ = world
     menus = {a.text().replace("&", ""): a.menu() for a in win.menuBar().actions()}
-    texts = [a.text() for a in menus["Commands"].actions()]
-    assert {"Pack to Zip...", "Unpack...", "Convert Archive to Zip"} <= set(texts)
+    sub = [a for a in menus["Tools"].actions() if a.text() == "Archives"][0].menu()
+    texts = [a.text() for a in sub.actions()]
+    assert {"Pack to Zip...", "Unpack...", "Convert Archive to Zip", "Open as Archive"} <= set(texts)
