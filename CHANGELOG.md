@@ -2,6 +2,15 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-21#18 -- OPDS book catalogues and Subsonic music servers
+
+- **Two new kinds of server (Add a Server... > Type):** **OPDS** (a book catalogue: Calibre, Calibre-Web, Kavita, Komga, COPS) and **Subsonic** (a music server: Navidrome, Airsonic, Gonic). They show as folders and files on the Home page and in the panels, like the other servers, and are **always read-only**: nothing in a catalogue can be changed from Dossier.
+- **OPDS:** the catalogue's folders are folders, and every book is a file for each format it comes in (`The Sea Wolf.epub`, `The Sea Wolf.pdf`). Both OPDS 1.x (Atom) and OPDS 2.0 (JSON) are read, long feeds are followed page by page, and links to another computer are left out. Put the catalogue's address on the server in *Start in* (for example `/opds`). Login is the web's (Basic or Digest).
+- **Subsonic:** `Artists / artist / album / tracks` and `Playlists`. The login sends a salted token, never the password. A track is the server's original file.
+- **Copy a book or a track out** with F5 or drag it to the other panel; **Enter** downloads it and opens it in the program Windows has for it (a book reader, a music player). Nothing plays before the download is complete: this is not streaming.
+- Tested against test servers of my own, not against the real programs; try it on yours and tell me what a real catalogue does differently. Search in a catalogue, covers and the Kavita kind of entry that is both a folder and a book are not built.
+- A web address pasted into Host keeps the kind you chose.
+
 ## 2026-10-21#17 -- The function key bar and the command line can be moved too
 
 - **The function key bar (F2 Rename ... F8 Delete) and the command line can go above the panels.** Each has the same six dots at its left end: drag them into the upper half of the panels to put the bar above them, into the lower half to put it back under them. A gold strip shows where it will land. The programs bar keeps its three places (menu bar row, under the menu bar, bottom).

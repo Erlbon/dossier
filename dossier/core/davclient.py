@@ -227,10 +227,10 @@ class DavClient:
         return None
 
     def request(self, method: str, path: str, body=None, headers: Optional[dict] = None, *, length: Optional[int] = None,
-                want: tuple = ()) -> Reply:
+                want: tuple = (), quoted: bool = False) -> Reply:
         """One HTTP request and its whole (capped) answer. Follows redirects, logs in when asked, reconnects once when the server dropped
         an idle connection. A status in ``want`` is returned; any other error status is raised as the matching ``OSError``."""
-        target = quote(path if path.startswith("/") else "/" + path, safe="/~!$&'()*+,;=:@-._")
+        target = path if quoted else quote(path if path.startswith("/") else "/" + path, safe="/~!$&'()*+,;=:@-._")   # quoted: a ready target
         with self._lock:
             redirects, logins = 0, 0
             while True:

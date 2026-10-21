@@ -16,8 +16,12 @@ from typing import Optional
 PROTOCOLS = (("sftp", "SFTP (the server's file service, over SSH)"),
              ("scp", "SCP (a shell over SSH, for servers that have no SFTP service)"),
              ("webdav", "WebDAV (a web folder, over HTTPS or HTTP)"),
-             ("ftp", "FTP or FTPS (the old file transfer service)"))
-NAMES = {"sftp": "SFTP", "scp": "SCP", "webdav": "WebDAV", "ftp": "FTP"}
+             ("ftp", "FTP or FTPS (the old file transfer service)"),
+             ("opds", "OPDS (a book catalogue: Calibre, Calibre-Web, Kavita, Komga; read-only)"),
+             ("subsonic", "Subsonic (a music server: Navidrome, Airsonic, Gonic; read-only)"))
+NAMES = {"sftp": "SFTP", "scp": "SCP", "webdav": "WebDAV", "ftp": "FTP", "opds": "OPDS", "subsonic": "Subsonic"}
+CATALOGS = ("opds", "subsonic")                    # web catalogues: always read-only, no key file, the "start in" is an address on the server
+WEB = ("webdav", "ftp") + CATALOGS                 # kinds that have an encrypted (https, FTPS) and a plain form
 DEFAULT_PORT = 22
 SERVICE = "Dossier"
 MAX_CONNECTIONS = 200
@@ -26,7 +30,7 @@ MAX_CONNECTIONS = 200
 def default_port(protocol: str, secure: bool = True) -> int:
     if protocol == "ftp":
         return 21                                              # FTPS here is explicit TLS on the same port
-    return (443 if secure else 80) if protocol == "webdav" else DEFAULT_PORT
+    return (443 if secure else 80) if protocol == "webdav" or protocol in CATALOGS else DEFAULT_PORT
 
 
 @dataclass
@@ -52,8 +56,8 @@ class Connection:
         return f"{self.protocol}://" + self.authority() + (path if path.startswith("/") else "/" + path)
 
     def describe(self) -> str:
-        where = self.authority() + (self.start_dir if self.protocol == "webdav" and self.start_dir else "")
-        plain = "  (not encrypted)" if self.protocol in ("webdav", "ftp") and not self.secure else ""
+        where = self.authority() + (self.start_dir if self.protocol in ("webdav",) + CATALOGS and self.start_dir else "")
+        plain = "  (not encrypted)" if self.protocol in WEB and not self.secure else ""
         name = "FTPS" if self.protocol == "ftp" and self.secure else NAMES.get(self.protocol, self.protocol)
         return f"{name}  {where}{plain}" + ("  (read-only)" if self.read_only else "")
 
@@ -70,6 +74,12 @@ class Connection:
         if any(c in self.user for c in " /\\@:"):
             return "the user name cannot hold spaces, slashes, colons or @"
         return ""
+
+    def force_rules(self) -> "Connection":
+        """A catalogue is read-only whatever was asked."""
+        if self.protocol in CATALOGS:
+            self.read_only = True
+        return self
 
 
 def parse_authority(authority: str) -> tuple:
@@ -131,7 +141,7 @@ def from_json(text) -> list:
         except (TypeError, ValueError):
             continue
         if not c.problem():
-            out.append(c)
+            out.append(c.force_rules())
     return out
 
 

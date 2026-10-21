@@ -18,7 +18,7 @@ from typing import Callable, Optional
 from PyQt6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFileDialog, QFormLayout, QHBoxLayout, QLabel, QLineEdit,
                              QPushButton, QSpinBox, QVBoxLayout)
 
-from ..core import davclient, ftpclient, servers, sshlink
+from ..core import davclient, ftpclient, opdsclient, servers, sshlink, subsonicclient
 from ..core.home import ADD_SERVER, ServerItem
 from ..core.sftpfs import Session, scheme_of, split_path
 from .background import run_in_background
@@ -101,19 +101,27 @@ class ConnectionDialog(QDialog):
                         "has no SFTP service.",
                  "webdav": "A web folder: Nextcloud and ownCloud (https://host/remote.php/dav/files/you), a NAS, Apache, nginx. You can "
                            "paste the whole address into Host.",
+                 "opds": "A book catalogue (Calibre, Calibre-Web, Kavita, Komga, COPS): its books show as folders and files you can open or "
+                         "copy. Put the catalogue's address on the server in Start in (for example /opds). Read-only.",
+                 "subsonic": "A music server (Navidrome, Airsonic, Gonic): Artists, albums, tracks and playlists as folders; open or copy "
+                             "a track. Use the user name and password of the server. Read-only.",
                  "ftp": "Plain FTP sends the password and the files as readable text. Keep Encrypted (FTPS) ticked when the server "
                         "offers it. You can paste a whole address (ftp://host/folder or ftps://host/folder) into Host."}
         self.type_note.setText(notes.get(kind, ""))
         dav = kind == "webdav"
-        web = kind in ("webdav", "ftp")
+        web = kind in servers.WEB
+        catalog = kind in servers.CATALOGS
         self.secure.setText("Encrypted (FTPS)" if kind == "ftp" else "Encrypted (HTTPS)")
         self._form.setRowVisible(self.secure, web)
         self._form.setRowVisible(self._key_row, not web)
+        self._form.setRowVisible(self.read_only, not catalog)         # a catalogue is always read-only
         if self.port.value() == self._last_default:                      # a port nobody changed follows the type
             self.port.setValue(servers.default_port(kind, self.secure.isChecked()))
         self._last_default = servers.default_port(kind, self.secure.isChecked())
         self.start_dir.setPlaceholderText("the folder on the server that is the top for this connection, for example /remote.php/dav/files/me"
-                                          if dav else "empty: the folder the server opens on login")
+                                          if dav else "the catalogue's address on the server, for example /opds" if kind == "opds" else
+                                          "empty, or the folder the server lives in (for example /navidrome)" if kind == "subsonic" else
+                                          "empty: the folder the server opens on login")
         self.remember.setText("Keep the password in the system's password store (otherwise it is asked for when needed)")
         self.note.setText("This connection is NOT encrypted: a password and every file travel as plain text. Use it only inside a network "
                           "you trust." if web and not self.secure.isChecked() else
@@ -127,7 +135,8 @@ class ConnectionDialog(QDialog):
         parsed = servers.from_url(self.host.text())
         if parsed is None:
             return
-        self.protocol.setCurrentIndex(self.protocol.findData(parsed["protocol"]))
+        if not (self.protocol.currentData() in servers.CATALOGS and parsed["protocol"] == "webdav"):    # a web address does not turn a catalogue into WebDAV
+            self.protocol.setCurrentIndex(self.protocol.findData(parsed["protocol"]))
         self.secure.setChecked(parsed["secure"])
         self.host.setText(parsed["host"])
         self.port.setValue(parsed["port"])
@@ -146,7 +155,8 @@ class ConnectionDialog(QDialog):
     def connection(self) -> servers.Connection:
         return servers.Connection(self.name.text().strip(), self.host.text().strip(), self.user.text().strip(), int(self.port.value()),
                                   self.protocol.currentData(), self.key_file.text().strip(), self.start_dir.text().strip(),
-                                  self.read_only.isChecked(), self.remember.isChecked(), self.base.id, self.secure.isChecked(),
+                                  self.read_only.isChecked() or self.protocol.currentData() in servers.CATALOGS, self.remember.isChecked(),
+                                  self.base.id, self.secure.isChecked(),
                                   self.base.cert if (self.host.text().strip(), int(self.port.value()), self.secure.isChecked()) ==
                                   (self.base.host, self.base.port, self.base.secure) else "")
 
@@ -274,7 +284,8 @@ class ServersMixin:
 
     def server_fs(self, conn: servers.Connection):
         """The file system that holds the sessions of this kind of connection."""
-        return {"scp": self.fs.scp, "webdav": self.fs.dav, "ftp": self.fs.ftp}.get(conn.protocol, self.fs.sftp)
+        return {"scp": self.fs.scp, "webdav": self.fs.dav, "ftp": self.fs.ftp, "opds": self.fs.opds,
+                "subsonic": self.fs.subsonic}.get(conn.protocol, self.fs.sftp)
 
     def server_connected(self, conn: servers.Connection) -> bool:
         return self.server_fs(conn).connected(conn.authority())
@@ -355,7 +366,7 @@ class ServersMixin:
             return
 
         def go(session: Session) -> None:
-            target = conn.url("/" if conn.protocol == "webdav" else (conn.start_dir or session.home))   # a web folder's base is its top
+            target = conn.url("/" if conn.protocol == "webdav" or conn.protocol in servers.CATALOGS else (conn.start_dir or session.home))   # a web folder's base is its top
             panel.new_tab(target) if new_tab else panel.set_folder(target)
         self.connect_server(conn, go)
 
@@ -375,7 +386,7 @@ class ServersMixin:
             existing.read_only = conn.read_only
             then(existing)
             return
-        if conn.protocol in ("webdav", "ftp"):
+        if conn.protocol in servers.WEB:
             saved = servers.get_password(conn) if conn.save_password else ""
             self._try_dav(conn, saved, then, asked=bool(saved))
             return
@@ -442,8 +453,11 @@ class ServersMixin:
     def _try_dav(self, conn, password: str, then, asked: bool, remember: bool = False) -> None:
         def login(progress, cancel):
             progress(0, 0)
-            maker = ftpclient.FtpClient if conn.protocol == "ftp" else davclient.DavClient
+            maker = {"ftp": ftpclient.FtpClient, "opds": opdsclient.OpdsClient, "subsonic": subsonicclient.SubsonicClient}.get(
+                conn.protocol, davclient.DavClient)
             client = maker(conn.host, conn.port, conn.secure, conn.user, password, conn.cert)
+            if conn.protocol in servers.CATALOGS:
+                client.set_start(conn.start_dir)                      # where on the server the catalogue begins
             try:
                 client.connect()
             except davclient.CertificateError as e:
@@ -545,14 +559,14 @@ class ServersMixin:
 
     def disconnect_active_server(self) -> None:
         path = self.active.path
-        conn = self.connection_for(path) if path.startswith(("sftp://", "scp://", "webdav://", "ftp://")) else None
+        conn = self.connection_for(path) if path.startswith(("sftp://", "scp://", "webdav://", "ftp://", "opds://", "subsonic://")) else None
         if conn is None:
             self._say("This panel is not on a server")
             return
         self.disconnect_server(conn)
 
     def disconnect_all_servers(self) -> None:
-        for fs in (self.fs.sftp, self.fs.scp, self.fs.dav, self.fs.ftp):
+        for fs in (self.fs.sftp, self.fs.scp, self.fs.dav, self.fs.ftp, self.fs.opds, self.fs.subsonic):
             for authority in list(fs.sessions):
                 fs.drop(authority)
         self._links.clear()
