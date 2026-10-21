@@ -12,6 +12,7 @@ import pytest
 from dossier import cli
 from dossier.cli import commands
 from dossier.core import askpass
+from dossier.core.version import RELEASE
 
 T0 = 1_700_000_000
 
@@ -62,7 +63,7 @@ def test_the_program_runs_a_command_without_starting_the_window(tmp_path):
     bad = subprocess.run([sys.executable, "-m", "dossier", "ls", str(tmp_path / "nope")], capture_output=True, text=True, timeout=60)
     assert bad.returncode == 2 and "does not exist" in bad.stderr
     version = subprocess.run([sys.executable, "-m", "dossier", "--version"], capture_output=True, text=True, timeout=60)
-    assert version.returncode == 0 and "Dossier 20" in version.stdout
+    assert version.returncode == 0 and f"Dossier {RELEASE} (build 20" in version.stdout
 
 
 def test_ssh_can_ask_the_program_for_a_password_through_the_same_entry(tmp_path):

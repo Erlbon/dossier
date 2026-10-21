@@ -81,7 +81,7 @@ class TailnetMixin:
         again, self._tailnet_again = self._tailnet_again, False
         if again:
             self.refresh_tailnet(force=True)
-        items = [TailnetItem(d.name, d.host, d.detail(), d.online) for d in (devices or [])]
+        items = [TailnetItem(d.name, d.host, d.detail(), d.online, d.type_text()) for d in (devices or [])]
         if items != self._tailnet_items:
             self._tailnet_items = items
             self._refresh_home_panels()

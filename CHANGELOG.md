@@ -2,6 +2,13 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-21#20 -- Version 0.4, the first release
+
+- **Dossier has a release version: 0.4.** It is `RELEASE` in `dossier/core/version.py`, shown in Help > About and in `dossier --version` (`Dossier 0.4 (build 2026-10-21#20)`); the build number is still there to say which check-in a program is made from. A release is made by pushing the tag `v0.4`.
+- **The release build:** `dossier.spec` (PyInstaller, one exe with the window and the command line), `build_exe.bat`, and `.github/workflows/release.yml`, which checks the tag against `RELEASE`, runs the tests, builds `dist/dossier.exe` with UPX, starts it once (`--version`, `ls`, `--check`) and publishes it with the notes in `docs/releases/v0.4.md`.
+- **Tailnet list lines up:** the address is alone in the Details column, and the system and state ("Windows, online") are in the Type column, so each column starts at the same place.
+- **The README is rewritten** to say what the program does today (it described things that were never built), with a download section; CLAUDE.md has the release rules.
+
 ## 2026-10-21#19 -- Tailnet devices on the Home page
 
 - **A Tailnet section on the Home page lists the devices of your Tailscale network** (name, address, system, online or offline, and "this computer"), read from the Tailscale program already on the computer. If Tailscale is not installed or not running there is no section. Dossier only reads the list: it never logs in or out, changes a setting or scans the network.

@@ -394,7 +394,7 @@ class FolderModel(QAbstractTableModel):
         if col > 2:
             return None                                  # the Home page has three columns; the others are hidden there
         if role == Qt.ItemDataRole.DisplayRole:
-            return entry.name if col == 0 else (TYPE_NAMES.get(entry.kind, "") if col == 1 else entry.detail)
+            return entry.name if col == 0 else ((entry.label or TYPE_NAMES.get(entry.kind, "")) if col == 1 else entry.detail)
         if role == Qt.ItemDataRole.DecorationRole and col == 0:
             return self._home_icon(entry)
         if role == Qt.ItemDataRole.ToolTipRole and entry.note:

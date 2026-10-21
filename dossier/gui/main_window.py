@@ -22,7 +22,7 @@ from ..core.commandline import Placeholders, expand, run_command
 from ..core import patterns, viewmodes
 from ..core.platform import IS_WINDOWS, has_scheme, is_elevated, machine_name, path_key, set_window_border
 from ..core.selection import SelectionStore
-from ..core.version import APP_NAME, APP_REPO_URL, APP_VERSION
+from ..core.version import APP_NAME, APP_REPO_URL, APP_VERSION, RELEASE
 from ..core.textedit import BinaryFile, EncodingProblem, FileTooLarge, load_document
 from ..core.terminals import (UnsafeArgument, builtin_profiles, default_launcher, default_profile, detect,
                               session_launch)
@@ -1068,7 +1068,7 @@ class MainWindow(ViewModesMixin, ToolsBarMixin, ContextMenuMixin, DragDropMixin,
 
     def about(self) -> None:
         self.dialogs.info(f"About {APP_NAME}", chr(10).join([
-            f"{APP_NAME}, a dual-pane file manager",
+            f"{APP_NAME} {RELEASE}, a dual-pane file manager",
             f"Build {APP_VERSION}",
             "",
             APP_REPO_URL,

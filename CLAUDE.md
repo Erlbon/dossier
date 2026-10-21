@@ -50,13 +50,18 @@ The function list follows The Next Tool (Ebdac Software GmbH, discontinued 2007)
 - Veritas scanner `gui/csv_viewer_tab.py` (private repo): the CSV viewer to promote into `redactor_common` (generic table model, sort key, TSV copy, encoding fallback, row-checker hook), with delimiter sniffing and lazy loading added.
 - Metadata cores: `epubredactor`, `cbzredactor`, `mp3redactor`, `videoredactor` (read the cores, do not copy).
 
+## Releases (the owner, 2026-10-21)
+- **0.4 is the first release.** A release has its own version, `RELEASE` in `dossier/core/version.py`; the owner decides the main numbers. The tag is `v` + `RELEASE` (`v0.4`), and `.github/workflows/release.yml` refuses any other tag. The build number still says which check-in a program is made from (`Build 2026-10-21#20` in About, `--version` and the status line).
+- **To release:** change `RELEASE` (when the owner says so), write `docs/releases/v<RELEASE>.md` (the notes, by hand: what is new since the last release and what to know), bump and check in as usual, then push the tag. The workflow runs the tests, builds `dist/dossier.exe` with `dossier.spec` (UPX on), starts it once, and publishes the release. Only the owner asks for a release.
+- **Not in 0.4:** a Linux tarball (the sibling workflow's Linux job needs the Docker toolchain and its first run on Dossier is untried), code signing, an installer.
+- The exe is about 57 MB without UPX (Python 3.15, 2026-10-21); tell the owner when a release exe is 5 percent bigger than the one before.
+
 ## Open items
 - Icon sets are swappable (Settings > Appearance > Icon Set, user sets in the settings folder `icon-sets`). Tabler and Lucide draw the ebook and comic glyphs the other way round (Tabler `book` is open, Lucide `book` is closed): a set's manifest `map` fixes that per set; a Preferences page for per-file-type icon overrides is a possible later step (user, 2026-10-19).
 - Later idea (user, 2026-10-19): a mix-and-match icon set, "developer's choice": each icon picked from whichever set draws it best (e.g. Tabler files, Lucide drives). Fits the manifest format if a `map` value may name another set (`lucide:hard-drive.svg`); not built, mind the rule that a set can never point outside its own folder when doing it (only built-in set ids).
 - Push access to `redactor_common` for promoting shared modules.
 - Which metadata format comes first (EPUB, CBZ, MP3, video).
 - Remote sources read-only until phase 2 is stable?
-- PyInstaller spec and release workflow (copy the pattern from `cbzredactor/.github/workflows/release.yml`).
 
 ## State
 Done 2026-10-19: spec (`docs/spec.md`), core skeleton with tests (`platform`, `vfs`, `selection`), CI for Windows and Ubuntu. Not started: operations with plan/undo, any GUI, viewers, notes, metadata, remote, MCP. Next in build order: operations with plan, progress and undo; then the GUI shell on Windows.

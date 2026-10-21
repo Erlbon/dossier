@@ -17,6 +17,11 @@ def test_the_build_number_has_the_redactor_form():
     assert version.tag_of("2026-10-19#03") == "v2026-10-19-03"
 
 
+def test_a_release_has_its_own_version_and_tag():
+    assert re.fullmatch(r"\d+\.\d+(\.\d+)?", version.RELEASE)
+    assert version.release_tag() == "v" + version.RELEASE and version.release_tag("0.4") == "v0.4" and version.release_title() == f"Dossier {version.RELEASE}"
+
+
 def test_the_same_day_counts_up_and_a_new_day_starts_again_at_one():
     day = datetime.date(2026, 10, 19)
     assert bump_version.next_version("2026-10-19", 1, day) == "2026-10-19#02"

@@ -15,7 +15,7 @@ from ..core.ops import ExecOptions, Kind, Resolution, default_trash, execute, pl
 from ..core.progress import Cancelled
 from ..core.search import BadCriteria, Criteria, search
 from ..core.sizefmt import human_size
-from ..core.version import APP_NAME, APP_VERSION
+from ..core.version import APP_NAME, APP_VERSION, RELEASE
 from . import COMMANDS
 from .helpers import (date_text, entry_row, make_fs, need_paths, one_folder, op_line, parse_date, parse_size, path_arguments, sort_entries)
 
@@ -32,7 +32,7 @@ def build_parser() -> argparse.ArgumentParser:
         epilog="What changes files can be previewed with --dry-run. Nothing is overwritten unless --on-conflict overwrite says so; what is "
                "deleted or replaced goes to the recycle bin. --json prints one JSON document on stdout; progress and warnings go to stderr. "
                "Exit codes: 0 all went well, 1 some items failed, 2 a mistake in the command or a path that does not exist.")
-    parser.add_argument("--version", action="version", version=f"{APP_NAME} {APP_VERSION}")
+    parser.add_argument("--version", action="version", version=f"{APP_NAME} {RELEASE} (build {APP_VERSION})")
     sub = parser.add_subparsers(dest="command", metavar="command")
 
     def command(name: str, text: str) -> argparse.ArgumentParser:

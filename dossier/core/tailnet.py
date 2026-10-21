@@ -33,9 +33,14 @@ class Device:
         return self.address or self.dns
 
     def detail(self) -> str:
-        parts = [self.address or self.dns, self.os.capitalize() if self.os and self.os.islower() else self.os,
-                 "this computer" if self.is_self else ("online" if self.online else "offline")]
-        return "   ".join(p for p in parts if p)
+        """The text of the Details column: the address alone, so the column lines up."""
+        return self.address or self.dns
+
+    def type_text(self) -> str:
+        """The text of the Type column: the system and whether the device is there (``Windows, online``)."""
+        system = self.os.capitalize() if self.os and self.os.islower() else self.os
+        state = "this computer" if self.is_self else ("online" if self.online else "offline")
+        return f"{system}, {state}" if system else state
 
 
 def find_tailscale() -> str:

@@ -6,7 +6,8 @@ venv/
 build/
 dist/
 *.egg-info/
-# PyInstaller rewrites the spec file each build; flags live in the build script
+# PyInstaller writes spec files of its own; Dossier's is committed
 *.spec
+!dossier.spec
 .env
 .env.local

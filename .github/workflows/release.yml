@@ -1,0 +1,95 @@
+name: Release
+
+# Push a tag like v0.4 (``v`` + RELEASE in dossier/core/version.py) to build dossier.exe on Windows and publish it as a GitHub Release.
+# The notes of the release are the file docs/releases/<tag>.md (written by hand for each release). The tag must match RELEASE and the
+# notes file must exist, or nothing is built. The tests run first and the built exe is started once (--version and a file listing)
+# before anything is published.
+# Re-running on an existing tag (Actions tab > Release > Run workflow) re-uploads the exe to that tag's release instead of failing.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to (re)build and publish, e.g. v0.4"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    env:
+      QT_QPA_PLATFORM: offscreen
+      TAG: ${{ github.event.inputs.tag || github.ref_name }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      # The .spec builds with upx=True; without UPX on PATH PyInstaller silently skips compression and the exe comes out larger.
+      - name: Install UPX
+        run: choco install upx -y --no-progress
+
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt "pyinstaller>=6.6"
+
+      - name: Check the tag against RELEASE and find the notes
+        shell: python
+        run: |
+          import os, sys
+          sys.path.insert(0, ".")
+          from dossier.core.version import APP_NAME, APP_VERSION, RELEASE, release_tag
+          tag = os.environ["TAG"]
+          if tag != release_tag():
+              sys.exit(f"Tag {tag} does not match RELEASE {RELEASE} in dossier/core/version.py (expected {release_tag()})")
+          notes = os.path.join("docs", "releases", tag + ".md")
+          if not os.path.isfile(notes):
+              sys.exit(f"There are no release notes: write {notes} first")
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as f:
+              f.write(f"RELEASE_TITLE={APP_NAME} {RELEASE} (build {APP_VERSION})\n")
+              f.write(f"RELEASE_NOTES={notes}\n")
+
+      - name: Syntax check
+        run: python -m compileall -q dossier tests
+
+      - name: Run tests
+        run: python -m pytest -q
+
+      - name: Build exe
+        run: python -m PyInstaller dossier.spec --noconfirm
+
+      # Starts the exe it just built: the version, and a listing through the command line (a window program has no console, so the
+      # output is read through a pipe).
+      - name: Try the exe
+        shell: python
+        run: |
+          import subprocess, sys
+          exe = r"dist\dossier.exe"
+          version = subprocess.run([exe, "--version"], capture_output=True, text=True, timeout=120)
+          print(version.stdout, version.stderr)
+          assert version.returncode == 0 and "Dossier" in version.stdout, "the exe does not report its version"
+          listing = subprocess.run([exe, "ls", "dist"], capture_output=True, text=True, timeout=120)
+          print(listing.stdout, listing.stderr)
+          assert listing.returncode == 0 and "dossier.exe" in listing.stdout, "the exe cannot list a folder"
+          check = subprocess.run([exe, "--check"], capture_output=True, text=True, timeout=120)
+          print(check.stdout, check.stderr)
+          assert check.returncode == 0, "the exe is missing a package"
+
+      - name: Publish GitHub Release
+        shell: bash
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/dossier.exe --clobber
+          else
+            gh release create "$TAG" dist/dossier.exe --title "$RELEASE_TITLE" --notes-file "$RELEASE_NOTES"
+          fi

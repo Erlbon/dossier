@@ -58,8 +58,9 @@ class TailnetItem:
     """A device of the owner's Tailscale network as the Home page shows it (the window makes these from what the local Tailscale says)."""
     name: str
     host: str                  # its address
-    detail: str
+    detail: str                # the Details column: the address
     online: bool = False
+    label: str = ""            # the Type column: the system and the state, for example "Windows, online"
 
 
 @dataclass
@@ -162,7 +163,7 @@ def build_entries(p: HomeProvider) -> list:
     if devices:
         entries.append(_header("tailnet"))
         for item in devices:
-            entries.append(Entry(name=item.name, path=TAILNET_PREFIX + item.name, is_dir=False, kind="tailnet", detail=item.detail,
+            entries.append(Entry(name=item.name, path=TAILNET_PREFIX + item.name, is_dir=False, kind="tailnet", detail=item.detail, label=item.label,
                                  status=OK if item.online else UNCHECKED,
                                  note="Online: press Enter to add it as a server" if item.online else "Offline"))
     return entries

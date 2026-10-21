@@ -21,8 +21,8 @@ def test_the_status_becomes_devices_this_computer_first_then_online_then_by_name
     assert [d.name for d in devices] == ["laptop", "homeserver3", "alpha-nas", "zeta-phone"]
     me, server = devices[0], devices[1]
     assert me.is_self and me.online and me.address == "100.64.0.1" and me.dns == "laptop.tail1234.ts.net"
-    assert server.host == "100.118.213.22" and server.detail() == "100.118.213.22   Linux   online"
-    assert devices[2].detail() == "100.64.0.5   Linux   offline" and me.detail().endswith("this computer")
+    assert server.host == "100.118.213.22" and server.detail() == "100.118.213.22" and server.type_text() == "Linux, online"
+    assert devices[2].type_text() == "Linux, offline" and me.type_text() == "Windows, this computer" and devices[3].type_text() == "Android, offline"
 
 
 def test_damaged_or_foreign_status_text_is_no_devices_and_never_an_error():
@@ -52,9 +52,10 @@ def test_reading_the_devices_is_none_when_tailscale_is_missing_stopped_or_slow(m
 def test_the_home_page_has_a_tailnet_section_only_when_there_are_devices():
     quiet = HomeProvider(volumes=lambda: [], exists=lambda p: False)
     assert "Tailnet" not in [e.name for e in build_entries(quiet)]
-    items = [TailnetItem("laptop", "100.64.0.1", "100.64.0.1   Windows   this computer", True), TailnetItem("phone", "100.64.0.9", "x   offline", False)]
+    items = [TailnetItem("laptop", "100.64.0.1", "100.64.0.1", True, "Windows, this computer"), TailnetItem("phone", "100.64.0.9", "100.64.0.9", False, "Android, offline")]
     entries = build_entries(HomeProvider(volumes=lambda: [], exists=lambda p: False, tailnet=lambda: items))
     names = [e.name for e in entries]
     section = entries[names.index("Tailnet") + 1:]
     assert [e.name for e in section] == ["laptop", "phone"] and all(e.kind == "tailnet" and not e.is_dir for e in section)
+    assert [e.detail for e in section] == ["100.64.0.1", "100.64.0.9"] and [e.label for e in section] == ["Windows, this computer", "Android, offline"]
     assert section[0].status == "ok" and section[1].status != "ok" and section[0].path.startswith("home://#tailnet/")

@@ -31,6 +31,7 @@ class Entry:
     detail: str = ""     # the text for the third column of such a listing (free space, an address)
     status: str = ""     # the indicator light of a Home entry: ok, unchecked, failed, changed ("" = no light)
     note: str = ""       # what the light means, for its tooltip
+    label: str = ""      # the text for the second column (Type) of such a listing; empty: the name of its kind
     ctime: float = 0.0   # created (Windows) or status changed (elsewhere); 0 = unknown
     atime: float = 0.0   # last opened
     attrs: int = 0       # Windows file attributes, elsewhere the mode bits; 0 = unknown
