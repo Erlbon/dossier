@@ -426,7 +426,9 @@ class MainWindow(ViewModesMixin, ToolsBarMixin, ContextMenuMixin, DragDropMixin,
         except (OSError, EncodingProblem) as e:
             self.dialogs.info("Edit", f"The file could not be opened: {getattr(e, 'strerror', None) or e}")
             return
-        win = NotepadWindow(doc, self.dialogs, show_replace=show_replace)
+        remembered = str(self.settings.value("editor/markdown_preview", "")).lower()
+        win = NotepadWindow(doc, self.dialogs, show_replace=show_replace, preview={"true": True, "false": False}.get(remembered))
+        win.preview_toggled.connect(lambda on, w=win: self.settings.setValue("editor/markdown_preview", "true" if on else "false") if w.is_markdown() else None)
         self.editors.append(win)
         win.closed.connect(lambda w: self.editors.remove(w) if w in self.editors else None)
         win.saved.connect(lambda _p: self.refresh())

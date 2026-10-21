@@ -10,16 +10,19 @@ from typing import Optional
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QAction, QKeySequence
 from PyQt6.QtWidgets import (QCheckBox, QComboBox, QHBoxLayout, QInputDialog, QLabel, QLineEdit, QMainWindow,
-                             QPushButton, QVBoxLayout, QWidget)
+                             QPushButton, QSplitter, QVBoxLayout, QWidget)
 
+from ..core import markdownsafe, viewmodes
 from ..core.replace import FindSpec, PatternError, count, expand_at, find_next, replacements, validate
 from ..core.textedit import (Document, EncodingProblem, FileChangedOnDisk, convert_eol, load_document, save_document)
 from ..core.textview import ENCODINGS
 from . import theme
 from .editor import EditorView, from_line_index, line_starts
+from .markdown_view import MarkdownView
 
 EOLS = (("Windows (CRLF)", "\r\n"), ("Unix (LF)", "\n"), ("Classic Mac (CR)", "\r"))
 COUNT_LIMIT_CHARS = 2_000_000       # beyond this the live match count is skipped: it would lag the typing
+PREVIEW_DELAY = 300                 # ms of quiet in the typing before the Markdown preview is drawn again
 
 
 class FindBar(QWidget):
@@ -106,8 +109,10 @@ class FindBar(QWidget):
 class NotepadWindow(QMainWindow):
     saved = pyqtSignal(str)
     closed = pyqtSignal(object)
+    preview_toggled = pyqtSignal(bool)        # the owner switched the Markdown preview on or off (the window remembers it for Markdown files)
 
-    def __init__(self, doc: Document, dialogs, parent=None, show_replace: bool = False) -> None:
+    def __init__(self, doc: Document, dialogs, parent=None, show_replace: bool = False, preview: Optional[bool] = None) -> None:
+        """``preview``: whether the Markdown preview starts shown; None means it is shown for a Markdown file and not for any other."""
         super().__init__(parent)
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
         self.dialogs = dialogs
@@ -115,12 +120,20 @@ class NotepadWindow(QMainWindow):
         self._extra_dirty = False       # a change that is not in the text: the kind of line break
         self.resize(900, 640)
         self.editor = EditorView()
+        self.preview = MarkdownView()
+        self.preview.setVisible(False)
+        self.split = QSplitter(Qt.Orientation.Horizontal)
+        self.split.addWidget(self.editor)
+        self.split.addWidget(self.preview)
+        self.split.setChildrenCollapsible(False)
+        self.split.setStretchFactor(0, 1)
+        self.split.setStretchFactor(1, 1)
         self.bar = FindBar()
         central = QWidget()
         lay = QVBoxLayout(central)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(0)
-        lay.addWidget(self.editor, 1)
+        lay.addWidget(self.split, 1)
         lay.addWidget(self.bar)
         self.setCentralWidget(central)
         self._build_menus()
@@ -130,6 +143,10 @@ class NotepadWindow(QMainWindow):
         self.editor.cursorPositionChanged.connect(lambda *_a: self._update_position())
         self.editor.selectionChanged.connect(self._update_position)
         self.editor.escape_pressed.connect(self._escape)
+        self.editor.textChanged.connect(self._render_soon)
+        self.editor.verticalScrollBar().valueChanged.connect(self._sync_preview)
+        self.preview.open_file_requested.connect(lambda path: self.message.setText(f"A link to a file: {path}"))
+        self.preview.refused.connect(lambda text: self.message.setText(f"This link is not opened: {text}"))
         self.bar.next_button.clicked.connect(lambda: self.find(True))
         self.bar.prev_button.clicked.connect(lambda: self.find(False))
         self.bar.replace_button.clicked.connect(self.replace_one)
@@ -140,11 +157,16 @@ class NotepadWindow(QMainWindow):
         self._timer.setSingleShot(True)
         self._timer.setInterval(250)
         self._timer.timeout.connect(self._validate)
+        self._render_timer = QTimer(self)
+        self._render_timer.setSingleShot(True)
+        self._render_timer.setInterval(PREVIEW_DELAY)
+        self._render_timer.timeout.connect(self._render)
         self._update_title()
         self._update_status_fields()
         self._update_position()
         if show_replace:
             self.bar.show_replace()
+        self.act_preview.setChecked(preview if preview is not None else self.is_markdown())
 
     # setup -----------------------------------------------------------------------------------------------------
     def _action(self, text: str, keys, slot) -> QAction:
@@ -181,6 +203,13 @@ class NotepadWindow(QMainWindow):
         self.act_space.toggled.connect(lambda on: self.editor.setWhitespaceVisibility(
             self.editor.WhitespaceVisibility.WsVisible if on else self.editor.WhitespaceVisibility.WsInvisible))
         v.addAction(self.act_space)
+        self.act_preview = QAction("Markdown Preview", self)
+        self.act_preview.setCheckable(True)
+        self.act_preview.setShortcut(QKeySequence("Ctrl+Shift+M"))
+        self.act_preview.setToolTip("Show the text as Markdown beside the source (raw HTML in it is shown as text, never run)")
+        self.act_preview.toggled.connect(self._set_preview)
+        self.addAction(self.act_preview)
+        v.addAction(self.act_preview)
         v.addSeparator()
         for text, keys, slot in (("Zoom In", "Ctrl+=", self.editor.zoomIn), ("Zoom Out", "Ctrl+-", self.editor.zoomOut),
                                  ("Actual Size", "Ctrl+0", lambda: self.editor.zoomTo(0))):
@@ -218,6 +247,39 @@ class NotepadWindow(QMainWindow):
         if self.doc.mixed_eol:
             self.message.setText("The line breaks were mixed; they will be written as "
                                  + self.eol.currentText() + ".")
+
+    # the Markdown preview ------------------------------------------------------------------------------------------
+    def is_markdown(self) -> bool:
+        return self.doc.path.lower().endswith(viewmodes.MARKDOWN_EXTENSIONS)
+
+    def _set_preview(self, on: bool) -> None:
+        self.preview.setVisible(on)
+        if on:
+            self.split.setSizes([1, 1])
+            self._render()
+        self.preview_toggled.emit(on)
+
+    def _render_soon(self) -> None:
+        if self.preview.isVisibleTo(self):
+            self._render_timer.start()
+
+    def _render(self) -> None:
+        """Draw the preview from the text as it is now (not the file on disk), in the safe subset of Markdown: nothing in it runs."""
+        if not self.preview.isVisibleTo(self):
+            return
+        text = self.editor.text()
+        if markdownsafe.too_big(len(text.encode("utf-8"))):
+            self.preview.show_notice("This text is too big to show as Markdown (the limit is 256 KB). The source is still editable.")
+            return
+        self.preview.set_markdown(text, os.path.dirname(self.doc.path), keep_position=True)
+
+    def _sync_preview(self, *_a) -> None:
+        """The preview follows the source: the same fraction of the page is in view."""
+        if not self.preview.isVisibleTo(self):
+            return
+        mine, theirs = self.editor.verticalScrollBar(), self.preview.verticalScrollBar()
+        if mine.maximum() > 0:
+            theirs.setValue(int(theirs.maximum() * mine.value() / mine.maximum()))
 
     # title, status ------------------------------------------------------------------------------------------------
     def is_modified(self) -> bool:

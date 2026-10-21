@@ -34,13 +34,21 @@ class MarkdownView(QTextBrowser):
             f"blockquote{{color:{t['dim']};}} table{{border-color:{t['line']};}}")
         self.setStyleSheet(f"QTextBrowser{{background:{t['bg']};color:{t['fg']};border:none;padding:12px;}}")
 
-    def set_markdown(self, text: str, base_dir: str) -> None:
-        """Render ``text``; pictures and links are looked for beside the file (``base_dir``)."""
+    def set_markdown(self, text: str, base_dir: str, keep_position: bool = False) -> None:
+        """Render ``text``; pictures and links are looked for beside the file (``base_dir``). With ``keep_position`` (the editor's live
+        preview, drawn again at every pause in the typing) the view stays at the same fraction of the page instead of jumping to the top."""
+        bar = self.verticalScrollBar()
+        fraction = bar.value() / bar.maximum() if keep_position and bar.maximum() > 0 else 0.0
         self.base_dir = base_dir
         self.setSearchPaths([base_dir] if base_dir else [])
         self.document().setBaseUrl(QUrl.fromLocalFile(base_dir + "/") if base_dir else QUrl())
         self.document().setMarkdown(ms.escape_html(text), QTextDocument.MarkdownFeature.MarkdownDialectGitHub)
         self.moveCursor(self.textCursor().MoveOperation.Start)
+        bar.setValue(int(fraction * bar.maximum()))
+
+    def show_notice(self, text: str) -> None:
+        """Say something in place of the page (a file too big to render)."""
+        self.document().setPlainText(text)
 
     def _clicked(self, url: QUrl) -> None:
         text = url.toString()

@@ -2,6 +2,12 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-21#22 -- A Markdown preview in the editor
+
+- **The F4 editor can show the text as Markdown beside the source** (View > Markdown Preview, Ctrl+Shift+M). It is on when you open a Markdown file (`.md`, `.markdown`) and off for any other file, and you can switch it on for a text file too. It is drawn again a moment after you stop typing, from the text as it is now (nothing is saved for it), keeps its place on the page while you type, and follows the source when you scroll (the same fraction of the page is in view).
+- **Safe like the viewer's Markdown:** raw HTML in the text is shown as text and never run, a link opens only to the web, mail or a file on this computer (a refused link is said in the status line), and a text over 256 KB is not rendered (the source stays editable).
+- **Remembered for Markdown files:** if you switch the preview off (or on) in a Markdown file, the next Markdown file you open does the same. What you do in other files is not remembered.
+
 ## 2026-10-21#21 -- The release build's tests pass on the GitHub runner
 
 - The first run of the release workflow stopped at the tests: four tests of SFTP connections failed on the GitHub runner, because there the Windows OpenSSH `sftp-server` comes first on the path and the tests spell their paths for the one in Git for Windows. The test helper now looks for Git's build first. (Test code only; the program is unchanged.)
