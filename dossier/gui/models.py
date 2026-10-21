@@ -340,10 +340,10 @@ class FolderModel(QAbstractTableModel):
             if col == 0:
                 return entry.name
             if self.is_up_row(index.row()):
-                return "UP" if col == 1 else ""
+                return ""                                # the ".." row says what it is in its name
             if col == 1:
                 if entry.is_dir:
-                    return human_size(entry.size) if entry.path in self._tree_sizes else "DIR"
+                    return human_size(entry.size) if entry.path in self._tree_sizes else ""      # the Type column says Folder
                 return human_size(entry.size)
             if col == 2:
                 return datetime.fromtimestamp(entry.mtime).strftime("%Y-%m-%d %H:%M") if entry.mtime else ""

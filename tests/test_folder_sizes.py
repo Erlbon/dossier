@@ -103,7 +103,7 @@ def size_cells(panel):
 
 
 def wait_sizes(win, panel, folder):
-    pump(win, lambda: size_cells(panel).get(folder) != "DIR", timeout=10)
+    pump(win, lambda: size_cells(panel).get(folder) != "", timeout=10)
 
 
 def setup(win, left):
@@ -117,7 +117,7 @@ def setup(win, left):
 def test_the_button_adds_up_every_folder_and_the_size_column_shows_it(world):
     win, _d, left, *_ = world
     setup(win, left)
-    assert size_cells(win.left)["t"] == "DIR" and size_cells(win.left)["u"] == "DIR"
+    assert size_cells(win.left)["t"] == "" and size_cells(win.left)["u"] == ""
     win.left.sizes_button.click()
     wait_sizes(win, win.left, "t")
     cells = size_cells(win.left)
@@ -134,7 +134,7 @@ def test_marked_folders_only_when_some_are_marked(world):
     win.calculate_folder_sizes()
     wait_sizes(win, win.left, "u")
     cells = size_cells(win.left)
-    assert cells["u"] != "DIR" and cells["t"] == "DIR"
+    assert cells["u"] != "" and cells["t"] == ""
 
 
 def test_the_marked_total_of_the_status_line_counts_folder_sizes(world):
@@ -178,7 +178,7 @@ def test_a_refresh_forgets_the_sizes_and_shows_dir_again(world):
     win.left.sizes_button.click()
     wait_sizes(win, win.left, "t")
     win.left.refresh()
-    pump(win, lambda: size_cells(win.left).get("t") == "DIR")
+    pump(win, lambda: size_cells(win.left).get("t") == "")
 
 
 def test_a_folder_list_without_folders_and_the_home_page_say_so(world):

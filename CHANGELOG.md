@@ -2,6 +2,10 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-21#12 -- Quieter folder rows
+
+- **No more "UP" and "DIR" in the lists.** The ".." row is just "..", and a folder's Size cell is empty until its size has been calculated (Alt+Shift+Return); the Type column already says Folder. Sorting is unchanged.
+
 ## 2026-10-21#11 -- Saving a text file waits for a program that holds it
 
 - **A save of a text file no longer fails when a virus scanner or indexer has the new file open for a moment.** Putting the new file in place is tried again for a second or two (a Windows sharing violation) before giving up; if it still fails, the original file is untouched and the error is shown as before.
