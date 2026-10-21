@@ -25,7 +25,8 @@ BY_EXTENSION = {ext: icon for icon, exts in GROUPS.items() for ext in exts.split
 
 FOLDER, UP, LINK, FALLBACK = "folder", "corner-left-up", "link", "file"
 DRIVE_ICONS = {"fixed": "device-desktop", "removable": "usb", "network": "network", "optical": "disc",
-               "other": "database", "home": "home", "server": "cloud"}
+               "other": "database", "home": "home", "server": "cloud",
+               "tailnet": "device-desktop"}
 
 
 def icon_name(name: str, *, is_dir: bool = False, is_link: bool = False, is_up: bool = False) -> str:

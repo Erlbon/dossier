@@ -183,6 +183,7 @@ class MenusMixin:
         self._nfs_status.setEnabled(False)
         net_menu.aboutToShow.connect(lambda: self._nfs_status.setText(self.nfs_status_text()))
         net_menu.addAction(self._action("How to Switch On Client for NFS...", None, self.explain_nfs))
+        self.build_tailnet_menu(network)
 
     # Settings -------------------------------------------------------------------------------------------------------------------
     def _build_settings_menu(self, settings) -> None:

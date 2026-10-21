@@ -49,6 +49,7 @@ from .menus import MenusMixin
 from .wheel_settings import WheelMixin
 from .tools_bar_place import ToolsBarPlaceMixin
 from .bar_grip import BarGrip
+from .tailnet import TailnetMixin
 from .compare_folders import CompareFoldersMixin
 from .servers import ServersMixin
 from .copy_settings import CopySettingsMixin
@@ -78,7 +79,7 @@ SUMMARY_ITEMS = 12    # the confirmation lists this many items, then says how ma
 SIZE_LIMIT = 1000    # the status line sizes at most this many marked items
 
 
-class MainWindow(ViewModesMixin, ToolsBarMixin, ContextMenuMixin, DragDropMixin, LookMixin, ZipEditMixin, ArchiveCommandsMixin, CopySettingsMixin, AssistantMixin, OpenFilesMixin, MenusMixin, WheelMixin, ToolsBarPlaceMixin, CompareFoldersMixin, ServersMixin, DuplicatesMixin, FolderLayoutsMixin, QueueResumeMixin, ColumnsMixin, PropertiesMixin, MountMixin, ChecksumMixin, MarksAndNotesMixin, SearchCommandMixin, BatchRenameMixin, OperationQueueMixin, StallLogMixin, GoingPlacesMixin, FolderSizesMixin, UnpackMixin, QMainWindow):
+class MainWindow(ViewModesMixin, ToolsBarMixin, ContextMenuMixin, DragDropMixin, LookMixin, ZipEditMixin, ArchiveCommandsMixin, CopySettingsMixin, AssistantMixin, OpenFilesMixin, MenusMixin, WheelMixin, ToolsBarPlaceMixin, TailnetMixin, CompareFoldersMixin, ServersMixin, DuplicatesMixin, FolderLayoutsMixin, QueueResumeMixin, ColumnsMixin, PropertiesMixin, MountMixin, ChecksumMixin, MarksAndNotesMixin, SearchCommandMixin, BatchRenameMixin, OperationQueueMixin, StallLogMixin, GoingPlacesMixin, FolderSizesMixin, UnpackMixin, QMainWindow):
     def __init__(self, fs: Optional[FileSystem] = None, *, settings_path: Optional[str] = None, start=(None, None),
                  dialogs=None, trasher=None, terminal_launcher=None, which=None) -> None:
         super().__init__()
@@ -95,6 +96,7 @@ class MainWindow(ViewModesMixin, ToolsBarMixin, ContextMenuMixin, DragDropMixin,
         self.home_provider = HomeProvider(pins=lambda: self._saved_list("home/pins"),
                                           network=lambda: self._saved_list("home/network"),
                                           servers=lambda: self.server_items(),
+                                          tailnet=lambda: self.tailnet_items(),
                                           memory=DriveMemory(load=self._load_seen_drives, save=self._save_seen_drives,
                                                              persist=lambda: self._remember_drives()))
         self.fs = RouterFileSystem(self.fs, HomeFileSystem(self.home_provider))     # home:// and the disk as one
@@ -195,6 +197,7 @@ class MainWindow(ViewModesMixin, ToolsBarMixin, ContextMenuMixin, DragDropMixin,
         self.build_thumbnails()                      # the thumbnail maker, and each panel's remembered view
         self.build_layouts()                         # folder layouts: applied when a folder is shown
         self.build_assistant()                       # the assistant feature (off until the owner switches it on)
+        self.build_tailnet()                         # the Tailnet section of the Home page (read from the local Tailscale, on a thread)
 
         self._restore(start)
         if self.act_stall_log.isChecked():

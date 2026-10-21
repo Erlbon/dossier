@@ -2,6 +2,13 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-21#19 -- Tailnet devices on the Home page
+
+- **A Tailnet section on the Home page lists the devices of your Tailscale network** (name, address, system, online or offline, and "this computer"), read from the Tailscale program already on the computer. If Tailscale is not installed or not running there is no section. Dossier only reads the list: it never logs in or out, changes a setting or scans the network.
+- **Enter on a device adds it as a server:** the Add a Server dialog opens with the device's name and address filled in (SFTP first; change the type there). The right-click menu offers SFTP, WebDAV, OPDS and Subsonic directly, **Copy the Address** and **Read the Tailnet Again**.
+- The list is read on a thread when Dossier starts and when you show the Home page (not more than every half minute), so the page never waits for it. **Network > Show Tailnet Devices on the Home Page** switches the section off.
+- Not built: Taildrop (send files to a device) and Tailscale SSH checks.
+
 ## 2026-10-21#18 -- OPDS book catalogues and Subsonic music servers
 
 - **Two new kinds of server (Add a Server... > Type):** **OPDS** (a book catalogue: Calibre, Calibre-Web, Kavita, Komga, COPS) and **Subsonic** (a music server: Navidrome, Airsonic, Gonic). They show as folders and files on the Home page and in the panels, like the other servers, and are **always read-only**: nothing in a catalogue can be changed from Dossier.

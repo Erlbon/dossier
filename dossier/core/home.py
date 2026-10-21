@@ -28,11 +28,13 @@ HOME_URL = "home://"
 HEADER_PREFIX = "home://#"
 ADD_NETWORK = HEADER_PREFIX + "add-network"
 ADD_SERVER = HEADER_PREFIX + "add-server"
+TAILNET_PREFIX = HEADER_PREFIX + "tailnet/"
 TYPE_NAMES = {"fixed": "Local disk", "removable": "Removable disk", "optical": "Optical disc", "other": "Disk",
               "network": "Network drive", "place": "Folder", "pin": "Pinned folder", "netloc": "Network location", "server": "Server",
-              "action": "", "header": ""}
-SECTIONS = ("drives", "places", "pins", "network", "servers")
-SECTION_TITLES = {"drives": "Local drives", "places": "Places", "pins": "Pinned folders", "network": "Network", "servers": "Servers"}
+              "tailnet": "Tailnet device", "action": "", "header": ""}
+SECTIONS = ("drives", "places", "pins", "network", "servers", "tailnet")
+SECTION_TITLES = {"drives": "Local drives", "places": "Places", "pins": "Pinned folders", "network": "Network", "servers": "Servers",
+                  "tailnet": "Tailnet"}
 
 # the user's folders, by their usual name under the home folder
 KNOWN_FOLDERS = ("Desktop", "Documents", "Downloads", "Pictures", "Music", "Videos")
@@ -52,6 +54,15 @@ class ServerItem:
 
 
 @dataclass
+class TailnetItem:
+    """A device of the owner's Tailscale network as the Home page shows it (the window makes these from what the local Tailscale says)."""
+    name: str
+    host: str                  # its address
+    detail: str
+    online: bool = False
+
+
+@dataclass
 class HomeProvider:
     """Where the Home page gets its facts. Every one can be replaced, so the page is testable without a disk."""
 
@@ -62,6 +73,7 @@ class HomeProvider:
     pins: Callable[[], list] = lambda: []
     network: Callable[[], list] = lambda: []
     servers: Callable[[], list] = lambda: []      # ServerItem objects: the saved servers (nothing is contacted to list them)
+    tailnet: Callable[[], list] = lambda: []      # TailnetItem objects, read earlier from the local Tailscale (empty: no section)
     board: LightBoard = None                      # what the panels found out about places (set in __post_init__)
     memory: DriveMemory = None                    # which drive each letter held
 
@@ -146,6 +158,13 @@ def build_entries(p: HomeProvider) -> list:
                              status=OK if item.connected else UNCHECKED,
                              note="Connected" if item.connected else "Not connected: nothing is contacted until you open it"))
     entries.append(Entry(name="Add a server...", path=ADD_SERVER, is_dir=False, kind="action"))
+    devices = list(p.tailnet())
+    if devices:
+        entries.append(_header("tailnet"))
+        for item in devices:
+            entries.append(Entry(name=item.name, path=TAILNET_PREFIX + item.name, is_dir=False, kind="tailnet", detail=item.detail,
+                                 status=OK if item.online else UNCHECKED,
+                                 note="Online: press Enter to add it as a server" if item.online else "Offline"))
     return entries
 
 

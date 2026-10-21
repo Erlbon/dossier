@@ -19,7 +19,7 @@ from PyQt6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, QF
                              QPushButton, QSpinBox, QVBoxLayout)
 
 from ..core import davclient, ftpclient, opdsclient, servers, sshlink, subsonicclient
-from ..core.home import ADD_SERVER, ServerItem
+from ..core.home import ADD_SERVER, TAILNET_PREFIX, ServerItem
 from ..core.sftpfs import Session, scheme_of, split_path
 from .background import run_in_background
 
@@ -27,9 +27,10 @@ SETTINGS_KEY = "servers/list"
 
 
 class ConnectionDialog(QDialog):
-    def __init__(self, parent, conn: Optional[servers.Connection] = None) -> None:
+    def __init__(self, parent, conn: Optional[servers.Connection] = None, new: bool = False) -> None:
+        """``conn`` to edit; or, with ``new``, the values a new connection starts with (a device of the tailnet)."""
         super().__init__(parent)
-        self.setWindowTitle("Edit the Server" if conn else "Add a Server")
+        self.setWindowTitle("Edit the Server" if conn and not new else "Add a Server")
         self.setMinimumWidth(520)
         c = conn or servers.Connection("", "")
         self.base = c
@@ -313,8 +314,8 @@ class ServersMixin:
         return dlg.exec() == QDialog.DialogCode.Accepted
 
     # adding, editing, removing ------------------------------------------------------------------------------------------------------------
-    def add_server(self) -> None:
-        dlg = ConnectionDialog(self)
+    def add_server(self, prefill: Optional[servers.Connection] = None) -> None:
+        dlg = ConnectionDialog(self, prefill, new=prefill is not None)
         if not self._ask_server(dlg):
             return
         new = dlg.connection()
@@ -352,6 +353,9 @@ class ServersMixin:
     def _home_server_action(self, path: str) -> bool:
         if path == ADD_SERVER:
             self.add_server()
+            return True
+        if path.startswith(TAILNET_PREFIX):
+            self.add_tailnet_server(path)
             return True
         return False
 

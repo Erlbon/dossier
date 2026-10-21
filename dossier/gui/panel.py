@@ -1467,7 +1467,7 @@ class Panel(QFrame):
             self.go_up()
         elif entry.kind == "header":
             return
-        elif entry.kind == "action":
+        elif entry.kind in ("action", "tailnet"):
             self.home_action.emit(entry.path)
         elif entry.kind == "server":
             self.server_requested.emit(entry.path, new_tab)

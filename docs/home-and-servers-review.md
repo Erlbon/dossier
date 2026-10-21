@@ -192,3 +192,13 @@ Two read-only catalogues, shown as folders through the same `SftpFileSystem(sche
 * **"Stream to the player":** Enter on a track or a book downloads it to a temporary folder (with a question above 200 MB) and hands it to the program Windows has for it, the same way a file inside an archive opens. Nothing plays before the download is complete.
 * Not reachable from the command line or the assistant, like the other servers: they need an interactive login.
 * Tested against in-process servers (`tests/catalog_server.py`: an Atom and a JSON catalogue with paging, Basic login and range support, and a Subsonic API with token login), not against Calibre-Web, Kavita, Komga or Navidrome themselves.
+
+## 17. Tailnet (2026-10-21, H2b)
+
+The light integration of section 7, as recommended: a **Tailnet** section on the Home page, after Servers, listing the devices of the owner's Tailscale network.
+
+* `core/tailnet.py` runs `tailscale status --json` (found on the path, or in the usual install folder of Windows and macOS) with a five-second limit, no console window and no input, and turns it into devices: this computer first, then the online ones, then the rest by name. Nothing else of Tailscale is ever called: no login, no logout, no settings, no scan. No program, a stopped program, a slow one or damaged output are all "no devices", and then there is no section.
+* `gui/tailnet.py` reads it on a thread when the window opens and when a panel shows the Home page (at most every 30 seconds; a reading asked for while another runs follows it), and the Home page is redrawn only when the list changed. The Network menu has a switch (on by default) that hides the section.
+* **Enter** on a device (or the right-click menu: SFTP, WebDAV, OPDS, Subsonic) opens the Add a Server dialog with the device's name and **address** filled in (the address needs no name service); the owner finishes it. "Copy the Address" and "Read the Tailnet Again" are in the same menu.
+* The tests never run the real program: `tests/conftest.py` hides it from every window a test makes. Tried once by hand on the owner's computer: it lists this computer, two other Windows computers and a phone, with their addresses and online state.
+* Not built: Taildrop ("send to device"), a "received files" place, Tailscale SSH checks, MagicDNS names as hosts.

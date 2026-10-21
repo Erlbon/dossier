@@ -37,3 +37,10 @@ def _delete_leftover_windows():
     app.processEvents()
     app.sendPostedEvents(None, core.QEvent.Type.DeferredDelete.value)
     app.processEvents()
+
+
+@pytest.fixture(autouse=True)
+def _no_real_tailscale(monkeypatch):
+    """A test window never runs the Tailscale program of the computer the tests run on (and never lists its devices)."""
+    from dossier.core import tailnet
+    monkeypatch.setattr(tailnet, "find_tailscale", lambda: "")

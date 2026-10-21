@@ -16,6 +16,7 @@ from PyQt6.QtWidgets import QApplication, QMenu
 from ..core import archives, shellmenu
 from ..core.home import is_home
 from . import file_clipboard
+from .tailnet import KINDS as TAILNET_KINDS
 
 ARCHIVE_NAMES = archives.FOLDER_EXTENSIONS
 
@@ -171,6 +172,12 @@ class ContextMenuMixin:
         if entry is not None and entry.kind not in ("header",):
             if entry.kind == "action":
                 add(entry.name.rstrip("."), panel.open_current)
+            elif entry.kind == "tailnet":
+                for kind, label in TAILNET_KINDS:
+                    add(f"Add as {label}...", lambda k=kind, p=entry.path: self.add_tailnet_server(p, k))
+                menu.addSeparator()
+                add("Copy the Address", lambda p=entry.path: self.copy_tailnet_address(p))
+                add("Read the Tailnet Again", lambda: self.refresh_tailnet(force=True))
             elif entry.kind == "server":
                 conn = self.connection_for(entry.path)
                 live = conn is not None and self.server_connected(conn)
