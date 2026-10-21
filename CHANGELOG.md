@@ -2,6 +2,11 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-21#16 -- The programs bar can be moved
+
+- **The tools bar (your programs and folders of programs) can sit in the menu bar's row**, after the menus, which gives a whole row of the screen back to the panels. **Drag the six dots at its left end** to move it: a gold strip shows where it will land (the menu bar's row, the row under the menu bar, or the bottom, above the command line), and letting go puts it there. **View > Tools Bar Position** does the same without the mouse. The place is remembered, and View > Tools Bar still shows or hides the bar wherever it is.
+- The bar draws the edge that fits its place: a line under it below the menu bar, above it at the bottom, and none in the menu bar's row.
+
 ## 2026-10-21#15 -- Settings > Mouse Wheel
 
 - **Settings > Mouse Wheel...** chooses what the wheel does in the picture viewer, separately for the wheel, Ctrl+wheel and Shift+wheel: *scroll the picture, then the next or previous one*, *next or previous picture*, *zoom*, *scroll up and down*, *scroll left and right* or *nothing*. A viewer that is open follows at once. In the file lists the wheel always scrolls.

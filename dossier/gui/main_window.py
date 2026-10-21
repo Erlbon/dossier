@@ -47,6 +47,7 @@ from .assistant import AssistantMixin
 from .open_files import OpenFilesMixin
 from .menus import MenusMixin
 from .wheel_settings import WheelMixin
+from .tools_bar_place import ToolsBarPlaceMixin
 from .compare_folders import CompareFoldersMixin
 from .servers import ServersMixin
 from .copy_settings import CopySettingsMixin
@@ -76,7 +77,7 @@ SUMMARY_ITEMS = 12    # the confirmation lists this many items, then says how ma
 SIZE_LIMIT = 1000    # the status line sizes at most this many marked items
 
 
-class MainWindow(ViewModesMixin, ToolsBarMixin, ContextMenuMixin, DragDropMixin, LookMixin, ZipEditMixin, ArchiveCommandsMixin, CopySettingsMixin, AssistantMixin, OpenFilesMixin, MenusMixin, WheelMixin, CompareFoldersMixin, ServersMixin, DuplicatesMixin, FolderLayoutsMixin, QueueResumeMixin, ColumnsMixin, PropertiesMixin, MountMixin, ChecksumMixin, MarksAndNotesMixin, SearchCommandMixin, BatchRenameMixin, OperationQueueMixin, StallLogMixin, GoingPlacesMixin, FolderSizesMixin, UnpackMixin, QMainWindow):
+class MainWindow(ViewModesMixin, ToolsBarMixin, ContextMenuMixin, DragDropMixin, LookMixin, ZipEditMixin, ArchiveCommandsMixin, CopySettingsMixin, AssistantMixin, OpenFilesMixin, MenusMixin, WheelMixin, ToolsBarPlaceMixin, CompareFoldersMixin, ServersMixin, DuplicatesMixin, FolderLayoutsMixin, QueueResumeMixin, ColumnsMixin, PropertiesMixin, MountMixin, ChecksumMixin, MarksAndNotesMixin, SearchCommandMixin, BatchRenameMixin, OperationQueueMixin, StallLogMixin, GoingPlacesMixin, FolderSizesMixin, UnpackMixin, QMainWindow):
     def __init__(self, fs: Optional[FileSystem] = None, *, settings_path: Optional[str] = None, start=(None, None),
                  dialogs=None, trasher=None, terminal_launcher=None, which=None) -> None:
         super().__init__()
@@ -156,6 +157,7 @@ class MainWindow(ViewModesMixin, ToolsBarMixin, ContextMenuMixin, DragDropMixin,
         box.addLayout(status_row)
         self.setCentralWidget(central)
         self._build_menus()
+        self.set_tools_bar_place(self.tools_bar_place(), save=False)     # menus exist now: the bar goes where it was left
 
         for panel in (self.left, self.right):
             panel.activated.connect(self._set_active)
