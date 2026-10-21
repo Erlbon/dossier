@@ -13,6 +13,7 @@ import os
 from dataclasses import dataclass, replace
 from typing import Optional
 
+from .fsretry import replace_with_retry
 from .platform import longpath
 from .textview import AUTO, detect_encoding, looks_binary
 
@@ -140,7 +141,7 @@ def save_document(doc: Document, text: str, *, force: bool = False) -> Document:
             os.chmod(temp, os.stat(real).st_mode)
         except OSError:
             pass
-        os.replace(temp, real)
+        replace_with_retry(temp, real)               # a virus scanner may hold the new file for a moment
     except BaseException:
         try:
             os.remove(temp)

@@ -20,6 +20,7 @@ from dataclasses import dataclass, field
 from typing import Callable, Optional, Sequence
 
 from . import archives
+from .fsretry import replace_with_retry
 from .progress import Cancelled, CancelToken, check
 
 ZIP_BASED = (".zip", ".cbz", ".epub", ".docx", ".xlsx", ".pptx", ".odt", ".ods", ".odp", ".jar", ".apk", ".xpi", ".kmz",
@@ -292,14 +293,10 @@ REPLACE_WAIT = 0.1                       # scanner, a preview) lets go within a 
 
 def _replace(src: str, dst: str) -> None:
     """``os.replace`` that waits a little when another program has either file open (a sharing violation on Windows)."""
-    for attempt in range(REPLACE_TRIES):
-        try:
-            os.replace(src, dst)
-            return
-        except PermissionError as e:
-            if attempt == REPLACE_TRIES - 1:
-                raise ZipWriteError(f"the archive is in use by another program ({e.strerror or e}); nothing was changed") from e
-            time.sleep(REPLACE_WAIT * min(attempt + 1, 5))
+    try:
+        replace_with_retry(src, dst, REPLACE_TRIES, REPLACE_WAIT)
+    except PermissionError as e:
+        raise ZipWriteError(f"the archive is in use by another program ({e.strerror or e}); nothing was changed") from e
 
 
 def _swap_in(archive: str, part: str, trasher: Optional[Callable]) -> None:

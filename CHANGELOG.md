@@ -2,6 +2,11 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-21#11 -- Saving a text file waits for a program that holds it
+
+- **A save of a text file no longer fails when a virus scanner or indexer has the new file open for a moment.** Putting the new file in place is tried again for a second or two (a Windows sharing violation) before giving up; if it still fails, the original file is untouched and the error is shown as before.
+- One shared rule (`core/fsretry.py`) for the text editor and the archive writer, which had its own copy.
+
 ## 2026-10-21#10 -- A new menu layout, and two visual fixes
 
 - **The menus are sorted by what they are for.** *Files* (what can I do to the files), *Edit* (new: Undo and the clipboard), *Mark*, *View* (how a folder is shown), *Go* (where am I and where to next), *Tools* (replaces *Commands*: search, duplicates, compare, batch rename, archives, checksums, the operation queue, terminals), *Network* (new: servers, shares, network drives), *Settings* and *Help*. Every command keeps its shortcut and is in exactly one place; a test checks that.
