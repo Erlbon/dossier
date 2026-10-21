@@ -48,6 +48,7 @@ from .open_files import OpenFilesMixin
 from .menus import MenusMixin
 from .wheel_settings import WheelMixin
 from .tools_bar_place import ToolsBarPlaceMixin
+from .bar_grip import BarGrip
 from .compare_folders import CompareFoldersMixin
 from .servers import ServersMixin
 from .copy_settings import CopySettingsMixin
@@ -152,12 +153,14 @@ class MainWindow(ViewModesMixin, ToolsBarMixin, ContextMenuMixin, DragDropMixin,
         self.tools_bar.setVisible(str(self.settings.value("view/tools_bar", "true")).lower() == "true")
         box.addWidget(self.tools_bar)
         box.addWidget(self.split, 1)
-        box.addWidget(self._build_command_row())
+        self.command_row = self._build_command_row()
+        box.addWidget(self.command_row)
         box.addWidget(self.fkeys)
         box.addLayout(status_row)
         self.setCentralWidget(central)
         self._build_menus()
-        self.set_tools_bar_place(self.tools_bar_place(), save=False)     # menus exist now: the bar goes where it was left
+        for name in ("command", "fkeys", "tools"):                        # menus exist now: each bar goes where it was left
+            self.set_bar_place(name, self.bar_place(name), save=False)
 
         for panel in (self.left, self.right):
             panel.activated.connect(self._set_active)
@@ -216,6 +219,10 @@ class MainWindow(ViewModesMixin, ToolsBarMixin, ContextMenuMixin, DragDropMixin,
         row = QHBoxLayout(bar)
         row.setContentsMargins(0, 0, 0, 0)
         row.setSpacing(0)
+        grip = BarGrip(bar)
+        grip.dragging.connect(lambda pos: self._bar_dragging("fkeys", pos))
+        grip.dropped.connect(lambda pos: self._bar_dropped("fkeys", pos))
+        row.addWidget(grip)
         self._fkey_buttons = []
         self._fkey_icons = []
         for label, icon_name_, slot in (("F2 Rename", "pencil", lambda: self.rename()),
@@ -469,6 +476,10 @@ class MainWindow(ViewModesMixin, ToolsBarMixin, ContextMenuMixin, DragDropMixin,
         self.term_button.customContextMenuRequested.connect(
             lambda pos: self.build_terminal_menu().popup(self.term_button.mapToGlobal(pos)))
         self._style_terminal_button()
+        grip = BarGrip(row)
+        grip.dragging.connect(lambda pos: self._bar_dragging("command", pos))
+        grip.dropped.connect(lambda pos: self._bar_dropped("command", pos))
+        lay.addWidget(grip)
         lay.addWidget(self.prompt)
         lay.addWidget(self.cmdline, 1)
         lay.addWidget(self.term_button)

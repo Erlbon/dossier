@@ -8,7 +8,7 @@ into ``-``, for example ``v2026-10-19-01``.
 from __future__ import annotations
 
 APP_NAME = "Dossier"
-APP_VERSION = "2026-10-21#16"
+APP_VERSION = "2026-10-21#17"
 APP_REPO_URL = "https://github.com/Erlbon/dossier"
 
 

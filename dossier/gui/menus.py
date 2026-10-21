@@ -110,7 +110,7 @@ class MenusMixin:
         self.act_tools_bar.setChecked(self.tools_bar.isVisibleTo(self))
         self.act_tools_bar.toggled.connect(self.set_tools_bar_visible)
         view_menu.addAction(self.act_tools_bar)
-        self.build_tools_bar_place_menu(view_menu)
+        self.build_bar_place_menus(view_menu)
         tabs_menu = view_menu.addMenu("Tabs")
         for text, keys, slot in (("New Tab", "Ctrl+T", lambda: self.active.new_tab()),
                                  ("Close Tab", "Ctrl+W", lambda: self.active.close_tab(self.active.tabs.currentIndex())),

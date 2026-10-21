@@ -10,7 +10,7 @@ import os
 from typing import Optional
 
 from PyQt6.QtCore import QFileInfo, Qt, pyqtSignal
-from PyQt6.QtGui import QAction, QColor, QIcon, QPainter
+from PyQt6.QtGui import QAction, QIcon
 from PyQt6.QtWidgets import (QAbstractItemView, QComboBox, QDialog, QDialogButtonBox, QFileDialog, QFileIconProvider, QFormLayout,
                              QFrame, QHBoxLayout, QLabel, QLineEdit, QMenu, QPushButton, QSizePolicy, QToolButton,
                              QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget)
@@ -20,6 +20,7 @@ from ..core import tools as T
 from ..core.drives import is_network_path
 from . import icon_set, theme
 from .background import run_in_background
+from .bar_grip import BarGrip
 
 PROGRAM_EXTENSIONS = (".exe", ".com", ".bat", ".cmd", ".lnk", ".ps1", ".msi", ".appref-ms", ".jar", ".py", ".sh")
 
@@ -335,43 +336,6 @@ class ManageDialog(QDialog):
         return read(self.tree.invisibleRootItem())
 
 
-class _Grip(QWidget):
-    """Six dots at the left end of the bar: drag it to move the bar (to the menu bar's row, under it, or to the bottom)."""
-
-    dragging = pyqtSignal(object)                 # the global position while the button is down
-    dropped = pyqtSignal(object)
-
-    def __init__(self, parent=None) -> None:
-        super().__init__(parent)
-        self.setFixedWidth(12)
-        self.setCursor(Qt.CursorShape.SizeAllCursor)
-        self.setToolTip("Drag to move the bar")
-        self._down = False
-
-    def paintEvent(self, event) -> None:
-        p = QPainter(self)
-        p.setPen(Qt.PenStyle.NoPen)
-        p.setBrush(QColor(theme.current()["dim"]))
-        top = (self.height() - 12) // 2
-        for col in (3, 7):
-            for row in range(3):
-                p.drawEllipse(col, top + row * 5, 2, 2)
-
-    def mousePressEvent(self, event) -> None:
-        if event.button() == Qt.MouseButton.LeftButton:
-            self._down = True
-            self.dragging.emit(event.globalPosition().toPoint())
-
-    def mouseMoveEvent(self, event) -> None:
-        if self._down:
-            self.dragging.emit(event.globalPosition().toPoint())
-
-    def mouseReleaseEvent(self, event) -> None:
-        if self._down and event.button() == Qt.MouseButton.LeftButton:
-            self._down = False
-            self.dropped.emit(event.globalPosition().toPoint())
-
-
 class ToolsBar(QWidget):
     run_requested = pyqtSignal(object)            # a Tool: start it
     context_requested = pyqtSignal(object, object)   # (global position, path of the item under it, () for the bar itself)
@@ -390,7 +354,7 @@ class ToolsBar(QWidget):
         self.buttons: list = []
         self.place = "below_menu"                 # set by the window (core/barplace.py)
         self.wanted_width = 0                     # in the menu bar's row: the room the menus leave (the menu bar sizes a corner widget by its hint)
-        self.grip = _Grip(self)
+        self.grip = BarGrip(self)
         self.grip.dragging.connect(self.drag_moved.emit)
         self.grip.dropped.connect(self.drag_dropped.emit)
         self.setMinimumHeight(30)

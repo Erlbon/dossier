@@ -2,6 +2,12 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-21#17 -- The function key bar and the command line can be moved too
+
+- **The function key bar (F2 Rename ... F8 Delete) and the command line can go above the panels.** Each has the same six dots at its left end: drag them into the upper half of the panels to put the bar above them, into the lower half to put it back under them. A gold strip shows where it will land. The programs bar keeps its three places (menu bar row, under the menu bar, bottom).
+- **View > Bar Positions** sets all three without the mouse, in one submenu with a group for each bar. Every bar's place is remembered. Above the panels the order is: programs bar, command line, function key bar.
+- The view menu has one entry for this instead of one per bar.
+
 ## 2026-10-21#16 -- The programs bar can be moved
 
 - **The tools bar (your programs and folders of programs) can sit in the menu bar's row**, after the menus, which gives a whole row of the screen back to the panels. **Drag the six dots at its left end** to move it: a gold strip shows where it will land (the menu bar's row, the row under the menu bar, or the bottom, above the command line), and letting go puts it there. **View > Tools Bar Position** does the same without the mouse. The place is remembered, and View > Tools Bar still shows or hides the bar wherever it is.

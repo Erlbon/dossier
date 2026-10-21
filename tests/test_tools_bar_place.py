@@ -97,3 +97,76 @@ def test_the_place_is_remembered_for_the_next_start(app, tmp_path):
     pump(second)
     assert where(second) == "menu_row" and second.tools_bar_place_actions["menu_row"].isChecked()
     second.close()
+
+
+# the function key bar and the command line ------------------------------------------------------------------------------------------------
+def order_of(win):
+    column = win.centralWidget().layout()
+    names = {id(win.tools_bar): "tools", id(win.command_row): "command", id(win.fkeys): "fkeys", id(win.split): "panels"}
+    return [names.get(id(column.itemAt(i).widget())) or "status" for i in range(column.count())]
+
+
+def test_the_default_order_is_as_it_always_was(world):
+    win, *_ = world
+    assert order_of(win) == ["tools", "panels", "command", "fkeys", "status"]
+
+
+def test_the_function_key_bar_and_the_command_line_move_above_the_panels_and_back(world):
+    win, *_ = world
+    win.bar_place_actions["fkeys"]["top"].trigger()
+    assert order_of(win) == ["tools", "fkeys", "panels", "command", "status"] and win.settings.value("view/fkeys_place") == "top"
+    win.bar_place_actions["command"]["top"].trigger()
+    assert order_of(win) == ["tools", "command", "fkeys", "panels", "status"]
+    win.bar_place_actions["fkeys"]["bottom"].trigger()
+    assert order_of(win) == ["tools", "command", "panels", "fkeys", "status"]
+    win.set_tools_bar_place("bottom")
+    assert order_of(win) == ["command", "panels", "tools", "fkeys", "status"]
+    win.set_tools_bar_place("menu_row")
+    win.bar_place_actions["command"]["bottom"].trigger()
+    assert order_of(win) == ["panels", "command", "fkeys", "status"]
+    assert win.fkeys.isVisible() and win.command_row.isVisible() and win.cmdline.isVisible()
+
+
+def test_dragging_the_grips_of_these_bars_moves_them_by_the_half_of_the_panels(world):
+    win, *_ = world
+    top = win.split.mapTo(win, QPoint(0, 0)).y()
+    upper = win.mapToGlobal(QPoint(300, top + 20))
+    lower = win.mapToGlobal(QPoint(300, top + win.split.height() - 20))
+    win._bar_dragging("fkeys", upper)
+    assert win._drop_place == "top" and win._strip.isVisible()
+    win._bar_dropped("fkeys", upper)
+    assert order_of(win)[:3] == ["tools", "fkeys", "panels"] and not win._strip.isVisible()
+    win._bar_dropped("command", upper)
+    assert order_of(win)[:4] == ["tools", "command", "fkeys", "panels"]
+    win._bar_dropped("fkeys", lower)
+    win._bar_dropped("command", lower)
+    assert order_of(win) == ["tools", "panels", "command", "fkeys", "status"]
+
+
+def test_every_movable_bar_has_a_grip_and_the_places_are_remembered(app, tmp_path):
+    from dossier.gui.bar_grip import BarGrip
+    ini = str(tmp_path / "s.ini")
+    (tmp_path / "a").mkdir()
+    first = MainWindow(settings_path=ini, start=(str(tmp_path / "a"), str(tmp_path / "a")))
+    assert first.fkeys.findChildren(BarGrip) and first.command_row.findChildren(BarGrip) and first.tools_bar.findChildren(BarGrip)
+    first.set_bar_place("fkeys", "top")
+    first.set_bar_place("command", "top")
+    first.close()
+    second = MainWindow(settings_path=ini, start=(str(tmp_path / "a"), str(tmp_path / "a")))
+    second.show()
+    pump(second)
+    assert order_of(second) == ["tools", "command", "fkeys", "panels", "status"]
+    assert second.bar_place_actions["fkeys"]["top"].isChecked() and second.bar_place_actions["command"]["top"].isChecked()
+    second.close()
+
+
+def test_moving_another_bar_leaves_the_programs_bar_where_it_was_and_visible(world):
+    win, *_ = world
+    win.set_tools_bar_place("menu_row")
+    win.set_bar_place("fkeys", "top")
+    win.set_bar_place("command", "top")
+    QApplication.processEvents()
+    assert where(win) == "menu_row" and win.tools_bar.isVisible()
+    win.act_tools_bar.setChecked(False)
+    win.set_bar_place("fkeys", "bottom")
+    assert not win.tools_bar.isVisible()

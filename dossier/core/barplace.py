@@ -22,3 +22,17 @@ def place_at(y: int, menu_bottom: int, panels_top: int, panels_bottom: int) -> s
     if y < panels_top + (panels_bottom - panels_top) // 2:
         return "below_menu"
     return "bottom"
+
+
+# the function key bar (F2 Rename ... F8 Delete) and the command line can sit under the panels, as they always did, or above them
+FKEY_PLACES = (("bottom", "At the Bottom"), ("top", "Above the Panels"))
+FKEY_DEFAULT = "bottom"
+
+
+def fkey_clean(value) -> str:
+    return value if value in dict(FKEY_PLACES) else FKEY_DEFAULT
+
+
+def half_place_at(y: int, panels_top: int, panels_bottom: int) -> str:
+    """Dropped in the upper half of the panels (or above them) the bar goes above the panels, else under them."""
+    return "top" if y < panels_top + (panels_bottom - panels_top) // 2 else "bottom"
