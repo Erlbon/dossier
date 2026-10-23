@@ -99,10 +99,12 @@ def _other_names(path: str) -> list:
     return [n for n in names if os.path.normcase(os.path.abspath(n)) != me]
 
 
-def default_link_name(target: str, kind: str) -> str:
-    """A name for a new link to ``target``: ``name - link`` (a hard link keeps the extension)."""
+def default_link_name(target: str, kind: str, is_dir: Optional[bool] = None) -> str:
+    """A name for a new link to ``target``: ``name - link`` (a hard link keeps the extension). ``is_dir`` spares a look at the disk."""
     base = os.path.basename(target.rstrip("/\\")) or "link"
-    stem, ext = os.path.splitext(base) if kind == HARDLINK and os.path.isfile(target) else (base, "")
+    if is_dir is None:
+        is_dir = os.path.isdir(target)
+    stem, ext = os.path.splitext(base) if kind == HARDLINK and not is_dir else (base, "")
     return f"{stem} - link{ext}"
 
 

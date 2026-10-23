@@ -3,24 +3,11 @@
 from __future__ import annotations
 
 import os
-import re
-from dataclasses import replace
 
 from redactor_common.cli import EXIT_OK, EXIT_PARTIAL, CliError
 
 from ..core import filetimes as ft, links
-from .helpers import date_text, need_paths, parse_date
-
-_UNITS = {"d": 86400, "h": 3600, "m": 60, "s": 1}
-
-
-def duration(text: str) -> float:
-    """``+2h``, ``-1d``, ``1d2h30m15s`` as seconds."""
-    m = re.fullmatch(r"\s*([+-]?)((?:\d+(?:\.\d+)?[dhms])+)\s*", text or "")
-    if not m:
-        raise CliError(f"not a time difference: {text!r} (use +2h, -1d, 1d2h30m)")
-    total = sum(float(n) * _UNITS[u] for n, u in re.findall(r"(\d+(?:\.\d+)?)([dhms])", m.group(2)))
-    return -total if m.group(1) == "-" else total
+from .helpers import date_text, need_paths
 
 
 def cmd_link(args, out, fs) -> int:
@@ -40,9 +27,9 @@ def cmd_link(args, out, fs) -> int:
 
 def _rule(args):
     if args.set:
-        return ft.Rule(ft.SET, when=parse_date(args.set))
+        return ft.Rule(ft.SET, when=ft.parse_moment(args.set))
     if args.shift:
-        return ft.Rule(ft.SHIFT, seconds=duration(args.shift))
+        return ft.Rule(ft.SHIFT, seconds=ft.parse_duration(args.shift))
     if args.from_file:
         source = os.path.abspath(args.from_file)
         if not os.path.exists(source):
@@ -59,22 +46,14 @@ def cmd_touch(args, out, fs) -> int:
     paths = need_paths(args.paths)
     on = [f for f in ft.FLAGS if getattr(args, f) == "on"]
     off = [f for f in ft.FLAGS if getattr(args, f) == "off"]
-    rule = _rule(args)
-    if rule is None and not (on or off):
-        raise CliError("nothing to change: give a date (--set, --shift, --from-file, --from-exif, --copy-from) or an attribute (--readonly on)")
-    which = [f for f in ft.FIELDS if getattr(args, f)] or ["modified"]
-    merged: dict = {}
     try:
-        if rule is not None:
-            for c in ft.plan_times(paths, rule, which, recursive=args.recursive, include_folders=not args.no_folders):
-                merged[c.path] = c
-        if on or off:
-            for c in ft.plan_flags(paths, set_on=on, set_off=off, recursive=args.recursive, include_folders=not args.no_folders):
-                base = merged.get(c.path)
-                merged[c.path] = c if base is None else base if base.problem else replace(base, old_flags=c.old_flags, new_flags=c.new_flags)
+        rule = _rule(args)
+        if rule is None and not (on or off):
+            raise CliError("nothing to change: give a date (--set, --shift, --from-file, --from-exif, --copy-from) or an attribute (--readonly on)")
+        which = [f for f in ft.FIELDS if getattr(args, f)] or ["modified"]
+        plan = ft.plan_both(paths, rule, which, set_on=on, set_off=off, recursive=args.recursive, include_folders=not args.no_folders)
     except ft.TimeError as e:
         raise CliError(str(e)) from e
-    plan = list(merged.values())
     code = EXIT_OK
     for c in plan:
         if c.problem:

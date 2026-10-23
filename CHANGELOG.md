@@ -2,6 +2,13 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-24#02 -- Change Dates and Attributes, and New Link, in the window
+
+- **Tools > Change Dates and Attributes...** (also in the right-click menu) works on everything marked, or the item under the cursor. Choose which dates (modified, last opened, created on Windows) and how: set a moment, shift by a difference (`+2h`, `-1d`), copy one date of the item into another (created from modified), take the date of a file, or take a photo's date taken. Attributes are three-state boxes: leave as it is, switch on, switch off (hidden, system and archive on Windows). Folders can be included with what is inside them, and their own dates can be left alone.
+- **The table shows old and new for every item before anything is written.** It is made on a thread a moment after you stop typing, lists items that cannot be changed with the reason (a photo without a date taken, a file in an archive), and every header resizes and sorts. Nothing is written until **Apply**; then the change runs on a thread with progress and Cancel, and says how many items changed and which failed.
+- **Tools > New Link...** (also in the right-click menu) makes a symbolic link, a junction (folders, Windows) or a hard link (files, same drive) to the item under the cursor, by default in the other panel's folder. Options that cannot work for the item are greyed out with the reason in their tooltip; a hard link keeps the extension in the suggested name; a symbolic link can store a relative path. If the link is refused (the name is taken, no right to make symlinks) the dialog opens again with the reason and what you typed.
+- Date and time parsing is shared by the window and `dossier touch`, and one function plans dates and attributes together for both.
+
 ## 2026-10-24#01 -- Links and dates: the engine and the command line
 
 - **`dossier link target link [--kind symlink|junction|hardlink]`** makes a symbolic link, a junction (Windows, folders) or a hard link (same drive, files). Nothing is ever replaced, and each refusal says why (a hard link cannot be made for a folder, a junction only shows a folder, Windows needs Developer Mode for a symlink and says so). `--relative` makes a symlink that survives moving both ends.

@@ -139,6 +139,8 @@ class ContextMenuMixin:
         if convertible:
             add("Convert Archive to Zip", self.convert_archive_to_zip, enabled=not many)
         menu.addSeparator()
+        add("Change Dates and Attributes...", self.change_dates)
+        add("New Link...", self.new_link, enabled=not many)
         add("Properties", self.show_properties, keys="Alt+Enter")
         if shellmenu.can_show(paths):
             menu.addSeparator()

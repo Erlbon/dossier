@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import ctypes
 import os
+import re
 import stat
 from dataclasses import dataclass, field, replace
 from datetime import datetime
@@ -269,6 +270,45 @@ def plan_flags(paths: Iterable[str], *, set_on: Iterable[str] = (), set_off: Ite
         except OSError as e:
             out.append(Change(path, is_dir, Times(), Times(), problem=str(e.strerror or e)))
     return out
+
+
+def plan_both(paths: Iterable[str], rule: Optional[Rule], which: Iterable[str], *, set_on: Iterable[str] = (), set_off: Iterable[str] = (),
+              recursive: bool = False, include_folders: bool = True, cancel: Optional[CancelToken] = None) -> list:
+    """One plan for the dates (when there is a ``rule``) and the attributes (when any are named): the window and the command line both ask
+    for this, so an item appears once with everything that would change on it."""
+    on, off = list(set_on), list(set_off)
+    merged: dict = {}
+    if rule is not None:
+        for c in plan_times(paths, rule, which, recursive=recursive, include_folders=include_folders, cancel=cancel):
+            merged[c.path] = c
+    if on or off:
+        for c in plan_flags(paths, set_on=on, set_off=off, recursive=recursive, include_folders=include_folders, cancel=cancel):
+            base = merged.get(c.path)
+            merged[c.path] = c if base is None else base if base.problem else replace(base, old_flags=c.old_flags, new_flags=c.new_flags)
+    return list(merged.values())
+
+
+_DURATION = re.compile(r"\s*([+-]?)((?:\d+(?:\.\d+)?[dhms])+)\s*")
+_UNITS = {"d": 86400, "h": 3600, "m": 60, "s": 1}
+
+
+def parse_duration(text: str) -> float:
+    """``+2h``, ``-1d``, ``1d2h30m15s`` as seconds. Raises ``TimeError``."""
+    m = _DURATION.fullmatch(text or "")
+    if not m:
+        raise TimeError(f"not a time difference: {text!r} (use +2h, -1d, 1d2h30m)")
+    total = sum(float(n) * _UNITS[u] for n, u in re.findall(r"(\d+(?:\.\d+)?)([dhms])", m.group(2)))
+    return -total if m.group(1) == "-" else total
+
+
+def parse_moment(text: str) -> float:
+    """``2024-05-17``, ``2024-05-17 10:30`` or ``2024-05-17 10:30:15`` (local time) as seconds since 1970. Raises ``TimeError``."""
+    for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%d"):
+        try:
+            return datetime.strptime((text or "").strip(), fmt).timestamp()
+        except ValueError:
+            continue
+    raise TimeError(f"not a date: {text!r} (use 2024-05-17 or 2024-05-17 10:30)")
 
 
 def restore_plan(changes: Iterable[Change]) -> list:

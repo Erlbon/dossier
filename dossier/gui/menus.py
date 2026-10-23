@@ -160,6 +160,8 @@ class MenusMixin:
         archives.addAction(self._action("Pack to Zip...", "Alt+F5", self.pack_to_zip))
         archives.addAction(self._action("Unpack...", "Alt+F9", self.unpack_archive))
         archives.addAction(self._action("Convert Archive to Zip", None, self.convert_archive_to_zip))
+        tools.addAction(self._action("Change Dates and Attributes...", None, self.change_dates))
+        tools.addAction(self._action("New Link...", None, self.new_link))
         tools.addAction(self._action("Checksums of Marked Files", None, self.show_checksums))
         tools.addAction(self._action("Verify Checksum...", None, self.verify_checksum))
         tools.addAction(self._action("Edit Folder Note", "Ctrl+Shift+E", self.edit_folder_note))
