@@ -165,6 +165,7 @@ class MenusMixin:
         tools.addAction(self._action("Checksums of Marked Files", None, self.show_checksums))
         tools.addAction(self._action("Verify Checksum...", None, self.verify_checksum))
         tools.addAction(self._action("Edit Folder Note", "Ctrl+Shift+E", self.edit_folder_note))
+        tools.addAction(self._action("Command Line History...", None, lambda: (self.cmdline.setFocus(), self.show_command_history())))
         tools.addSeparator()
         operations = tools.addMenu("Operations")
         operations.addAction(self._action("Pause or Resume Operations", "Ctrl+Shift+P", self.toggle_pause))

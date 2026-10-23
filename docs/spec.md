@@ -164,7 +164,7 @@ Credentials go to the system keyring, never to a config file. Connections are bo
 | C1 | Every command is named and bound to a key; keys are editable, with the common two-pane set as a preset | TNT |
 | C2 | Command palette: type to find any command, folder, favourite or recent file | New |
 | C3 | User-defined menu entries and commands with placeholders (current file, selection list, folder), run as program, script or viewer | TNT |
-| C4 | Command line under the listing: runs in the current folder, with history and placeholders | TNT |
+| C4 | Command line under the listing: runs in the current folder, with history (Up and Down, a list under Ctrl+Down), name completion (Ctrl+Space) and placeholders | TNT |
 | C5 | File templates for "New" | TNT |
 | C6 | Favourite folders, with groups and quick keys | TNT |
 | C7 | System-wide hotkeys (bring Dossier forward, open a new window here) | TNT |

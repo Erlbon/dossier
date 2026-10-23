@@ -2,6 +2,12 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-24#03 -- The command line completes names and lists its history
+
+- **Ctrl+Space completes the word at the cursor.** In the first word it offers the programs of `PATH` (read once on a thread and kept for five minutes), the files of the folder and what you typed before; elsewhere it offers the files and folders of the panel's folder, or of the folder you typed (`sub\in`, `C:\Users\`, `~/`). One match is put in; several put in what they have in common and drop a list under the line (Up and Down, Enter or Tab or a click chooses, typing closes it and goes on). A name with a space gets quotes, a folder ends in the separator and keeps the quote open so the next press goes one level in. Hidden names show only when you start with a dot. It never runs or changes anything, and it works on a thread so a slow share cannot freeze the window.
+- **Ctrl+Down (or Tools > Command Line History...) lists what was typed this session**, newest first, each command once; with something already typed only the commands that contain it. The history is still kept in memory only.
+- Ctrl+Space and Ctrl+Down are used because Tab stays "back to the panel" and no shortcut uses Ctrl+Alt.
+
 ## 2026-10-24#02 -- Change Dates and Attributes, and New Link, in the window
 
 - **Tools > Change Dates and Attributes...** (also in the right-click menu) works on everything marked, or the item under the cursor. Choose which dates (modified, last opened, created on Windows) and how: set a moment, shift by a difference (`+2h`, `-1d`), copy one date of the item into another (created from modified), take the date of a file, or take a photo's date taken. Attributes are three-state boxes: leave as it is, switch on, switch off (hidden, system and archive on Windows). Folders can be included with what is inside them, and their own dates can be left alone.
