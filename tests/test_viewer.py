@@ -316,7 +316,7 @@ def test_menus_view_has_modes_and_notes_while_settings_has_the_choices(commander
     assert titles == ["Files", "Edit", "Mark", "View", "Go", "Tools", "Network", "Settings", "Help"]
     menus = {a.text().replace("&", ""): a.menu() for a in win.menuBar().actions()}
     texts = lambda name: [a.text() for a in menus[name].actions() if not a.isSeparator()]       # noqa: E731
-    assert texts("Edit") == ["Undo", "Copy Files to Clipboard", "Cut Files to Clipboard", "Paste Files Here", "Copy Marked Paths as Text"]
+    assert texts("Edit") == ["Undo", "Copy Files to Clipboard", "Cut Files to Clipboard", "Paste Files Here", "Paste Picture or Text as New File...", "Copy Marked Paths as Text"]
     assert texts("Mark") == ["Select All", "Mark by Pattern...", "Unmark by Pattern...", "Invert Selection", "Deselect All", "Mark by Tag...",
                              "Unmark by Tag...", "Saved Selections"]
     assert texts("View") == ["Details", "Thumbnails", "Thumbnail Size", "Arrange By", "Folder Layout", "Folder Notes", "Tools Bar", "Bar Positions", "Tabs",

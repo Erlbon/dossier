@@ -114,6 +114,7 @@ class _FileView:
     drag_paths = None           # set by the panel: row -> the paths a drag from that row carries
     drag_source = ""            # set by the panel: its name in a drag, so a drop knows where it came from
     drop_check = None           # set by the panel: (paths, source, row) -> whether a drop here would do something
+    content_check = None        # set by the panel: row -> whether a picture or text dropped here could become a new file
     _press = None               # where and on which row the left button went down
 
     def contextMenuEvent(self, event) -> None:
@@ -235,7 +236,7 @@ class _FileView:
             return
         from .dragdrop import label, make_mime
         drag = QDrag(self)
-        drag.setMimeData(make_mime(paths, self.drag_source))
+        drag.setMimeData(make_mime(paths, self.drag_source, self._stage_function(paths)))
         text = label(paths)
         metrics = QFontMetrics(self.font())
         pixmap = QPixmap(metrics.horizontalAdvance(text) + 24, metrics.height() + 10)
@@ -249,21 +250,45 @@ class _FileView:
         self._set_drop_row(-1)
         self.drag_ended.emit()
 
+    stage_for = None            # set by the panel: paths -> a function that copies them out of an archive or off a server, or None
+
+    def _stage_function(self, paths: list):
+        return self.stage_for(paths) if self.stage_for is not None else None
+
     # taking drops ----------------------------------------------------------------------------------------------
     def _drop_info(self, event):
         from .dragdrop import read_paths
         paths, source = read_paths(event.mimeData())
         return paths, source, self.indexAt(event.position().toPoint()).row()
 
+    def _content_row(self, event) -> Optional[int]:
+        """The row under a drop of a picture or text (no files in it) when it could become a new file here, else None."""
+        from .dragdrop import content_of
+        if self.content_check is None or content_of(event.mimeData()) is None:
+            return None
+        row = self.indexAt(event.position().toPoint()).row()
+        return row if self.content_check(row) else None
+
     def dragEnterEvent(self, event) -> None:
         paths, source, row = self._drop_info(event)
         if paths and self.drop_check is not None and self.drop_check(paths, source, row) is not None:
+            event.acceptProposedAction()
+        elif not paths and self._content_row(event) is not None:
             event.acceptProposedAction()
         else:
             event.ignore()
 
     def dragMoveEvent(self, event) -> None:
         paths, source, row = self._drop_info(event)
+        if not paths:
+            content_row = self._content_row(event)
+            if content_row is None:
+                self._set_drop_row(-1)
+                event.ignore()
+                return
+            self._set_drop_row(content_row if content_row >= 0 and self.content_check(content_row) == "folder" else -1)
+            event.acceptProposedAction()
+            return
         target = self.drop_check(paths, source, row) if paths and self.drop_check is not None else None
         if target is None:
             self._set_drop_row(-1)
@@ -279,7 +304,17 @@ class _FileView:
     def dropEvent(self, event) -> None:
         paths, source, row = self._drop_info(event)
         self._set_drop_row(-1)
-        if not paths or self.drop_check is None or self.drop_check(paths, source, row) is None:
+        if not paths:
+            content_row = self._content_row(event)
+            if content_row is None:
+                event.ignore()
+                return
+            from .dragdrop import content_of
+            kind, payload = content_of(event.mimeData())
+            event.acceptProposedAction()
+            self.content_dropped.emit(kind, payload, content_row)
+            return
+        if self.drop_check is None or self.drop_check(paths, source, row) is None:
             event.ignore()
             return
         event.acceptProposedAction()
@@ -378,6 +413,7 @@ class PanelTable(_FileView, QTableView):
     middle_clicked = pyqtSignal(int)  # middle click on a row: open that folder in a background tab
     history_step = pyqtSignal(int)    # the mouse's back (-1) or forward (+1) button
     dropped = pyqtSignal(list, int, int, object)   # (paths, row under the pointer or -1, keyboard modifiers, source panel)
+    content_dropped = pyqtSignal(str, object, int)  # (kind, a QImage or a str, row under the pointer or -1): a picture or text, not files
     drag_ended = pyqtSignal()                      # a drag that started here is over (the lists may have changed)
     context_requested = pyqtSignal(object, int)    # a right-click, or the Menu key: (global position, row under it or -1)
     zoom = pyqtSignal(int)                         # Ctrl+wheel in the icon view: +1 bigger, -1 smaller
@@ -397,6 +433,7 @@ class PanelIcons(_FileView, QListView):
     middle_clicked = pyqtSignal(int)  # middle click on a row: open that folder in a background tab
     history_step = pyqtSignal(int)    # the mouse's back (-1) or forward (+1) button
     dropped = pyqtSignal(list, int, int, object)   # (paths, row under the pointer or -1, keyboard modifiers, source panel)
+    content_dropped = pyqtSignal(str, object, int)  # (kind, a QImage or a str, row under the pointer or -1): a picture or text, not files
     drag_ended = pyqtSignal()                      # a drag that started here is over (the lists may have changed)
     context_requested = pyqtSignal(object, int)    # a right-click, or the Menu key: (global position, row under it or -1)
     zoom = pyqtSignal(int)                         # Ctrl+wheel in the icon view: +1 bigger, -1 smaller
@@ -569,6 +606,7 @@ class Panel(QFrame):
     mode_changed = pyqtSignal(object)                    # the view mode or the thumbnail size of this panel changed
     sort_changed = pyqtSignal(object)                    # the owner (not the program) changed the sort order of this panel
     files_dropped = pyqtSignal(list, str, int, object)    # (paths, folder they were dropped on, key modifiers, source panel)
+    content_dropped = pyqtSignal(str, object, str)        # (kind, a QImage or a str, folder it was dropped on): a picture or text to make a file of
     column_menu_requested = pyqtSignal(object)    # a right-click on the header (its position)
     columns_reordered = pyqtSignal()              # the user dragged a column
     note_edit_requested = pyqtSignal()    # the note was double-clicked
@@ -672,6 +710,9 @@ class Panel(QFrame):
         self.table.drag_paths = self._paths_to_drag
         self.table.drag_source = str(id(self))
         self.table.drop_check = self._drop_target
+        self.table.content_check = self._content_target
+        self.table.stage_for = self._stage_for_paths
+        self.table.content_dropped.connect(self._content_dropped)
         self.table.setAcceptDrops(True)
         self.table.setDragDropMode(QAbstractItemView.DragDropMode.DropOnly)
         self.table.dropped.connect(self._table_dropped)
@@ -779,6 +820,9 @@ class Panel(QFrame):
         view.drag_paths = self._paths_to_drag
         view.drag_source = str(id(self))
         view.drop_check = self._drop_target
+        view.content_check = self._content_target
+        view.stage_for = self._stage_for_paths
+        view.content_dropped.connect(self._content_dropped)
         view.setAcceptDrops(True)
         view.setDragDropMode(QAbstractItemView.DragDropMode.DropOnly)
         view.dropped.connect(self._table_dropped)
@@ -1130,6 +1174,37 @@ class Panel(QFrame):
         if source == str(id(self)) and all_in_folder(paths, dest, self.fs.dirname):
             return None
         return dest if on_row else "here"
+
+    def _stage_for_paths(self, paths: list):
+        """For a drag of items that are not on a drive (inside an archive, on a server): a function that copies them out when another
+        program asks for files. None when they are all on a drive (nothing to do) or are more than the limit (said in the status line)."""
+        if all(not has_scheme(p) for p in paths):
+            return None
+        from ..core import stage
+        wanted = set(paths)
+        known = [e for e in (self.model.entry_at(r) for r in range(self.model.entry_count())) if e is not None and e.path in wanted]
+        if stage.known_size(known) > stage.LIMIT:
+            self.message.emit(f"Too big to hand to another program (over {stage.LIMIT // (1024 * 1024)} MB): copy it to the other panel instead")
+            return None
+        fs = self.fs
+        return lambda: stage.stage(fs, paths)
+
+    def _content_target(self, row: int):
+        """Where a picture or text dropped on ``row`` would be made into a file: ``"folder"`` for a folder row, ``"here"`` for this panel's
+        folder, None where nothing can be made (the Home page, a read-only place, an archive)."""
+        if self.is_home:
+            return None
+        entry = self.model.entry_at(row) if row >= 0 else None
+        if entry is not None and entry.is_dir and entry.kind not in ("header", "action") and not self.model.is_up_row(row):
+            return "folder" if self.fs.is_writable(entry.path) and not entry.path.startswith("zip://") else None
+        return "here" if self.fs.is_writable(self.path) and not self.path.startswith("zip://") else None
+
+    def _content_dropped(self, kind: str, payload, row: int) -> None:
+        target = self._content_target(row)
+        if target is None:
+            return
+        entry = self.model.entry_at(row) if target == "folder" else None
+        self.content_dropped.emit(kind, payload, entry.path if entry is not None else self.path)
 
     def _table_dropped(self, paths: list, row: int, modifiers: int, source) -> None:
         target = self._drop_target(paths, source, row)

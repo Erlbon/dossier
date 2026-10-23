@@ -19,7 +19,7 @@ from PyQt6.QtWidgets import (QApplication, QHBoxLayout, QLabel, QMainWindow, QMe
 from ..core.ops import (Plan, check_name, conflict_rows, plan_copy, plan_delete, plan_move, plan_rename)
 from ..core.home import ADD_NETWORK, HomeFileSystem, HomeProvider, RouterFileSystem, removable_from_home
 from ..core.commandline import Placeholders, expand, run_command
-from ..core import patterns, viewmodes
+from ..core import patterns, stage, viewmodes
 from ..core.platform import IS_WINDOWS, has_scheme, is_elevated, machine_name, path_key, set_window_border
 from ..core.selection import SelectionStore
 from ..core.version import APP_NAME, APP_REPO_URL, APP_VERSION, RELEASE
@@ -34,6 +34,7 @@ from .command_line import CommandLine
 from .batch_rename import BatchRenameMixin
 from .command_completion import CommandCompletionMixin
 from .tab_sets import TabSetsMixin
+from .new_from_content import NewFromContentMixin
 from .dates_links import DatesLinksMixin
 from .checksums import ChecksumMixin
 from .mounting import MountMixin
@@ -82,7 +83,7 @@ SUMMARY_ITEMS = 12    # the confirmation lists this many items, then says how ma
 SIZE_LIMIT = 1000    # the status line sizes at most this many marked items
 
 
-class MainWindow(TabSetsMixin, CommandCompletionMixin, DatesLinksMixin, ViewModesMixin, ToolsBarMixin, ContextMenuMixin, DragDropMixin, LookMixin, ZipEditMixin, ArchiveCommandsMixin, CopySettingsMixin, AssistantMixin, OpenFilesMixin, MenusMixin, WheelMixin, ToolsBarPlaceMixin, TailnetMixin, CompareFoldersMixin, ServersMixin, DuplicatesMixin, FolderLayoutsMixin, QueueResumeMixin, ColumnsMixin, PropertiesMixin, MountMixin, ChecksumMixin, MarksAndNotesMixin, SearchCommandMixin, BatchRenameMixin, OperationQueueMixin, StallLogMixin, GoingPlacesMixin, FolderSizesMixin, UnpackMixin, QMainWindow):
+class MainWindow(NewFromContentMixin, TabSetsMixin, CommandCompletionMixin, DatesLinksMixin, ViewModesMixin, ToolsBarMixin, ContextMenuMixin, DragDropMixin, LookMixin, ZipEditMixin, ArchiveCommandsMixin, CopySettingsMixin, AssistantMixin, OpenFilesMixin, MenusMixin, WheelMixin, ToolsBarPlaceMixin, TailnetMixin, CompareFoldersMixin, ServersMixin, DuplicatesMixin, FolderLayoutsMixin, QueueResumeMixin, ColumnsMixin, PropertiesMixin, MountMixin, ChecksumMixin, MarksAndNotesMixin, SearchCommandMixin, BatchRenameMixin, OperationQueueMixin, StallLogMixin, GoingPlacesMixin, FolderSizesMixin, UnpackMixin, QMainWindow):
     def __init__(self, fs: Optional[FileSystem] = None, *, settings_path: Optional[str] = None, start=(None, None),
                  dialogs=None, trasher=None, terminal_launcher=None, which=None) -> None:
         super().__init__()
@@ -118,6 +119,7 @@ class MainWindow(TabSetsMixin, CommandCompletionMixin, DatesLinksMixin, ViewMode
         self._plans: list = []                     # plans being worked out in the background
         self.paused = False
         self._closing = False                      # the program is being closed: unfinished jobs stay in the journal
+        threading.Thread(target=stage.clean_up, daemon=True, name="dossier-stage-clean").start()   # temporary copies a crash left behind
         self._jobs: list = []                      # running first, then the ones waiting
         self._links: dict = {}                     # the ssh process of each connected server
         self._size_jobs: list = []                 # folder size walks in the background
@@ -189,6 +191,7 @@ class MainWindow(TabSetsMixin, CommandCompletionMixin, DatesLinksMixin, ViewMode
             panel.flatten_requested.connect(lambda p=panel: self.show_all_files_below(p))
             panel.context_requested.connect(lambda pos, row, p=panel: self.show_context_menu(p, pos, row))
             panel.files_dropped.connect(lambda paths, dest, mods, source: self._files_dropped(paths, dest, mods, source))
+            panel.content_dropped.connect(self._new_file_from_content)
             panel.column_menu_requested.connect(lambda pos, p=panel: self.show_column_menu(p, pos))
             panel.columns_reordered.connect(lambda p=panel: self._columns_dragged(p))
             panel.open_archived.connect(lambda path: self._unpack_then([path], lambda local: self._open_with_system(local[0])))
@@ -928,7 +931,8 @@ class MainWindow(TabSetsMixin, CommandCompletionMixin, DatesLinksMixin, ViewMode
             return
         sources, cut = file_clipboard.get()
         if not sources:
-            self._say("The clipboard holds no files")
+            if not self.paste_content():                      # a picture or text on the clipboard becomes a new file
+                self._say("The clipboard holds no files, picture or text")
             return
         if self.active.loading:
             self.dialogs.info("Paste", f"This panel is still opening {self.active.pending_path}. Wait for it, or press "
@@ -1095,6 +1099,7 @@ class MainWindow(TabSetsMixin, CommandCompletionMixin, DatesLinksMixin, ViewMode
                 event.ignore()
                 return
         self._closing = True
+        stage.clean_up(everything=True)               # what a drag out of an archive or a server copied for another program
         for job in list(self._jobs) + list(self._size_jobs) + list(self._plans):
             job.cancel()
         self.disconnect_all_servers()                # the ssh processes end with the program

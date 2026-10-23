@@ -2,6 +2,13 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-24#05 -- Pictures, text and web links become files; drag items out of archives and servers
+
+- **Ctrl+V with no files on the clipboard makes a file of what is there:** a picture becomes a PNG, text becomes a UTF-8 `.txt`. You are asked for the name first (suggested from the time, for example `Pasted image 2026-10-24 10.30.12.png`); the extension the kind needs is added if you leave it out, and typing `.jpg`, `.bmp`, `.tif` or `.webp` saves the picture in that format. **Edit > Paste Picture or Text as New File...** (Ctrl+Shift+V) does the same on purpose. A name that is taken becomes `name (2).ext`: nothing is ever overwritten, and the file is made exclusively on a thread.
+- **Dropping a picture or text on a panel does the same,** in the panel's folder, or inside the folder row it was dropped on (the row lights up). A **web link dragged from a browser** becomes an Internet Shortcut (`.url`) named after the site. Files dropped from Explorer, and what Dossier itself drags, are handled as files, as before. A read-only place (an open archive, a catalogue, the Home page) says why nothing was made.
+- **Dragging items that are inside an archive or on a server to another program now works.** The other program is offered file URLs, and the items are copied to a temporary folder only when it asks, at the drop; a drag that ends inside Dossier copies nothing. The limit is 64 MB (files that are listed are counted up front, and a folder that turns out bigger stops the copy); a bigger drag says so in the status line and still works between the panels. The temporary copies are removed when the window closes, and old ones a crash left (more than a day) when the program starts.
+- Drag-in from other programs (files from Explorer or a file manager) was already there; it is now joined by pictures, text and links.
+
 ## 2026-10-24#04 -- Saved tab sets
 
 - **View > Tabs > Save Tab Set As...** keeps the folders of the active panel's tabs, and which tab was in front, under a name. **Open Tab Set** replaces the panel's tabs with them (as the saved session does when the program starts); **Add Tab Set** opens its folders as more tabs after the ones there; **Forget Tab Set** removes one. A set is not tied to a panel: open it in either. The lists of names are filled each time the menu opens, like the saved selections of the Mark menu.

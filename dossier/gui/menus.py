@@ -63,6 +63,7 @@ class MenusMixin:
                   self._action("Cut Files to Clipboard", "Ctrl+X", self.clip_cut),
                   self._action("Paste Files Here", "Ctrl+V", self.clip_paste)):
             edit.addAction(a)
+        edit.addAction(self._action("Paste Picture or Text as New File...", "Ctrl+Shift+V", self.paste_as_new_file))
         edit.addSeparator()
         edit.addAction(self._action("Copy Marked Paths as Text", None, self.copy_marked_paths))
 

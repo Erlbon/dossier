@@ -175,7 +175,8 @@ def test_menu_and_shortcuts_act_on_the_active_panel(world):
     view = {a.text().replace("&", ""): a.menu() for a in win.menuBar().actions()}["View"]
     tabs_menu = next(a.menu() for a in view.actions() if a.text() == "Tabs")
     assert [a.text() for a in tabs_menu.actions()] == ["New Tab", "Close Tab", "Next Tab", "Previous Tab",
-                                                       "Open Folder in New Tab"]
+                                                       "Open Folder in New Tab", "", "Save Tab Set As...", "Open Tab Set",
+                                                       "Add Tab Set", "Forget Tab Set"]
 
 
 def test_copy_goes_to_the_other_panels_current_tab(world):

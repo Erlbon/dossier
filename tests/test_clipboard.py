@@ -113,9 +113,12 @@ def test_a_plain_url_list_is_a_copy(world):
 
 def test_paste_with_no_files_says_so_and_changes_nothing(world):
     win, dialogs, left, _r, _t = world
-    QApplication.clipboard().setText("just words")
+    QApplication.clipboard().clear()
     key(win, Qt.Key.Key_V, CTRL)
     assert "no files" in win.status.text()
+    assert list(left.iterdir()) == []
+    QApplication.clipboard().setText("just words")                 # text is offered as a new file (a name is asked; cancelling makes nothing)
+    key(win, Qt.Key.Key_V, CTRL)
     assert list(left.iterdir()) == []
 
 
