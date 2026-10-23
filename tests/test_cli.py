@@ -284,3 +284,25 @@ def test_the_documentation_names_every_command_and_every_option():
                 if option.startswith("--") and option not in ("--help", "--json", "--quiet", "--output") and option not in doc:
                     missing.append(f"{name} {option}")
     assert not missing, missing
+
+
+def test_check_reports_and_fixes(tmp_path, capsys, bin_dir):
+    data = tmp_path / "data"
+    put(data / "Thumbs.db", b"j")
+    put(data / "Beach.JPG", b"\xff\xd8\xff\xe0" + b"0" * 20)
+    code, doc, _err = run_json(capsys, "check", str(data))
+    assert code == 0 and doc["findings"] == 2 and doc["warning"] == 0
+    assert {r["rule"] for r in doc["results"]} == {"junk-file", "upper-case-extension"}
+    code, doc, _err = run_json(capsys, "check", str(data), "--fix", "--dry-run")
+    assert code == 0 and doc["dry_run"] and (data / "Beach.JPG").exists()
+    code, doc, _err = run_json(capsys, "check", str(data), "--fix")
+    assert "Beach.jpg" in os.listdir(data)
+    code, doc, _err = run_json(capsys, "check", str(data), "--fix", "--delete-junk")
+    assert not (data / "Thumbs.db").exists() and data.is_dir()
+
+
+def test_check_lists_its_checkers_and_refuses_an_unknown_one(tmp_path, capsys):
+    code, doc, _err = run_json(capsys, "check", str(tmp_path), "--list")
+    assert code == 0 and doc["checkers"] >= 10
+    code, _out, err = run(capsys, "check", str(tmp_path), "--only", "nonsense")
+    assert code == 2

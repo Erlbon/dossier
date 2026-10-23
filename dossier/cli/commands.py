@@ -100,6 +100,14 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--same", action="store_true", help="also list the files that are alike")
     p.add_argument("--sync", choices=[k for k, _t in sync.MODES], help="make the folders alike: copy and delete in this direction")
     p.add_argument("--dry-run", action="store_true", help="with --sync: show what would be done and do nothing")
+    p = command("check", "look for files that are not healthy: empty, junk, bad names, wrong extensions, damaged zips, empty folders")
+    p.add_argument("folders", nargs="+", metavar="folder", help="where to look")
+    p.add_argument("--deep", action="store_true", help="also read whole files (checks the inside of every zip, cbz, epub); slow on big libraries")
+    p.add_argument("--only", action="append", default=[], metavar="RULE", help="run only this checker (repeat for several; --list shows them)")
+    p.add_argument("--list", action="store_true", help="list the checkers and do nothing")
+    p.add_argument("--fix", action="store_true", help="apply the obvious fixes (renames, or with --delete-junk the junk to the recycle bin)")
+    p.add_argument("--delete-junk", action="store_true", help="with --fix: delete (to the recycle bin) instead of renaming")
+    p.add_argument("--dry-run", action="store_true", help="with --fix: show what would be done and do nothing")
     sub.add_parser("mcp", help="run the MCP server for an AI assistant on standard input and output (see docs/assistant.md)",
                    description="Starts the MCP server. The assistant's program starts it and talks to it through the pipes; there is no network "
                                "listener. What an assistant may do is set in Dossier: Settings > Assistant Access.")
@@ -393,6 +401,46 @@ def cmd_compare(args, out, fs) -> int:
     return code
 
 
-COMMAND_FUNCTIONS = {"mcp": None, "ls": cmd_ls, "info": cmd_info, "find": cmd_find, "checksum": cmd_checksum, "copy": cmd_transfer, "move": cmd_transfer,
+# check ------------------------------------------------------------------------------------------------------------------------------------
+def cmd_check(args, out, fs) -> int:
+    from ..core import health
+    known = {c.id: c for c in health.checkers()}
+    if args.list:
+        for c in known.values():
+            _emit(out, {"id": c.id, "name": c.name, "tier": c.tier, "scope": c.scope}, f"{c.id:<10} tier {c.tier}  {c.name}")
+        out.finish({"command": "check", "checkers": len(known)})
+        return EXIT_OK
+    unknown = [o for o in args.only if o not in known]
+    if unknown:
+        raise CliError("no such checker: " + ", ".join(unknown) + " (--list shows them)")
+    roots = [one_folder(f) for f in args.folders]
+    report = health.run_checks(fs, roots, max_tier=health.T2 if args.deep else health.T1, only=args.only or None,
+                               progress=lambda done, found: out.info(f"{done:,} files looked at, {found:,} findings"))
+    for f in report.findings:
+        _emit(out, {"path": f.path, "checker": f.checker, "rule": f.rule, "severity": f.severity, "message": f.message, "evidence": f.evidence,
+                    "fix": f.fix.label if f.fix else None},
+              f"{f.severity:<7} {f.rule:<22} {f.path}" + (f"  ({f.evidence})" if f.evidence else ""))
+    if report.unreadable:
+        out.warn(f"{report.unreadable} item{'s' if report.unreadable != 1 else ''} could not be read")
+    counts = {s: report.count(s) for s in health.SEVERITIES}
+    out.line(f"{len(report.findings):,} finding{'s' if len(report.findings) != 1 else ''} ({counts['error']} errors, {counts['warning']} warnings, "
+             f"{counts['info']} notes) in {report.files:,} files and {report.folders:,} folders")
+    summary = {"command": "check", "findings": len(report.findings), **counts, "files": report.files, "folders": report.folders}
+    code = EXIT_PARTIAL if counts["error"] or counts["warning"] else EXIT_OK
+    if args.fix:
+        fixable = [f for f in report.findings if f.fix and (f.fix.kind == "rename") != args.delete_junk]
+        plan = health.fix_plan(fs, fixable)
+        if plan is None:
+            out.line("nothing to fix")
+        else:
+            sub = argparse.Namespace(command="check", dry_run=args.dry_run, verify=False)
+            step_code, info = _run_plan(plan, sub, out, fs, plan.title.lower())
+            code = max(code if args.dry_run else EXIT_OK, step_code)
+            summary.update(info)
+    out.finish(summary)
+    return code
+
+
+COMMAND_FUNCTIONS = {"mcp": None, "check": cmd_check, "ls": cmd_ls, "info": cmd_info, "find": cmd_find, "checksum": cmd_checksum, "copy": cmd_transfer, "move": cmd_transfer,
                      "delete": cmd_delete, "dups": cmd_dups, "compare": cmd_compare}
 assert set(COMMAND_FUNCTIONS) == set(COMMANDS)

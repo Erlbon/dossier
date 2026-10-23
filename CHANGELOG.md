@@ -2,6 +2,13 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-23#01 -- File health checks (first wave): `dossier check`
+
+- **`dossier check folder...`** looks through a folder tree for files that are not healthy and reports each with a severity (error, warning, note) and the evidence. It finds empty files, junk (`Thumbs.db`, `~$` files, half-downloaded files), names that break on Windows (trailing space or dot, reserved or illegal characters, accents stored in the wrong form, text read in the wrong encoding, paths over 259 characters), names that differ only in case, dead links, dates in the future or before 1980, a file whose extension and content disagree (a `.cbz` that is really a rar), subtitle files without a video, and empty folders (the folder you check is never called empty).
+- **`--deep`** also reads every zip, cbz, epub and Office file completely: a damaged entry, an archive that cannot be read, a name stored twice, and entries that would unpack outside their folder.
+- **Reports only.** Nothing is changed unless `--fix` is given: it applies the renames (a plan, so the same conflict rules apply); `--fix --delete-junk` instead moves junk and empty folders to the recycle bin. `--dry-run` shows the steps. `--list` names the checkers, `--only` runs some of them. Exit code 1 when there are errors or warnings.
+- Built as a Qt-free core (`core/health.py` the framework, `core/health_rules.py` the rules) so the window, the command line and the assistant can use the same checks later. No window for it yet.
+
 ## 2026-10-21#22 -- A Markdown preview in the editor
 
 - **The F4 editor can show the text as Markdown beside the source** (View > Markdown Preview, Ctrl+Shift+M). It is on when you open a Markdown file (`.md`, `.markdown`) and off for any other file, and you can switch it on for a text file too. It is drawn again a moment after you stop typing, from the text as it is now (nothing is saved for it), keeps its place on the page while you type, and follows the source when you scroll (the same fraction of the page is in view).
