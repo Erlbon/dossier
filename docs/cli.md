@@ -60,6 +60,25 @@ same content (by size, then the first and last 64 KB, then the whole file, so a 
 what is in both. Each group shows the copy that stays (`keep`) and the others (`extra`). `--delete` moves the extras to the recycle bin;
 one copy of every group always stays; `--dry-run` shows what would be deleted.
 
+### link
+
+`dossier link target link [--kind symlink|junction|hardlink] [--relative]` makes a link. A **symlink** holds a path and can point at a file or a folder
+(on Windows it needs Developer Mode or an administrator; the error says so). A **junction** (Windows only) shows another folder of the same computer and
+needs no special right. A **hard link** is a second name for the same file on the same drive; it cannot be made for a folder. `--relative` makes a
+symlink that stores the path from its own folder, so it still works when both are moved together. If `link` is an existing folder the link is made
+inside it, named after its target. Nothing is ever replaced: a name that is taken is refused. `dossier info` shows what a link points at, whether it is
+broken, and how many names a hard-linked file has.
+
+### touch
+
+`dossier touch path... (--set DATE | --shift TIME | --from-file PATH | --from-exif | --copy-from FIELD) [--modified] [--accessed] [--created] [-r] [--no-folders]
+[--readonly on|off] [--hidden on|off] [--system on|off] [--archive on|off] [--dry-run]` changes dates and attributes of many items at once. `--set` gives
+the moment, `--shift` moves the dates (`+2h`, `-1d`, `1d2h30m`), `--from-file` takes the date of another item, `--from-exif` takes the date a photo was
+taken, `--copy-from created` copies one date of an item into the others (for example the creation date into the modified date). `--modified` is the
+default; `--created` works on Windows only. `-r` (`--recursive`) goes into folders (links are not entered); `--no-folders` leaves the folders' own dates alone. Read-only
+files and folders can be changed. Use `--dry-run` first: it lists the old and the new values and changes nothing. The attributes hidden, system and archive
+exist on Windows; elsewhere only read-only (the write permission).
+
 ### check
 
 `dossier check folder... [--deep] [--only RULE] [--list] [--fix [--delete-junk]] [--dry-run]` looks for files that are not healthy and reports

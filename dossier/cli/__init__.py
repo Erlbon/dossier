@@ -15,7 +15,7 @@ This file stays light: it only knows the names (``cli_requested`` is called on e
 """
 from __future__ import annotations
 
-COMMANDS = ("ls", "info", "find", "checksum", "copy", "move", "delete", "dups", "compare", "check", "mcp")
+COMMANDS = ("ls", "info", "find", "checksum", "copy", "move", "delete", "dups", "compare", "check", "link", "touch", "mcp")
 
 
 def cli_requested(argv) -> bool:

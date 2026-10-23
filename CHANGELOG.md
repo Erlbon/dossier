@@ -2,6 +2,13 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-24#01 -- Links and dates: the engine and the command line
+
+- **`dossier link target link [--kind symlink|junction|hardlink]`** makes a symbolic link, a junction (Windows, folders) or a hard link (same drive, files). Nothing is ever replaced, and each refusal says why (a hard link cannot be made for a folder, a junction only shows a folder, Windows needs Developer Mode for a symlink and says so). `--relative` makes a symlink that survives moving both ends.
+- **`dossier info` shows what a link is:** where a symlink or junction points, whether it is broken, and for a hard-linked file how many names it has (on Windows also the other names).
+- **`dossier touch`** changes dates and attributes of many items at once: set a moment, shift by a difference (`+2h`, `-1d`), take the date of another file, take the date a photo was taken, or copy one date of the item into another (creation date into modified date). Modified, accessed and created (Windows) dates; read-only, hidden, system and archive attributes (Windows; read-only elsewhere). It goes into folders with `-r`, works on read-only files, and `--dry-run` lists old and new values first.
+- Built as Qt-free cores (`core/links.py`, `core/filetimes.py`) with a plan-then-apply split and a restore plan; the window for them comes next.
+
 ## 2026-10-23#02 -- Resume after a restart: the gaps closed
 
 - **Every job that moves or deletes files is remembered, not only Copy, Move, Paste, drag and drop and Delete.** Unpack, Synchronize, Convert, copy with Flatten and what the assistant asks for are kept as their steps while they wait or run (still only when Settings > Copy and Move > remember is on). Plans that only rename or make folders are not kept.

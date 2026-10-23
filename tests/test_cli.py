@@ -306,3 +306,38 @@ def test_check_lists_its_checkers_and_refuses_an_unknown_one(tmp_path, capsys):
     assert code == 0 and doc["checkers"] >= 10
     code, _out, err = run(capsys, "check", str(tmp_path), "--only", "nonsense")
     assert code == 2
+
+
+def test_link_makes_a_hard_link_and_info_shows_it(tmp_path, capsys):
+    src = put(tmp_path / "a.txt", b"hello")
+    code, doc, _err = run_json(capsys, "link", src, str(tmp_path / "b.txt"), "--kind", "hardlink")
+    assert code == 0 and open(tmp_path / "b.txt").read() == "hello"
+    code, doc, _err = run_json(capsys, "info", src)
+    assert "2 names" in doc["results"][0]["link_info"]
+    code, _out, err = run(capsys, "link", src, str(tmp_path / "b.txt"), "--kind", "hardlink")
+    assert code == 2 and "already there" in err
+    code, doc, _err = run_json(capsys, "link", src, str(tmp_path), "--kind", "hardlink")                  # into an existing folder
+    assert code == 0 and (tmp_path / "a - link.txt").exists()
+
+
+def test_touch_previews_then_changes_dates(tmp_path, capsys):
+    a = put(tmp_path / "a.txt", mtime=T0)
+    code, doc, _err = run_json(capsys, "touch", a, "--set", "2024-05-17 10:30", "--dry-run")
+    assert code == 0 and doc["dry_run"] and doc["items"] == 1 and os.stat(a).st_mtime == T0
+    code, doc, _err = run_json(capsys, "touch", a, "--shift", "+1d2h")
+    assert code == 0 and os.stat(a).st_mtime == T0 + 86400 + 7200
+    code, doc, _err = run_json(capsys, "touch", a, "--readonly", "on")
+    assert code == 0 and not os.access(a, os.W_OK)
+    code, doc, _err = run_json(capsys, "touch", a, "--readonly", "off", "--set", "2020-01-01")
+    assert code == 0 and os.access(a, os.W_OK)
+
+
+def test_touch_goes_into_folders_and_refuses_nonsense(tmp_path, capsys):
+    put(tmp_path / "d" / "x.txt", mtime=T0)
+    code, doc, _err = run_json(capsys, "touch", str(tmp_path / "d"), "-r", "--no-folders", "--set", "2024-01-01")
+    assert code == 0 and doc["done"] == 1
+    assert os.stat(tmp_path / "d").st_mtime != os.stat(tmp_path / "d" / "x.txt").st_mtime
+    code, _out, err = run(capsys, "touch", str(tmp_path / "d"))
+    assert code == 2 and "nothing to change" in err
+    code, _out, err = run(capsys, "touch", str(tmp_path / "d"), "--shift", "soon")
+    assert code == 2 and "not a time difference" in err

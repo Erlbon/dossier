@@ -100,7 +100,30 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--same", action="store_true", help="also list the files that are alike")
     p.add_argument("--sync", choices=[k for k, _t in sync.MODES], help="make the folders alike: copy and delete in this direction")
     p.add_argument("--dry-run", action="store_true", help="with --sync: show what would be done and do nothing")
-    p = command("check", "look for files that are not healthy: empty, junk, bad names, wrong extensions, damaged zips, empty folders")
+    p = command("link", "make a symbolic link, a junction (Windows, folders) or a hard link (same drive, files); nothing is replaced")
+    p.add_argument("target", help="the file or folder the link leads to")
+    p.add_argument("link", help="the new link: a path that does not exist yet (or an existing folder to put it in)")
+    p.add_argument("--kind", choices=("symlink", "junction", "hardlink"), default="symlink", help="the kind of link (default symlink)")
+    p.add_argument("--relative", action="store_true", help="a symlink that stores the path from its own folder, so it survives moving both")
+
+    p = command("touch", "change the dates (and Windows attributes) of files and folders; --dry-run shows old and new first")
+    p.add_argument("paths", nargs="+", metavar="path")
+    group = p.add_mutually_exclusive_group()
+    group.add_argument("--set", metavar="DATE", help="set the date to this moment (2024-05-17 or 2024-05-17 10:30)")
+    group.add_argument("--shift", metavar="TIME", help="move the dates later or earlier: +2h, -1d, 1d2h30m")
+    group.add_argument("--from-file", metavar="PATH", help="take the date of this file or folder")
+    group.add_argument("--from-exif", action="store_true", help="take the date a photo was taken from the picture")
+    group.add_argument("--copy-from", choices=("modified", "accessed", "created"), help="copy this date of the same item into the dates chosen")
+    p.add_argument("--modified", action="store_true", help="change the modified date (the default)")
+    p.add_argument("--accessed", action="store_true", help="change the date last opened")
+    p.add_argument("--created", action="store_true", help="change the creation date (Windows only)")
+    p.add_argument("-r", "--recursive", action="store_true", help="also everything inside the folders")
+    p.add_argument("--no-folders", action="store_true", help="with --recursive: only files, folders keep their dates")
+    for flag in ("readonly", "hidden", "system", "archive"):
+        p.add_argument(f"--{flag}", choices=("on", "off"), help=f"switch the {flag} attribute on or off")
+    p.add_argument("--dry-run", action="store_true", help="show the old and the new values and change nothing")
+
+    p = command("check","look for files that are not healthy: empty, junk, bad names, wrong extensions, damaged zips, empty folders")
     p.add_argument("folders", nargs="+", metavar="folder", help="where to look")
     p.add_argument("--deep", action="store_true", help="also read whole files (checks the inside of every zip, cbz, epub); slow on big libraries")
     p.add_argument("--only", action="append", default=[], metavar="RULE", help="run only this checker (repeat for several; --list shows them)")
@@ -196,6 +219,12 @@ def cmd_info(args, out, fs) -> int:
                 ex = read_exif(path)
                 row["exif"] = [{"group": g, "label": k, "value": v} for g, k, v in ex.fields]
                 lines += [f"{k}: {v}" for _g, k, v in ex.fields]
+        if "://" not in path:
+            from ..core import links
+            described = links.what_is(links.inspect(path))
+            if described:
+                row["link_info"] = described
+                lines.append(f"Link: {described}")
         out.record(row)
         out.line("\n".join(lines) + ("\n" if len(paths) > 1 else ""))
     out.finish({"command": "info"})
@@ -441,6 +470,8 @@ def cmd_check(args, out, fs) -> int:
     return code
 
 
-COMMAND_FUNCTIONS = {"mcp": None, "check": cmd_check, "ls": cmd_ls, "info": cmd_info, "find": cmd_find, "checksum": cmd_checksum, "copy": cmd_transfer, "move": cmd_transfer,
+from .touch_link import cmd_link, cmd_touch  # noqa: E402
+
+COMMAND_FUNCTIONS = {"mcp": None, "check": cmd_check, "link": cmd_link, "touch": cmd_touch, "ls": cmd_ls, "info": cmd_info, "find": cmd_find, "checksum": cmd_checksum, "copy": cmd_transfer, "move": cmd_transfer,
                      "delete": cmd_delete, "dups": cmd_dups, "compare": cmd_compare}
 assert set(COMMAND_FUNCTIONS) == set(COMMANDS)
