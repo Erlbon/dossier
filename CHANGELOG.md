@@ -2,6 +2,12 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-24#04 -- Saved tab sets
+
+- **View > Tabs > Save Tab Set As...** keeps the folders of the active panel's tabs, and which tab was in front, under a name. **Open Tab Set** replaces the panel's tabs with them (as the saved session does when the program starts); **Add Tab Set** opens its folders as more tabs after the ones there; **Forget Tab Set** removes one. A set is not tied to a panel: open it in either. The lists of names are filled each time the menu opens, like the saved selections of the Mark menu.
+- Only sets you save by name are kept (in the settings, with the folder layouts); a folder that is gone when a set is opened falls back to the nearest folder above it. A search result tab is saved as the folder the search started in.
+- Tests now pin that the sort order follows the same scope as the folder layout: a rule for a folder and its subfolders gives the subfolders its sort, a sort change there changes the rule, and nothing outside it is written.
+
 ## 2026-10-24#03 -- The command line completes names and lists its history
 
 - **Ctrl+Space completes the word at the cursor.** In the first word it offers the programs of `PATH` (read once on a thread and kept for five minutes), the files of the folder and what you typed before; elsewhere it offers the files and folders of the panel's folder, or of the folder you typed (`sub\in`, `C:\Users\`, `~/`). One match is put in; several put in what they have in common and drop a list under the line (Up and Down, Enter or Tab or a click chooses, typing closes it and goes on). A name with a space gets quotes, a folder ends in the separator and keeps the quote open so the next press goes one level in. Hidden names show only when you start with a dot. It never runs or changes anything, and it works on a thread so a slow share cannot freeze the window.

@@ -1344,6 +1344,11 @@ class Panel(QFrame):
         if activate:
             self.tabs.setCurrentIndex(index)         # runs _tab_switched
 
+    def append_tab(self, path: str) -> int:
+        """A tab at the end of the row, in the background (several appended one after the other keep their order)."""
+        self._save_tab_state()
+        return self._add_tab_entry(path)
+
     def _tab_switched(self, index: int) -> None:
         if index < 0:
             return

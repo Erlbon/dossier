@@ -118,6 +118,12 @@ class MenusMixin:
                                  ("Previous Tab", "Ctrl+Shift+Tab", lambda: self.active.next_tab(-1)),
                                  ("Open Folder in New Tab", "Ctrl+Return", lambda: self.active.open_current(True))):
             tabs_menu.addAction(self._action(text, keys, slot))
+        tabs_menu.addSeparator()
+        tabs_menu.addAction(self._action("Save Tab Set As...", None, self.save_tab_set))
+        self._tab_open_menu, self._tab_add_menu, self._tab_forget_menu = (tabs_menu.addMenu("Open Tab Set"), tabs_menu.addMenu("Add Tab Set"),
+                                                                          tabs_menu.addMenu("Forget Tab Set"))
+        tabs_menu.aboutToShow.connect(lambda: self.build_tab_set_menus(self._tab_open_menu, self._tab_add_menu, self._tab_forget_menu))
+        self.build_tab_set_menus(self._tab_open_menu, self._tab_add_menu, self._tab_forget_menu)
         view_menu.addSeparator()
         view_menu.addAction(self._action("Quick Filter", "Ctrl+S", lambda: self.active.start_filter()))
         view_menu.addAction(self._action("Folder Sizes", "Alt+Shift+Return", lambda: self.calculate_folder_sizes()))

@@ -151,3 +151,21 @@ def test_a_saved_layout_is_applied_when_the_program_starts(world):
         assert again.right.view_mode == "details"
     finally:
         again.close()
+
+
+def test_the_sort_follows_the_scope_like_the_view_does(world):
+    win, d, left, right, tmp = world
+    photos = photos_layout(win, tmp, "tree")                                  # photos: sorted by date, newest first, for it and below
+    _p, year, music, other = tree(tmp)
+    goto(win, win.left, year)
+    assert win.left.current_sort() == ("modified", True)                      # a subfolder of a tree rule: the same sort
+    win.left.table.sortByColumn(index_of("size"), Qt.SortOrder.AscendingOrder)
+    assert stored(win)[0]["sort"] == "size" and stored(win)[0]["desc"] is False   # changed in the subfolder: the rule changes
+    goto(win, win.left, photos)
+    assert win.left.current_sort() == ("size", False)                         # and so does the folder that owns it
+    goto(win, win.left, other)
+    assert win.left.current_sort() == ("name", False)                         # outside the scope: the ordinary sort
+    win.left.table.sortByColumn(index_of("type"), Qt.SortOrder.DescendingOrder)
+    assert stored(win)[0]["sort"] == "size"                                   # nothing outside the scope is written
+    goto(win, win.left, year)
+    assert win.left.current_sort() == ("size", False)
