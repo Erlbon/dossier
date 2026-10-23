@@ -167,6 +167,7 @@ class MenusMixin:
         operations = tools.addMenu("Operations")
         operations.addAction(self._action("Pause or Resume Operations", "Ctrl+Shift+P", self.toggle_pause))
         operations.addAction(self._action("Cancel Waiting Operations", None, self.cancel_waiting))
+        operations.addAction(self._action("Unfinished Operations...", None, lambda: self.offer_resume(manual=True)))
         tools.addSeparator()
         for a in (self._action("Terminal Here", "Ctrl+Shift+T", self.open_terminal),
                   self._action("Administrator Terminal Here", None, lambda: self.open_terminal(admin=True))):

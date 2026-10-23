@@ -3,10 +3,12 @@ pause, a list of what waits, and the report at the end."""
 from __future__ import annotations
 
 import threading
+from dataclasses import replace
 from typing import Optional
 
 from ..core.ops import ExecOptions, Kind, Plan
 from ..core.progress import check
+from ..core.queue_journal import plan_entry
 from ..core.worker import Job, JobState, run_plan_job
 from .background import run_in_background
 
@@ -39,9 +41,13 @@ class OperationQueueMixin:
         """Queue a plan. Plans run one after the other (one disk is never fought over); the progress box of a
         plan appears when it starts, and a queued plan waits until the ones before it are done. ``remember`` (an
         ``Entry``) is kept in the journal while the operation is unfinished, when the owner switched that on."""
-        journal = self.queue_journal() if remember is not None else None
-        if journal is not None:
-            journal.add(remember)
+        journal = self.queue_journal()
+        if journal is not None and remember is None:             # not asked for as a copy, move or delete (unpack, sync, the assistant...)
+            remember = plan_entry(plan)
+        if journal is not None and remember is not None:
+            self._journal_put(journal, remember)
+        else:
+            journal = None
         holder: dict = {}
         shown: dict = {}
 
@@ -61,7 +67,11 @@ class OperationQueueMixin:
 
         def finished(job: Job) -> None:
             if journal is not None and not self._closing:      # closing the program cancels the jobs: that is not finishing
-                journal.remove(remember.id)
+                failed = self._failed_steps(job)
+                if failed:                                       # not done: it stays, and the next start offers it again
+                    self._journal_put(journal, replace(remember, note=f"{failed} failed last time"))
+                else:
+                    journal.remove(remember.id)
             if "box" in shown:
                 shown["box"].close()
             if job in self._jobs:
@@ -84,6 +94,20 @@ class OperationQueueMixin:
         self._jobs.append(job)
         self._job = self._jobs[0]
         self._update_queue_label()
+
+    @staticmethod
+    def _journal_put(journal, entry) -> None:
+        """A plan with many steps is written on a thread; the short entry of a copy, move or delete at once."""
+        journal.add_later(entry) if entry.ops else journal.add(entry)
+
+    @staticmethod
+    def _failed_steps(job: Job) -> int:
+        """How many steps of a job that ended on its own failed (an error stops it too: 1). A job the owner cancelled or stopped is not
+        counted: they said they were done with it."""
+        result = job.result
+        if result is None:
+            return 1 if job.state is JobState.FAILED else 0
+        return 0 if result.cancelled or result.aborted else len(result.failed)
 
     def toggle_pause(self) -> None:
         """Pause or resume the running operation and the ones waiting behind it."""

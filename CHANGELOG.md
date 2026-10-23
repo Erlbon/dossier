@@ -2,6 +2,14 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-23#02 -- Resume after a restart: the gaps closed
+
+- **Every job that moves or deletes files is remembered, not only Copy, Move, Paste, drag and drop and Delete.** Unpack, Synchronize, Convert, copy with Flatten and what the assistant asks for are kept as their steps while they wait or run (still only when Settings > Copy and Move > remember is on). Plans that only rename or make folders are not kept.
+- **Your conflict choices survive.** A kept plan has the overwrite, skip and keep-both choices already in it, so after a restart nobody is asked again; only the steps that are not done run (a step whose source is gone, or whose copy is already there with the same size and time, is dropped).
+- **A job that ended with failed steps stays on the list** (for example a full disk or a locked file) and says so ("3 failed last time"); the next start offers it again, and only what failed is left to do. A job you cancelled or stopped yourself still goes off the list.
+- **Not now is not forgotten:** the status line says how many unfinished operations are remembered, and **Tools > Operations > Unfinished Operations...** asks about them again at any time (it also says when nothing is remembered, or when remembering is off).
+- Long plans are written to the list on a thread, in order, so the window never waits for the disk; the list is one object per window now (before, each use made a new one).
+
 ## 2026-10-23#01 -- File health checks (first wave): `dossier check`
 
 - **`dossier check folder...`** looks through a folder tree for files that are not healthy and reports each with a severity (error, warning, note) and the evidence. It finds empty files, junk (`Thumbs.db`, `~$` files, half-downloaded files), names that break on Windows (trailing space or dot, reserved or illegal characters, accents stored in the wrong form, text read in the wrong encoding, paths over 259 characters), names that differ only in case, dead links, dates in the future or before 1980, a file whose extension and content disagree (a `.cbz` that is really a rar), subtitle files without a video, and empty folders (the folder you check is never called empty).
