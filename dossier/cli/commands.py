@@ -123,6 +123,13 @@ def build_parser() -> argparse.ArgumentParser:
         p.add_argument(f"--{flag}", choices=("on", "off"), help=f"switch the {flag} attribute on or off")
     p.add_argument("--dry-run", action="store_true", help="show the old and the new values and change nothing")
 
+    p = command("tag", "show or change the tags inside files: mp3, flac, ogg, opus and m4a, and the ComicInfo of a cbz")
+    p.add_argument("paths", nargs="*", metavar="path", help="the files, all of one kind")
+    p.add_argument("--set", action="append", default=[], metavar="FIELD=VALUE", help="set a field (repeat for several), for example --set 'title=New title'")
+    p.add_argument("--clear", action="append", default=[], metavar="FIELD", help="take a field away (repeat for several)")
+    p.add_argument("--fields", action="store_true", help="list the fields of each kind of file and do nothing")
+    p.add_argument("--dry-run", action="store_true", help="show the old and the new values and change nothing")
+
     p = command("check","look for files that are not healthy: empty, junk, bad names, wrong extensions, damaged zips, empty folders")
     p.add_argument("folders", nargs="+", metavar="folder", help="where to look")
     p.add_argument("--deep", action="store_true", help="also read whole files (checks the inside of every zip, cbz, epub); slow on big libraries")
@@ -476,8 +483,9 @@ def cmd_check(args, out, fs) -> int:
     return code
 
 
+from .tagging import cmd_tag  # noqa: E402
 from .touch_link import cmd_link, cmd_touch  # noqa: E402
 
-COMMAND_FUNCTIONS = {"mcp": None, "check": cmd_check, "link": cmd_link, "touch": cmd_touch, "ls": cmd_ls, "info": cmd_info, "find": cmd_find, "checksum": cmd_checksum, "copy": cmd_transfer, "move": cmd_transfer,
+COMMAND_FUNCTIONS = {"mcp": None, "check": cmd_check, "link": cmd_link, "touch": cmd_touch, "tag": cmd_tag, "ls": cmd_ls, "info": cmd_info, "find": cmd_find, "checksum": cmd_checksum, "copy": cmd_transfer, "move": cmd_transfer,
                      "delete": cmd_delete, "dups": cmd_dups, "compare": cmd_compare}
 assert set(COMMAND_FUNCTIONS) == set(COMMANDS)

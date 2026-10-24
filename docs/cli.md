@@ -60,6 +60,17 @@ same content (by size, then the first and last 64 KB, then the whole file, so a 
 what is in both. Each group shows the copy that stays (`keep`) and the others (`extra`). `--delete` moves the extras to the recycle bin;
 one copy of every group always stays; `--dry-run` shows what would be deleted.
 
+### tag
+
+`dossier tag path... [--set FIELD=VALUE]... [--clear FIELD]... [--dry-run] [--fields]` shows or changes the tags inside files: mp3, flac, ogg, opus and
+m4a files (title, artist, album, album artist, track, disc, year or date, genre, composer) and the ComicInfo of a cbz (series, number, count, volume,
+title, summary, year, month, day, the credits, publisher, genre, tags, language, age rating, manga, web). Give files of one kind. With neither `--set`
+nor `--clear` it prints what the files carry. A field is named by its key or its label in any case (`album-artist`, `Series`, `year`); `--fields`
+lists them. Only the fields you name are touched: cover art, lyrics and tags Dossier does not know stay as they are, and a value that is already
+there is not written again. `--clear` (or `--set title=`) takes a field away. A file is never changed in place: the new version is made beside
+it, read back and checked, and only then put in its place, and the old one goes to the recycle bin. `--dry-run` lists old and new values and changes
+nothing; a file that cannot be changed (read-only, damaged, another kind) is named with the reason and the rest goes on.
+
 ### link
 
 `dossier link target link [--kind symlink|junction|hardlink] [--relative]` makes a link. A **symlink** holds a path and can point at a file or a folder

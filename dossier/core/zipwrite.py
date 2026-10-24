@@ -317,6 +317,9 @@ def _swap_in(archive: str, part: str, trasher: Optional[Callable]) -> None:
         pass                                                      # the old file stays beside the new one, named .dossier-old
 
 
+swap_in = _swap_in                       # public: other writers (the tags of an mp3, ComicInfo) put their new file in place the same way
+
+
 # convert ---------------------------------------------------------------------------------------------------------
 def _extract_all(archive: str, folder: str, cancel) -> None:
     """Unpack the whole archive into ``folder`` with the reader that can open it (one call, not one per member)."""

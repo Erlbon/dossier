@@ -2,6 +2,13 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-24#11 -- Writing metadata, first step: mp3 tags and cbz ComicInfo (engine and command line)
+
+- **`dossier tag`** shows or changes the tags inside files. It writes mp3, flac, ogg, opus and m4a tags (title, artist, album, album artist, track, disc, year or date, genre, composer) and the ComicInfo of a cbz (series, number, count, volume, title, summary, year, month, day, the credits, publisher, genre, tags, language, age rating, manga, web). `--set FIELD=VALUE`, `--clear FIELD`, `--dry-run` for old and new values, `--fields` to list the fields. Several files of one kind at once.
+- **Only what you name is touched.** Cover art, lyrics, custom frames and ComicInfo elements Dossier does not know stay exactly as they are; a value that is already there is not written; an empty value takes the field away. A new ComicInfo element goes where the schema puts it, a comic without ComicInfo.xml gets one, and one inside a folder is changed in place.
+- **A file is never changed in place.** The new version is made beside it (an mp3 as a copy with the new tags, a cbz as a rewritten zip), read back and checked against what was asked for, and only then put in the old one's place; the old file goes to the recycle bin (deleted at once on a drive that has none). A failure, a locked file or a cancel leaves the original as it was, with no leftover files. Values are checked first (a month is 1 to 12, a year a whole number), and a read-only, damaged or other kind of file is named with the reason while the rest goes on. The rating and label Dossier keeps on a file follow it.
+- The window for it (Tools > Edit Tags...) comes next. No new libraries: `mutagen` was already in for reading, the cbz uses the standard library and the zip rewrite that was already there.
+
 ## 2026-10-24#10 -- The Health window
 
 - **Tools > Check Folder Health...** opens a window that runs the file health checks (`dossier check`) on the active panel's folder and everything below it. Findings are **grouped by rule on the left**, worst first, each with its count and a coloured dot (red error, amber warning, grey note); **All findings** is on top for the flat view. The files of the chosen group are on the right with severity, item, folder, what is wrong and the fix on offer. Every header resizes and sorts (severity sorts by how bad it is, not alphabetically).
