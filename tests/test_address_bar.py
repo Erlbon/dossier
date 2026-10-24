@@ -75,6 +75,7 @@ def crumb_buttons(panel):
 def deep_folder(win, tmp):
     deep = tmp / "one" / "two" / "three"
     deep.mkdir(parents=True)
+    win.resize(1500, 700)                                      # wide enough for the whole path: the buttons on the bar's right take room too
     win.left.set_folder(str(deep))
     pump(win, lambda: win.left.path == str(deep))
     return deep

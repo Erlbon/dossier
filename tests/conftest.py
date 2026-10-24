@@ -19,6 +19,16 @@ def _own_assistant_folder(tmp_path, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _auto_refresh_off_unless_a_test_asks(monkeypatch):
+    """The panels would refresh themselves while a test is changing files under them: off here, and a test of auto refresh switches it on."""
+    try:
+        from dossier.gui import auto_refresh
+    except ImportError:                          # no Qt in this environment
+        return
+    monkeypatch.setattr(auto_refresh, "DEFAULT_LOCAL", False)
+
+
+@pytest.fixture(autouse=True)
 def _delete_leftover_windows():
     yield
     widgets = sys.modules.get("PyQt6.QtWidgets")

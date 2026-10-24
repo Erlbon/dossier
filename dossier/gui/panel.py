@@ -752,9 +752,17 @@ class Panel(QFrame):
         self.flatten_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.flatten_button.setToolTip("Flatten: every file below this folder as one list in a new tab (Ctrl+Shift+B)")
         self.flatten_button.clicked.connect(self.flatten_requested.emit)
+        self.refresh_button = QToolButton()
+        self.refresh_button.setObjectName("refreshbtn")
+        self.refresh_button.setText(chr(0x21BB))                                # a circular arrow: read this folder again
+        self.refresh_button.setAutoRaise(True)
+        self.refresh_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.refresh_button.setToolTip("Refresh: read this folder again (Ctrl+R refreshes both panels)")
+        self.refresh_button.clicked.connect(self.refresh)
         bar.addWidget(self.free)
         bar.addWidget(self.sizes_button)
         bar.addWidget(self.flatten_button)
+        bar.addWidget(self.refresh_button)
         self.bar = QWidget()
         self.bar.setObjectName("pathbarbox")
         self.bar.setLayout(bar)
@@ -975,9 +983,9 @@ class Panel(QFrame):
             f"#pathbarbox QToolButton#crumb:hover{{background:rgba(0,0,0,60);}}"
             f"#pathbarbox QToolButton#crumb::menu-indicator{{image:none;}}"
             f"#pathbarbox QLabel#crumbsep{{color:{text};}}"
-            f"#pathbarbox QToolButton#sizesbtn, #pathbarbox QToolButton#flatbtn"
+            f"#pathbarbox QToolButton#sizesbtn, #pathbarbox QToolButton#flatbtn, #pathbarbox QToolButton#refreshbtn"
             f"{{border:none;border-radius:4px;padding:1px 6px;font-weight:{look.weight()};}}"
-            f"#pathbarbox QToolButton#sizesbtn:hover, #pathbarbox QToolButton#flatbtn:hover{{background:rgba(0,0,0,60);}}")
+            f"#pathbarbox QToolButton#sizesbtn:hover, #pathbarbox QToolButton#flatbtn:hover, #pathbarbox QToolButton#refreshbtn:hover{{background:rgba(0,0,0,60);}}")
         palette = QPalette(QApplication.palette())
         if not active:
             for group in (QPalette.ColorGroup.Active, QPalette.ColorGroup.Inactive):

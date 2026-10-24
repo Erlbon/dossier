@@ -2,6 +2,12 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-24#14 -- Auto refresh, with its own switch for network drives, and a Refresh button
+
+- **Settings > Auto Refresh** has two switches. **Drives of This Computer** (on by default): a panel shows a file saved, a download that finished or a folder made by another program without you refreshing. **Network Drives (can be slow)** (off by default): watching a share can be slow and unreliable, so it is separate, and a network folder is never watched unless you turn that on. Both are remembered.
+- **Gentle by design.** Only the folder each panel shows is watched (two watches at most, nothing for the Home page, archives, search results or servers). A burst of changes (a download growing, a big copy by another program) is waited out, a panel is refreshed at most every 1.5 seconds, and nothing is refreshed while the panel is loading, an operation is running, a name is being edited, the address is being typed or the quick filter is open: the change is looked at again a moment later, never forgotten. It is the ordinary refresh, so the cursor, the marks and the scroll position stay where they were.
+- **A Refresh button** (a circular arrow) sits next to the sum and flatten buttons in each panel's bar and reads that panel's folder again (Ctrl+R refreshes both panels; F5 is still copy).
+
 ## 2026-10-24#13 -- Built to stay open for weeks: a soak test and two limits
 
 - **A soak test, `tools/soak.py`,** uses the window hard and watches memory, handles, threads and the number of objects: each round changes both panels' folders and does one more thing (a tab opened and closed, select all, a sort, the view mode, a copy that overwrites and a delete, a Health window opened and closed, a command, an undo, a refresh). Over 2,000 rounds (4,000 folder changes) the object count stayed flat (62,326 from start to end) and memory moved by under 2 MB, with no growth in handles or threads. A window can stay open for weeks.
