@@ -114,7 +114,7 @@ Sizes use the owner's scale (small under 2 minutes of Claude time, medium up to 
 | 1 | Group A and the ZIP integrity of B, extension against content, exact duplicates, sidecar orphans. Standard library only | C | large | The museum's issues are all found; none reported on a clean tree |
 | 2 | Rest of B: images, PDF, text and data files, SQLite, hash lists (Pillow and pypdf as optional extras) | C | large | Same, with extras absent and present |
 | 3 | The bit-rot baseline and "vanished files" (G), with the opt-in save | C | medium | A flipped byte under unchanged mtime is found |
-| 4 | Health window: findings list, grouping, severity filter, select-into-selection, fix preview, ignore | L | large | Walk from finding to previewed fix to undo on real folders |
+| 4 | Health window: findings list, grouping, severity filter, select-into-selection, fix preview, ignore | L | large | Walk from finding to previewed fix to undo on real folders. **Built 2026-10-24** (layout B: groups by rule on the left, with All findings on top; ignores last one session) |
 | 5 | Redactor adapters (D): promote the checks to `redactor_common`, wrap them | C | large | Apps and Dossier report the same findings for the same files |
 | 6 | Media (C) through the tool locator: mp3val, ffmpeg decode pass, container checks | C | medium | Run on a sample set with and without the tools installed |
 | 7 | Rule profiles (E): TOML loader, the comic profile ported from `comic-checker`, fix patterns | C | large | The profile reproduces the old checker's summary on its sample folder |

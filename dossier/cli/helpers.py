@@ -11,6 +11,7 @@ from redactor_common.cli import CliError
 
 from ..core.columns import when
 from ..core.home import HomeFileSystem, HomeProvider, RouterFileSystem
+from ..core.ops import describe_op
 from ..core.sizefmt import human_size
 from ..core.vfs import LocalFileSystem, natural_key
 
@@ -94,12 +95,7 @@ def sort_entries(entries: list) -> list:
     return sorted(entries, key=lambda e: (not e.is_dir, natural_key(e.name)))
 
 
-def op_line(op) -> str:
-    """One line for a planned step: what it does and to what."""
-    kind = op.kind.value
-    if op.dst:
-        return f"{kind:<6} {op.src}  ->  {op.dst}" if op.src else f"{kind:<6} {op.dst}"
-    return f"{kind:<6} {op.src}"
+op_line = describe_op                                  # the one-line description of a planned step lives in the core
 
 
 def first_line(text: Optional[str]) -> str:

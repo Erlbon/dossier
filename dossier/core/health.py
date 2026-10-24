@@ -14,7 +14,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Callable, Iterable, Iterator, Optional, Sequence
 
-from .progress import CancelToken, check
+from .progress import Cancelled, CancelToken, check
 from .vfs import Entry, FileSystem
 
 ERROR, WARNING, INFO = "error", "warning", "info"
@@ -84,6 +84,7 @@ class Report:
     folders: int = 0
     files: int = 0
     unreadable: int = 0        # folders that could not be listed and files that could not be read
+    cancelled: bool = False    # the run was stopped (only with ``partial_on_cancel``): what was found until then is here
 
     def count(self, severity: str) -> int:
         return sum(1 for f in self.findings if f.severity == severity)
@@ -106,8 +107,10 @@ def _walk(fs: FileSystem, root: str, report: Report, cancel: Optional[CancelToke
 
 
 def run_checks(fs: FileSystem, roots: Sequence[str], *, max_tier: int = T1, only: Optional[Iterable[str]] = None, now: float = 0.0,
-               cancel: Optional[CancelToken] = None, progress: Optional[Callable[[int, int], None]] = None) -> Report:
-    """Check the trees under ``roots`` with the registered checkers up to ``max_tier`` (``only``: those ids)."""
+               cancel: Optional[CancelToken] = None, progress: Optional[Callable[[int, int], None]] = None,
+               partial_on_cancel: bool = False) -> Report:
+    """Check the trees under ``roots`` with the registered checkers up to ``max_tier`` (``only``: those ids). A cancel raises ``Cancelled``,
+    or with ``partial_on_cancel`` ends the run and returns what was found so far (``report.cancelled``)."""
     import time
     wanted = set(only) if only is not None else None
     active = [c for c in checkers() if c.tier <= max_tier and (wanted is None or c.id in wanted)]
@@ -115,24 +118,29 @@ def run_checks(fs: FileSystem, roots: Sequence[str], *, max_tier: int = T1, only
     report = Report()
     file_checkers = [c for c in active if c.scope == FILE]
     folder_checkers = [c for c in active if c.scope == FOLDER]
-    for root in roots:
-        for folder, entries in _walk(fs, root, report, cancel):
-            for c in folder_checkers:
-                report.findings.extend(c.check(ctx, folder, entries))
-            for entry in entries:
-                if entry.is_dir:
-                    continue
-                report.files += 1
-                check(cancel)
-                for c in file_checkers:
-                    if c.extensions and not entry.name.lower().endswith(c.extensions):
+    try:
+        for root in roots:
+            for folder, entries in _walk(fs, root, report, cancel):
+                for c in folder_checkers:
+                    report.findings.extend(c.check(ctx, folder, entries))
+                for entry in entries:
+                    if entry.is_dir:
                         continue
-                    try:
-                        report.findings.extend(c.check(ctx, entry))
-                    except OSError:
-                        report.unreadable += 1
-                if progress and report.files % 200 == 0:
-                    progress(report.files, len(report.findings))
+                    report.files += 1
+                    check(cancel)
+                    for c in file_checkers:
+                        if c.extensions and not entry.name.lower().endswith(c.extensions):
+                            continue
+                        try:
+                            report.findings.extend(c.check(ctx, entry))
+                        except OSError:
+                            report.unreadable += 1
+                    if progress and report.files % 200 == 0:
+                        progress(report.files, len(report.findings))
+    except Cancelled:
+        if not partial_on_cancel:
+            raise
+        report.cancelled = True
     if progress:
         progress(report.files, len(report.findings))
     report.findings.sort(key=lambda f: (SEVERITIES.index(f.severity), f.path.lower(), f.rule))
@@ -158,3 +166,65 @@ def fix_plan(fs: FileSystem, findings: Sequence[Finding], quarantine=None):
     if isolate:
         return q.plan_quarantine(fs, isolate, quarantine or q.Settings())
     return None
+
+
+# what the Health window shows --------------------------------------------------------------------------------------------------------------
+@dataclass
+class Group:
+    rule: str
+    severity: str
+    findings: list = field(default_factory=list)
+
+    @property
+    def count(self) -> int:
+        return len(self.findings)
+
+    @property
+    def fixable(self) -> int:
+        return sum(1 for f in self.findings if f.fix)
+
+
+def group_by_rule(findings: Iterable[Finding]) -> list:
+    """The findings grouped by rule: the worst severity first, then the biggest group, then the name. A rule that reports two severities
+    is listed under the worse one."""
+    groups: dict = {}
+    for f in findings:
+        g = groups.get(f.rule)
+        if g is None:
+            g = groups[f.rule] = Group(f.rule, f.severity)
+        elif SEVERITIES.index(f.severity) < SEVERITIES.index(g.severity):
+            g.severity = f.severity
+        g.findings.append(f)
+    return sorted(groups.values(), key=lambda g: (SEVERITIES.index(g.severity), -g.count, g.rule))
+
+
+class IgnoreList:
+    """Rules the owner chose to hide below a folder (``Ignore this rule here``). Kept in memory for the session: it names folders, which is user
+    data, so nothing is written to disk."""
+
+    def __init__(self) -> None:
+        self._rules: set = set()
+
+    def __len__(self) -> int:
+        return len(self._rules)
+
+    @staticmethod
+    def _key(folder: str) -> str:
+        from .platform import path_key
+        return path_key(folder).rstrip("/" + chr(92))
+
+    def add(self, folder: str, rule: str) -> None:
+        self._rules.add((self._key(folder), rule))
+
+    def clear(self) -> None:
+        self._rules.clear()
+
+    def hides(self, finding: Finding) -> bool:
+        if not self._rules:
+            return False
+        here = self._key(finding.path)
+        return any(finding.rule == rule and (here == root or here.startswith(root + "/") or here.startswith(root + chr(92)))
+                   for root, rule in self._rules)
+
+    def visible(self, findings: Iterable[Finding]) -> list:
+        return [f for f in findings if not self.hides(f)]

@@ -154,6 +154,7 @@ class MenusMixin:
     def _build_tools_menu(self, tools) -> None:
         tools.addAction(self._action("Search...", "Alt+F7", self.search_files))
         tools.addAction(self._action("Find Duplicate Files...", "Alt+Shift+F7", self.find_duplicate_files))
+        tools.addAction(self._action("Check Folder Health...", None, self.check_folder_health))
         tools.addAction(self._action("Compare Folders and Synchronize...", "Alt+Shift+F8", self.compare_folders))
         tools.addAction(self._action("Compare the Two Current Files", None, self.compare_files))
         tools.addSeparator()

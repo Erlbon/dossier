@@ -487,6 +487,14 @@ def plan_delete(fs: FileSystem, sources: Sequence[str], *, to_trash: bool = True
 Trasher = Callable[[str], None]
 
 
+def describe_op(op: "Op") -> str:
+    """One line for a planned step: what it does and to what (the command line and the Health window's preview show it)."""
+    kind = op.kind.value
+    if op.dst:
+        return f"{kind:<6} {op.src}  ->  {op.dst}" if op.src else f"{kind:<6} {op.dst}"
+    return f"{kind:<6} {op.src}"
+
+
 def default_trash(path: str) -> None:
     """Send one item to the recycle bin (Windows) or the freedesktop trash (Linux)."""
     try:

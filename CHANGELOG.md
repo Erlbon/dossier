@@ -2,6 +2,14 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-24#10 -- The Health window
+
+- **Tools > Check Folder Health...** opens a window that runs the file health checks (`dossier check`) on the active panel's folder and everything below it. Findings are **grouped by rule on the left**, worst first, each with its count and a coloured dot (red error, amber warning, grey note); **All findings** is on top for the flat view. The files of the chosen group are on the right with severity, item, folder, what is wrong and the fix on offer. Every header resizes and sorts (severity sorts by how bad it is, not alphabetically).
+- **The check runs on a thread** with progress ("12,000 files looked at, 31 findings so far") and a **Stop** button; a stopped check keeps what it found. **Deep** also reads whole zip-based files. Closing the window stops the check. A folder that cannot be read is said, not hidden.
+- **Fixes are plans, previewed first.** **Preview fix...** lists the steps of the plan (renames, deletes to the recycle bin, moves to the quarantine folder) and changes nothing; **Fix selected (n)** or **Fix all n** (when no row is selected the whole group) runs them through the ordinary queue: a name that is taken is asked about and never replaced, a delete goes to the recycle bin, renames and same-drive moves can be undone with Ctrl+Z. Fixes of different kinds are separate plans, one after the other. What was fixed leaves the list.
+- **Mark in the panel** puts the checked files into the shared selection (and shows their folder when it is just one), so every command works on them. **Ignore this rule here** hides a rule below the checked folder until the next check; **Show ignored** brings it back (nothing about it is written to disk). **Copy list** puts the group on the clipboard as tab-separated lines.
+- Underneath: findings are grouped and ignored by `core/health.py` (`group_by_rule`, `IgnoreList`), a run can end early and keep its findings (`partial_on_cancel`), and the one-line description of a planned step is now shared by the command line and the preview (`ops.describe_op`).
+
 ## 2026-10-24#09 -- A quarantine folder, with settings
 
 - **Settings > Quarantine...** chooses where quarantined files go. The default is **on each drive, in `<drive>:\Temp\Quarantine`** (for example `D:\Temp\Quarantine`): moving a file there stays on its drive, so it is instant and can be undone with Ctrl+Z. Or choose **one folder for everything**; each drive then gets a folder of its own inside it (`C`, `D`...). The dialog shows where the file under the cursor would go. "Back to the default" is there too.
