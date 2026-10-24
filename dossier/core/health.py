@@ -25,7 +25,8 @@ FILE, FOLDER = "file", "folder"
 
 @dataclass(frozen=True)
 class Fix:
-    """What would put a finding right, as data. ``kind`` is ``rename`` (to ``new_name``) or ``delete`` (to the recycle bin)."""
+    """What would put a finding right, as data. ``kind`` is ``rename`` (to ``new_name``), ``delete`` (to the recycle bin) or ``quarantine``
+    (into the quarantine folder, from where it can be put back)."""
     kind: str
     label: str
     new_name: str = ""
@@ -138,16 +139,22 @@ def run_checks(fs: FileSystem, roots: Sequence[str], *, max_tier: int = T1, only
     return report
 
 
-def fix_plan(fs: FileSystem, findings: Sequence[Finding]):
+def fix_plan(fs: FileSystem, findings: Sequence[Finding], quarantine=None):
     """One plan that applies the fixes of ``findings`` (those without a fix are left out), or None when nothing can be fixed.
-    A rename is a plan step like any other, so it can be undone; a delete goes to the recycle bin."""
+    A rename is a plan step like any other, so it can be undone; a delete goes to the recycle bin; a quarantine moves the file into the
+    quarantine folder (``quarantine``: the ``core.quarantine.Settings``, the default when None) and keeps its place in the tree.
+    A plan holds one kind of fix: ask once for each kind."""
     from .ops import plan_delete, plan_rename_many
+    from . import quarantine as q
     renames = [(f.path, f.fix.new_name) for f in findings if f.fix and f.fix.kind == "rename"]
     deletes = [f.path for f in findings if f.fix and f.fix.kind == "delete"]
-    if renames and deletes:
-        raise ValueError("a plan renames or deletes, not both: make one plan for each")
+    isolate = [f.path for f in findings if f.fix and f.fix.kind == "quarantine"]
+    if sum(1 for kind in (renames, deletes, isolate) if kind) > 1:
+        raise ValueError("a plan renames, deletes or quarantines, not several: make one plan for each")
     if renames:
         return plan_rename_many(fs, renames)
     if deletes:
         return plan_delete(fs, deletes, to_trash=True)
+    if isolate:
+        return q.plan_quarantine(fs, isolate, quarantine or q.Settings())
     return None

@@ -140,6 +140,7 @@ class ContextMenuMixin:
             add("Convert Archive to Zip", self.convert_archive_to_zip, enabled=not many)
         menu.addSeparator()
         add("Change Dates and Attributes...", self.change_dates)
+        add("Move to Quarantine...", self.move_to_quarantine)
         add("New Link...", self.new_link, enabled=not many)
         add("Properties", self.show_properties, keys="Alt+Enter")
         if shellmenu.can_show(paths):

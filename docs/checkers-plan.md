@@ -141,5 +141,5 @@ Order logic: wave 0 first because everything hangs off it; wave 1 gives the bigg
 | H2 | Which library first for real tests: comics (CBZ), EPUB, music, or video? | Comics: the structure checker and rules already exist and the library is the largest |
 | H3 | Run checks where: on this PC, or also on the server through the command line? | Both. The core is Qt-free, so this costs nothing extra |
 | H4 | Optional dependencies (Pillow, pypdf) acceptable as extras, or standard library only? | Extras, off when missing |
-| H5 | Quarantine folder policy: one folder per library root, or beside the file? | One `_quarantine` per library root, mirrored paths, so a file can be put back |
+| H5 | Quarantine folder policy: one folder per library root, or beside the file? | **Decided (owner, 2026-10-24) and built:** by default `<drive>:\Temp\Quarantine` on each drive, or one folder of the owner's choice (Settings > Quarantine); mirrored paths, so a file can be put back. `core/quarantine.py` |
 | H6 | Start the framework (wave 0) now in parallel with the 0.1 GUI work, or after 0.1? | Now; it is Qt-free and does not touch the GUI lane |

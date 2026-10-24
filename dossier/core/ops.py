@@ -358,13 +358,40 @@ def _place(path: str) -> str:
     return scheme + "://" + (rest.split("/", 1)[0] if scheme in ("sftp", "scp", "webdav", "ftp", "opds", "subsonic") else "")
 
 
-def plan_move(fs: FileSystem, sources: Sequence[str], dest_dir: str, *, watch=None) -> Plan:
+def _folders_to_make(fs: FileSystem, folder: str, blocking: list) -> list:
+    """The folders that are missing from ``folder`` up to the first one that is there, the topmost first. A file in the way, or a read-only
+    place, is said in ``blocking``."""
+    missing: list = []
+    here = folder
+    while True:
+        found = _stat(fs, here)
+        if found is not None:
+            if not found.is_dir:
+                blocking.append(f"cannot make {folder}: {here} is a file")
+            elif not fs.is_writable(here):
+                blocking.append("this folder is read-only (items inside an archive cannot be added or changed yet)")
+            break
+        missing.append(here)
+        above = fs.dirname(here)
+        if not above or above == here:
+            blocking.append(f"the destination folder does not exist: {folder}")
+            break
+        here = above
+    return missing[::-1]
+
+
+def plan_move(fs: FileSystem, sources: Sequence[str], dest_dir: str, *, watch=None, make_dest: bool = False) -> Plan:
+    """Move ``sources`` into ``dest_dir``. With ``make_dest`` a missing destination (and the folders above it) is not an error: the plan begins
+    with steps that make it, so nothing is made until the plan runs."""
     ops: list = []
     warnings: list = []
     blocking: list = []
     skipped: list = []
     taken: set = set()
-    _check_destination(fs, dest_dir, blocking)
+    if make_dest:
+        ops.extend(Op(Kind.MKDIR, "", folder, is_dir=True) for folder in _folders_to_make(fs, dest_dir, blocking))
+    else:
+        _check_destination(fs, dest_dir, blocking)
     _check_sources_writable(fs, sources, "move", blocking)
     for src in _clean_sources(fs, sources, "move", blocking):
         if watch is not None:
@@ -806,7 +833,8 @@ def _run_op(op: Op, fs: FileSystem, steps: list, progress, cancel, trasher: Tras
         existing = _stat(fs, op.dst)
         if existing is None:
             fs.mkdir(op.dst, parents=True)
-            carry_tags(fs, op.src, fs, op.dst, tags_lost)          # a new folder gets the tags of the one it copies
+            if op.src:                                             # a folder made for a move has no original
+                carry_tags(fs, op.src, fs, op.dst, tags_lost)      # a new folder gets the tags of the one it copies
         elif not existing.is_dir:
             raise FileExistsError(op.dst)
         return

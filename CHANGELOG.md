@@ -2,6 +2,13 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-24#09 -- A quarantine folder, with settings
+
+- **Settings > Quarantine...** chooses where quarantined files go. The default is **on each drive, in `<drive>:\Temp\Quarantine`** (for example `D:\Temp\Quarantine`): moving a file there stays on its drive, so it is instant and can be undone with Ctrl+Z. Or choose **one folder for everything**; each drive then gets a folder of its own inside it (`C`, `D`...). The dialog shows where the file under the cursor would go. "Back to the default" is there too.
+- **Tools > Move to Quarantine...** (also in the right-click menu) moves the marked items there after one confirmation that names the folder. A file **keeps its place in the folder tree** (`D:\Photos\2019\a.jpg` becomes `D:\Temp\Quarantine\Photos\2019\a.jpg`). **Tools > Put Back from Quarantine** moves it back to where it came from, making its folders again if they are gone. A name that is already taken, in the quarantine or where a file belongs, is asked about with the usual conflict dialog and never replaced. Nothing is ever deleted, and the quarantine is never emptied for you. **Go > Quarantine Folder** opens it.
+- **Planning changes nothing:** the folders the quarantine needs are made when the plan runs, so a dry run, a cancel or a declined confirmation leaves the disk alone (a move plan can now begin with steps that make its destination).
+- **File health fixes use it:** empty files and damaged zips (`bad-zip`, `bad-crc`) now offer "Move to the quarantine folder". `dossier check --fix --quarantine` applies it (`--quarantine-folder FOLDER` for one folder instead of the drive default); it cannot be combined with `--delete-junk` in one run.
+
 ## 2026-10-24#08 -- A Nextcloud preset under Remote sources
 
 - **"Nextcloud or ownCloud" is a new type in the Add a Server dialog.** Give the server (`cloud.example.com`) and your user name, or paste the address of its web page (`https://cloud.example.com/nextcloud/index.php/apps/files/` is cut down to the server and the folder it lives in); the address of your files, `.../remote.php/dav/files/<user>`, is worked out for you, so the Start in box is not shown. A user name with a space or a slash is encoded safely. It is still a WebDAV connection underneath (same client, certificate question, read-only by default), saved with `preset = nextcloud`, listed on the Home page as "Nextcloud".

@@ -168,3 +168,28 @@ def test_every_checker_has_a_unique_id_and_valid_tier():
     found = health.checkers()
     assert len({c.id for c in found}) == len(found) >= 10
     assert all(c.tier in (health.T0, health.T1, health.T2) and c.scope in (health.FILE, health.FOLDER) for c in found)
+
+
+def test_empty_and_damaged_files_get_a_quarantine_fix_that_moves_them_and_keeps_their_place(tmp_path):
+    from dossier.core import quarantine
+    put(tmp_path / "work" / "empty.dat", b"")
+    bad = str(put(tmp_path / "work" / "bad.zip", b"PK\x03\x04" + b"0" * 30))
+    s = quarantine.Settings(quarantine.FOLDER, str(tmp_path / "Q"))
+    fs = LocalFileSystem()
+    report = health.run_checks(fs, [str(tmp_path / "work")], max_tier=health.T2)
+    isolate = [f for f in report.findings if f.fix and f.fix.kind == "quarantine"]
+    assert {os.path.basename(f.path) for f in isolate} == {"empty.dat", "bad.zip"}
+    plan = health.fix_plan(fs, isolate, s)
+    assert plan.title == "Move to quarantine" and not plan.blocking
+    assert not (tmp_path / "Q").exists()                                                     # planning made nothing
+    assert not execute(plan, fs).failed
+    assert not os.path.exists(bad) and os.path.isfile(quarantine.destination(bad, s))          # moved, never deleted
+    assert os.path.isfile(quarantine.destination(str(tmp_path / "work" / "empty.dat"), s))
+
+
+def test_a_plan_does_not_mix_quarantine_with_renames(tmp_path):
+    put(tmp_path / "empty.dat", b"")
+    put(tmp_path / "Beach.JPG", b"\xff\xd8\xff\xe0" + b"0" * 20)
+    fs = LocalFileSystem()
+    with pytest.raises(ValueError):
+        health.fix_plan(fs, health.run_checks(fs, [str(tmp_path)]).findings)

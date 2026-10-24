@@ -142,6 +142,7 @@ class MenusMixin:
         go.addAction(self._action("Home Page", "Alt+Home", lambda: self.active.go_home()))
         go.addAction(self._action("Edit the Path", "Ctrl+L", lambda: self.active.address_bar.start_edit()))
         go.addAction(self._action("Pin Folder to Home Page", "Ctrl+D", self.pin_folder))
+        go.addAction(self._action("Quarantine Folder", None, self.show_quarantine_folder))
         go.addSeparator()
         for a in (self._action("All Files Below This Folder", "Ctrl+Shift+B", self.show_all_files_below),
                   self._action("Open Folder in the Other Panel", ["Ctrl+Right", "Ctrl+Left"], self.open_in_other_panel),
@@ -169,6 +170,8 @@ class MenusMixin:
         archives.addAction(self._action("Convert Archive to Zip", None, self.convert_archive_to_zip))
         tools.addAction(self._action("Change Dates and Attributes...", None, self.change_dates))
         tools.addAction(self._action("New Link...", None, self.new_link))
+        tools.addAction(self._action("Move to Quarantine...", None, self.move_to_quarantine))
+        tools.addAction(self._action("Put Back from Quarantine", None, self.put_back_from_quarantine))
         tools.addAction(self._action("Checksums of Marked Files", None, self.show_checksums))
         tools.addAction(self._action("Verify Checksum...", None, self.verify_checksum))
         tools.addAction(self._action("Edit Folder Note", "Ctrl+Shift+E", self.edit_folder_note))
@@ -239,6 +242,7 @@ class MenusMixin:
         self._action("Drives of Right Panel", "Alt+F2", lambda: self.right.open_drive_menu())
         settings.addSeparator()
         settings.addAction(self._action("Copy and Move...", None, self.open_copy_settings))
+        settings.addAction(self._action("Quarantine...", None, self.open_quarantine_settings))
         self.build_open_menu(settings)
         settings.addAction(self._action("Mouse Wheel...", None, self.open_wheel_settings))
         drives_menu = settings.addMenu("Drive Memory")

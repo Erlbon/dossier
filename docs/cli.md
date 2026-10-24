@@ -81,13 +81,15 @@ exist on Windows; elsewhere only read-only (the write permission).
 
 ### check
 
-`dossier check folder... [--deep] [--only RULE] [--list] [--fix [--delete-junk]] [--dry-run]` looks for files that are not healthy and reports
+`dossier check folder... [--deep] [--only RULE] [--list] [--fix [--delete-junk | --quarantine [--quarantine-folder FOLDER]]] [--dry-run]` looks for files that are not healthy and reports
 them, never changing anything unless `--fix` says so. It finds empty files, junk (`Thumbs.db`, `~$` files, half-downloaded files), names that
 break on Windows (trailing space or dot, reserved or illegal characters, accents stored in the wrong form, text read in the wrong encoding, paths
 over 259 characters), names that differ only in case, dead links, dates in the future, a `.cbz` that is really a rar, subtitle files without a video,
 and empty folders. `--deep` also reads every zip-based file (zip, cbz, epub, docx and others) completely and tests its checksums. `--list` names the
 checkers; `--only` runs some of them. Each finding has a severity (error, warning, note). `--fix` applies the renames, or with `--delete-junk` moves
-the junk and empty folders to the recycle bin; `--dry-run` shows the steps. The exit code is 1 when there are errors or warnings.
+the junk and empty folders to the recycle bin, or with `--quarantine` moves empty files and damaged zips into the quarantine folder (on each drive
+`<drive>:/Temp/Quarantine`, or the one folder `--quarantine-folder` names; a file keeps its place in the folder tree there, so it can be put back);
+`--dry-run` shows the steps. The exit code is 1 when there are errors or warnings.
 
 ### compare
 

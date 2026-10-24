@@ -341,3 +341,16 @@ def test_touch_goes_into_folders_and_refuses_nonsense(tmp_path, capsys):
     assert code == 2 and "nothing to change" in err
     code, _out, err = run(capsys, "touch", str(tmp_path / "d"), "--shift", "soon")
     assert code == 2 and "not a time difference" in err
+
+
+def test_check_can_quarantine_instead_of_renaming(tmp_path, capsys):
+    data = tmp_path / "data"
+    put(data / "empty.dat", b"")
+    safe = tmp_path / "safe"
+    code, doc, _err = run_json(capsys, "check", str(data), "--fix", "--quarantine", "--quarantine-folder", str(safe), "--dry-run")
+    assert doc["dry_run"] and (data / "empty.dat").exists() and not safe.exists()          # planning made nothing
+    code, doc, _err = run_json(capsys, "check", str(data), "--fix", "--quarantine", "--quarantine-folder", str(safe))
+    assert not (data / "empty.dat").exists()
+    assert [p for p in safe.rglob("empty.dat")]                                    # it is in the quarantine, in its own place
+    code, _out, err = run(capsys, "check", str(data), "--fix", "--quarantine", "--delete-junk")
+    assert code == 2 and "two different fixes" in err

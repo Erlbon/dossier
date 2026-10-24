@@ -36,7 +36,8 @@ def _splitext(name: str) -> tuple:
 # tier 0, one file ------------------------------------------------------------------------------------------------------------
 def zero_byte(ctx, entry):
     if entry.size == 0 and entry.name.lower() not in KEEP_EMPTY and not entry.is_link:
-        yield finding(entry.path, "zero_byte", "empty-file", WARNING, "The file is empty (0 bytes)")
+        yield finding(entry.path, "zero_byte", "empty-file", WARNING, "The file is empty (0 bytes)",
+                      fix=Fix("quarantine", "Move to the quarantine folder"))
 
 
 def junk(ctx, entry):
@@ -114,10 +115,11 @@ def zip_integrity(ctx, entry):
                 names = z.namelist()
                 bad = z.testzip()
     except zipfile.BadZipFile as e:
-        yield finding(entry.path, "zip", "bad-zip", ERROR, "The archive cannot be read", evidence=str(e))
+        yield finding(entry.path, "zip", "bad-zip", ERROR, "The archive cannot be read", evidence=str(e), fix=Fix("quarantine", "Move to the quarantine folder"))
         return
     if bad:
-        yield finding(entry.path, "zip", "bad-crc", ERROR, "An entry is damaged (checksum mismatch)", evidence=bad)
+        yield finding(entry.path, "zip", "bad-crc", ERROR, "An entry is damaged (checksum mismatch)", evidence=bad,
+                      fix=Fix("quarantine", "Move to the quarantine folder"))
     if len(set(names)) != len(names):
         yield finding(entry.path, "zip", "duplicate-entries", WARNING, "The same name is stored twice in the archive")
     escaping = [n for n in names if n.startswith(("/", "\\")) or ".." in n.replace("\\", "/").split("/") or re.match(r"[A-Za-z]:", n)]

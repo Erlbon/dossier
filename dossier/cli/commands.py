@@ -130,6 +130,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--list", action="store_true", help="list the checkers and do nothing")
     p.add_argument("--fix", action="store_true", help="apply the obvious fixes (renames, or with --delete-junk the junk to the recycle bin)")
     p.add_argument("--delete-junk", action="store_true", help="with --fix: delete (to the recycle bin) instead of renaming")
+    p.add_argument("--quarantine", action="store_true", help="with --fix: move empty files and damaged zips to the quarantine folder instead of renaming")
+    p.add_argument("--quarantine-folder", metavar="FOLDER", help="with --quarantine: one folder for everything (default: <drive>:/Temp/Quarantine on each drive)")
     p.add_argument("--dry-run", action="store_true", help="with --fix: show what would be done and do nothing")
     sub.add_parser("mcp", help="run the MCP server for an AI assistant on standard input and output (see docs/assistant.md)",
                    description="Starts the MCP server. The assistant's program starts it and talks to it through the pipes; there is no network "
@@ -432,7 +434,7 @@ def cmd_compare(args, out, fs) -> int:
 
 # check ------------------------------------------------------------------------------------------------------------------------------------
 def cmd_check(args, out, fs) -> int:
-    from ..core import health
+    from ..core import health, quarantine
     known = {c.id: c for c in health.checkers()}
     if args.list:
         for c in known.values():
@@ -457,8 +459,12 @@ def cmd_check(args, out, fs) -> int:
     summary = {"command": "check", "findings": len(report.findings), **counts, "files": report.files, "folders": report.folders}
     code = EXIT_PARTIAL if counts["error"] or counts["warning"] else EXIT_OK
     if args.fix:
-        fixable = [f for f in report.findings if f.fix and (f.fix.kind == "rename") != args.delete_junk]
-        plan = health.fix_plan(fs, fixable)
+        if args.quarantine and args.delete_junk:
+            raise CliError("--quarantine and --delete-junk are two different fixes: run them one after the other")
+        kind = "quarantine" if args.quarantine else "delete" if args.delete_junk else "rename"
+        fixable = [f for f in report.findings if f.fix and f.fix.kind == kind]
+        isolation = quarantine.Settings(quarantine.FOLDER, args.quarantine_folder).cleaned() if args.quarantine_folder else quarantine.Settings()
+        plan = health.fix_plan(fs, fixable, isolation)
         if plan is None:
             out.line("nothing to fix")
         else:
