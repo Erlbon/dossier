@@ -2,6 +2,10 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-24#06 -- The first tab lines up with the box below it
+
+- **The step under the first tab is gone.** In the panel that is not active, the first tab stuck out about 2 pixels (a frame's width) to the left of the address bar and list below it, because only the active panel has a gold frame to fill that margin. The first tab of a panel that is not active now starts where the box below starts; in the active panel it still runs on into the gold frame as before. Only the first tab moves, and only by that width, when the active panel changes. Tests check the two edges in both states for both panels.
+
 ## 2026-10-24#05 -- Pictures, text and web links become files; drag items out of archives and servers
 
 - **Ctrl+V with no files on the clipboard makes a file of what is there:** a picture becomes a PNG, text becomes a UTF-8 `.txt`. You are asked for the name first (suggested from the time, for example `Pasted image 2026-10-24 10.30.12.png`); the extension the kind needs is added if you leave it out, and typing `.jpg`, `.bmp`, `.tif` or `.webp` saves the picture in that format. **Edit > Paste Picture or Text as New File...** (Ctrl+Shift+V) does the same on purpose. A name that is taken becomes `name (2).ext`: nothing is ever overwritten, and the file is made exclusively on a thread.

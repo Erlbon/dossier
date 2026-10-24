@@ -516,6 +516,7 @@ class PanelTabBar(QTabBar):
         self.setMouseTracking(True)
         self._hover = -1
         self.panel_active = False        # set by the panel: the current tab then continues the gold frame below it
+        self.first_inset = 0             # set by the panel: how far the first tab's left edge is moved in, to line up with the box below
 
     def tabSizeHint(self, index: int) -> QSize:
         hint = super().tabSizeHint(index)
@@ -537,7 +538,7 @@ class PanelTabBar(QTabBar):
     def tab_outline(self, index: int) -> QRectF:
         # The gap between two tabs is the right margin of one plus the left margin of the next. The first tab has no
         # left margin: its edge lines up with the left edge of the box below it.
-        return QRectF(self.tabRect(index).adjusted(0 if index == 0 else 2, 4, -2, 0))
+        return QRectF(self.tabRect(index).adjusted(self.first_inset if index == 0 else 2, 4, -2, 0))
 
     def paintEvent(self, event) -> None:
         c = theme.tab_colors()
@@ -928,6 +929,9 @@ class Panel(QFrame):
         self.home_button.setIcon(icon_set.icon("home", text))
         self._style_close_buttons()
         self.tabs.panel_active = active
+        # The active panel's gold frame is the fill behind the body's side margins, so the box below the tabs reaches the panel's edge and
+        # the first tab lines up with it there. An inactive panel has no frame: its box starts FRAME in, so the first tab starts there too.
+        self.tabs.first_inset = 0 if active else FRAME
         self.tabs.update()
 
     def restyle(self) -> None:
