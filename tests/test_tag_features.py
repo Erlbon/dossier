@@ -137,7 +137,7 @@ def test_the_flatten_button_sits_right_next_to_the_sigma_button_and_opens_the_fl
     (left / "sub" / "deep.txt").write_text("x")
     (left / "top.txt").write_text("x")
     win.left.refresh()
-    bar = win.left.bar.layout()
+    bar = win.left.tool_group.layout()
     items = [bar.itemAt(i).widget() for i in range(bar.count())]
     assert items.index(win.left.flatten_button) == items.index(win.left.sizes_button) + 1
     assert win.left.flatten_button.text() == chr(0x2261) and "Flatten" in win.left.flatten_button.toolTip()

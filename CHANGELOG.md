@@ -2,6 +2,10 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-24#15 -- The three small buttons sit closer together
+
+- **The sum, flatten and refresh buttons are one tight group** in the panel's bar: no gap between them and less padding at their sides, so each takes about 23 pixels instead of 34 (the three together about 70 pixels instead of 100). The room goes to the address bar, so a long path collapses into "..." later.
+
 ## 2026-10-24#14 -- Auto refresh, with its own switch for network drives, and a Refresh button
 
 - **Settings > Auto Refresh** has two switches. **Drives of This Computer** (on by default): a panel shows a file saved, a download that finished or a folder made by another program without you refreshing. **Network Drives (can be slow)** (off by default): watching a share can be slow and unreliable, so it is separate, and a network folder is never watched unless you turn that on. Both are remembered.

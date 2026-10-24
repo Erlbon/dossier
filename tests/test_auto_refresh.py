@@ -173,10 +173,11 @@ def test_a_panel_that_moved_on_forgets_the_old_change(world, quick):
 # the Refresh button ---------------------------------------------------------------------------------------------------------------------
 def test_the_refresh_button_sits_next_to_sum_and_flatten(world):
     win, d, left, right, tmp = world
-    layout = win.left.bar.layout()
+    layout = win.left.tool_group.layout()
     items = [layout.itemAt(i).widget() for i in range(layout.count())]
     sizes, flat, refresh = win.left.sizes_button, win.left.flatten_button, win.left.refresh_button
     assert items.index(flat) == items.index(sizes) + 1 and items.index(refresh) == items.index(flat) + 1
+    assert layout.spacing() == 0 and win.left.bar.layout().indexOf(win.left.tool_group) > win.left.bar.layout().indexOf(win.left.free)   # close together, after the free space
     assert isinstance(refresh, QToolButton) and refresh.text() == chr(0x21BB) and "Refresh" in refresh.toolTip()
     assert refresh.objectName() == "refreshbtn" and win.right.refresh_button is not refresh                  # each panel has its own
 

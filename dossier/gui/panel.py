@@ -760,9 +760,13 @@ class Panel(QFrame):
         self.refresh_button.setToolTip("Refresh: read this folder again (Ctrl+R refreshes both panels)")
         self.refresh_button.clicked.connect(self.refresh)
         bar.addWidget(self.free)
-        bar.addWidget(self.sizes_button)
-        bar.addWidget(self.flatten_button)
-        bar.addWidget(self.refresh_button)
+        self.tool_group = QWidget()                      # the three small buttons sit close together, as one group, not a bar's usual gap apart
+        group = QHBoxLayout(self.tool_group)
+        group.setContentsMargins(0, 0, 0, 0)
+        group.setSpacing(0)
+        for button in (self.sizes_button, self.flatten_button, self.refresh_button):
+            group.addWidget(button)
+        bar.addWidget(self.tool_group)
         self.bar = QWidget()
         self.bar.setObjectName("pathbarbox")
         self.bar.setLayout(bar)
@@ -984,7 +988,7 @@ class Panel(QFrame):
             f"#pathbarbox QToolButton#crumb::menu-indicator{{image:none;}}"
             f"#pathbarbox QLabel#crumbsep{{color:{text};}}"
             f"#pathbarbox QToolButton#sizesbtn, #pathbarbox QToolButton#flatbtn, #pathbarbox QToolButton#refreshbtn"
-            f"{{border:none;border-radius:4px;padding:1px 6px;font-weight:{look.weight()};}}"
+            f"{{border:none;border-radius:4px;padding:1px 3px;font-weight:{look.weight()};}}"
             f"#pathbarbox QToolButton#sizesbtn:hover, #pathbarbox QToolButton#flatbtn:hover, #pathbarbox QToolButton#refreshbtn:hover{{background:rgba(0,0,0,60);}}")
         palette = QPalette(QApplication.palette())
         if not active:
