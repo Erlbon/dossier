@@ -20,6 +20,15 @@ def names(path):
         return []
 
 
+def read_entry(path, name):
+    """One entry of the zip, or None while the window is swapping the file for its new version."""
+    try:
+        with zipfile.ZipFile(path) as z:
+            return z.read(name)
+    except (OSError, KeyError, zipfile.BadZipFile):
+        return None
+
+
 def ready(path, predicate):
     """The zip as it is once the window has finished: read once, and never while it is being swapped for its new version."""
     found = names(path)
@@ -75,7 +84,7 @@ def test_a_clash_is_counted_and_the_new_file_replaces_the_old_one(world):
     win.copy()
     pump(win, lambda: d.confirms)
     assert "1 entry with the same name will be replaced" in d.confirms[-1][1]
-    pump(win, lambda: not win.busy and ready(str(z), lambda n: zipfile.ZipFile(z).read("keep.txt") == b"REPLACED"))
+    pump(win, lambda: not win.busy and ready(str(z), lambda n: read_entry(z, "keep.txt") == b"REPLACED"))
 
 
 def test_moving_into_the_zip_then_trashes_the_originals(world):
@@ -89,7 +98,7 @@ def test_moving_into_the_zip_then_trashes_the_originals(world):
     win.move()
     pump(win, lambda: d.confirms)
     pump(win, lambda: not win.busy and ready(str(z), lambda n: "gone.txt" in n) and not (left / "gone.txt").exists())
-    assert zipfile.ZipFile(z).read("gone.txt") == b"G"
+    assert read_entry(z, "gone.txt") == b"G"
 
 
 def test_cancelling_the_confirmation_changes_nothing(world):
