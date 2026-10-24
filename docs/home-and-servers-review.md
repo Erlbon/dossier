@@ -141,7 +141,9 @@ H0 and H1 are built and tested.
 - The identity, not the letter, is the key, so a drive that returns on another letter is recognised as the same drive ("Seen before as E:"). With a changed letter Dossier offers to update pins, favourites and tab history that use the old letter, after asking.
 - The "seen before" list is stored data: opt-in, off by default, with a checkbox and a Delete button. Without it, changes are only noticed within one session.
 
-## 10. Nextcloud (owner, 2026-10-20): future feature, under Remote sources
+## 10. Nextcloud (owner, 2026-10-20): under Remote sources
+
+**The preset is built (2026-10-24):** the Type list of the connection dialog has "Nextcloud or ownCloud". It is a WebDAV connection with `preset = nextcloud`: you give the server and your user name (or paste the address of its web page), the start folder `<where it lives>/remote.php/dav/files/<user>` is worked out, and the login asks for an app password. The extras below are still to do.
 
 - Nextcloud (and ownCloud) speak WebDAV at `https://host/remote.php/dav/files/<user>/`, so it rides on the WebDAV backend; it is a saved-connection preset, not a new file system.
 - What the preset adds: the right URL from just a server address and user name; login with an **app password** (never the main password; created in Nextcloud under Settings > Security), kept in the credential store; two-factor accounts work the same way.

@@ -20,6 +20,11 @@ PROTOCOLS = (("sftp", "SFTP (the server's file service, over SSH)"),
              ("opds", "OPDS (a book catalogue: Calibre, Calibre-Web, Kavita, Komga; read-only)"),
              ("subsonic", "Subsonic (a music server: Navidrome, Airsonic, Gonic; read-only)"))
 NAMES = {"sftp": "SFTP", "scp": "SCP", "webdav": "WebDAV", "ftp": "FTP", "opds": "OPDS", "subsonic": "Subsonic"}
+NEXTCLOUD = "nextcloud"
+PRESETS = ((NEXTCLOUD, "Nextcloud or ownCloud (a WebDAV web folder; the address of your files is filled in)"),)   # a preset is a WebDAV connection
+APP_PASSWORD_HINT = ("Log in with an app password, not your main password: in Nextcloud open Settings > Security > Devices and sessions, "
+                     "give the new app password a name such as Dossier, and copy it here. It works with two-factor login and can be "
+                     "revoked there at any time.")
 CATALOGS = ("opds", "subsonic")                    # web catalogues: always read-only, no key file, the "start in" is an address on the server
 WEB = ("webdav", "ftp") + CATALOGS                 # kinds that have an encrypted (https, FTPS) and a plain form
 DEFAULT_PORT = 22
@@ -47,6 +52,7 @@ class Connection:
     id: str = field(default_factory=lambda: uuid.uuid4().hex)
     secure: bool = True                # WebDAV: HTTPS (else plain HTTP, where a password is sent in the clear)
     cert: str = ""                     # WebDAV: the fingerprint of a certificate the owner approved for this server
+    preset: str = ""                   # "nextcloud": made from the Nextcloud preset (still a WebDAV connection; the start folder follows the user)
 
     def authority(self) -> str:
         host = f"[{self.host}]" if ":" in self.host and not self.host.startswith("[") else self.host
@@ -56,9 +62,10 @@ class Connection:
         return f"{self.protocol}://" + self.authority() + (path if path.startswith("/") else "/" + path)
 
     def describe(self) -> str:
-        where = self.authority() + (self.start_dir if self.protocol in ("webdav",) + CATALOGS and self.start_dir else "")
+        shown_dir = self.start_dir if self.protocol in ("webdav",) + CATALOGS and self.start_dir and not self.preset else ""
+        where = self.authority() + shown_dir
         plain = "  (not encrypted)" if self.protocol in WEB and not self.secure else ""
-        name = "FTPS" if self.protocol == "ftp" and self.secure else NAMES.get(self.protocol, self.protocol)
+        name = "Nextcloud" if self.preset == NEXTCLOUD else "FTPS" if self.protocol == "ftp" and self.secure else NAMES.get(self.protocol, self.protocol)
         return f"{name}  {where}{plain}" + ("  (read-only)" if self.read_only else "")
 
     def problem(self) -> str:
@@ -73,6 +80,8 @@ class Connection:
             return "choose SFTP or SCP"
         if any(c in self.user for c in " /\\@:"):
             return "the user name cannot hold spaces, slashes, colons or @"
+        if self.preset == NEXTCLOUD and not self.user.strip():
+            return "Nextcloud needs your user name: it is part of the address of your files"
         return ""
 
     def force_rules(self) -> "Connection":
@@ -80,6 +89,23 @@ class Connection:
         if self.protocol in CATALOGS:
             self.read_only = True
         return self
+
+
+def nextcloud_prefix(path: str) -> str:
+    """The folder a Nextcloud lives in on its server, from any address of it: ``/nextcloud/index.php/apps/files/`` gives ``/nextcloud``, a
+    server at the top gives an empty string."""
+    path = "/" + path.strip().strip("/")
+    for marker in ("/index.php", "/remote.php", "/apps/", "/f/", "/s/"):
+        at = path.find(marker)
+        if at >= 0:
+            path = path[:at]
+    return path.rstrip("/")
+
+
+def nextcloud_start(prefix_or_address_path: str, user: str) -> str:
+    """The WebDAV folder of ``user``'s files on a Nextcloud or ownCloud: ``<where it lives>/remote.php/dav/files/<user>``."""
+    from urllib.parse import quote
+    return nextcloud_prefix(prefix_or_address_path) + "/remote.php/dav/files/" + quote(user.strip(), safe="")
 
 
 def parse_authority(authority: str) -> tuple:
@@ -137,7 +163,8 @@ def from_json(text) -> list:
             c = Connection(str(item.get("name", "")), str(item.get("host", "")), str(item.get("user", "")),
                            int(item.get("port", DEFAULT_PORT)), str(item.get("protocol", "sftp")), str(item.get("key_file", "")),
                            str(item.get("start_dir", "")), bool(item.get("read_only", True)), bool(item.get("save_password", False)),
-                           str(item.get("id") or uuid.uuid4().hex), bool(item.get("secure", True)), str(item.get("cert", "")))
+                           str(item.get("id") or uuid.uuid4().hex), bool(item.get("secure", True)), str(item.get("cert", "")),
+                           str(item.get("preset", "")))
         except (TypeError, ValueError):
             continue
         if not c.problem():

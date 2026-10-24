@@ -39,9 +39,10 @@ class ConnectionDialog(QDialog):
         self.name = QLineEdit(c.name)
         self.name.setPlaceholderText("for example  The NAS")
         self.protocol = QComboBox()
-        for key, text in servers.PROTOCOLS:
+        for key, text in servers.PROTOCOLS + servers.PRESETS:               # a preset (Nextcloud) is a WebDAV connection with the address filled in
             self.protocol.addItem(text, key)
-        self.protocol.setCurrentIndex(max(0, self.protocol.findData(c.protocol)))
+        self.protocol.setCurrentIndex(max(0, self.protocol.findData(c.preset or c.protocol)))
+        self._nc_prefix = servers.nextcloud_prefix(c.start_dir) if c.preset == servers.NEXTCLOUD else ""   # where a Nextcloud lives on its server
         self.host = QLineEdit(c.host)
         self.host.setPlaceholderText("files.example.com  or  192.168.1.20")
         self.port = QSpinBox()
@@ -96,8 +97,14 @@ class ConnectionDialog(QDialog):
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
 
+    def _kind(self) -> str:
+        """The protocol the chosen type speaks: a preset is WebDAV."""
+        chosen = self.protocol.currentData()
+        return "webdav" if chosen == servers.NEXTCLOUD else chosen
+
     def _type_changed(self, *_args) -> None:
-        kind = self.protocol.currentData()
+        nextcloud = self.protocol.currentData() == servers.NEXTCLOUD
+        kind = self._kind()
         notes = {"scp": "Works through a shell on the server (ls, dd, mv...), so it is slower than SFTP: use it only when the server "
                         "has no SFTP service.",
                  "webdav": "A web folder: Nextcloud and ownCloud (https://host/remote.php/dav/files/you), a NAS, Apache, nginx. You can "
@@ -108,7 +115,9 @@ class ConnectionDialog(QDialog):
                              "a track. Use the user name and password of the server. Read-only.",
                  "ftp": "Plain FTP sends the password and the files as readable text. Keep Encrypted (FTPS) ticked when the server "
                         "offers it. You can paste a whole address (ftp://host/folder or ftps://host/folder) into Host."}
-        self.type_note.setText(notes.get(kind, ""))
+        self.type_note.setText(("Your Nextcloud or ownCloud. Type its address (cloud.example.com, or paste the address of its web page) and your "
+                                "user name; the address of your files is worked out for you. " + servers.APP_PASSWORD_HINT) if nextcloud
+                               else notes.get(kind, ""))
         dav = kind == "webdav"
         web = kind in servers.WEB
         catalog = kind in servers.CATALOGS
@@ -116,6 +125,7 @@ class ConnectionDialog(QDialog):
         self._form.setRowVisible(self.secure, web)
         self._form.setRowVisible(self._key_row, not web)
         self._form.setRowVisible(self.read_only, not catalog)         # a catalogue is always read-only
+        self._form.setRowVisible(self.start_dir, not nextcloud)       # a Nextcloud's start folder follows from its address and the user
         if self.port.value() == self._last_default:                      # a port nobody changed follows the type
             self.port.setValue(servers.default_port(kind, self.secure.isChecked()))
         self._last_default = servers.default_port(kind, self.secure.isChecked())
@@ -123,7 +133,8 @@ class ConnectionDialog(QDialog):
                                           if dav else "the catalogue's address on the server, for example /opds" if kind == "opds" else
                                           "empty, or the folder the server lives in (for example /navidrome)" if kind == "subsonic" else
                                           "empty: the folder the server opens on login")
-        self.remember.setText("Keep the password in the system's password store (otherwise it is asked for when needed)")
+        self.remember.setText("Keep the app password in the system's password store (otherwise it is asked for when needed)" if nextcloud
+                              else "Keep the password in the system's password store (otherwise it is asked for when needed)")
         self.note.setText("This connection is NOT encrypted: a password and every file travel as plain text. Use it only inside a network "
                           "you trust." if web and not self.secure.isChecked() else
                           ("Nothing is contacted until you open the server. A certificate that is not from a known authority is shown to you "
@@ -136,7 +147,10 @@ class ConnectionDialog(QDialog):
         parsed = servers.from_url(self.host.text())
         if parsed is None:
             return
-        if not (self.protocol.currentData() in servers.CATALOGS and parsed["protocol"] == "webdav"):    # a web address does not turn a catalogue into WebDAV
+        if self.protocol.currentData() == servers.NEXTCLOUD and parsed["protocol"] == "webdav":      # the Nextcloud type stays; its address is cut down
+            self._nc_prefix = servers.nextcloud_prefix(parsed["base"])
+            parsed = {**parsed, "base": ""}
+        elif not (self.protocol.currentData() in servers.CATALOGS and parsed["protocol"] == "webdav"):    # a web address does not turn a catalogue into WebDAV
             self.protocol.setCurrentIndex(self.protocol.findData(parsed["protocol"]))
         self.secure.setChecked(parsed["secure"])
         self.host.setText(parsed["host"])
@@ -154,12 +168,16 @@ class ConnectionDialog(QDialog):
             self.key_file.setText(os.path.normpath(path))
 
     def connection(self) -> servers.Connection:
-        return servers.Connection(self.name.text().strip(), self.host.text().strip(), self.user.text().strip(), int(self.port.value()),
-                                  self.protocol.currentData(), self.key_file.text().strip(), self.start_dir.text().strip(),
+        nextcloud = self.protocol.currentData() == servers.NEXTCLOUD
+        user = self.user.text().strip()
+        return servers.Connection(self.name.text().strip(), self.host.text().strip(), user, int(self.port.value()),
+                                  self._kind(), self.key_file.text().strip(),
+                                  servers.nextcloud_start(self._nc_prefix, user) if nextcloud else self.start_dir.text().strip(),
                                   self.read_only.isChecked() or self.protocol.currentData() in servers.CATALOGS, self.remember.isChecked(),
                                   self.base.id, self.secure.isChecked(),
                                   self.base.cert if (self.host.text().strip(), int(self.port.value()), self.secure.isChecked()) ==
-                                  (self.base.host, self.base.port, self.base.secure) else "")
+                                  (self.base.host, self.base.port, self.base.secure) else "",
+                                  servers.NEXTCLOUD if nextcloud else "")
 
     def _accept(self) -> None:
         why = self.connection().problem()
@@ -175,7 +193,9 @@ class PasswordDialog(QDialog):
         self.setWindowTitle(f"Log in to {conn.name}")
         self.setMinimumWidth(440)
         layout = QVBoxLayout(self)
-        layout.addWidget(QLabel(message or f"{conn.authority()} wants a password (or the passphrase of your key)."))
+        layout.addWidget(QLabel(message or (f"{conn.authority()} wants an app password (Nextcloud: Settings > Security > Devices and sessions)."
+                                            if conn.preset == servers.NEXTCLOUD else
+                                            f"{conn.authority()} wants a password (or the passphrase of your key).")))
         self.password_edit = QLineEdit()
         self.password_edit.setEchoMode(QLineEdit.EchoMode.Password)
         layout.addWidget(self.password_edit)
@@ -487,7 +507,10 @@ class ServersMixin:
                     if not self.dialogs.confirm("Connect", "Try another password?", "Try again"):
                         return
                 note = "" if conn.secure else f" {conn.authority()} is not encrypted: the password is sent as plain text."
-                message = f"{conn.authority()}: the login was refused. Password:" if (asked and password) else f"{conn.authority()}: log in.{note}"
+                what = "App password" if conn.preset == servers.NEXTCLOUD else "Password"         # a Nextcloud wants an app password, not the main one
+                hint = " " + servers.APP_PASSWORD_HINT if conn.preset == servers.NEXTCLOUD else ""
+                message = (f"{conn.authority()}: the login was refused. {what}:{hint}" if (asked and password)
+                           else f"{conn.authority()}: log in with your {what.lower()}.{note}{hint}")
                 dlg = PasswordDialog(self, conn, message)
                 if not self._ask_password(dlg):
                     self._say("Not connected")

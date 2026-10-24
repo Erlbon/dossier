@@ -2,6 +2,12 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-24#08 -- A Nextcloud preset under Remote sources
+
+- **"Nextcloud or ownCloud" is a new type in the Add a Server dialog.** Give the server (`cloud.example.com`) and your user name, or paste the address of its web page (`https://cloud.example.com/nextcloud/index.php/apps/files/` is cut down to the server and the folder it lives in); the address of your files, `.../remote.php/dav/files/<user>`, is worked out for you, so the Start in box is not shown. A user name with a space or a slash is encoded safely. It is still a WebDAV connection underneath (same client, certificate question, read-only by default), saved with `preset = nextcloud`, listed on the Home page as "Nextcloud".
+- **The login asks for an app password,** not your main password, and says how to make one (Settings > Security > Devices and sessions in Nextcloud). An app password works with two-factor accounts and can be revoked there. It is kept in the system's password store only if you ask, like any other password.
+- Not built yet (docs/home-and-servers-review.md section 10): Nextcloud's trash as a recycle bin, chunked upload, share links, versions.
+
 ## 2026-10-24#07 -- One outline around the current tab and its box
 
 - **The current tab now has a 1 px outline like the blue tabs, and it runs on around the whole box below it.** One line goes up the side of the tab, over its rounded top, down the other side, along the box's top edge beside the tab (where the other tabs rest on it), and down and around the sides and bottom of the box. The tab and the box read as a single shape. In the active panel the line is a darker gold, on the panel's very edge, with the gold frame inside it; in the other panel it is a lighter dim gold, where that panel's box starts.
