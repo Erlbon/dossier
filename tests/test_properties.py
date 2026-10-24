@@ -102,11 +102,9 @@ def test_the_window_shows_a_general_and_a_metadata_tab_for_a_comic(world, monkey
     pump(win, lambda: shown)
     dlg = shown[0]
     assert [dlg.tabs.tabText(i) for i in range(dlg.tabs.count())] == ["General", "ComicInfo", "Tags"]
-    labels = [dlg.tree.topLevelItem(i).text(0) for i in range(dlg.tree.topLevelItemCount())]
-    assert "Tags" in labels and "Credits" in labels
+    assert dlg.edit_rows["Series"][0].text() == "Blueberry" and dlg.edit_rows["Writer"][0].text() == "Charlier"      # the tab is a form now
     assert "Series: Blueberry" in dlg.text() and "Writer: Charlier" in dlg.text()
-    flags = dlg.tree.topLevelItem(0).child(0).flags()
-    assert not flags & Qt.ItemFlag.ItemIsEditable                              # read only
+    assert dlg.metadata_changes() == {}                                        # nothing is written until something is changed and saved
     dlg.copy_all()
     assert "Blueberry" in QApplication.clipboard().text()
 

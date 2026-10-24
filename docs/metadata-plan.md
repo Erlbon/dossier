@@ -3,7 +3,7 @@
 Goal: Alt+Enter on one or more items opens a Properties dialog with tabs. Dossier is meant to be a metadata specialist:
 it shows what a file carries inside, and where it is safe to do so, lets the owner change it.
 
-Status: PLAN ONLY. Nothing is built. Waiting for the owner to pick the tab layout and the order of the types.
+Status (2026-10-24): reading is built (step 1). **Writing is built for mp3, flac, ogg, opus, m4a tags and the ComicInfo of a cbz** (step 2, first types): the Metadata tab of Properties is an editable form (owner picked this over a separate Edit Tags window; a separate window with a preview table is kept in mind for *importing* metadata from elsewhere), `core/metawrite.py`, and `dossier tag`. Still to do: the other types below, and for large batches the Redactor apps remain the tool.
 
 ## Tabs
 

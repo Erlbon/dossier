@@ -2,6 +2,13 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-24#12 -- The Metadata tab of Properties can be edited (mp3 and cbz)
+
+- **Alt+Enter on an mp3, flac, ogg, opus or m4a file, or a cbz, now shows its tags as a form** in the Audio tags (or ComicInfo) tab, with **Save Metadata** for that tab and Save Tags for the Tags tab. A field that was changed is shown in bold; the little x takes a field away. Under the form, the rest of what the file carries (length, bitrate, cover art, lyrics) is listed read only as "Also in the file", so nothing is hidden and nothing is touched.
+- **Several files of one kind at once:** a field they all share shows its value; one that differs shows "(different)" and is left alone unless you type something in it (then every file gets it). The line under the form says "2 fields changed on 3 files", and files that cannot be changed (read-only, damaged) are counted and left out.
+- **Saving asks once** (which fields, how many files, who is left out and why), then writes on a thread with progress and Cancel. Each file is made beside the old one, read back and checked, then put in place; the old file goes to the recycle bin; a failure leaves it as it was. The panels refresh afterwards.
+- For large batches (numbering by pattern, whole libraries) the Redactor apps remain the tool; this is for one file or a few. A separate window with a preview table is kept for importing metadata from elsewhere.
+
 ## 2026-10-24#11 -- Writing metadata, first step: mp3 tags and cbz ComicInfo (engine and command line)
 
 - **`dossier tag`** shows or changes the tags inside files. It writes mp3, flac, ogg, opus and m4a tags (title, artist, album, album artist, track, disc, year or date, genre, composer) and the ComicInfo of a cbz (series, number, count, volume, title, summary, year, month, day, the credits, publisher, genre, tags, language, age rating, manga, web). `--set FIELD=VALUE`, `--clear FIELD`, `--dry-run` for old and new values, `--fields` to list the fields. Several files of one kind at once.

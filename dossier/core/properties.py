@@ -42,6 +42,11 @@ class Gathered:
     tags: dict = field(default_factory=dict)        # path -> Tags (empty when the items cannot hold tags)
     tags_reason: str = ""                           # why there is no Tags tab, or why it is read only
     tags_can_write: bool = False
+    edit_kind: str = ""                             # "audio" or "comic" when the files' own tags can be edited here (all of one kind)
+    edit_values: dict = field(default_factory=dict)   # field key -> the value every item has, or None where they differ
+    edit_paths: list = field(default_factory=list)  # the items an edit would be written to
+    edit_problems: dict = field(default_factory=dict)  # path -> why it cannot be read or changed (the rest can)
+    edit_reason: str = ""                           # why nothing can be edited, when that is so
 
 
 def kind_of(path: str) -> str:
@@ -176,7 +181,32 @@ def _read_tags(out: Gathered, paths: list) -> None:
                            if len(paths) == 1 else f"{len(cannot)} of these items are on a drive that cannot store tags.")
 
 
+MAX_EDITED = 2000
+
+
+def _read_edit(out: Gathered, paths: list) -> None:
+    """Fill in what the editable Metadata tab needs: for a group of files of one kind whose tags Dossier can write (mp3, flac, ogg, opus, m4a;
+    cbz), the value each field has in common and why a file cannot be changed."""
+    from . import metawrite
+    if any(has_scheme(p) for p in paths) or len(paths) > MAX_EDITED or not paths:
+        return
+    kinds = {metawrite.kind_of(p) for p in paths}
+    if len(kinds) != 1 or "" in kinds:
+        return
+    kind, values, problems = metawrite.common_values(paths)
+    for p in paths:
+        why = metawrite.why_not_writable(p)
+        if why:
+            problems.setdefault(p, why)
+    unusable = [p for p in paths if p in problems]
+    out.edit_kind, out.edit_values, out.edit_paths, out.edit_problems = kind, values, [p for p in paths if p not in problems], problems
+    if len(unusable) == len(paths):
+        out.edit_reason = next(iter(problems.values()))
+        out.edit_values = {}
+
+
 def gather(fs, paths: list, cancel: Optional[CancelToken] = None) -> Gathered:
     out = one_item(fs, paths[0], cancel) if len(paths) == 1 else many_items(fs, paths, cancel)
     _read_tags(out, paths)
+    _read_edit(out, paths)
     return out
