@@ -303,15 +303,20 @@ def test_tabs_have_rounded_top_corners_and_a_visible_gap_between_them(world):
     img = tab_image(p)
     t = theme.current()
     row = t["card"]
+    whole = p.grab().toImage()                                        # the current tab's line is the panel outline, drawn over the tabs
+    origin = p.tabs.mapTo(p, p.tabs.rect().topLeft())
     for i in (0, 1):
         r = p.tabs.tab_outline(i)
         # rounding: the outline is missing exactly at the corner, but is there on the top edge and down the side
         c = theme.tab_colors()
-        edge = c["blue_line"] if i == 0 else c["active_fill"]          # the current tab of the active panel: frame gold
-        assert not close_to(img, int(r.left()), int(r.top()), edge, spread=0), i
-        assert close_to(img, int(r.left()) + 30, int(r.top()), edge, spread=1), i
-        assert close_to(img, int(r.left()), int(r.top()) + 14, edge, spread=1), i
-        assert not close_to(img, int(r.right()) - 1, int(r.top()), edge, spread=0), i
+        if i == 0:
+            image, dx, dy, edge = img, 0, 0, c["blue_line"]
+        else:
+            image, dx, dy, edge = whole, origin.x(), origin.y(), c["frame_line"]      # the current tab of the active panel
+        assert not close_to(image, dx + int(r.left()), dy + int(r.top()), edge, spread=0), i
+        assert close_to(image, dx + int(r.left()) + 30, dy + int(r.top()), edge, spread=1), i
+        assert close_to(image, dx + int(r.left()), dy + int(r.top()) + 14, edge, spread=1), i
+        assert not close_to(image, dx + int(r.right()) - 1, dy + int(r.top()), edge, spread=0), i
     gap = (p.tabs.tab_outline(0).right() + p.tabs.tab_outline(1).left()) / 2
     assert close_to(img, int(gap), int(p.tabs.tab_outline(0).bottom()) - 4, row, spread=0)   # a clear gap
 
@@ -326,11 +331,12 @@ def test_every_tab_has_a_thin_outline(world):
     t = theme.current()
     cur, other = p.tabs.tab_outline(1), p.tabs.tab_outline(0)
     c = theme.tab_colors()
-    assert close_to(img, int(cur.left()), int(cur.bottom()) - 6, c["active_fill"])      # the frame's gold, 2 pixels
     assert close_to(img, int(other.left()), int(other.bottom()) - 6, c["blue_line"])       # the others: a thin blue line
-    y = int(cur.bottom()) - 6
-    assert close_to(img, int(cur.left()) + 1, y, c["active_fill"], spread=0)             # 2 pixels wide
-    assert not close_to(img, int(other.left()) + 1, y, c["active_fill"], tolerance=6, spread=0)   # 1 pixel wide
+    whole = p.grab().toImage()                                       # the current tab: the panel outline, one pixel, darker gold
+    origin = p.tabs.mapTo(p, p.tabs.rect().topLeft())
+    y = origin.y() + int(cur.bottom()) - 6
+    assert whole.pixelColor(origin.x() + int(cur.left()), y).name() == QColor(c["frame_line"]).name()
+    assert whole.pixelColor(origin.x() + int(cur.left()) + 1, y).name() == QColor(t["accent"]).name()   # and then the gold of the tab
 
 
 def test_the_close_cross_of_the_current_tab_is_brighter_than_the_others(world):
@@ -388,13 +394,15 @@ def test_the_current_tab_of_the_active_panel_continues_the_frame_line_exactly(wo
     p.set_active(True)
     p.tabs.setCurrentIndex(0)
     p.tabs.resize(600, p.tabs.height())
-    img = p.tabs.grab().toImage()
+    img = p.grab().toImage()
     t = theme.current()
     r = p.tabs.tab_outline(0)
-    y = int(r.bottom()) - 6
-    # the side of the tab is the frame's 2 pixels of the same gold, at the same x as the box's own border
-    assert img.pixelColor(int(r.left()), y).name() == QColor(t["accent"]).name()
-    assert img.pixelColor(int(r.left()) + 1, y).name() == QColor(t["accent"]).name()
+    origin = p.tabs.mapTo(p, p.tabs.rect().topLeft())
+    y = origin.y() + int(r.bottom()) - 6
+    # the side of the tab is the panel outline, the same line and the same x as the box's own edge below it, then the gold
+    assert img.pixelColor(origin.x() + int(r.left()), y).name() == QColor(theme.tab_colors()["frame_line"]).name()
+    assert img.pixelColor(origin.x() + int(r.left()) + 1, y).name() == QColor(t["accent"]).name()
+    assert img.pixelColor(origin.x() + int(r.left()), y + 40).name() == img.pixelColor(origin.x() + int(r.left()), y).name()   # no step below
     frame_x = p.body.mapTo(p, p.body.rect().topLeft()).x()
     assert int(p.tabs.mapTo(p, p.tabs.rect().topLeft()).x() + r.left()) == frame_x
     assert "background:" + t["accent"] in p.styleSheet().replace(" ", "")               # the same colour, as a fill

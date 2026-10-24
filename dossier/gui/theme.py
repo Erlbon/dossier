@@ -73,6 +73,8 @@ def tab_colors(t: Optional[dict] = None) -> dict:
         "dim_fill": dim, "dim_text": t["fg"] if dark else t["fg"],
         "inactive_fill": inactive, "inactive_text": t["fg"], "inactive_line": t["accent"],
         "hover_fill": mix(t["accent"], t["bg"], 0.48),
+        "frame_line": QColor(t["accent"]).darker(170).name(),
+        "inactive_frame_line": mix(t["accent"], t["bg"], 0.72) if dark else QColor(dim).darker(150).name(),
         "blue_fill": blue["fill"], "blue_line": blue["line"], "blue_text": blue["text"], "blue_hover": blue["hover"],
     }
 

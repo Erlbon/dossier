@@ -508,6 +508,7 @@ class PanelTabBar(QTabBar):
 
     middle_clicked = pyqtSignal(int)     # a tab was middle-clicked: close it
     new_requested = pyqtSignal()         # double-click on the empty part of the bar
+    layout_changed = pyqtSignal()        # the tabs moved or changed size: the outline around the current one must follow
     RADIUS = 8
 
     def __init__(self, parent=None) -> None:
@@ -517,6 +518,10 @@ class PanelTabBar(QTabBar):
         self._hover = -1
         self.panel_active = False        # set by the panel: the current tab then continues the gold frame below it
         self.first_inset = 0             # set by the panel: how far the first tab's left edge is moved in, to line up with the box below
+
+    def tabLayoutChange(self) -> None:
+        super().tabLayoutChange()
+        self.layout_changed.emit()
 
     def tabSizeHint(self, index: int) -> QSize:
         hint = super().tabSizeHint(index)
@@ -546,10 +551,9 @@ class PanelTabBar(QTabBar):
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         for i in range(self.count()):
             selected = i == self.currentIndex()
-            # a thin outline on every tab; the current tab of the active panel uses the frame's own 2 pixels and
-            # colour, so its sides run on into the border of the box below without a step
-            continues_frame = selected and self.panel_active
-            width = 2.0 if continues_frame else 1.0
+            # a thin outline on every tab that is not the current one; the current tab has none of its own: ``PanelOutline`` draws one
+            # line around it and the box below together, so tab and box read as a single shape
+            width = 1.0
             r = self.tab_outline(i).adjusted(width / 2, width / 2, -width / 2, 0)   # the line sits on whole pixels
             # open at the bottom: the tab grows out of the bar below. It runs past the widget's edge so the clip,
             # not the shape, ends it: at a fractional display scale the last device row is only partly inside
@@ -567,13 +571,14 @@ class PanelTabBar(QTabBar):
             if selected:
                 top = c["active_fill"] if self.panel_active else c["dim_fill"]
                 p.fillPath(fill, QColor(top))
-                line = c["active_fill"] if continues_frame else c["active_line"] if self.panel_active else c["dim_fill"]
+                line = None
                 text = c["active_text"] if self.panel_active else c["dim_text"]
             else:
                 p.fillPath(fill, QColor(c["blue_hover"] if i == self._hover else c["blue_fill"]))
                 line, text = c["blue_line"], c["blue_text"]
-            p.setPen(QPen(QColor(line), width))
-            p.drawPath(path)
+            if line is not None:
+                p.setPen(QPen(QColor(line), width))
+                p.drawPath(path)
             text_rect = r.adjusted(12, 0, -26, 0)           # room for the close cross on the right
             font = p.font()
             font.setBold(selected and look.bold_bars)
@@ -596,6 +601,58 @@ class PanelTabBar(QTabBar):
             self.new_requested.emit()
         else:
             super().mouseDoubleClickEvent(event)
+
+
+class PanelOutline(QWidget):
+    """One 1 px line around the current tab and the box below it together (tab sides and top, the box's top edge beside the tab, its
+    sides and bottom), like the thin line around the other tabs. It lies over the panel and lets every click through. The line is a
+    darker gold in the active panel and a lighter dim gold in the other; the box of the active panel reaches the panel's edge (its
+    frame is the gold fill), the box of the other starts FRAME in."""
+
+    def __init__(self, panel) -> None:
+        super().__init__(panel)
+        self.panel = panel
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        self.setAttribute(Qt.WidgetAttribute.WA_NoSystemBackground)
+
+    def path(self) -> Optional[QPainterPath]:
+        panel = self.panel
+        tabs = panel.tabs
+        current = tabs.currentIndex()
+        if current < 0 or panel.body.height() <= 0:
+            return None
+        inset = 0 if panel._active else FRAME
+        origin = tabs.mapTo(panel, QPoint(0, 0))
+        r = tabs.tab_outline(current).translated(origin.x(), origin.y()).adjusted(0.5, 0.5, -0.5, 0)   # the line sits on whole pixels
+        left, right, bottom = inset + 0.5, panel.width() - inset - 0.5, panel.height() - inset - 0.5
+        edge = panel.body.y() + 0.5                                  # the top edge of the box, where the tabs rest
+        radius = tabs.RADIUS
+        path = QPainterPath()
+        path.moveTo(left, bottom)
+        path.lineTo(left, edge)
+        if r.left() > left + 0.01:
+            path.lineTo(r.left(), edge)
+        path.lineTo(r.left(), r.top() + radius)
+        path.quadTo(r.left(), r.top(), r.left() + radius, r.top())
+        path.lineTo(r.right() - radius, r.top())
+        path.quadTo(r.right(), r.top(), r.right(), r.top() + radius)
+        path.lineTo(r.right(), edge)
+        if r.right() < right - 0.01:
+            path.lineTo(right, edge)
+        path.lineTo(right, bottom)
+        path.closeSubpath()
+        return path
+
+    def paintEvent(self, event) -> None:
+        path = self.path()
+        if path is None:
+            return
+        c = theme.tab_colors()
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p.setPen(QPen(QColor(c["frame_line"] if self.panel._active else c["inactive_frame_line"]), 1.0))
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        p.drawPath(path)
 
 
 class Panel(QFrame):
@@ -777,6 +834,9 @@ class Panel(QFrame):
         body.addWidget(self.filter_edit)
         layout.addWidget(self.tab_row)
         layout.addWidget(self.body, 1)
+        self.outline = PanelOutline(self)             # one line around the current tab and the box below; over everything, clicks pass through
+        self.outline.raise_()
+        self.tabs.layout_changed.connect(self.outline.update)
 
         self.address.returnPressed.connect(self._address_entered)
         self.filter_edit.textChanged.connect(self._filter_changed)
@@ -802,6 +862,7 @@ class Panel(QFrame):
         self.table.activate_in_tab.connect(lambda: self.open_current(new_tab=True))
         self.table.middle_clicked.connect(self._middle_click_row)
         self.tabs.currentChanged.connect(self._tab_switched)
+        self.tabs.currentChanged.connect(lambda _i: self.outline.update())
         self.tabs.middle_clicked.connect(self.close_tab)
         self.tabs.new_requested.connect(lambda: self.new_tab())
         self.new_tab_button.clicked.connect(lambda: self.new_tab())
@@ -933,6 +994,7 @@ class Panel(QFrame):
         # the first tab lines up with it there. An inactive panel has no frame: its box starts FRAME in, so the first tab starts there too.
         self.tabs.first_inset = 0 if active else FRAME
         self.tabs.update()
+        self.outline.update()
 
     def restyle(self) -> None:
         """The colour scheme changed: redraw the active mark, the marked rows and the note."""
@@ -1674,6 +1736,8 @@ class Panel(QFrame):
 
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
+        self.outline.setGeometry(self.rect())
+        self.outline.raise_()
         if self.model.note_row >= 0:
             self._place_note()
 

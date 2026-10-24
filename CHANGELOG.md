@@ -2,6 +2,12 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-24#07 -- One outline around the current tab and its box
+
+- **The current tab now has a 1 px outline like the blue tabs, and it runs on around the whole box below it.** One line goes up the side of the tab, over its rounded top, down the other side, along the box's top edge beside the tab (where the other tabs rest on it), and down and around the sides and bottom of the box. The tab and the box read as a single shape. In the active panel the line is a darker gold, on the panel's very edge, with the gold frame inside it; in the other panel it is a lighter dim gold, where that panel's box starts.
+- Colours are new theme entries (`frame_line`, `inactive_frame_line`), worked out from the accent for dark and light schemes. The line lies over the panel and lets every click through. Only the outline is new: the fills, the blue tabs and the bars are as before, and the first tab still lines up with the box.
+- Tests check the outline's path (box edges, where the tab is), its two colours, that it follows the current tab, and the pixels on the panel edge.
+
 ## 2026-10-24#06 -- The first tab lines up with the box below it
 
 - **The step under the first tab is gone.** In the panel that is not active, the first tab stuck out about 2 pixels (a frame's width) to the left of the address bar and list below it, because only the active panel has a gold frame to fill that margin. The first tab of a panel that is not active now starts where the box below starts; in the active panel it still runs on into the gold frame as before. Only the first tab moves, and only by that width, when the active panel changes. Tests check the two edges in both states for both panels.

@@ -48,3 +48,59 @@ def test_only_the_first_tab_is_moved(world):
     gap_before = win.right.tabs.tab_outline(1).left() - win.right.tabs.tabRect(1).left()
     win.right.set_active(True)
     assert win.right.tabs.tab_outline(1).left() - win.right.tabs.tabRect(1).left() == gap_before
+
+
+# the one line around the current tab and the box below it ----------------------------------------------------------------------------------
+def test_the_outline_runs_around_tab_and_box_and_starts_where_the_box_starts(world):
+    from PyQt6.QtCore import QPointF
+    win, d, left, right, tmp = world
+    for panel, other in ((win.left, win.right), (win.right, win.left)):
+        panel.set_active(True)
+        other.set_active(False)
+        for p in (panel, other):
+            path = p.outline.path()
+            assert path is not None
+            inset = 0 if p._active else FRAME
+            box = path.boundingRect()
+            assert box.left() == inset + 0.5 and box.right() == p.width() - inset - 0.5 and box.bottom() == p.height() - inset - 0.5
+            assert box.top() == p.tabs.mapTo(p, p.tabs.rect().topLeft()).y() + p.tabs.tab_outline(0).top() + 0.5
+            assert not path.contains(QPointF(box.center().x(), box.bottom() + 5))
+
+
+def test_the_outline_follows_the_current_tab_and_leaves_the_others_resting_on_the_top_edge(world):
+    win, d, left, right, tmp = world
+    p = win.left
+    p.new_tab(str(tmp))
+    p.tabs.setCurrentIndex(0)
+    first = p.outline.path()
+    p.tabs.setCurrentIndex(1)
+    second = p.outline.path()
+    assert first != second and first.boundingRect().left() == second.boundingRect().left()      # the box does not move, the tab does
+    tab_left = p.tabs.mapTo(p, p.tabs.rect().topLeft()).x() + p.tabs.tab_outline(1).left() + 0.5
+    xs = {round(second.elementAt(i).x, 1) for i in range(second.elementCount())}
+    assert round(tab_left, 1) in xs                                                           # it goes up at the second tab's own left edge
+
+
+def test_the_outline_is_darker_in_the_active_panel_and_clicks_pass_through(world):
+    from PyQt6.QtCore import Qt
+    from PyQt6.QtGui import QColor
+    from dossier.gui import theme
+    win, d, left, right, tmp = world
+    c = theme.tab_colors()
+    assert c["frame_line"] != c["inactive_frame_line"] and QColor(c["frame_line"]).lightness() < QColor(c["active_fill"]).lightness()
+    assert win.left.outline.testAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+    assert win.left.outline.geometry() == win.left.rect()
+
+
+def test_the_outline_is_drawn_on_the_panel_edge_in_the_right_colour(world):
+    from PyQt6.QtGui import QColor
+    from dossier.gui import theme
+    win, d, left, right, tmp = world
+    c = theme.tab_colors()
+    win.left.set_active(True)
+    win.right.set_active(False)
+    img = win.left.grab().toImage()
+    y = win.left.body.y() + 60
+    assert img.pixelColor(0, y).name() == QColor(c["frame_line"]).name()                       # the active panel: on its very edge
+    img = win.right.grab().toImage()
+    assert img.pixelColor(FRAME, win.right.body.y() + 60).name() == QColor(c["inactive_frame_line"]).name()   # the other: where its box starts
