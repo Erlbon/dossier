@@ -2,6 +2,13 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-24#13 -- Built to stay open for weeks: a soak test and two limits
+
+- **A soak test, `tools/soak.py`,** uses the window hard and watches memory, handles, threads and the number of objects: each round changes both panels' folders and does one more thing (a tab opened and closed, select all, a sort, the view mode, a copy that overwrites and a delete, a Health window opened and closed, a command, an undo, a refresh). Over 2,000 rounds (4,000 folder changes) the object count stayed flat (62,326 from start to end) and memory moved by under 2 MB, with no growth in handles or threads. A window can stay open for weeks.
+- **The thumbnail memory is limited in bytes now,** to 96 MB, as well as to 800 pictures. By count alone, 800 huge (256 pixel) thumbnails would have taken about 200 MB; the least recently used pictures go first, and one picture over the limit is still kept.
+- **The command line keeps the newest 500 commands** in memory (the history list and Up); before, the list had no limit.
+- Already limited, and checked: the undo list (20 actions), the folder-size memory (reset at 200,000 entries), the zip index cache, the saved-in-the-window lists (viewers and editors leave their list when closed), and temporary copies for drags (removed on closing and, after a crash, a day later). The only timers that run all the time do nothing when idle (0.0% CPU measured on the running window).
+
 ## 2026-10-24#12 -- The Metadata tab of Properties can be edited (mp3 and cbz)
 
 - **Alt+Enter on an mp3, flac, ogg, opus or m4a file, or a cbz, now shows its tags as a form** in the Audio tags (or ComicInfo) tab, with **Save Metadata** for that tab and Save Tags for the Tags tab. A field that was changed is shown in bold; the little x takes a field away. Under the form, the rest of what the file carries (length, bitrate, cover art, lyrics) is listed read only as "Also in the file", so nothing is hidden and nothing is touched.

@@ -118,6 +118,15 @@ def test_ctrl_space_asks_for_completion_and_ctrl_down_shows_the_history(world):
     assert win.cmdline.text() == "git log"
 
 
+def test_the_history_keeps_only_the_newest_commands(world):
+    from dossier.gui import command_line
+    win, d, left, right, tmp = world
+    for n in range(command_line.MAX_HISTORY + 40):
+        win.cmdline.remember(f"command {n}")
+    assert len(win.cmdline.history) == command_line.MAX_HISTORY
+    assert win.cmdline.history[0] == "command 40" and win.cmdline.history[-1] == f"command {command_line.MAX_HISTORY + 39}"
+
+
 def test_the_history_list_follows_what_is_typed(world):
     win, d, left, right, tmp = world
     for cmd in ("git status", "dir", "git log"):

@@ -18,6 +18,7 @@ from PyQt6.QtWidgets import QApplication
 from ..core import covers
 
 CACHE_ITEMS = 800
+CACHE_BYTES = 96 * 1024 * 1024                      # and never more than this much picture memory: 800 huge thumbnails would be about 200 MB
 THREADS = 4
 STEPS = (64, 96, 128, 192, 256)                     # the thumbnail sizes: small, medium, large, extra large, huge
 SIZE_NAMES = {64: "Small", 96: "Medium", 128: "Large", 192: "Extra Large", 256: "Huge"}
@@ -89,6 +90,7 @@ class Thumbnails(QObject):
         self._signals = _Done(self)
         self._signals.done.connect(self._finished)
         self._cache: OrderedDict = OrderedDict()         # key -> QPixmap, or None for "has no picture"
+        self._bytes = 0                                  # what the pixmaps in the cache take
         self._pending: dict = {}                         # key -> path
         app = QApplication.instance()
         self.ratio = (app.devicePixelRatio() if app is not None else 1.0) or 1.0     # screen pixels per logical pixel
@@ -122,6 +124,7 @@ class Thumbnails(QObject):
 
     def clear(self) -> None:
         self._cache.clear()
+        self._bytes = 0
 
     # results ---------------------------------------------------------------------------------------------------------------
     def _finished(self, key: str, image) -> None:
@@ -129,11 +132,18 @@ class Thumbnails(QObject):
         pixmap = QPixmap.fromImage(image) if isinstance(image, QImage) and not image.isNull() else None
         if pixmap is not None:
             pixmap.setDevicePixelRatio(self.ratio)                # made at screen resolution, drawn at the size asked for
+        self._bytes -= self._size_of(self._cache.pop(key, None))
         self._cache[key] = pixmap
-        while len(self._cache) > CACHE_ITEMS:
-            self._cache.popitem(last=False)
+        self._bytes += self._size_of(pixmap)
+        while len(self._cache) > 1 and (len(self._cache) > CACHE_ITEMS or self._bytes > CACHE_BYTES):
+            self._bytes -= self._size_of(self._cache.popitem(last=False)[1])           # the least recently used go first
         if path:
             self.ready.emit(path)
+
+    @staticmethod
+    def _size_of(pixmap) -> int:
+        """The memory a cached picture takes, in bytes (a pixmap's size is in screen pixels, four bytes each)."""
+        return 0 if pixmap is None else pixmap.width() * pixmap.height() * 4
 
     def idle(self) -> bool:
         return not self._pending

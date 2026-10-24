@@ -7,6 +7,7 @@ from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import QApplication, QLineEdit, QListWidget, QListWidgetItem
 
 POPUP_ROWS = 10
+MAX_HISTORY = 500                      # commands kept in memory for Up and the history list: a window open for weeks stays small
 
 
 class ChoicePopup(QListWidget):
@@ -90,6 +91,7 @@ class CommandLine(QLineEdit):
     def remember(self, text: str) -> None:
         if text and (not self.history or self.history[-1] != text):
             self.history.append(text)
+            del self.history[:-MAX_HISTORY]
         self._pos = len(self.history)
 
     def focusNextPrevChild(self, next_: bool) -> bool:

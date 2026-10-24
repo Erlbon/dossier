@@ -103,6 +103,29 @@ def test_the_memory_keeps_only_so_many_pictures(app, monkeypatch):
     assert len(loader._cache) == 5 and loader.get("k11") == (True, None) and loader.get("k0") == (False, None)
 
 
+def test_the_memory_is_also_limited_in_bytes_not_only_in_pictures(app, monkeypatch):
+    from PyQt6.QtGui import QImage
+    loader = th.Thumbnails()
+    loader.ratio = 1.0
+    monkeypatch.setattr(th, "CACHE_BYTES", 3 * 100 * 100 * 4 + 10)                     # room for three 100 x 100 pictures
+    for i in range(8):
+        image = QImage(100, 100, QImage.Format.Format_ARGB32)
+        image.fill(0)
+        loader._pending[f"k{i}"] = f"p{i}"
+        loader._finished(f"k{i}", image)
+    assert len(loader._cache) == 3 and loader._bytes == 3 * 100 * 100 * 4
+    assert loader.get("k7")[0] and not loader.get("k0")[0]                              # the newest stay, the oldest went
+    loader._finished("k7", None)                                                        # a replaced picture no longer counts
+    assert loader._bytes == 2 * 100 * 100 * 4
+    loader.clear()
+    assert loader._bytes == 0 and len(loader._cache) == 0
+    big = QImage(4000, 4000, QImage.Format.Format_ARGB32)                               # one picture over the limit is still kept (the newest)
+    big.fill(0)
+    loader._pending["big"] = "p"
+    loader._finished("big", big)
+    assert len(loader._cache) == 1
+
+
 # the panel, the model and the window ---------------------------------------------------------------------------------------
 def images_in(left, names=("a.png", "b.png", "c.txt")):
     for n in names:
