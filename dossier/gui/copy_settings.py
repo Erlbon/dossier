@@ -10,6 +10,7 @@ from PyQt6.QtWidgets import (QHBoxLayout, QCheckBox, QComboBox, QDialog, QDialog
 
 DEFAULTS = {"limit_mb": 0.0, "verify": False, "ask_on_error": False, "retries": 3, "retry_delay": 0.25, "workers": 0,
             "native": True, "flush": "auto", "ask_on_drop": False, "remember_queue": False}
+from .owned_dialog import OwnedDialog
 FLUSH_CHOICES = (("Only for removable and network drives", "auto"), ("Always", "always"), ("Never", "never"))
 
 
@@ -41,7 +42,7 @@ def write_settings(settings, values: dict) -> None:
         settings.setValue("copy/" + key, "true" if value is True else "false" if value is False else value)
 
 
-class CopySettingsDialog(QDialog):
+class CopySettingsDialog(OwnedDialog):
     def __init__(self, parent, values: dict) -> None:
         super().__init__(parent)
         self.setWindowTitle("Copy and Move")

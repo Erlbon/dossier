@@ -19,6 +19,7 @@ from ..core import startmenu as SM
 from ..core import tools as T
 from ..core.drives import is_network_path
 from . import icon_set, theme
+from .owned_dialog import OwnedDialog
 from .background import run_in_background
 from .bar_grip import BarGrip
 
@@ -40,7 +41,7 @@ def folder_icon() -> QIcon:
     return icon_set.icon("folder", theme.current()["accent"])
 
 
-class StartMenuDialog(QDialog):
+class StartMenuDialog(OwnedDialog):
     """The programs of the Windows Start menu as a tree with a search box; choose one, or go on to type the program in by hand."""
 
     def __init__(self, parent, tree: list) -> None:
@@ -107,7 +108,7 @@ class StartMenuDialog(QDialog):
         self.accept()
 
 
-class ToolDialog(QDialog):
+class ToolDialog(OwnedDialog):
     """Add or edit one program: name, program, arguments, start folder, and where it goes."""
 
     def __init__(self, parent, tool: Optional[T.Tool] = None, places: Optional[list] = None, suggestions: Optional[list] = None,
@@ -198,7 +199,7 @@ class ToolDialog(QDialog):
         return self.where.currentIndex() if self.where is not None else 0
 
 
-class FolderDialog(QDialog):
+class FolderDialog(OwnedDialog):
     def __init__(self, parent, name: str = "", places: Optional[list] = None, title: str = "Add a Folder") -> None:
         super().__init__(parent)
         self.setWindowTitle(title)
@@ -225,7 +226,7 @@ class FolderDialog(QDialog):
         return self.where.currentIndex() if self.where is not None else 0
 
 
-class ManageDialog(QDialog):
+class ManageDialog(OwnedDialog):
     """The whole bar as a tree: drag items into folders and into order, edit, remove."""
 
     def __init__(self, parent, items: list, edit_tool, edit_folder) -> None:

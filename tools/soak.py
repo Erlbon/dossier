@@ -28,12 +28,13 @@ for i in range(60):
     for j in range(60):
         with open(os.path.join(d, f"file{j:03}.txt"), "w") as f:
             f.write("x" * random.randint(1, 3000))
-os.makedirs(base + r"\dest", exist_ok=True)
+os.makedirs(os.path.join(base, "dest"), exist_ok=True)
+open(os.path.join(base, "dialog_target.txt"), "w").write("x")
 
 dialogs = FakeDialogs()
 dialogs.conflict_answer = Resolution.OVERWRITE
 dialogs.confirm_answer = True
-win = MainWindow(settings_path=base + r"\s.ini", start=(folders[0], base + r"\dest"), dialogs=dialogs, trasher=lambda p: os.remove(p) if os.path.isfile(p) else shutil.rmtree(p, ignore_errors=True))
+win = MainWindow(settings_path=os.path.join(base, "s.ini"), start=(folders[0], os.path.join(base, "dest")), dialogs=dialogs, trasher=lambda p: os.remove(p) if os.path.isfile(p) else shutil.rmtree(p, ignore_errors=True))
 win.show()
 proc = psutil.Process()
 
@@ -68,7 +69,7 @@ def sample(label):
 
 pump()
 rows = [sample("start")]
-ENABLED = set(int(x) for x in os.environ.get("ACTIONS", "0,1,2,3,4,5,6,7,8").split(",") if x != "")
+ENABLED = set(int(x) for x in os.environ.get("ACTIONS", "0,1,2,3,4,5,6,7,8,9").split(",") if x != "")
 N = int(sys.argv[1]) if len(sys.argv) > 1 else 600
 t0 = time.time()
 import tracemalloc
@@ -126,6 +127,23 @@ for i in range(1, N + 1):
     if r == 8:
         win.left.refresh()
         win.right.refresh()
+        pump()
+    if r == 9:                                   # dialogs: each is made with the window as parent and must be freed when it is closed
+        from dossier.core import properties, quarantine
+        from dossier.core.vfs import LocalFileSystem
+        from dossier.gui.copy_settings import CopySettingsDialog
+        from dossier.gui.dates_links import DatesDialog, LinkDialog
+        from dossier.gui.properties import PropertiesDialog
+        from dossier.gui.quarantine_ui import QuarantineDialog
+        from dossier.gui.servers import ConnectionDialog
+        target = os.path.join(base, "dialog_target.txt")
+        for make in (lambda: ConnectionDialog(win), lambda: DatesDialog(win, [target]), lambda: LinkDialog(win, target, base, False),
+                     lambda: QuarantineDialog(win, quarantine.Settings(), target), lambda: CopySettingsDialog(win, win.copy_settings()),
+                     lambda: PropertiesDialog(win, properties.gather(LocalFileSystem(), [target]), set())):
+            dlg = make()
+            dlg.show()
+            dlg.reject()
+            del dlg
         pump()
     del dialogs.progress_boxes[:]                      # the test dialogs keep every progress box; the real ones are closed and freed
     del dialogs.confirms[:], dialogs.infos[:]

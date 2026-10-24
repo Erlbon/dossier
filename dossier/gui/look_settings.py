@@ -6,6 +6,7 @@ from PyQt6.QtWidgets import (QCheckBox, QDialog, QDialogButtonBox, QDoubleSpinBo
                              QLabel, QPushButton, QVBoxLayout)
 
 from . import look
+from .owned_dialog import OwnedDialog
 
 DEFAULTS = {"font_family": "", "font_size": 0.0, "bold_lists": True, "bold_bars": True}
 
@@ -29,7 +30,7 @@ def write_look(settings, values: dict) -> None:
         settings.setValue("view/" + key, "true" if value is True else "false" if value is False else value)
 
 
-class LookDialog(QDialog):
+class LookDialog(OwnedDialog):
     def __init__(self, parent, values: dict) -> None:
         super().__init__(parent)
         self.setWindowTitle("Fonts and Bold")

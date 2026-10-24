@@ -13,6 +13,7 @@ from PyQt6.QtWidgets import (QDialog, QDialogButtonBox, QFileDialog, QFormLayout
 from ..core import quarantine
 from ..core.ops import Kind
 from ..core.platform import IS_WINDOWS
+from .owned_dialog import OwnedDialog
 from .background import run_in_background
 
 KEY_MODE, KEY_FOLDER = "quarantine/mode", "quarantine/folder"
@@ -29,7 +30,7 @@ def write_settings(settings, values: quarantine.Settings) -> None:
     settings.setValue(KEY_FOLDER, values.folder)
 
 
-class QuarantineDialog(QDialog):
+class QuarantineDialog(OwnedDialog):
     def __init__(self, parent, values: quarantine.Settings, example: str) -> None:
         super().__init__(parent)
         self.setWindowTitle("Quarantine")

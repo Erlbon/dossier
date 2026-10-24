@@ -21,12 +21,13 @@ from PyQt6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, QF
 from ..core import davclient, ftpclient, opdsclient, servers, sshlink, subsonicclient
 from ..core.home import ADD_SERVER, TAILNET_PREFIX, ServerItem
 from ..core.sftpfs import Session, scheme_of, split_path
+from .owned_dialog import OwnedDialog
 from .background import run_in_background
 
 SETTINGS_KEY = "servers/list"
 
 
-class ConnectionDialog(QDialog):
+class ConnectionDialog(OwnedDialog):
     def __init__(self, parent, conn: Optional[servers.Connection] = None, new: bool = False) -> None:
         """``conn`` to edit; or, with ``new``, the values a new connection starts with (a device of the tailnet)."""
         super().__init__(parent)
@@ -187,7 +188,7 @@ class ConnectionDialog(QDialog):
         self.accept()
 
 
-class PasswordDialog(QDialog):
+class PasswordDialog(OwnedDialog):
     def __init__(self, parent, conn: servers.Connection, message: str = "") -> None:
         super().__init__(parent)
         self.setWindowTitle(f"Log in to {conn.name}")
@@ -216,7 +217,7 @@ class PasswordDialog(QDialog):
         return self.keep.isChecked()
 
 
-class HostKeyDialog(QDialog):
+class HostKeyDialog(OwnedDialog):
     """A server's key, with its fingerprint, to be trusted or not. ``state`` is ``unknown`` or ``changed``."""
 
     def __init__(self, parent, host: str, port: int, keys: list, state: str, old: Optional[list] = None) -> None:
@@ -249,7 +250,7 @@ class HostKeyDialog(QDialog):
         layout.addWidget(buttons)
 
 
-class CertificateDialog(QDialog):
+class CertificateDialog(OwnedDialog):
     """The certificate a web server shows, with its fingerprint, to be trusted or not. ``state`` is ``unknown`` or ``changed``."""
 
     def __init__(self, parent, host: str, port: int, fingerprint: str, state: str, old: str = "") -> None:

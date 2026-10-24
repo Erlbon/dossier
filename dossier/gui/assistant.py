@@ -24,6 +24,7 @@ from ..assistant.scope import Denied, Scope
 from ..core import compare as cmp, sync as sync_core
 from ..core.ops import Resolution, plan_copy, plan_delete, plan_move, plan_rename
 from ..core.sizefmt import human_size
+from .owned_dialog import OwnedDialog
 
 TICK_MS = 1000
 HEARTBEAT = 5.0
@@ -41,7 +42,7 @@ def server_snippet() -> str:
     return json.dumps({"mcpServers": {"dossier": entry}}, indent=2)
 
 
-class AssistantDialog(QDialog):
+class AssistantDialog(OwnedDialog):
     def __init__(self, parent, current: config_module.AssistantConfig) -> None:
         super().__init__(parent)
         self.setWindowTitle("Assistant Access")

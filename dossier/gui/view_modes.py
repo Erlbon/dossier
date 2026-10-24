@@ -10,13 +10,14 @@ from PyQt6.QtGui import QAction, QActionGroup
 from PyQt6.QtWidgets import QCheckBox, QDialog, QDialogButtonBox, QLabel, QPushButton, QVBoxLayout
 
 from ..core.columns import index_of
+from .owned_dialog import OwnedDialog
 from .thumbnails import SIZE_NAMES, STEPS, Thumbnails, nearest_step
 
 ARRANGE = (("Name", "name"), ("Size", "size"), ("Date", "modified"), ("Type", "type"), ("Created", "created"),
            ("Last opened", "accessed"))
 
 
-class ThumbnailSettingsDialog(QDialog):
+class ThumbnailSettingsDialog(OwnedDialog):
     def __init__(self, parent, network: bool, video: bool, ffmpeg_found: bool) -> None:
         super().__init__(parent)
         self.setWindowTitle("Thumbnails")

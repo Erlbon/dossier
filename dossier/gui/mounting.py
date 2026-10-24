@@ -5,10 +5,11 @@ from PyQt6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, QF
 
 from ..core import mounting
 from ..core.drives import list_drives
+from .owned_dialog import OwnedDialog
 from .background import run_in_background
 
 
-class MountDialog(QDialog):
+class MountDialog(OwnedDialog):
     def __init__(self, parent, letters: list, nfs_on: bool) -> None:
         super().__init__(parent)
         self.setWindowTitle("Add a Network Share")

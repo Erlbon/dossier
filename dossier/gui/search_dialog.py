@@ -12,6 +12,7 @@ from PyQt6.QtWidgets import (QCheckBox, QComboBox, QDateEdit, QDialog, QDialogBu
                              QLabel, QLineEdit, QVBoxLayout, QWidget)
 
 from ..core.search import BadCriteria, Criteria
+from .owned_dialog import OwnedDialog
 
 UNITS = (("KB", 1024), ("MB", 1024 ** 2), ("GB", 1024 ** 3), ("bytes", 1))
 KINDS = (("Files", "files"), ("Folders", "folders"), ("Files and folders", "both"))
@@ -73,7 +74,7 @@ class _DateBox(QWidget):
         return datetime.combine(day.date(), dtime.max if end_of_day else dtime.min).timestamp()
 
 
-class SearchDialog(QDialog):
+class SearchDialog(OwnedDialog):
     def __init__(self, parent, root: str, last: Optional[Criteria] = None) -> None:
         super().__init__(parent)
         self.setWindowTitle("Search")

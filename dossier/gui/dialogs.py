@@ -10,6 +10,7 @@ from PyQt6.QtWidgets import (QDialog, QFileDialog, QInputDialog, QCheckBox, QMes
 
 from ..core.progress import RateMeter, human_duration
 from ..core.sizefmt import human_size
+from .owned_dialog import OwnedDialog
 
 
 BYTES_SHOWN = 1 << 20          # below this a progress total is a count of steps, not bytes
@@ -85,6 +86,7 @@ class Dialogs:
 
     def info(self, title: str, text: str) -> None:
         box = QMessageBox(QMessageBox.Icon.Information, title, text, QMessageBox.StandardButton.Ok, self.parent)
+        box.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)       # freed after use, not kept by the window for good
         box.exec()
 
     def confirm(self, title: str, text: str, ok_label: str = "OK") -> bool:
@@ -92,6 +94,7 @@ class Dialogs:
         ok = box.addButton(ok_label, QMessageBox.ButtonRole.AcceptRole)
         box.addButton(QMessageBox.StandardButton.Cancel)
         box.setDefaultButton(ok)
+        box.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)       # freed after use, not kept by the window for good
         box.exec()
         return box.clickedButton() is ok
 
@@ -105,6 +108,7 @@ class Dialogs:
         ok = box.addButton(ok_label, QMessageBox.ButtonRole.AcceptRole)
         box.addButton(QMessageBox.StandardButton.Cancel)
         box.setDefaultButton(ok)
+        box.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)       # freed after use, not kept by the window for good
         box.exec()
         return check.isChecked() if box.clickedButton() is ok else None
 
@@ -118,6 +122,7 @@ class Dialogs:
         drop = box.addButton("Discard the list", QMessageBox.ButtonRole.DestructiveRole)
         box.addButton("Not now", QMessageBox.ButtonRole.RejectRole)
         box.setDefaultButton(go)
+        box.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)       # freed after use, not kept by the window for good
         box.exec()
         return "continue" if box.clickedButton() is go else "discard" if box.clickedButton() is drop else "later"
 
@@ -128,6 +133,7 @@ class Dialogs:
         discard = box.addButton("Discard changes", QMessageBox.ButtonRole.DestructiveRole)
         box.addButton(QMessageBox.StandardButton.Cancel)
         box.setDefaultButton(save)
+        box.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)       # freed after use, not kept by the window for good
         box.exec()
         return "save" if box.clickedButton() is save else "discard" if box.clickedButton() is discard else "cancel"
 
@@ -138,6 +144,7 @@ class Dialogs:
         over = box.addButton("Overwrite with my version", QMessageBox.ButtonRole.DestructiveRole)
         reload_ = box.addButton("Reload from disk", QMessageBox.ButtonRole.AcceptRole)
         box.addButton(QMessageBox.StandardButton.Cancel)
+        box.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)       # freed after use, not kept by the window for good
         box.exec()
         return "overwrite" if box.clickedButton() is over else "reload" if box.clickedButton() is reload_ else None
 
@@ -147,7 +154,7 @@ class Dialogs:
 
     def show_output(self, title: str, text: str) -> None:
         """The captured output of a command, in a resizable read-only box."""
-        dlg = QDialog(self.parent)
+        dlg = OwnedDialog(self.parent)
         dlg.setWindowTitle(title)
         dlg.resize(760, 420)
         edit = QPlainTextEdit(text)
@@ -177,6 +184,7 @@ class Dialogs:
                    box.addButton("Skip", QMessageBox.ButtonRole.RejectRole): "skip",
                    box.addButton("Skip all errors", QMessageBox.ButtonRole.RejectRole): "skip_all",
                    box.addButton("Stop", QMessageBox.ButtonRole.DestructiveRole): "abort"}
+        box.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)       # freed after use, not kept by the window for good
         box.exec()
         return buttons.get(box.clickedButton(), "skip")
 

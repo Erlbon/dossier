@@ -18,6 +18,7 @@ from PyQt6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, QF
 from ..core import filetimes as ft
 from ..core import links
 from ..core.platform import IS_WINDOWS
+from .owned_dialog import OwnedDialog
 from .background import run_in_background
 
 MAX_ROWS = 2000
@@ -35,7 +36,7 @@ def moment_text(ts: float) -> str:
         return ""
 
 
-class DatesDialog(QDialog):
+class DatesDialog(OwnedDialog):
     """Choose what to change, see old and new for every item, press Apply. ``plan`` is the answer (empty when cancelled)."""
 
     def __init__(self, win, paths: list, has_folders: bool = False) -> None:
@@ -284,7 +285,7 @@ class DatesDialog(QDialog):
         self.accept()
 
 
-class LinkDialog(QDialog):
+class LinkDialog(OwnedDialog):
     """Kind, what it points to, where it goes and what it is called. ``answer()`` is ``(kind, target, link_path, relative)``."""
 
     EXPLAIN = {links.SYMLINK: "Holds a path to a file or a folder anywhere. On Windows it needs Developer Mode (or an administrator).",

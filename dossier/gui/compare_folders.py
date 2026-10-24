@@ -15,6 +15,7 @@ from PyQt6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, QD
 from ..core import compare as cmp
 from ..core import sync
 from ..core.sizefmt import human_size
+from .owned_dialog import OwnedDialog
 from .background import run_in_background
 
 FILTERS = ((cmp.ONLY_LEFT, "Only left"), (cmp.ONLY_RIGHT, "Only right"), (cmp.LEFT_NEWER, "Newer left"),
@@ -30,7 +31,7 @@ def _side(entry) -> str:
     return f"{human_size(entry.size)}   {when}"
 
 
-class CompareOptionsDialog(QDialog):
+class CompareOptionsDialog(OwnedDialog):
     def __init__(self, parent, left: str, right: str, values: dict) -> None:
         super().__init__(parent)
         self.setWindowTitle("Compare Folders")
@@ -72,7 +73,7 @@ class CompareOptionsDialog(QDialog):
                 "ignore_hour": self.hour.isChecked(), "include_same": self.same.isChecked()}
 
 
-class CompareResultDialog(QDialog):
+class CompareResultDialog(OwnedDialog):
     """The differences. ``action`` is ``sync``, ``mark`` or ``""``; ``actions`` are the checked ones (``sync.Action``)."""
 
     def __init__(self, parent, result: cmp.CompareResult, mode: str = "update_right") -> None:

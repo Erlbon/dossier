@@ -12,6 +12,7 @@ from PyQt6.QtWidgets import (QApplication, QComboBox, QDialog, QDialogButtonBox,
 from ..core import metawrite
 from ..core.filetags import CannotHoldTags, TagChange, apply_change, clean_tags
 from ..core.properties import Gathered, gather
+from .owned_dialog import OwnedDialog
 from .background import run_in_background
 
 KIND_TITLES = {"audio": "Audio tags", "comic": "ComicInfo", "video": "Video details"}
@@ -30,7 +31,7 @@ def split_tags(text: str) -> list:
     return clean_tags(text.replace(";", ",").split(","))
 
 
-class PropertiesDialog(QDialog):
+class PropertiesDialog(OwnedDialog):
     def __init__(self, parent, data: Gathered, known_tags=()) -> None:
         super().__init__(parent)
         self.setWindowTitle(data.title)

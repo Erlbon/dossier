@@ -15,6 +15,7 @@ from PyQt6.QtWidgets import (QAbstractItemView, QComboBox, QDialog, QDialogButto
 
 from ..core.ops import ConflictRow, Resolution
 from ..core.sizefmt import human_size
+from .owned_dialog import OwnedDialog
 
 MAX_ROWS_SHOWN = 10                     # the table is this tall at most; more rows scroll
 MIN_ROWS_SHOWN = 3
@@ -39,7 +40,7 @@ def _when(mtime: float) -> str:
         return ""
 
 
-class ConflictDialog(QDialog):
+class ConflictDialog(OwnedDialog):
     def __init__(self, parent: Optional[QWidget], rows: list, where: str = "") -> None:
         super().__init__(parent)
         self.setWindowTitle("Items already exist")

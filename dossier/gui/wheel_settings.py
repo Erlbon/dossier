@@ -4,6 +4,7 @@ from __future__ import annotations
 from PyQt6.QtWidgets import QComboBox, QDialog, QDialogButtonBox, QFormLayout, QLabel, QPushButton, QVBoxLayout
 
 from ..core import wheel
+from .owned_dialog import OwnedDialog
 
 
 def read_wheel(settings) -> dict:
@@ -15,7 +16,7 @@ def write_wheel(settings, values: dict) -> None:
         settings.setValue("wheel/" + key, value)
 
 
-class WheelDialog(QDialog):
+class WheelDialog(OwnedDialog):
     def __init__(self, parent, values: dict) -> None:
         super().__init__(parent)
         self.setWindowTitle("Mouse Wheel")

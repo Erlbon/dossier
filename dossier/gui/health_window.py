@@ -19,6 +19,7 @@ from PyQt6.QtWidgets import (QApplication, QCheckBox, QDialog, QDialogButtonBox,
 from ..core import health
 from ..core.ops import describe_op
 from ..core.progress import CancelToken
+from .owned_dialog import OwnedDialog
 
 MAX_ROWS = 5000
 ALL = ""                                                     # the data of the "All findings" row
@@ -39,7 +40,7 @@ class _Row(QTreeWidgetItem):
         return self.text(column).lower() < other.text(column).lower()
 
 
-class PlanPreview(QDialog):
+class PlanPreview(OwnedDialog):
     """The steps a fix would take, listed; nothing has happened yet."""
 
     def __init__(self, parent, plans: list) -> None:
@@ -73,7 +74,7 @@ class PlanPreview(QDialog):
         layout.addWidget(buttons)
 
 
-class HealthWindow(QDialog):
+class HealthWindow(OwnedDialog):
     def __init__(self, win, folder: str, deep: bool = False, start: bool = True) -> None:
         super().__init__(win)
         self.win = win

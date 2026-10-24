@@ -17,11 +17,12 @@ from PyQt6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, QF
 from ..core import duplicates as dup
 from ..core.listings import FOUND_PREFIX, ResultSet
 from ..core.sizefmt import human_size
+from .owned_dialog import OwnedDialog
 from .background import run_in_background
 from .zip_edit import zip_parts
 
 
-class DuplicatesOptionsDialog(QDialog):
+class DuplicatesOptionsDialog(OwnedDialog):
     def __init__(self, parent, here: str, other: str = "", min_kb: int = 1) -> None:
         super().__init__(parent)
         self.setWindowTitle("Find Duplicate Files")
@@ -77,7 +78,7 @@ class DuplicatesOptionsDialog(QDialog):
         return self.pattern.text().strip()
 
 
-class DuplicatesResultDialog(QDialog):
+class DuplicatesResultDialog(OwnedDialog):
     """The groups with a check box per copy. ``action`` is ``delete``, ``mark``, ``tab`` or ``""`` (closed); ``paths`` the checked files."""
 
     def __init__(self, parent, result: dup.Result) -> None:

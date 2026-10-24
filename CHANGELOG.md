@@ -2,6 +2,12 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-24#16 -- Dialogs no longer stay in memory after they are closed
+
+- **A leak is fixed.** Every dialog is made with the window as its parent, and Qt keeps a child alive for as long as its parent lives, so each dialog that had been opened stayed in memory, with all its fields, until the program closed: about 12 to 60 widgets each time, and about half a megabyte for Properties. Opening Properties 30 times left 1,830 widgets and 14 MB behind. A window left open for weeks, with dozens of dialogs a day, would have grown by tens of megabytes. (The soak test did not catch it, since it never opened these dialogs; a check of the Redactor apps did.)
+- **One shared base, `OwnedDialog`, deletes a dialog as soon as it is closed** (accepted, rejected or closed), once control is back in the event loop, so what the caller reads from it right after it closes is still there. All 27 dialogs use it, and so do the window's own message and question boxes and the output viewer. A test fails when a new dialog class is made straight from QDialog, and another checks that opening six kinds of dialog again and again leaves no widgets behind; both fail without the fix.
+- `tools/soak.py` now opens six dialogs every tenth round: over 1,000 rounds the object count stayed flat (63,620 at the end) and memory moved by 1.2 MB.
+
 ## 2026-10-24#15 -- The three small buttons sit closer together
 
 - **The sum, flatten and refresh buttons are one tight group** in the panel's bar: no gap between them and less padding at their sides, so each takes about 23 pixels instead of 34 (the three together about 70 pixels instead of 100). The room goes to the address bar, so a long path collapses into "..." later.

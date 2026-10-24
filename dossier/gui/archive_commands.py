@@ -13,12 +13,13 @@ from ..core import archives, zipwrite
 from ..core.ops import plan_copy
 from ..core.platform import has_scheme
 from ..core.zipfs import archive_root
+from .owned_dialog import OwnedDialog
 from .background import run_in_background
 
 LEVELS = (("Normal", "normal"), ("Fast", "fast"), ("Maximum", "maximum"), ("Store only (no compression)", "store"))
 
 
-class PackDialog(QDialog):
+class PackDialog(OwnedDialog):
     def __init__(self, parent, folder: str, name: str, count: int) -> None:
         super().__init__(parent)
         self.setWindowTitle("Pack to Zip")
