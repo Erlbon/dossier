@@ -86,16 +86,16 @@ class Dialogs:
 
     def info(self, title: str, text: str) -> None:
         box = QMessageBox(QMessageBox.Icon.Information, title, text, QMessageBox.StandardButton.Ok, self.parent)
-        box.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)       # freed after use, not kept by the window for good
         box.exec()
+        box.deleteLater()                                      # freed once the answer has been read, not kept by the window for good
 
     def confirm(self, title: str, text: str, ok_label: str = "OK") -> bool:
         box = QMessageBox(QMessageBox.Icon.Question, title, text, parent=self.parent)
         ok = box.addButton(ok_label, QMessageBox.ButtonRole.AcceptRole)
         box.addButton(QMessageBox.StandardButton.Cancel)
         box.setDefaultButton(ok)
-        box.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)       # freed after use, not kept by the window for good
         box.exec()
+        box.deleteLater()                                      # freed once the answer has been read, not kept by the window for good
         return box.clickedButton() is ok
 
     def confirm_transfer(self, title: str, text: str, ok_label: str, verify: bool) -> Optional[bool]:
@@ -108,8 +108,8 @@ class Dialogs:
         ok = box.addButton(ok_label, QMessageBox.ButtonRole.AcceptRole)
         box.addButton(QMessageBox.StandardButton.Cancel)
         box.setDefaultButton(ok)
-        box.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)       # freed after use, not kept by the window for good
         box.exec()
+        box.deleteLater()                                      # freed once the answer has been read, not kept by the window for good
         return check.isChecked() if box.clickedButton() is ok else None
 
     def ask_resume(self, lines: list) -> str:
@@ -122,8 +122,8 @@ class Dialogs:
         drop = box.addButton("Discard the list", QMessageBox.ButtonRole.DestructiveRole)
         box.addButton("Not now", QMessageBox.ButtonRole.RejectRole)
         box.setDefaultButton(go)
-        box.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)       # freed after use, not kept by the window for good
         box.exec()
+        box.deleteLater()                                      # freed once the answer has been read, not kept by the window for good
         return "continue" if box.clickedButton() is go else "discard" if box.clickedButton() is drop else "later"
 
     def ask_save(self, name: str) -> str:
@@ -133,8 +133,8 @@ class Dialogs:
         discard = box.addButton("Discard changes", QMessageBox.ButtonRole.DestructiveRole)
         box.addButton(QMessageBox.StandardButton.Cancel)
         box.setDefaultButton(save)
-        box.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)       # freed after use, not kept by the window for good
         box.exec()
+        box.deleteLater()                                      # freed once the answer has been read, not kept by the window for good
         return "save" if box.clickedButton() is save else "discard" if box.clickedButton() is discard else "cancel"
 
     def ask_changed_on_disk(self, name: str) -> Optional[str]:
@@ -144,8 +144,8 @@ class Dialogs:
         over = box.addButton("Overwrite with my version", QMessageBox.ButtonRole.DestructiveRole)
         reload_ = box.addButton("Reload from disk", QMessageBox.ButtonRole.AcceptRole)
         box.addButton(QMessageBox.StandardButton.Cancel)
-        box.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)       # freed after use, not kept by the window for good
         box.exec()
+        box.deleteLater()                                      # freed once the answer has been read, not kept by the window for good
         return "overwrite" if box.clickedButton() is over else "reload" if box.clickedButton() is reload_ else None
 
     def ask_save_path(self, default: str) -> Optional[str]:
@@ -184,8 +184,8 @@ class Dialogs:
                    box.addButton("Skip", QMessageBox.ButtonRole.RejectRole): "skip",
                    box.addButton("Skip all errors", QMessageBox.ButtonRole.RejectRole): "skip_all",
                    box.addButton("Stop", QMessageBox.ButtonRole.DestructiveRole): "abort"}
-        box.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)       # freed after use, not kept by the window for good
         box.exec()
+        box.deleteLater()                                      # freed once the answer has been read, not kept by the window for good
         return buttons.get(box.clickedButton(), "skip")
 
     def make_progress(self, title: str, on_cancel: Callable[[], None]) -> ProgressBox:

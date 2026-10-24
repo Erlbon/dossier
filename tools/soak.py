@@ -10,7 +10,7 @@ import gc, os, random, shutil, sys, time
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import psutil
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtWidgets import QApplication
 app = QApplication([])
 from tests.test_gui_commander import FakeDialogs
@@ -141,8 +141,8 @@ for i in range(1, N + 1):
                      lambda: QuarantineDialog(win, quarantine.Settings(), target), lambda: CopySettingsDialog(win, win.copy_settings()),
                      lambda: PropertiesDialog(win, properties.gather(LocalFileSystem(), [target]), set())):
             dlg = make()
-            dlg.show()
-            dlg.reject()
+            QTimer.singleShot(0, dlg.accept if i % 2 else dlg.reject)       # a real modal exec(), closed from inside it
+            dlg.exec()
             del dlg
         pump()
     del dialogs.progress_boxes[:]                      # the test dialogs keep every progress box; the real ones are closed and freed

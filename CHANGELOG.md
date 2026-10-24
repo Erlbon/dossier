@@ -2,6 +2,12 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-24#17 -- Fix: dialogs freed the right way (build #16 broke reading a dialog after it closed)
+
+- **Build #16 had a bug.** It freed dialogs with Qt's "delete on close" flag, but `exec()` then deletes the dialog the moment it returns, before the caller can read what the user typed. Dialogs such as Connection, Properties, Dates, Link, Quarantine and Copy Settings, and the message boxes, could fail with "wrapped C/C++ object has been deleted" when OK was pressed. Its tests replaced `exec()` with a stand-in and did not see it.
+- **The fix.** `OwnedDialog.exec()` now runs the dialog and then calls `deleteLater()`, which waits until control is back in the caller's own event loop, so the answer can be read and a follow-up dialog (a nested loop) does not delete it early. A dialog shown without `exec()` is deleted when closed. The window's message boxes get the same `deleteLater()`.
+- **Tests now use the real `exec()`**, closed by a timer from inside it, and read the answer afterwards; the test fails with the old design and passes with the new one. Six dialog kinds opened 10 times leave no widgets behind.
+
 ## 2026-10-24#16 -- Dialogs no longer stay in memory after they are closed
 
 - **A leak is fixed.** Every dialog is made with the window as its parent, and Qt keeps a child alive for as long as its parent lives, so each dialog that had been opened stayed in memory, with all its fields, until the program closed: about 12 to 60 widgets each time, and about half a megabyte for Properties. Opening Properties 30 times left 1,830 widgets and 14 MB behind. A window left open for weeks, with dozens of dialogs a day, would have grown by tens of megabytes. (The soak test did not catch it, since it never opened these dialogs; a check of the Redactor apps did.)
