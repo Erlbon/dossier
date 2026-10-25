@@ -86,4 +86,4 @@ def test_the_build_number_is_in_the_status_line_and_in_the_about_box(world):
 def test_the_help_menu_has_about(world):
     win, *_ = world
     menus = {a.text().replace("&", ""): a.menu() for a in win.menuBar().actions()}
-    assert [a.text() for a in menus["Help"].actions() if not a.isSeparator()] == ["Slowness Log", "About Dossier..."]
+    assert [a.text() for a in menus["Help"].actions() if not a.isSeparator()] == ["Slowness Log", "Keyboard Shortcuts...", "About Dossier..."]

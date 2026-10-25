@@ -41,7 +41,29 @@ def _terminal(p: QPainter, color: str) -> None:
     p.drawLine(QPointF(8.6, 10.4), QPointF(11.6, 10.4))
 
 
-PAINTED: dict = {"x": _close, "terminal-2": _terminal}
+def _help(p: QPainter, color: str) -> None:
+    p.setPen(_pen(color, 1.3))
+    p.drawEllipse(QRectF(1.5, 1.5, 13, 13))
+    p.drawArc(QRectF(5.6, 4.4, 4.8, 4.2), 150 * 16, -240 * 16)
+    p.drawLine(QPointF(8.0, 8.2), QPointF(8.0, 9.2))
+    p.drawPoint(QPointF(8.0, 11.3))
+
+
+def _info(p: QPainter, color: str) -> None:
+    p.setPen(_pen(color, 1.3))
+    p.drawEllipse(QRectF(1.5, 1.5, 13, 13))
+    p.drawLine(QPointF(8.0, 7.2), QPointF(8.0, 11.4))
+    p.drawPoint(QPointF(8.0, 4.8))
+
+
+def _maximize(p: QPainter, color: str) -> None:
+    p.setPen(_pen(color, 1.3))
+    for x, y, dx, dy in ((2.0, 6.0, 0, -4.0), (2.0, 2.0, 4.0, 0), (10.0, 2.0, 4.0, 0), (14.0, 2.0, 0, 4.0),
+                         (14.0, 10.0, 0, 4.0), (14.0, 14.0, -4.0, 0), (6.0, 14.0, -4.0, 0), (2.0, 14.0, 0, -4.0)):
+        p.drawLine(QPointF(x, y), QPointF(x + dx, y + dy))
+
+
+PAINTED: dict = {"x": _close, "terminal-2": _terminal, "help": _help, "info": _info, "maximize": _maximize}
 
 
 def has(name: str) -> bool:

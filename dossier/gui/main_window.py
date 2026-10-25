@@ -57,6 +57,8 @@ from .menus import MenusMixin
 from .wheel_settings import WheelMixin
 from .tools_bar_place import ToolsBarPlaceMixin
 from .bar_grip import BarGrip
+from . import fkeys
+from .keys_help import KeysMixin
 from .tailnet import TailnetMixin
 from .compare_folders import CompareFoldersMixin
 from .servers import ServersMixin
@@ -87,7 +89,7 @@ SUMMARY_ITEMS = 12    # the confirmation lists this many items, then says how ma
 SIZE_LIMIT = 1000    # the status line sizes at most this many marked items
 
 
-class MainWindow(AutoRefreshMixin, MetadataEditMixin, HealthMixin, QuarantineMixin, NewFromContentMixin, TabSetsMixin, CommandCompletionMixin, DatesLinksMixin, ViewModesMixin, ToolsBarMixin, ContextMenuMixin, DragDropMixin, LookMixin, ZipEditMixin, ArchiveCommandsMixin, CopySettingsMixin, AssistantMixin, OpenFilesMixin, MenusMixin, WheelMixin, ToolsBarPlaceMixin, TailnetMixin, CompareFoldersMixin, ServersMixin, DuplicatesMixin, FolderLayoutsMixin, QueueResumeMixin, ColumnsMixin, PropertiesMixin, MountMixin, ChecksumMixin, MarksAndNotesMixin, SearchCommandMixin, BatchRenameMixin, OperationQueueMixin, StallLogMixin, GoingPlacesMixin, FolderSizesMixin, UnpackMixin, QMainWindow):
+class MainWindow(KeysMixin, AutoRefreshMixin, MetadataEditMixin, HealthMixin, QuarantineMixin, NewFromContentMixin, TabSetsMixin, CommandCompletionMixin, DatesLinksMixin, ViewModesMixin, ToolsBarMixin, ContextMenuMixin, DragDropMixin, LookMixin, ZipEditMixin, ArchiveCommandsMixin, CopySettingsMixin, AssistantMixin, OpenFilesMixin, MenusMixin, WheelMixin, ToolsBarPlaceMixin, TailnetMixin, CompareFoldersMixin, ServersMixin, DuplicatesMixin, FolderLayoutsMixin, QueueResumeMixin, ColumnsMixin, PropertiesMixin, MountMixin, ChecksumMixin, MarksAndNotesMixin, SearchCommandMixin, BatchRenameMixin, OperationQueueMixin, StallLogMixin, GoingPlacesMixin, FolderSizesMixin, UnpackMixin, QMainWindow):
     def __init__(self, fs: Optional[FileSystem] = None, *, settings_path: Optional[str] = None, start=(None, None),
                  dialogs=None, trasher=None, terminal_launcher=None, which=None) -> None:
         super().__init__()
@@ -229,7 +231,7 @@ class MainWindow(AutoRefreshMixin, MetadataEditMixin, HealthMixin, QuarantineMix
         return QSettings(path, QSettings.Format.IniFormat)
 
     def _build_fkey_bar(self) -> QWidget:
-        bar = QWidget()
+        bar = fkeys.ShrinkingKeys()
         row = QHBoxLayout(bar)
         row.setContentsMargins(0, 0, 0, 0)
         row.setSpacing(0)
@@ -239,23 +241,39 @@ class MainWindow(AutoRefreshMixin, MetadataEditMixin, HealthMixin, QuarantineMix
         row.addWidget(grip)
         self._fkey_buttons = []
         self._fkey_icons = []
-        for label, icon_name_, slot in (("F2 Rename", "pencil", lambda: self.rename()),
-                                        ("F3 View", "file-text", lambda: self.view_file()),
-                                        ("F4 Edit", "file-code", lambda: self.edit_file()),
-                                        ("F5 Copy", "copy", lambda: self.copy()),
-                                        ("F6 Move", "arrows-right-left", lambda: self.move()),
-                                        ("F7 Folder", "folder-plus", lambda: self.new_folder()),
-                                        ("F8 Delete", "trash", lambda: self.delete())):
-            b = QPushButton(label)
+        self._fkey_layer = fkeys.PLAIN
+        for number in range(1, 13):
+            b = QPushButton()
             b.setFlat(True)
             b.setIconSize(QSize(16, 16))
             b.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-            b.clicked.connect(lambda _c=False, s=slot: s())
+            b.clicked.connect(lambda _c=False, n=number: self.run_fkey(n))      # looks the key up in the layer shown NOW
             row.addWidget(b, 1)
             self._fkey_buttons.append(b)
-            self._fkey_icons.append(icon_name_)
-        self._apply_fkey_icons()
+            self._fkey_icons.append("")
+        self._fkey_bar = bar
+        self.set_fkey_layer(fkeys.PLAIN)
         return bar
+
+    def set_fkey_layer(self, layer: str) -> None:
+        """Show the keys of another layer on the bar (the plain row today; a Shift or Ctrl row once it is in ``fkeys.LAYERS``). A layer
+        that has no key for a number leaves that button empty and disabled."""
+        self._fkey_layer = layer
+        by_number = {k.number: k for k in fkeys.keys_of(layer)}
+        for number, b in enumerate(self._fkey_buttons, 1):
+            key = by_number.get(number)
+            self._fkey_bar.set_button(b, fkeys.button_text(key) if key else "")
+            b.setEnabled(key is not None)
+            self._fkey_icons[number - 1] = key.icon if key else ""
+        self._apply_fkey_icons()
+        self._fkey_bar.relabel()
+
+    def run_fkey(self, number: int) -> None:
+        """What a click on a bar button does: the command of that number in the layer shown on the bar."""
+        for key in fkeys.keys_of(self._fkey_layer):
+            if key.number == number:
+                getattr(self, key.command)()
+                return
 
     def _apply_fkey_icons(self) -> None:
         color = theme.current()["fg"]

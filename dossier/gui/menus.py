@@ -45,7 +45,7 @@ class MenusMixin:
         self.act_mkdir = self._action("New Folder", "F7", self.new_folder)
         self.act_delete = self._action("Delete", ["F8", "Delete"], self.delete)
         self.act_delete_perm = self._action("Delete Permanently", "Shift+F8", lambda: self.delete(permanent=True))
-        self.act_properties = self._action("Properties", "Alt+Return", self.show_properties)
+        self.act_properties = self._action("Properties", ["Alt+Return", "F9"], self.show_properties)
         quit_ = self._action("Quit", "Ctrl+Q", self.close)
         for a in (self.act_view, self.act_edit, self.act_rename, self.act_copy, self.act_move, self.act_mkdir, self.act_delete,
                   self.act_delete_perm):
@@ -129,6 +129,7 @@ class MenusMixin:
         view_menu.addAction(self._action("Quick Filter", "Ctrl+S", lambda: self.active.start_filter()))
         view_menu.addAction(self._action("Folder Sizes", "Alt+Shift+Return", lambda: self.calculate_folder_sizes()))
         view_menu.addAction(self._action("Refresh", "Ctrl+R", self.refresh))
+        view_menu.addAction(self._action("Full Screen", "F11", self.toggle_full_screen))
 
     # Go -------------------------------------------------------------------------------------------------------------------------
     def _build_go_menu(self, go) -> None:
@@ -152,7 +153,7 @@ class MenusMixin:
 
     # Tools ----------------------------------------------------------------------------------------------------------------------
     def _build_tools_menu(self, tools) -> None:
-        tools.addAction(self._action("Search...", "Alt+F7", self.search_files))
+        tools.addAction(self._action("Search...", ["Alt+F7", "F10"], self.search_files))
         tools.addAction(self._action("Find Duplicate Files...", "Alt+Shift+F7", self.find_duplicate_files))
         tools.addAction(self._action("Check Folder Health...", None, self.check_folder_health))
         tools.addAction(self._action("Compare Folders and Synchronize...", "Alt+Shift+F8", self.compare_folders))
@@ -183,7 +184,7 @@ class MenusMixin:
         operations.addAction(self._action("Cancel Waiting Operations", None, self.cancel_waiting))
         operations.addAction(self._action("Unfinished Operations...", None, lambda: self.offer_resume(manual=True)))
         tools.addSeparator()
-        for a in (self._action("Terminal Here", "Ctrl+Shift+T", self.open_terminal),
+        for a in (self._action("Terminal Here", ["Ctrl+Shift+T", "F12"], self.open_terminal),
                   self._action("Administrator Terminal Here", None, lambda: self.open_terminal(admin=True))):
             tools.addAction(a)
 
@@ -277,5 +278,6 @@ class MenusMixin:
         slow_menu.addAction(self.act_stall_log)
         slow_menu.addAction(self._action("Open the Log", None, self.open_stall_log))
         slow_menu.addAction(self._action("Delete the Log", None, self.delete_stall_log))
+        help_menu.addAction(self._action("Keyboard Shortcuts...", "F1", self.show_keys))
         help_menu.addSeparator()
         help_menu.addAction(self._action(f"About {APP_NAME}...", None, self.about))

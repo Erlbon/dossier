@@ -320,7 +320,7 @@ def test_menus_view_has_modes_and_notes_while_settings_has_the_choices(commander
     assert texts("Mark") == ["Select All", "Mark by Pattern...", "Unmark by Pattern...", "Invert Selection", "Deselect All", "Mark by Tag...",
                              "Unmark by Tag...", "Saved Selections"]
     assert texts("View") == ["Details", "Thumbnails", "Thumbnail Size", "Arrange By", "Folder Layout", "Folder Notes", "Tools Bar", "Bar Positions", "Tabs",
-                             "Quick Filter", "Folder Sizes", "Refresh"]
+                             "Quick Filter", "Folder Sizes", "Refresh", "Full Screen"]
     assert texts("Tools") == ["Search...", "Find Duplicate Files...", "Check Folder Health...", "Compare Folders and Synchronize...", "Compare the Two Current Files",
                               "Batch Rename", "Archives", "Change Dates and Attributes...", "New Link...", "Move to Quarantine...", "Put Back from Quarantine", "Checksums of Marked Files", "Verify Checksum...", "Edit Folder Note", "Command Line History...", "Operations",
                               "Terminal Here", "Administrator Terminal Here"]

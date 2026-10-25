@@ -2,6 +2,13 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-25#01 -- All twelve function keys do something
+
+- **F1 to F12 are all in use.** The bar had F2 to F8. New: **F1 Keys** (a list of every keyboard shortcut, read from the menus so it is never out of date, with a filter box and sortable columns), **F9 Properties**, **F10 Search**, **F11 Full screen** (F11 again puts the window back, maximized or not) and **F12 Terminal**. The old shortcuts (Alt+Enter, Alt+F7, Ctrl+Shift+T) still work. Pack and Unpack stay on Alt+F5 and Alt+F9.
+- **The bar shrinks.** The twelve buttons may be narrower than their names; a button that is too narrow shows only `F5` (its tooltip has the full name), so the window can still be made narrow.
+- **Ready for more rows.** The keys are a table per layer (`gui/fkeys.py`); a Shift or Ctrl row is one more entry plus `set_fkey_layer(...)`, and the same buttons show it and run its commands. Nothing but the plain row exists yet.
+- New painted icons for help, info and full screen, for icon sets that lack them.
+
 ## 2026-10-24#17 -- Fix: dialogs freed the right way (build #16 broke reading a dialog after it closed)
 
 - **Build #16 had a bug.** It freed dialogs with Qt's "delete on close" flag, but `exec()` then deletes the dialog the moment it returns, before the caller can read what the user typed. Dialogs such as Connection, Properties, Dates, Link, Quarantine and Copy Settings, and the message boxes, could fail with "wrapped C/C++ object has been deleted" when OK was pressed. Its tests replaced `exec()` with a stand-in and did not see it.
