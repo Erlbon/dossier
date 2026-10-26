@@ -1,11 +1,13 @@
 """F1: the list of every keyboard shortcut, read from the menus themselves (so it is never out of date), and F11: full screen."""
 from __future__ import annotations
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import QEvent, QObject, Qt
 from PyQt6.QtGui import QAction
 from PyQt6.QtWidgets import (QAbstractItemView, QDialog, QDialogButtonBox, QHeaderView, QLineEdit, QMenu, QTableWidget,
                              QTableWidgetItem, QVBoxLayout)
 
+from ..core import fkey_config
+from . import fkeys
 from .owned_dialog import OwnedDialog
 
 
@@ -65,8 +67,59 @@ class KeysDialog(OwnedDialog):
             self.table.setRowHidden(r, not hit)
 
 
+class LayerWatcher(QObject):
+    """Watches the whole application for Shift and Ctrl going down and up, and tells the window which row of function keys to show."""
+
+    def __init__(self, window) -> None:
+        super().__init__(window)
+        self.window = window
+
+    def eventFilter(self, obj, event) -> bool:
+        kind = event.type()
+        if kind in (QEvent.Type.KeyPress, QEvent.Type.KeyRelease) and event.key() in (Qt.Key.Key_Shift, Qt.Key.Key_Control):
+            if self.window.isActiveWindow():
+                mods = event.modifiers()                  # the key that just changed is judged by the event kind, not by what the platform reports
+                pressed = kind == QEvent.Type.KeyPress
+                shift = pressed if event.key() == Qt.Key.Key_Shift else bool(mods & Qt.KeyboardModifier.ShiftModifier)
+                ctrl = pressed if event.key() == Qt.Key.Key_Control else bool(mods & Qt.KeyboardModifier.ControlModifier)
+                self.window.show_modifier_row(shift, ctrl)
+        elif kind == QEvent.Type.WindowDeactivate and obj is self.window:
+            self.window.show_modifier_row(False, False)                       # a key let go in another window is never seen here
+        return False
+
+
 class KeysMixin:
     """Part of ``MainWindow``."""
+
+    def install_layer_watcher(self) -> None:
+        from PyQt6.QtWidgets import QApplication
+        QApplication.instance().installEventFilter(LayerWatcher(self))
+
+    def show_modifier_row(self, shift: bool, ctrl: bool) -> None:
+        layer = fkey_config.layer_for(self._fkey_table, shift, ctrl)
+        if layer != self._fkey_layer:
+            self.set_fkey_layer(layer)
+
+    def delete_permanently(self) -> None:
+        self.delete(permanent=True)
+
+    def open_admin_terminal(self) -> None:
+        self.open_terminal(admin=True)
+
+    def open_function_keys_settings(self) -> None:
+        from .fkey_settings import FunctionKeysDialog
+        dlg = FunctionKeysDialog(self._fkey_table, self)
+        if dlg.exec() != QDialog.DialogCode.Accepted:
+            return
+        self.set_fkey_table(dlg.table())
+
+    def set_fkey_table(self, table: dict) -> None:
+        """Use a new choice of keys: save what differs from the built-in table, rebind the keyboard, redraw the bar."""
+        changes = fkey_config.changes_from(table)                          # a key left empty is a change too, not a gap to fill with the default
+        self._fkey_table = fkey_config.resolve(changes, known=fkeys.COMMANDS)
+        self.settings.setValue("fkeys/config", fkey_config.dump(changes))
+        self.apply_fkey_shortcuts()
+        self.set_fkey_layer(fkey_config.layer_for(self._fkey_table, False, False))
 
     def show_keys(self) -> None:
         KeysDialog(shortcut_rows(self.menuBar()), self).exec()

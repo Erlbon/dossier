@@ -2,6 +2,14 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-26#01 -- Choose your function keys: plain, Shift and Ctrl rows
+
+- **Settings > Function Keys...** lets you choose the command of every key in three rows: plain `F1`..`F12`, `Shift+F1`.. and `Ctrl+F1`... Each key has a drop-down of commands (about 40: copy, move, search, health check, dates, links, compare, quarantine, checksums, terminals, pack and unpack and more), or "(none)". "Restore This Tab" and "Restore All" go back to the built-in choices.
+- **The bar follows the keys you hold.** Hold Shift or Ctrl and the buttons change to that row; let go and they change back. A row with no keys in it is never shown, so holding Ctrl for Ctrl+C does not blank the bar.
+- **The Shift row has defaults:** F1 Health, F2 Dates, F3 Link, F4 New file, F5 Compare files, F6 Compare folders, F7 Quarantine, F8 Erase (delete permanently), F9 Checksums, F10 Duplicates, F11 Sizes, F12 Admin terminal. The Ctrl row is empty.
+- **One key, one command.** Every function key is set on the menu action of its command from this one table, so the menu, the bar and the keyboard cannot disagree; the Keyboard Shortcuts list (F1) shows what is set now. The fixed keys (Alt+F5, Alt+Enter, Delete, Ctrl+Shift+T and so on) are not changed. Only your changes are saved, so a later build can improve a built-in choice you never touched.
+- New: **Files > New File...** (Shift+F4) makes an empty text file in the folder of the active panel.
+
 ## 2026-10-25#01 -- All twelve function keys do something
 
 - **F1 to F12 are all in use.** The bar had F2 to F8. New: **F1 Keys** (a list of every keyboard shortcut, read from the menus so it is never out of date, with a filter box and sortable columns), **F9 Properties**, **F10 Search**, **F11 Full screen** (F11 again puts the window back, maximized or not) and **F12 Terminal**. The old shortcuts (Alt+Enter, Alt+F7, Ctrl+Shift+T) still work. Pack and Unpack stay on Alt+F5 and Alt+F9.

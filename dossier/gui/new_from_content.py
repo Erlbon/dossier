@@ -55,20 +55,26 @@ class NewFromContentMixin:
         if not self.paste_content():
             self._say("The clipboard holds no picture or text to make a file of")
 
-    def _new_file_from_content(self, kind: str, payload, folder: str) -> None:
+    def new_file(self) -> None:
+        """Files > New File... (Shift+F4 by default): an empty text file in the folder of the active panel, named by the user."""
+        if self._home_blocked("New File"):
+            return
+        self._new_file_from_content(newfile.TEXT, "", self.active.path, title="New File", suggested="New file.txt")
+
+    def _new_file_from_content(self, kind: str, payload, folder: str, title: str = "Paste as New File", suggested: str = "") -> None:
         if not self.fs.is_writable(folder) or folder.startswith("zip://"):
             self._say("A file cannot be made here: this place is read-only (an open archive, a catalogue, or the Home page)")
             return
-        suggested = newfile.suggested_name(kind, datetime.now(), str(payload) if kind == newfile.LINK else "")
+        suggested = suggested or newfile.suggested_name(kind, datetime.now(), str(payload) if kind == newfile.LINK else "")
         while True:
-            answer = self.dialogs.ask_text("Paste as New File", f"Name for the new {newfile.WORDS[kind]} file in {folder}:", suggested)
+            answer = self.dialogs.ask_text(title, f"Name for the new {newfile.WORDS[kind]} file in {folder}:", suggested)
             if not answer:
                 return
             try:
                 name = newfile.clean_name(answer, kind)
                 break
             except ValueError as e:
-                self.dialogs.info("Paste as New File", f"{answer}: {e}")
+                self.dialogs.info(title, f"{answer}: {e}")
                 suggested = answer
 
         def work(progress, cancel):
@@ -83,4 +89,4 @@ class NewFromContentMixin:
                     panel.set_folder(panel.path, select=made)
             self._say(f"Made {made}")
         run_in_background(self, self.cmd_runner, "Making the file", work, on_result=finished, tracked=self._size_jobs,
-                          failed_title="Paste as New File")
+                          failed_title=title)

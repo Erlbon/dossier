@@ -11,7 +11,7 @@ is released, and nowhere else. The build number still says exactly which check-i
 from __future__ import annotations
 
 APP_NAME = "Dossier"
-APP_VERSION = "2026-10-25#01"
+APP_VERSION = "2026-10-26#01"
 RELEASE = "0.4"
 APP_REPO_URL = "https://github.com/Erlbon/dossier"
 

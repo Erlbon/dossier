@@ -9,19 +9,34 @@ from __future__ import annotations
 
 from PyQt6.QtGui import QAction, QActionGroup, QKeySequence
 
+from ..core import fkey_config
 from ..core.version import APP_NAME
+from . import fkeys
 
 
 class MenusMixin:
     """Part of ``MainWindow``."""
 
     def _action(self, text: str, keys, slot) -> QAction:
+        """A menu action. The keys given here are the fixed ones; the function keys (F5, Shift+F5, Ctrl+F5) are not set from here but from the
+        function key table (``apply_fkey_shortcuts``), for every action whose slot is one of the commands in ``fkeys.COMMANDS``."""
         act = QAction(text, self)
-        if keys:
-            act.setShortcuts([QKeySequence(k) for k in (keys if isinstance(keys, (list, tuple)) else [keys])])
+        fixed = [k for k in (keys if isinstance(keys, (list, tuple)) else [keys] if keys else []) if not fkey_config.assignable(k)]
+        if fixed:
+            act.setShortcuts([QKeySequence(k) for k in fixed])
+        command = getattr(slot, "__name__", "")
+        if command in fkeys.COMMANDS:
+            self.__dict__.setdefault("_command_actions", {})[command] = (act, fixed)
         act.triggered.connect(lambda _checked=False: slot())
         self.addAction(act)
         return act
+
+    def apply_fkey_shortcuts(self) -> None:
+        """Put every function key of the table on the action of its command (and take it off any other): one key, one action."""
+        for command, (act, fixed) in self.__dict__.get("_command_actions", {}).items():
+            assigned = [fkey_config.key_text(layer, n) for layer in fkey_config.LAYERS
+                        for n, c in sorted(self._fkey_table.get(layer, {}).items()) if c == command]
+            act.setShortcuts([QKeySequence(k) for k in fixed + assigned])
 
     def _build_menus(self) -> None:
         bar = self.menuBar()
@@ -37,17 +52,18 @@ class MenusMixin:
 
     # Files ----------------------------------------------------------------------------------------------------------------------
     def _build_files_menu(self, files) -> None:
-        self.act_view = self._action("View", "F3", self.view_file)
-        self.act_edit = self._action("Edit", "F4", self.edit_file)
-        self.act_rename = self._action("Rename", "F2", self.rename)
-        self.act_copy = self._action("Copy to Other Panel", "F5", self.copy)
-        self.act_move = self._action("Move to Other Panel", "F6", self.move)
-        self.act_mkdir = self._action("New Folder", "F7", self.new_folder)
-        self.act_delete = self._action("Delete", ["F8", "Delete"], self.delete)
-        self.act_delete_perm = self._action("Delete Permanently", "Shift+F8", lambda: self.delete(permanent=True))
-        self.act_properties = self._action("Properties", ["Alt+Return", "F9"], self.show_properties)
+        self.act_view = self._action("View", None, self.view_file)
+        self.act_edit = self._action("Edit", None, self.edit_file)
+        self.act_rename = self._action("Rename", None, self.rename)
+        self.act_copy = self._action("Copy to Other Panel", None, self.copy)
+        self.act_move = self._action("Move to Other Panel", None, self.move)
+        self.act_mkdir = self._action("New Folder", None, self.new_folder)
+        self.act_new_file = self._action("New File...", None, self.new_file)
+        self.act_delete = self._action("Delete", "Delete", self.delete)
+        self.act_delete_perm = self._action("Delete Permanently", None, self.delete_permanently)
+        self.act_properties = self._action("Properties", "Alt+Return", self.show_properties)
         quit_ = self._action("Quit", "Ctrl+Q", self.close)
-        for a in (self.act_view, self.act_edit, self.act_rename, self.act_copy, self.act_move, self.act_mkdir, self.act_delete,
+        for a in (self.act_view, self.act_edit, self.act_rename, self.act_copy, self.act_move, self.act_mkdir, self.act_new_file, self.act_delete,
                   self.act_delete_perm):
             files.addAction(a)
         files.addSeparator()
@@ -127,9 +143,9 @@ class MenusMixin:
         self.build_tab_set_menus(self._tab_open_menu, self._tab_add_menu, self._tab_forget_menu)
         view_menu.addSeparator()
         view_menu.addAction(self._action("Quick Filter", "Ctrl+S", lambda: self.active.start_filter()))
-        view_menu.addAction(self._action("Folder Sizes", "Alt+Shift+Return", lambda: self.calculate_folder_sizes()))
+        view_menu.addAction(self._action("Folder Sizes", "Alt+Shift+Return", self.calculate_folder_sizes))
         view_menu.addAction(self._action("Refresh", "Ctrl+R", self.refresh))
-        view_menu.addAction(self._action("Full Screen", "F11", self.toggle_full_screen))
+        view_menu.addAction(self._action("Full Screen", None, self.toggle_full_screen))
 
     # Go -------------------------------------------------------------------------------------------------------------------------
     def _build_go_menu(self, go) -> None:
@@ -153,7 +169,7 @@ class MenusMixin:
 
     # Tools ----------------------------------------------------------------------------------------------------------------------
     def _build_tools_menu(self, tools) -> None:
-        tools.addAction(self._action("Search...", ["Alt+F7", "F10"], self.search_files))
+        tools.addAction(self._action("Search...", "Alt+F7", self.search_files))
         tools.addAction(self._action("Find Duplicate Files...", "Alt+Shift+F7", self.find_duplicate_files))
         tools.addAction(self._action("Check Folder Health...", None, self.check_folder_health))
         tools.addAction(self._action("Compare Folders and Synchronize...", "Alt+Shift+F8", self.compare_folders))
@@ -184,8 +200,8 @@ class MenusMixin:
         operations.addAction(self._action("Cancel Waiting Operations", None, self.cancel_waiting))
         operations.addAction(self._action("Unfinished Operations...", None, lambda: self.offer_resume(manual=True)))
         tools.addSeparator()
-        for a in (self._action("Terminal Here", ["Ctrl+Shift+T", "F12"], self.open_terminal),
-                  self._action("Administrator Terminal Here", None, lambda: self.open_terminal(admin=True))):
+        for a in (self._action("Terminal Here", "Ctrl+Shift+T", self.open_terminal),
+                  self._action("Administrator Terminal Here", None, self.open_admin_terminal)):
             tools.addAction(a)
 
     # Network --------------------------------------------------------------------------------------------------------------------
@@ -247,6 +263,7 @@ class MenusMixin:
         settings.addAction(self._action("Quarantine...", None, self.open_quarantine_settings))
         self.build_open_menu(settings)
         settings.addAction(self._action("Mouse Wheel...", None, self.open_wheel_settings))
+        settings.addAction(self._action("Function Keys...", None, self.open_function_keys_settings))
         self.add_auto_refresh_actions(settings)
         drives_menu = settings.addMenu("Drive Memory")
         self.act_remember_drives = QAction("Remember Drives Between Sessions (to notice a different drive under a letter)", self)
@@ -278,6 +295,6 @@ class MenusMixin:
         slow_menu.addAction(self.act_stall_log)
         slow_menu.addAction(self._action("Open the Log", None, self.open_stall_log))
         slow_menu.addAction(self._action("Delete the Log", None, self.delete_stall_log))
-        help_menu.addAction(self._action("Keyboard Shortcuts...", "F1", self.show_keys))
+        help_menu.addAction(self._action("Keyboard Shortcuts...", None, self.show_keys))
         help_menu.addSeparator()
         help_menu.addAction(self._action(f"About {APP_NAME}...", None, self.about))

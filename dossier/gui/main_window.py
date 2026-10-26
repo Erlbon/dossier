@@ -58,6 +58,7 @@ from .wheel_settings import WheelMixin
 from .tools_bar_place import ToolsBarPlaceMixin
 from .bar_grip import BarGrip
 from . import fkeys
+from ..core import fkey_config
 from .keys_help import KeysMixin
 from .tailnet import TailnetMixin
 from .compare_folders import CompareFoldersMixin
@@ -103,6 +104,7 @@ class MainWindow(KeysMixin, AutoRefreshMixin, MetadataEditMixin, HealthMixin, Qu
         self._which = which or shutil.which
         self.dialogs = dialogs or Dialogs(self)
         self.settings = self._open_settings(settings_path)
+        self._fkey_table = fkey_config.resolve(fkey_config.load(str(self.settings.value("fkeys/config", ""))), known=fkeys.COMMANDS)
         self.home_provider = HomeProvider(pins=lambda: self._saved_list("home/pins"),
                                           network=lambda: self._saved_list("home/network"),
                                           servers=lambda: self.server_items(),
@@ -172,6 +174,8 @@ class MainWindow(KeysMixin, AutoRefreshMixin, MetadataEditMixin, HealthMixin, Qu
         box.addLayout(status_row)
         self.setCentralWidget(central)
         self._build_menus()
+        self.apply_fkey_shortcuts()
+        self.install_layer_watcher()
         for name in ("command", "fkeys", "tools"):                        # menus exist now: each bar goes where it was left
             self.set_bar_place(name, self.bar_place(name), save=False)
 
@@ -241,7 +245,7 @@ class MainWindow(KeysMixin, AutoRefreshMixin, MetadataEditMixin, HealthMixin, Qu
         row.addWidget(grip)
         self._fkey_buttons = []
         self._fkey_icons = []
-        self._fkey_layer = fkeys.PLAIN
+        self._fkey_layer = fkey_config.PLAIN
         for number in range(1, 13):
             b = QPushButton()
             b.setFlat(True)
@@ -252,14 +256,14 @@ class MainWindow(KeysMixin, AutoRefreshMixin, MetadataEditMixin, HealthMixin, Qu
             self._fkey_buttons.append(b)
             self._fkey_icons.append("")
         self._fkey_bar = bar
-        self.set_fkey_layer(fkeys.PLAIN)
+        self.set_fkey_layer(fkey_config.PLAIN)
         return bar
 
     def set_fkey_layer(self, layer: str) -> None:
-        """Show the keys of another layer on the bar (the plain row today; a Shift or Ctrl row once it is in ``fkeys.LAYERS``). A layer
-        that has no key for a number leaves that button empty and disabled."""
+        """Show the keys of one row on the bar (plain, Shift or Ctrl). A number with no command in that row leaves its button empty and
+        disabled."""
         self._fkey_layer = layer
-        by_number = {k.number: k for k in fkeys.keys_of(layer)}
+        by_number = {k.number: k for k in fkeys.keys_of(layer, self._fkey_table)}
         for number, b in enumerate(self._fkey_buttons, 1):
             key = by_number.get(number)
             self._fkey_bar.set_button(b, fkeys.button_text(key) if key else "")
@@ -270,7 +274,7 @@ class MainWindow(KeysMixin, AutoRefreshMixin, MetadataEditMixin, HealthMixin, Qu
 
     def run_fkey(self, number: int) -> None:
         """What a click on a bar button does: the command of that number in the layer shown on the bar."""
-        for key in fkeys.keys_of(self._fkey_layer):
+        for key in fkeys.keys_of(self._fkey_layer, self._fkey_table):
             if key.number == number:
                 getattr(self, key.command)()
                 return

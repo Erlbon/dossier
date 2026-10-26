@@ -325,7 +325,7 @@ def test_menus_view_has_modes_and_notes_while_settings_has_the_choices(commander
                               "Batch Rename", "Archives", "Change Dates and Attributes...", "New Link...", "Move to Quarantine...", "Put Back from Quarantine", "Checksums of Marked Files", "Verify Checksum...", "Edit Folder Note", "Command Line History...", "Operations",
                               "Terminal Here", "Administrator Terminal Here"]
     assert texts("Network") == ["Add a Server...", "Disconnect from the Server of This Panel", "Add Network Share...", "Network Drives", "Show Tailnet Devices on the Home Page"]
-    assert texts("Settings") == ["Appearance", "Copy and Move...", "Quarantine...", "Opening Files", "Mouse Wheel...", "Auto Refresh", "Drive Memory", "Assistant Access..."]
+    assert texts("Settings") == ["Appearance", "Copy and Move...", "Quarantine...", "Opening Files", "Mouse Wheel...", "Function Keys...", "Auto Refresh", "Drive Memory", "Assistant Access..."]
     look = [a for a in menus["Settings"].actions() if a.text() == "Appearance"][0].menu()
     assert [a.text() for a in look.actions()] == ["Color Scheme", "Icon Set", "Fonts and Bold...", "Thumbnails...", "Columns", "Drive Selector"]
     # every command is in exactly one place
