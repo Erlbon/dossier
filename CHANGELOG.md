@@ -2,6 +2,11 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-26#02 -- Address bar: double-click a folder name to edit, right-click to copy the path
+
+- **Double-click on a part of the path** (a folder name in the address bar) now switches the bar to typing, starting from the path up to that part. Before, only a click in the empty end of the bar did that, so a double-click on the path itself did nothing. The first click still goes to that folder; the release after the double-click is not counted as a second click.
+- **Right-click on the address bar** has **Copy Path** (the whole path), **Copy Path up to ...** (when the mouse is over a part other than the last) and **Edit Path**. While you are typing, the text field keeps its own menu (Copy, Paste, Select All).
+
 ## 2026-10-26#01 -- Choose your function keys: plain, Shift and Ctrl rows
 
 - **Settings > Function Keys...** lets you choose the command of every key in three rows: plain `F1`..`F12`, `Shift+F1`.. and `Ctrl+F1`... Each key has a drop-down of commands (about 40: copy, move, search, health check, dates, links, compare, quarantine, checksums, terminals, pack and unpack and more), or "(none)". "Restore This Tab" and "Restore All" go back to the built-in choices.

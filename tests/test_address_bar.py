@@ -61,9 +61,10 @@ def test_an_empty_path_has_no_parts(router):
 
 # in the window ------------------------------------------------------------------------------------------
 pytest.importorskip("PyQt6")
-from PyQt6.QtCore import QPoint, Qt  # noqa: E402
+from PyQt6.QtCore import QPoint, Qt, QTimer  # noqa: E402
+from PyQt6.QtGui import QContextMenuEvent  # noqa: E402
 from PyQt6.QtTest import QTest  # noqa: E402
-from PyQt6.QtWidgets import QApplication, QToolButton  # noqa: E402
+from PyQt6.QtWidgets import QApplication, QMenu, QToolButton  # noqa: E402
 
 from tests.test_gui_commander import app, key, pump, world  # noqa: E402,F401
 
@@ -176,3 +177,50 @@ def test_rebuilding_the_parts_leaves_no_stray_windows_behind(world):
     strays = [w for w in QApplication.topLevelWidgets() if isinstance(w, QToolButton) and w.isVisible()]
     assert strays == []
     assert QApplication.activeWindow() is win or not win.isActiveWindow()
+
+
+def test_a_double_click_on_a_part_types_from_that_part_and_does_not_go_there_twice(world):
+    win, _d, left, right, tmp = world
+    deep = deep_folder(win, tmp)
+    bar = win.left.address_bar
+    seen = []
+    bar.navigate.connect(seen.append)
+    two = [b for b in crumb_buttons(win.left) if b.text() == "two"][0]
+    QTest.mouseDClick(two, Qt.MouseButton.LeftButton)
+    assert bar.editing and bar.line.text() == str(tmp / "one" / "two")
+    assert len(seen) <= 1                                               # the first click went there; the release after the double click did not again
+
+
+def test_right_click_on_the_bar_copies_the_whole_path_or_the_path_up_to_a_part(world):
+    win, _d, left, right, tmp = world
+    deep = deep_folder(win, tmp)
+    bar = win.left.address_bar
+    QTest.qWait(100)                                                    # let the freshly built parts be laid out: the mouse position depends on it
+    two = [b for b in crumb_buttons(win.left) if b.text() == "two"][0]
+
+    problems = []
+
+    def choose(label_start):
+        def pick():
+            try:
+                menu = next(m for m in QApplication.topLevelWidgets() if isinstance(m, QMenu) and m.isVisible())
+                action = next(a for a in menu.actions() if a.text().startswith(label_start))
+                action.trigger()
+                menu.close()
+            except Exception as error:                                  # noqa: BLE001 -- an exception inside a Qt callback would abort the run
+                problems.append(repr(error))
+                for m in QApplication.topLevelWidgets():
+                    if isinstance(m, QMenu):
+                        m.close()
+        QTimer.singleShot(50, pick)
+
+    choose("Copy Path up to two")
+    QApplication.sendEvent(bar, QContextMenuEvent(QContextMenuEvent.Reason.Mouse, bar.mapFromGlobal(two.mapToGlobal(two.rect().center())),
+                                                   two.mapToGlobal(two.rect().center())))
+    QTest.qWait(150)                                                    # the offscreen platform may return from the menu before the pick
+    assert problems == [] and QApplication.clipboard().text() == str(tmp / "one" / "two")
+    choose("Copy Path")
+    blank = bar._blank.mapToGlobal(bar._blank.rect().center())
+    QApplication.sendEvent(bar, QContextMenuEvent(QContextMenuEvent.Reason.Mouse, bar.mapFromGlobal(blank), blank))
+    QTest.qWait(150)
+    assert QApplication.clipboard().text() == str(deep) and problems == []

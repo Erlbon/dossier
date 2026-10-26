@@ -10,7 +10,7 @@ from __future__ import annotations
 from . import look
 
 from PyQt6.QtCore import QEvent, QObject, Qt, pyqtSignal
-from PyQt6.QtGui import QFontMetrics
+from PyQt6.QtGui import QFontMetrics, QGuiApplication
 from PyQt6.QtWidgets import QHBoxLayout, QLabel, QLineEdit, QMenu, QSizePolicy, QStackedLayout, QToolButton, QWidget
 
 from ..core import pathparts
@@ -20,6 +20,14 @@ SEPARATOR = chr(0x203A)          # a single right-pointing angle quote
 
 class _Crumb(QToolButton):
     middle_clicked = pyqtSignal()
+    double_clicked = pyqtSignal()
+
+    def mouseDoubleClickEvent(self, event) -> None:
+        """Double-click on a part of the path: type a path (the single click has already gone to that folder). Not passed on, so the
+        release that follows is not a second click on the part."""
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.double_clicked.emit()
+        event.accept()
 
     def mouseReleaseEvent(self, event) -> None:
         if event.button() == Qt.MouseButton.MiddleButton:
@@ -154,6 +162,7 @@ class AddressBar(QWidget):
             button.setAutoRaise(True)
             button.clicked.connect(lambda _c=False, t=target: self.navigate.emit(t))
             button.middle_clicked.connect(lambda t=target: self.navigate_new_tab.emit(t))
+            button.double_clicked.connect(lambda t=target: self.start_edit(t))
             self._row.addWidget(button)
             if i < len(shown) - 1:
                 self._row.addWidget(self._separator())
@@ -173,11 +182,33 @@ class AddressBar(QWidget):
             self._rebuild()
 
     # editing -------------------------------------------------------------------------------------------------
-    def start_edit(self) -> None:
-        self.line.setText(self.path)
+    def start_edit(self, text: str = "") -> None:
+        """Type a path. ``text`` is what to start from (the part that was double-clicked); the current folder when empty."""
+        self.line.setText(text or self.path)
         self._stack.setCurrentIndex(1)
         self.line.setFocus()
         self.line.selectAll()
+
+    def contextMenuEvent(self, event) -> None:
+        """Right-click on the bar: copy the whole path, or the path up to the part under the mouse, or type a path."""
+        if self.editing:
+            return                                   # the text field has its own menu (Copy, Paste, Select All)
+        under = self.childAt(event.pos())
+        menu = QMenu(self)
+        copy_all = menu.addAction("Copy Path")
+        copy_all.setEnabled(bool(self.path))
+        copy_all.triggered.connect(lambda: self.copy_path(self.path))
+        if isinstance(under, _Crumb) and under.toolTip() and under.toolTip() != self.path:
+            copy_part = menu.addAction(f"Copy Path up to {under.text()}")
+            copy_part.triggered.connect(lambda _c=False, t=under.toolTip(): self.copy_path(t))
+        menu.addSeparator()
+        menu.addAction("Edit Path").triggered.connect(lambda: self.start_edit())
+        menu.exec(event.globalPos())
+        menu.deleteLater()
+
+    @staticmethod
+    def copy_path(text: str) -> None:
+        QGuiApplication.clipboard().setText(text)
 
     def finish_edit(self) -> None:
         if self.editing:
