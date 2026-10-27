@@ -508,8 +508,8 @@ class MainWindow(KeysMixin, AutoRefreshMixin, MetadataEditMixin, HealthMixin, Qu
         self.term_button.setAutoRaise(True)
         self.term_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.term_button.setIconSize(QSize(18, 18))
-        self.term_button.setToolTip("Open a terminal in this folder (Ctrl+Shift+T). "
-                                    "Right-click: administrator, interpreter.")
+        self.term_button.setToolTip("Open a terminal in this folder (Ctrl+Shift+T); on a server's folder, an SSH session there. "
+                                    "Right-click: administrator, SSH, interpreter.")
         self.term_button.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.term_button.clicked.connect(lambda: self.open_terminal())
         self.term_button.customContextMenuRequested.connect(
@@ -531,6 +531,9 @@ class MainWindow(KeysMixin, AutoRefreshMixin, MetadataEditMixin, HealthMixin, Qu
         """The right-click menu of the Terminal button."""
         menu = QMenu(self)
         menu.addAction("Open as Administrator").triggered.connect(lambda _c=False: self.open_terminal(admin=True))
+        ssh = menu.addAction("Open an SSH Session to This Server")
+        ssh.setEnabled(self.active.path.startswith(("sftp://", "scp://")))
+        ssh.triggered.connect(lambda _c=False: self.open_ssh_terminal())
         sub = menu.addMenu("Interpreter")
         group = QActionGroup(menu)
         group.setExclusive(True)
@@ -640,8 +643,14 @@ class MainWindow(KeysMixin, AutoRefreshMixin, MetadataEditMixin, HealthMixin, Qu
             self.dialogs.info("Terminal", "No command interpreter was found.")
             return
         folder = folder or panel.real_folder()
+        if folder.startswith(("sftp://", "scp://")):         # a server's folder: a session on that server, not on this computer
+            if admin:
+                self.dialogs.info("Terminal", "The administrator terminal is for this computer. For a server, open an SSH session.")
+                return
+            self.open_ssh_terminal(folder)
+            return
         if "://" in folder:
-            self.dialogs.info("Terminal", "A terminal can only open in a folder on this computer.")
+            self.dialogs.info("Terminal", "A terminal can only open in a folder on this computer, or an SSH session in a folder on an SFTP server.")
             return
         try:
             launch = session_launch(profile, folder, admin=admin, windows_terminal=self.windows_terminal,

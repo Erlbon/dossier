@@ -323,7 +323,7 @@ def test_menus_view_has_modes_and_notes_while_settings_has_the_choices(commander
                              "Quick Filter", "Folder Sizes", "Refresh", "Full Screen"]
     assert texts("Tools") == ["Search...", "Find Duplicate Files...", "Check Folder Health...", "Compare Folders and Synchronize...", "Compare the Two Current Files",
                               "Batch Rename", "Archives", "Change Dates and Attributes...", "New Link...", "Move to Quarantine...", "Put Back from Quarantine", "Checksums of Marked Files", "Verify Checksum...", "Edit Folder Note", "Command Line History...", "Operations",
-                              "Terminal Here", "Administrator Terminal Here"]
+                              "Terminal Here", "Administrator Terminal Here", "SSH Terminal Here"]
     assert texts("Network") == ["Add a Server...", "Disconnect from the Server of This Panel", "Add Network Share...", "Network Drives", "Show Tailnet Devices on the Home Page"]
     assert texts("Settings") == ["Appearance", "Copy and Move...", "Quarantine...", "Opening Files", "Mouse Wheel...", "Function Keys...", "Auto Refresh", "Drive Memory", "Assistant Access..."]
     look = [a for a in menus["Settings"].actions() if a.text() == "Appearance"][0].menu()

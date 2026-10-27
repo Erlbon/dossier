@@ -18,7 +18,7 @@ from typing import Callable, Optional
 from PyQt6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFileDialog, QFormLayout, QHBoxLayout, QLabel, QLineEdit,
                              QPushButton, QSpinBox, QVBoxLayout)
 
-from ..core import davclient, ftpclient, opdsclient, servers, sshlink, subsonicclient
+from ..core import davclient, ftpclient, opdsclient, servers, sshlink, subsonicclient, terminals
 from ..core.home import ADD_SERVER, TAILNET_PREFIX, ServerItem
 from ..core.sftpfs import Session, scheme_of, split_path
 from .owned_dialog import OwnedDialog
@@ -298,6 +298,32 @@ class ServersMixin:
         for panel in (self.left, self.right):
             if panel.is_home:
                 panel.refresh()
+
+    def open_ssh_terminal(self, folder: str = "") -> None:
+        """An interactive SSH session on the server of the active panel, in the folder shown, in a terminal window of its own.
+        The window runs the system's ``ssh`` with Dossier's own known-hosts file (a host key you approved), so a server that was
+        never connected from here is refused; a password is typed in that window, never seen by Dossier."""
+        folder = folder or self.active.path
+        if not folder.startswith(("sftp://", "scp://")):
+            self.dialogs.info("SSH Terminal", "Open a folder on an SFTP or SCP server in this panel first: an SSH session goes to the server it shows.")
+            return
+        conn = self.connection_for(folder)
+        if conn is None:
+            self.dialogs.info("SSH Terminal", "This server is not in your list of servers.")
+            return
+        if not self.known_hosts().lookup(conn.host, conn.port):
+            self.dialogs.info("SSH Terminal", f"The host key of {conn.host} has not been approved yet. Connect to the server in a panel once, "
+                                              "and check its key there; then the session can be opened.")
+            return
+        remote = split_path(folder)[1]
+        try:
+            argv = sshlink.session_command(conn, self.known_hosts().path, remote)
+            launch = terminals.ssh_launch(argv, os.path.expanduser("~"), windows_terminal=self.windows_terminal, which=self._which)
+            self.launch_terminal(launch)
+        except (sshlink.ConnectError, terminals.UnsafeArgument, OSError) as e:
+            self.dialogs.info("SSH Terminal", str(e))
+            return
+        self._say(f"SSH session to {conn.name} opened in {remote}")
 
     def connection_for(self, path_or_authority: str) -> Optional[servers.Connection]:
         if "://" in path_or_authority:

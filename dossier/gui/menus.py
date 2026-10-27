@@ -201,7 +201,8 @@ class MenusMixin:
         operations.addAction(self._action("Unfinished Operations...", None, lambda: self.offer_resume(manual=True)))
         tools.addSeparator()
         for a in (self._action("Terminal Here", "Ctrl+Shift+T", self.open_terminal),
-                  self._action("Administrator Terminal Here", None, self.open_admin_terminal)):
+                  self._action("Administrator Terminal Here", None, self.open_admin_terminal),
+                  self._action("SSH Terminal Here", None, self.open_ssh_terminal)):
             tools.addAction(a)
 
     # Network --------------------------------------------------------------------------------------------------------------------

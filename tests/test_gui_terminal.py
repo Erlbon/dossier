@@ -211,11 +211,16 @@ def test_a_declined_or_failed_launch_is_explained(world):
     assert dialogs.infos and "declined" in dialogs.infos[-1][1]
 
 
-def test_a_remote_folder_has_no_terminal(world, monkeypatch):
+def test_a_remote_folder_has_no_local_terminal(world, monkeypatch):
+    """A WebDAV or FTP folder has no shell; an SFTP folder gets an SSH session instead (tests/test_ssh_terminal.py), which a server that is
+    not in the list cannot have."""
     win, dialogs, rec, *_ = world
-    monkeypatch.setattr(type(win.active), "path", property(lambda self: "sftp://host/x"))
+    monkeypatch.setattr(type(win.active), "path", property(lambda self: "webdav://host/x"))
     win.open_terminal()
     assert not rec.launches and dialogs.infos and "this computer" in dialogs.infos[-1][1]
+    monkeypatch.setattr(type(win.active), "path", property(lambda self: "sftp://host/x"))
+    win.open_terminal()
+    assert not rec.launches and "not in your list" in dialogs.infos[-1][1]
 
 
 def test_there_is_one_plain_terminal_button_next_to_the_command_line(world):
@@ -230,11 +235,11 @@ def test_there_is_one_plain_terminal_button_next_to_the_command_line(world):
     assert "Terminal Here" in texts and "Administrator Terminal Here" in texts
 
 
-def test_right_click_offers_only_administrator_and_the_interpreter(world):
+def test_right_click_offers_administrator_the_ssh_session_and_the_interpreter(world):
     win, _d, rec, left, right, _t = world
     menu = win.build_terminal_menu()
     texts = [a.text() for a in menu.actions()]
-    assert texts == ["Open as Administrator", "Interpreter"]    # nothing else: no per-folder or per-case entries
+    assert texts == ["Open as Administrator", "Open an SSH Session to This Server", "Interpreter"]    # nothing else: no per-folder or per-case entries
     menu.actions()[0].trigger()
     if IS_WINDOWS:
         assert rec.launches[-1].elevate and rec.launches[-1].cwd == str(left)

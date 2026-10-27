@@ -17,6 +17,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import os
+import shlex
 import shutil
 import subprocess
 import sys
@@ -218,6 +219,29 @@ def ssh_command(c: Connection, known_hosts: str, subsystem: str = "sftp", *, wit
         cmd += ["-i", c.key_file, "-o", "IdentitiesOnly=yes"]
     target = f"{c.user}@{c.host}" if c.user else c.host
     cmd += ["-T", target, "sh"] if shell else ["-s", target, subsystem]       # a shell to send commands to, or the server's SFTP service
+    return cmd
+
+
+def session_command(c: Connection, known_hosts: str, remote_dir: str = "") -> list:
+    """The ``ssh`` command line of an interactive session on the server, opened in ``remote_dir`` (a terminal window runs it).
+
+    The same strict host-key check as a file connection (only Dossier's own known-hosts file, a key the owner approved), no ``BatchMode``
+    and no password helper: ssh asks for a password itself, in the terminal window, where it is typed by the owner and never seen by
+    Dossier. Key files and the ssh-agent log in without one."""
+    exe = find_tool("ssh")
+    if not exe:
+        raise ConnectError("OpenSSH is not installed on this computer (the ssh program was not found). On Windows it is an optional "
+                           "feature: Settings > System > Optional features > OpenSSH Client")
+    if any(ch in remote_dir for ch in (chr(0), chr(13), chr(10))):
+        raise ConnectError("a folder name with a line break cannot be used for a session")
+    cmd = [exe, "-o", "StrictHostKeyChecking=yes", "-o", f"UserKnownHostsFile={option_path(known_hosts)}", "-o", f"GlobalKnownHostsFile={option_path(os.devnull)}",
+           "-o", "HashKnownHosts=no", "-o", f"ConnectTimeout={CONNECT_TIMEOUT}", "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=4",
+           "-p", str(c.port)]
+    if c.key_file:
+        cmd += ["-i", c.key_file, "-o", "IdentitiesOnly=yes"]
+    cmd += ["-t", f"{c.user}@{c.host}" if c.user else c.host]
+    if remote_dir:
+        cmd.append("cd " + shlex.quote(remote_dir) + ' && exec "${SHELL:-/bin/sh}" -l')       # the server's own shell for this user, as a login shell
     return cmd
 
 

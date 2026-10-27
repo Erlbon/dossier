@@ -157,11 +157,24 @@ def session_launch(profile: Profile, cwd: str, *, admin: bool = False, windows_t
     inner = [exe, *profile.session_args]
     if profile.kind == "wsl":
         inner = [exe, "--cd", to_wsl_path(cwd)]
+    return _hosted(inner, cwd, admin, windows_terminal, emulator, which, exe)
+
+
+def ssh_launch(argv: list, cwd: str, *, windows_terminal: Optional[str] = None, emulator: Optional[str] = None,
+               which: Which = shutil.which) -> Launch:
+    """How to open the ssh command ``argv`` (an interactive session on a server) in a terminal window of its own: the same hosts as a
+    local session (Windows Terminal, a console, or the Linux terminal program). ``cwd`` is a local folder the window starts in."""
+    return _hosted(list(argv), cwd, False, windows_terminal, emulator, which, argv[0])
+
+
+def _hosted(inner: list, cwd: str, admin: bool, windows_terminal: Optional[str], emulator: Optional[str], which: Which, exe: str) -> Launch:
+    """``inner`` (a program and its arguments) in a terminal window that starts in ``cwd``."""
     if IS_WINDOWS:
         if windows_terminal:
             # Windows Terminal reads a semicolon on its command line as the end of a command: a folder with one in
             # its name has to be written with a backslash in front of it
-            return Launch([windows_terminal, "-d", cwd.replace(";", chr(92) + ";"), *inner], cwd, admin, windows_terminal)
+            escaped = [a.replace(";", chr(92) + ";") for a in inner]
+            return Launch([windows_terminal, "-d", cwd.replace(";", chr(92) + ";"), *escaped], cwd, admin, windows_terminal)
         return Launch(inner, cwd, admin, exe)
     name = emulator or next((e for e in EMULATORS if which(e)), "")
     if not name:

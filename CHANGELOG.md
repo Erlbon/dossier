@@ -2,6 +2,12 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-27#01 -- SSH sessions from the terminal button
+
+- **A terminal on a server's folder is now an SSH session.** With an SFTP or SCP server in the panel, the Terminal button, Ctrl+Shift+T and F12 open a terminal window running `ssh` on that server, in the folder shown (`cd` to it, then the server's own shell for your user as a login shell). Before, they said a terminal only opens on this computer. The same is in **Tools > SSH Terminal Here** (any function key can be given to it in Settings > Function Keys) and in the Terminal button's right-click menu as **Open an SSH Session to This Server**.
+- **Same safety as a file connection.** The session uses the system's own `ssh` and Dossier's own known-hosts file only, so a server whose host key you have not approved (connect to it in a panel once and check its key) is refused with a reason, and a changed key stops it. A password is typed by you in the terminal window (ssh asks for it itself) and never passes through Dossier; key files and the ssh-agent log in without one. The key file and port of the saved server are used.
+- A folder name cannot become a command: it is passed to the server as one quoted word, and a name with a line break is refused. The administrator terminal stays for this computer only; WebDAV, FTP and the other servers have no shell and still say so.
+
 ## 2026-10-26#02 -- Address bar: double-click a folder name to edit, right-click to copy the path
 
 - **Double-click on a part of the path** (a folder name in the address bar) now switches the bar to typing, starting from the path up to that part. Before, only a click in the empty end of the bar did that, so a double-click on the path itself did nothing. The first click still goes to that folder; the release after the double-click is not counted as a second click.

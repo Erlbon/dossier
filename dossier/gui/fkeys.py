@@ -44,6 +44,7 @@ COMMANDS: dict = {
     "toggle_full_screen": Command("Full screen", "maximize"),
     "open_terminal": Command("Terminal", "terminal-2"),
     "open_admin_terminal": Command("Admin terminal", "terminal-2"),
+    "open_ssh_terminal": Command("SSH terminal", "terminal-2"),
     "check_folder_health": Command("Health", "file-settings"),
     "change_dates": Command("Dates", "settings"),
     "new_link": Command("Link", "link"),
