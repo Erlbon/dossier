@@ -2,6 +2,10 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-28#11 -- Frosted background: the title bar too
+
+- **The title bar is frosted while the frame is frosted** (Windows 11): Dossier asks Windows for its own frosted material on the title bar and the border. It is Windows' look, not our blurred picture, so the two are close but not identical. On Windows 10 the title bar stays plain. The Frosted Background note no longer claims the "title row" was part of the picture.
+
 ## 2026-10-28#10 -- Frosted background: an Apply button, and the menu bar is frosted too
 
 - **The Frosted Background dialog has an Apply button**: the effect shows at once with the dialog still open, so the strength can be judged while moving the slider. Cancel after Apply puts it back as it was; OK keeps it.

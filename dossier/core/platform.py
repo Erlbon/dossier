@@ -211,6 +211,24 @@ def set_window_border(hwnd: int, color: Optional[str]) -> bool:
         return False
 
 
+def set_title_backdrop(hwnd: int, on: bool, dark: bool = False) -> bool:
+    """Give the title bar of this window Windows 11's frosted material (acrylic), or put the plain one back. ``dark`` makes the title text
+    and buttons light, to match a dark scheme. It is the window's own look: nothing else changes. Windows 10 and other systems ignore it
+    (returns False)."""
+    if not IS_WINDOWS:
+        return False
+    import ctypes
+    try:
+        set_attribute = ctypes.windll.dwmapi.DwmSetWindowAttribute
+        hole = ctypes.c_void_p(int(hwnd))
+        dark_mode = ctypes.c_int(1 if dark else 0)
+        set_attribute(hole, 20, ctypes.byref(dark_mode), ctypes.sizeof(dark_mode))               # DWMWA_USE_IMMERSIVE_DARK_MODE
+        backdrop = ctypes.c_int(3 if on else 0)                                                 # DWMSBT_TRANSIENTWINDOW (acrylic) / automatic
+        return set_attribute(hole, 38, ctypes.byref(backdrop), ctypes.sizeof(backdrop)) == 0   # DWMWA_SYSTEMBACKDROP_TYPE
+    except (AttributeError, OSError, ValueError):
+        return False
+
+
 def is_remote_session() -> bool:
     """True inside a remote desktop session, where window transparency and blur are not available."""
     if not IS_WINDOWS:

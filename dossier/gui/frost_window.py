@@ -1,4 +1,4 @@
-"""Settings > Appearance > Frosted Background...: the file manager's frame (title row, menu bar, tools bar, command line, function keys,
+"""Settings > Appearance > Frosted Background...: the file manager's frame (menu bar, tools bar, command line, function keys,
 status line) shows a blurred picture of the screen, while the file lists stay solid so names are always easy to read.
 
 The picture is taken when Dossier opens (or when the setting is turned on: the window hides for a moment so it is not in it) and is not
@@ -12,7 +12,7 @@ from PyQt6.QtCore import QEventLoop, QPoint, QRect, Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QColor, QPainter
 from PyQt6.QtWidgets import (QApplication, QCheckBox, QDialogButtonBox, QFormLayout, QHBoxLayout, QLabel, QSlider, QVBoxLayout)
 
-from ..core import glass
+from ..core import glass, platform
 from . import frost, theme
 from .owned_dialog import OwnedDialog
 
@@ -38,8 +38,9 @@ class FrostDialog(OwnedDialog):
         row.addWidget(self.value_label)
         form.addRow("Screen shows through", row)
         layout.addLayout(form)
-        note = QLabel("The title row, menus, bars and the status line show a blurred picture of your screen; the file lists stay solid. "
-                      "The picture is taken when Dossier opens, so it does not follow what happens behind the window afterwards."
+        note = QLabel("The menus, bars and the status line show a blurred picture of your screen, and the title bar gets Windows' own frosted look "
+                      "(Windows 11); the file lists stay solid. The picture is taken when Dossier opens, so it does not follow what happens "
+                      "behind the window afterwards."
                       + ("" if available else " This is not available in a remote desktop session."))
         note.setWordWrap(True)
         layout.addWidget(note)
@@ -101,10 +102,16 @@ class FrostMixin:
                 w.show()
             on = bool(self._frost_shots)
         frost.set_active(on)
+        self.apply_title_backdrop()
         self.tools_bar.restyle()
         self.menuBar().update()
         self.update()
         return on
+
+    def apply_title_backdrop(self) -> None:
+        """The title bar is Windows' own, so it gets Windows' frosted material while the frame is frosted (Windows 11)."""
+        if self.isVisible():
+            platform.set_title_backdrop(int(self.winId()), frost.active(), dark=theme.is_dark())
 
     def open_frost_settings(self) -> None:
         before = (frost.active(), self._frost_level)
@@ -132,6 +139,11 @@ class FrostMixin:
         tint = QColor(theme.current()["card"])
         tint.setAlpha(frost.tint_alpha(self._frost_level))
         painter.fillRect(self.rect(), tint)
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        if frost.active():
+            self.apply_title_backdrop()                                # a frosted window that starts frosted: the title bar too
 
     def moveEvent(self, event) -> None:
         super().moveEvent(event)

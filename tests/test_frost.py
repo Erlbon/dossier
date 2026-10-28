@@ -115,3 +115,19 @@ def test_apply_shows_the_effect_with_the_dialog_open_and_cancel_puts_it_back(wor
     win.open_frost_settings()
     assert seen == [(True, 35, True)]
     assert not frost.active() and str(win.settings.value("frost/on")) == "false"      # cancelled: as before
+
+
+def test_the_title_bar_gets_windows_frosted_look_while_the_frame_is_frosted(world, monkeypatch):
+    from dossier.core import platform
+    win, *_ = world
+    calls = []
+    monkeypatch.setattr(platform, "set_title_backdrop", lambda hwnd, on, dark=False: calls.append(on) or True)
+    win.set_frost(True, 40, grabber=lambda: fake_screens(win), wait_ms=0)
+    win.set_frost(False)
+    assert calls[-2:] == [True, False]
+
+
+def test_the_title_backdrop_call_is_a_harmless_no_on_other_systems(monkeypatch):
+    from dossier.core import platform
+    monkeypatch.setattr(platform, "IS_WINDOWS", False)
+    assert platform.set_title_backdrop(1, True) is False
