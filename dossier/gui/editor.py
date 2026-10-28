@@ -13,7 +13,7 @@ from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QColor, QFontDatabase
 from PyQt6.Qsci import QsciScintilla
 
-from . import theme
+from . import syntax, theme
 
 S = QsciScintilla
 NEWLINES = chr(13) + chr(10)      # built from code points: no backslash escapes to be mangled
@@ -97,6 +97,41 @@ class EditorView(QsciScintilla):
         self.setSelectionForegroundColor(QColor(t["fg"]))
         self.SendScintilla(S.SCI_SETSELALPHA, 110)              # see-through, so the text stays readable
         self.SendScintilla(S.SCI_SETADDITIONALSELALPHA, 110)
+        self.setFoldMarginColors(QColor(t["card"]), QColor(t["card"]))
+        if self.language:
+            self.set_language(self.language)                    # the lexer's colours come from the scheme too
+
+    # highlighting and folding -------------------------------------------------------------------------------
+    language: Optional[str] = None
+
+    def set_language(self, key: Optional[str]) -> bool:
+        """Highlight (and fold) the text as language ``key``; None puts plain text back. False when there is no lexer for ``key``."""
+        lexer = syntax.lexer_for(key, self.font(), self) if key else None
+        self.setLexer(lexer)
+        self.language = key if lexer is not None else None
+        if lexer is None:
+            self.setFolding(S.FoldStyle.NoFoldStyle)
+            self.setMarginWidth(2, 0)
+            self.apply_theme_colours()
+            return key is None
+        self.setFolding(S.FoldStyle.BoxedTreeFoldStyle, 2)
+        self.setMarginWidth(2, 16)
+        self.setFoldMarginColors(QColor(theme.current()["card"]), QColor(theme.current()["card"]))
+        return True
+
+    def apply_theme_colours(self) -> None:
+        t = theme.current()
+        self.setPaper(QColor(t["bg"]))
+        self.setColor(QColor(t["fg"]))
+
+    def set_all_folds(self, folded: bool) -> None:
+        """Fold every block (or open every block): a header line is toggled when it is not already as wanted."""
+        order = range(self.lines() - 1, -1, -1) if folded else range(self.lines())
+        for line in order:
+            header = self.SendScintilla(S.SCI_GETFOLDLEVEL, line) & S.SC_FOLDLEVELHEADERFLAG
+            expanded = bool(self.SendScintilla(S.SCI_GETFOLDEXPANDED, line))
+            if header and expanded == folded:
+                self.SendScintilla(S.SCI_TOGGLEFOLD, line)
 
     def _fit_margin(self) -> None:
         digits = max(3, len(str(max(1, self.lines()))))

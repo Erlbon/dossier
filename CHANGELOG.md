@@ -2,6 +2,14 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-28#15 -- The notepad (F4) can colour code and fold blocks
+
+- **View > Syntax Highlighting** (off by default, remembered once you turn it on) colours the text by the language of the file and lets blocks fold, with fold arrows in a margin beside the line numbers. 22 languages: Python, JavaScript and TypeScript, JSON, HTML, XML, CSS, YAML, SQL, shell and batch scripts, C and C++, C#, Java, Ruby, Perl, Lua, Markdown, settings files (ini, toml, properties), diff, Makefile, CMake and TeX.
+- **The language comes from the file name**; **View > Language** picks another one by hand (or Plain Text) for this window. A file name with no language says so in the status line. Save As to another kind of file changes the language.
+- **The colours come from the colour scheme** (light or dark): comments dim and italic, strings, numbers and keywords in the scheme's own colours, on the scheme's paper, so a dark scheme has no white patches.
+- **View > Fold All Blocks** and **Unfold All Blocks** (no shortcuts) work when highlighting is on. A text over 1 MB is not coloured, and the status line says so.
+- The F3 viewer is unchanged: it stays plain.
+
 ## 2026-10-28#14 -- The floating picture bar is 50 % bigger
 
 - **The bar over a picture (glass viewer and F3) has bigger buttons**: glyphs, padding and margins are 50 % larger, in both viewers.

@@ -8,11 +8,12 @@ from dataclasses import replace as dc_replace
 from typing import Optional
 
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal
-from PyQt6.QtGui import QAction, QKeySequence
+from PyQt6.QtGui import QAction, QActionGroup, QKeySequence
 from PyQt6.QtWidgets import (QCheckBox, QComboBox, QHBoxLayout, QInputDialog, QLabel, QLineEdit, QMainWindow,
                              QPushButton, QSplitter, QVBoxLayout, QWidget)
 
 from ..core import markdownsafe, viewmodes
+from ..core.languages import HIGHLIGHT_LIMIT, LANGUAGES, label, language_for
 from ..core.replace import FindSpec, PatternError, count, expand_at, find_next, replacements, validate
 from ..core.textedit import (Document, EncodingProblem, FileChangedOnDisk, convert_eol, load_document, save_document)
 from ..core.textview import ENCODINGS
@@ -110,9 +111,12 @@ class NotepadWindow(QMainWindow):
     saved = pyqtSignal(str)
     closed = pyqtSignal(object)
     preview_toggled = pyqtSignal(bool)        # the owner switched the Markdown preview on or off (the window remembers it for Markdown files)
+    syntax_toggled = pyqtSignal(bool)         # the owner switched syntax highlighting on or off (remembered for every notepad)
 
-    def __init__(self, doc: Document, dialogs, parent=None, show_replace: bool = False, preview: Optional[bool] = None) -> None:
-        """``preview``: whether the Markdown preview starts shown; None means it is shown for a Markdown file and not for any other."""
+    def __init__(self, doc: Document, dialogs, parent=None, show_replace: bool = False, preview: Optional[bool] = None,
+                 syntax: bool = False) -> None:
+        """``preview``: whether the Markdown preview starts shown; None means it is shown for a Markdown file and not for any other.
+        ``syntax``: whether syntax highlighting and folding start on (it is opt-in)."""
         super().__init__(parent)
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
         self.dialogs = dialogs
@@ -167,6 +171,8 @@ class NotepadWindow(QMainWindow):
         if show_replace:
             self.bar.show_replace()
         self.act_preview.setChecked(preview if preview is not None else self.is_markdown())
+        self.act_syntax.setChecked(bool(syntax))
+        self._apply_syntax()                                      # (a switch that stays off sends no signal)
 
     # setup -----------------------------------------------------------------------------------------------------
     def _action(self, text: str, keys, slot) -> QAction:
@@ -211,6 +217,30 @@ class NotepadWindow(QMainWindow):
         self.addAction(self.act_preview)
         v.addAction(self.act_preview)
         v.addSeparator()
+        self.act_syntax = QAction("Syntax Highlighting", self)
+        self.act_syntax.setCheckable(True)
+        self.act_syntax.setToolTip("Colour the text by the language of the file and let blocks fold. Off by default; big files are not coloured")
+        self.act_syntax.toggled.connect(self._set_syntax)
+        v.addAction(self.act_syntax)
+        self._language_choice = "auto"
+        self.lang_menu = v.addMenu("Language")
+        group = QActionGroup(self)
+        self.lang_actions: dict = {}
+        for choice, text in (("auto", "Automatic (by the file name)"), ("none", "Plain Text")) + tuple(
+                (key, label(key)) for key in LANGUAGES):
+            act = self.lang_menu.addAction(text)
+            act.setCheckable(True)
+            act.setActionGroup(group)
+            act.triggered.connect(lambda _c=False, c=choice: self._choose_language(c))
+            self.lang_actions[choice] = act
+            if choice == "none":
+                self.lang_menu.addSeparator()
+        self.lang_actions["auto"].setChecked(True)
+        self.act_fold = self._action("Fold All Blocks", None, lambda: self.editor.set_all_folds(True))
+        self.act_unfold = self._action("Unfold All Blocks", None, lambda: self.editor.set_all_folds(False))
+        v.addAction(self.act_fold)
+        v.addAction(self.act_unfold)
+        v.addSeparator()
         for text, keys, slot in (("Zoom In", "Ctrl+=", self.editor.zoomIn), ("Zoom Out", "Ctrl+-", self.editor.zoomOut),
                                  ("Actual Size", "Ctrl+0", lambda: self.editor.zoomTo(0))):
             v.addAction(self._action(text, keys, slot))
@@ -247,6 +277,32 @@ class NotepadWindow(QMainWindow):
         if self.doc.mixed_eol:
             self.message.setText("The line breaks were mixed; they will be written as "
                                  + self.eol.currentText() + ".")
+
+    # syntax highlighting and folding --------------------------------------------------------------------------------
+    def _set_syntax(self, on: bool) -> None:
+        self._apply_syntax()
+        self.syntax_toggled.emit(on)
+
+    def _choose_language(self, choice: str) -> None:
+        self._language_choice = choice
+        self._apply_syntax()
+
+    def _apply_syntax(self) -> None:
+        """Colour and fold the text if highlighting is on, in the language chosen (or the file name's), unless the text is too big."""
+        key = None
+        if self.act_syntax.isChecked() and self._language_choice != "none":
+            key = language_for(self.doc.path) if self._language_choice == "auto" else self._language_choice
+            if key is None:
+                self.message.setText("No highlighting for this kind of file. View > Language picks one")
+            elif self.editor.length() > HIGHLIGHT_LIMIT:
+                self.message.setText("This text is too big to colour (the limit is 1 MB)")
+                key = None
+        shown = self.editor.set_language(key)
+        has = self.editor.language is not None
+        self.act_fold.setEnabled(has)
+        self.act_unfold.setEnabled(has)
+        if key is not None and not shown:
+            self.message.setText(f"This Scintilla has no highlighting for {label(key)}")
 
     # the Markdown preview ------------------------------------------------------------------------------------------
     def is_markdown(self) -> bool:
@@ -438,6 +494,7 @@ class NotepadWindow(QMainWindow):
         if not ok:
             self.doc = old
         self._update_title()
+        self._apply_syntax()                                     # the new name may be another language
         return ok
 
     def reload(self, ask: bool = True, encoding: str = "auto") -> bool:

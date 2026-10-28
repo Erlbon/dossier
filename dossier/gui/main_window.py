@@ -460,7 +460,9 @@ class MainWindow(FrostMixin, GlassViewMixin, KeysMixin, AutoRefreshMixin, Metada
             self.dialogs.info("Edit", f"The file could not be opened: {getattr(e, 'strerror', None) or e}")
             return
         remembered = str(self.settings.value("editor/markdown_preview", "")).lower()
-        win = NotepadWindow(doc, self.dialogs, show_replace=show_replace, preview={"true": True, "false": False}.get(remembered))
+        win = NotepadWindow(doc, self.dialogs, show_replace=show_replace, preview={"true": True, "false": False}.get(remembered),
+                            syntax=str(self.settings.value("editor/syntax", "false")).lower() == "true")
+        win.syntax_toggled.connect(lambda on: self.settings.setValue("editor/syntax", "true" if on else "false"))
         win.preview_toggled.connect(lambda on, w=win: self.settings.setValue("editor/markdown_preview", "true" if on else "false") if w.is_markdown() else None)
         self.editors.append(win)
         win.closed.connect(lambda w: self.editors.remove(w) if w in self.editors else None)
