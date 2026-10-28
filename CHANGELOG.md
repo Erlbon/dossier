@@ -2,6 +2,10 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-28#13 -- Frosted background: the slider goes to 95 %
+
+- **The Frosted Background slider now goes up to 95 %** (it stopped at 85 %): more of the screen shows through the frame. Near the top the menus and bars get harder to read, which is the owner's call to make.
+
 ## 2026-10-28#12 -- Frosted background: more of the screen shows through by default
 
 - **The default strength is 65 % (was 50 %) and the slider goes to 85 % (was 80 %)**: on a dark screen the frame looked grey, because half of it was the window's own dark colour laid over a dark blur. The title bar's own tint is Windows' and cannot be changed from Dossier.
