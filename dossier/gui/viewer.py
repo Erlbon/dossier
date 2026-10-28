@@ -22,6 +22,7 @@ from ..core.textview import AUTO, ENCODINGS, TextSource, TextTooLarge, detect_en
 from ..core.worker import Job, JobRunner, JobState
 from . import icon_set, theme
 from .dialogs import ProgressBox
+from .floating_bar import FloatingBar
 from .hex_view import HexView
 from .image_view import ImagePage, read_image
 from .line_view import LineView
@@ -121,16 +122,7 @@ class TextViewerWindow(QMainWindow):
         self.image_info.setToolTip("The file's facts and, for a photo, its EXIF")
         self.image_info.toggled.connect(self.image_page.show_info)
         self._tb["image"].append(bar.addWidget(self.image_info))
-        for text, tip, slot in (("Fit", "Show the whole picture (0)", lambda: self.image_page.view.fit()),
-                                ("100%", "Show every pixel (1)", lambda: self.image_page.view.actual_size()),
-                                ("Turn left", "Turn the picture a quarter left (L); the file is not changed", lambda: self.image_page.view.turn(-1)),
-                                ("Turn right", "Turn the picture a quarter right (R); the file is not changed", lambda: self.image_page.view.turn(1))):
-            b = QPushButton(text)
-            b.setFlat(True)
-            b.setToolTip(tip)
-            b.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-            b.clicked.connect(lambda _c=False, s=slot: s())
-            self._tb["image"].append(bar.addWidget(b))
+        self.floating = FloatingBar(self.image_page.view.viewport(), self.image_page.view, self.step, self.close)   # zoom, fit, turn: over the picture
 
         self.status = QLabel()
         self.position = QLabel()
@@ -231,6 +223,8 @@ class TextViewerWindow(QMainWindow):
             for action in actions:
                 action.setVisible(show)
         self.edit_button.setEnabled(mode in ("text", "markdown"))
+        self.floating.set_stepping(len(self.paths) > 1)
+        self.floating.set_enabled(mode == "image")
         path = self.paths[self.index]
         {"text": self._open_text, "hex": self._open_hex, "image": self._open_image, "markdown": self._open_markdown}[mode](path)
         self._focus_page()

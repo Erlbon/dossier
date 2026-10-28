@@ -2,6 +2,11 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-28#07 -- The floating picture bar in the normal viewer, and frosted glass done by Dossier itself
+
+- **F3 on a picture now has the floating bar** from the glass viewer: previous and next (only with several pictures), zoom out and in, fit, 1:1 (every pixel), turn left and right, close. It fades in when the mouse moves over the picture and out when it rests. The old Fit, 100% and Turn buttons are gone from the toolbar (the keys 0, 1, L and R are as before); Info stays. One shared piece of code (`floating_bar.py`) draws it in both viewers, and 1:1 is in the glass viewer's bar too.
+- **Frosted glass works on every computer.** Windows' own blur (acrylic) could not be set to a strength and gave a flat grey cloud. Frosted now takes a picture of the screen just before the viewer opens, blurs it itself and lays the dark layer over it. `--blur acrylic` and `--blur plain` still ask Windows for its blur. If the screen cannot be captured, frosted falls back to dim.
+
 ## 2026-10-28#06 -- Glass viewer: the sharp "dim" look is now the default
 
 - **`dossier view` now starts in the dim look**, half open (50 % of the desktop shows through, sharp), because Windows' acrylic blur turned the desktop into a flat grey cloud. Frosted is still there with `--glass frosted`; `--glass dim:30` is darker and `dim:70` lets more through.

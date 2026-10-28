@@ -32,7 +32,7 @@ def detect() -> Capabilities:
     from . import platform
     if platform.is_remote_session():
         return Capabilities(False, False)
-    return Capabilities(True, platform.IS_WINDOWS)
+    return Capabilities(True, True)                          # the blur is done by Dossier on a picture of the screen, so any computer can
 
 
 def resolve(requested: str, caps: Capabilities) -> str:

@@ -21,7 +21,7 @@ def test_the_computer_is_asked_and_a_remote_session_gets_solid(monkeypatch):
     monkeypatch.setattr(platform, "is_remote_session", lambda: True)
     assert glass.detect() == Capabilities(False, False)
     monkeypatch.setattr(platform, "is_remote_session", lambda: False)
-    assert glass.detect().transparent is True and glass.detect().blur is platform.IS_WINDOWS
+    assert glass.detect() == Capabilities(True, True)
 
 
 def test_what_the_owner_types_is_understood():

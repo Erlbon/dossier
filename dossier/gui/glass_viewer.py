@@ -15,18 +15,17 @@ import os
 from typing import Callable, Optional
 
 from PyQt6.QtCore import QEvent, QPropertyAnimation, Qt, QTimer, pyqtSignal
-from PyQt6.QtGui import QBrush, QColor, QCursor, QGuiApplication, QPainter
+from PyQt6.QtGui import QBrush, QColor, QCursor, QGuiApplication, QPainter, QPixmap
 from PyQt6.QtWidgets import (QFrame, QGraphicsOpacityEffect, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget)
 
 from ..core import glass, platform, viewmodes
 from ..core.platform import has_scheme
 from ..core.worker import JobRunner, JobState
 from . import theme
+from .floating_bar import FADE_MS, BAR_IDLE_MS, FloatingBar  # noqa: F401  (re-exported)
 from .image_view import ImageView, read_image
 from .qt_bridge import QtDispatcher
 
-BAR_IDLE_MS = 2500           # the bar fades out after this long without the mouse moving
-FADE_MS = 180
 
 
 def pictures_around(path: str) -> tuple:
@@ -53,6 +52,26 @@ def saved_look(settings) -> tuple:
         mode, level = None, None
     saved_level = str(settings.value("viewer/glass_level", ""))
     return mode or glass.DEFAULT_MODE, int(saved_level) if saved_level.isdigit() else level
+
+
+def screen_under_cursor():
+    return QGuiApplication.screenAt(QCursor.pos()) or QGuiApplication.primaryScreen()
+
+
+def grab_backdrop() -> Optional[QPixmap]:
+    """A picture of the screen the viewer will cover (taken before the viewer shows), or None when the system will not give one."""
+    screen = screen_under_cursor()
+    if screen is None:
+        return None
+    pixmap = screen.grabWindow(0)
+    return None if pixmap.isNull() else pixmap
+
+
+def blurred(pixmap: QPixmap, shrink: int = 16) -> QPixmap:
+    """``pixmap`` softened: scaled far down and back up with smoothing, so the blur is ours and works on every computer."""
+    w, h = pixmap.width(), pixmap.height()
+    small = pixmap.scaled(max(1, w // shrink), max(1, h // shrink), Qt.AspectRatioMode.IgnoreAspectRatio, Qt.TransformationMode.SmoothTransformation)
+    return small.scaled(w, h, Qt.AspectRatioMode.IgnoreAspectRatio, Qt.TransformationMode.SmoothTransformation)
 
 
 class GlassImageView(ImageView):
@@ -83,8 +102,8 @@ class GlassViewer(QWidget):
     closed = pyqtSignal()
 
     def __init__(self, paths: list, index: int = 0, mode: str = glass.DEFAULT_MODE, level: Optional[int] = None, *,
-                 capabilities: Optional[glass.Capabilities] = None, blur: Optional[Callable] = None, blur_kind: str = "acrylic",
-                 tint: Optional[int] = None, dispatch=None, parent=None) -> None:
+                 capabilities: Optional[glass.Capabilities] = None, blur: Optional[Callable] = None, blur_kind: str = "snapshot",
+                 tint: Optional[int] = None, backdrop: Optional[Callable] = None, dispatch=None, parent=None) -> None:
         super().__init__(parent, Qt.WindowType.Window | Qt.WindowType.FramelessWindowHint)
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
         self.setWindowTitle("Dossier picture viewer")
@@ -95,9 +114,17 @@ class GlassViewer(QWidget):
         self.capabilities = capabilities if capabilities is not None else glass.detect()
         self._blur = blur or functools.partial(platform.set_blur_behind, kind=blur_kind, **({} if tint is None else {"tint": tint}))
         self.mode = glass.resolve(mode, self.capabilities)                  # the best look this computer can do
+        self._system_blur = blur is not None or blur_kind != "snapshot"    # Windows' own blur, only when asked for; else the blur is ours
+        self._backdrop: Optional[QPixmap] = None
+        if self.mode == glass.FROSTED and not self._system_blur:
+            shot = (backdrop or grab_backdrop)()                            # the screen as it is now, blurred, is the glass
+            if shot is None or shot.isNull():
+                self.mode = glass.DIM
+            else:
+                self._backdrop = blurred(shot)
         self._dispatch = dispatch or QtDispatcher(self)
         self._runner = JobRunner(self._dispatch)
-        if self.mode != glass.SOLID:
+        if self.mode != glass.SOLID and self._backdrop is None:
             self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setMouseTracking(True)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
@@ -113,49 +140,8 @@ class GlassViewer(QWidget):
         box.setContentsMargins(0, 0, 0, 0)
         box.addWidget(self.view)
 
-        fg = QColor(theme.current()["fg"])
-        shade = f"rgba({fg.red()}, {fg.green()}, {fg.blue()}, 38)"
-        text = fg.name()
-        self.bar = QFrame(self)
-        self.bar.setObjectName("glassbar")
-        row = QHBoxLayout(self.bar)
-        row.setContentsMargins(8, 4, 8, 4)
-        row.setSpacing(2)
-        self.buttons: dict = {}
-        for key, glyph, tip, slot in (("prev", "◀", "Previous picture (Left)", lambda: self.step(-1)),
-                                      ("next", "▶", "Next picture (Right)", lambda: self.step(1)),
-                                      ("out", "−", "Zoom out (-)", lambda: self.view.zoom_by(0.8)),
-                                      ("in", "+", "Zoom in (+)", lambda: self.view.zoom_by(1.25)),
-                                      ("fit", "▢", "Fit to the window (0)", lambda: self.view.fit()),
-                                      ("left", "↶", "Turn left (L)", lambda: self.view.turn(-1)),
-                                      ("right", "↷", "Turn right (R)", lambda: self.view.turn(1)),
-                                      ("close", "✕", "Close (Esc)", self.close)):
-            b = QPushButton(glyph)
-            b.setToolTip(tip)
-            b.setFlat(True)
-            b.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-            b.setMouseTracking(True)
-            b.clicked.connect(lambda _c=False, s=slot: s())
-            row.addWidget(b)
-            self.buttons[key] = b
-        self.caption = QLabel(self)
-        self.caption.setObjectName("glasscaption")
-        self.caption.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.setStyleSheet(
-            f"QFrame#glassbar {{ background: {shade}; border-radius: 14px; }}"
-            f"QLabel#glasscaption {{ background: {shade}; color: {text}; border-radius: 10px; padding: 3px 12px; }}"
-            f"QPushButton {{ color: {text}; border: 0; padding: 4px 11px; font-size: 16px; border-radius: 8px; }}"
-            f"QPushButton:hover {{ background: {shade}; }}")
-        self._effects: dict = {}
-        self._fades: dict = {}
-        for widget in (self.bar, self.caption):
-            effect = QGraphicsOpacityEffect(widget)
-            widget.setGraphicsEffect(effect)
-            self._effects[widget] = effect
-        self._idle = QTimer(self)
-        self._idle.setSingleShot(True)
-        self._idle.setInterval(BAR_IDLE_MS)
-        self._idle.timeout.connect(self._fade_out)
+        self.floating = FloatingBar(self, self.view, self.step, self.close, captioned=True)
+        self.bar, self.caption, self.buttons = self.floating.bar, self.floating.caption, self.floating.buttons
         self._cover_screen()
         self._show_current()
         self._poke()
@@ -169,17 +155,21 @@ class GlassViewer(QWidget):
         tint = QColor(theme.current()["bg"])
         tint.setAlpha(self.alpha())
         painter = QPainter(self)
+        if self._backdrop is not None:
+            painter.drawPixmap(self.rect(), self._backdrop)
+            painter.fillRect(self.rect(), tint)
+            return
         painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_Source)
         painter.fillRect(self.rect(), tint)
 
     def _cover_screen(self) -> None:
-        screen = QGuiApplication.screenAt(QCursor.pos()) or QGuiApplication.primaryScreen()
+        screen = screen_under_cursor()
         if screen is not None:
             self.setGeometry(screen.geometry())
 
     def showEvent(self, event) -> None:
         super().showEvent(event)
-        if self.mode == glass.FROSTED and not self._blur(int(self.winId())):
+        if self.mode == glass.FROSTED and self._system_blur and not self._blur(int(self.winId())):
             self.mode = glass.DIM                                           # the system would not blur: see-through without the blur
             self.update()
         self.activateWindow()
@@ -216,58 +206,23 @@ class GlassViewer(QWidget):
         self._poke()
 
     def _set_caption(self, text: str) -> None:
-        self.caption.setText(text)
-        self.caption.adjustSize()
-        self._place_overlay()
+        self.floating.set_caption(text)
 
-    # the floating bar ------------------------------------------------------------------------------------------------------------
     def _place_overlay(self) -> None:
-        self.bar.adjustSize()
-        self.bar.move((self.width() - self.bar.width()) // 2, self.height() - self.bar.height() - max(24, self.height() // 24))
-        self.caption.move((self.width() - self.caption.width()) // 2, max(18, self.height() // 40))
-        self.bar.raise_()
-        self.caption.raise_()
+        self.floating.place()
 
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
         self._place_overlay()
 
     def bar_visible(self) -> bool:
-        return not self.bar.isHidden()
-
-    def _fade(self, widget: QWidget, to: float) -> None:
-        effect = self._effects[widget]
-        old = self._fades.get(widget)
-        if old is not None:
-            old.stop()
-        animation = QPropertyAnimation(effect, b"opacity", self)
-        animation.setDuration(FADE_MS)
-        animation.setEndValue(to)
-        if to == 0.0:
-            animation.finished.connect(widget.hide)
-        else:
-            widget.show()
-        self._fades[widget] = animation
-        animation.start()
+        return self.floating.is_visible()
 
     def _poke(self) -> None:
-        """The mouse moved or a picture was stepped to: show the bar, and hide it again after a rest."""
-        for widget in (self.bar, self.caption):
-            if widget.isHidden() or self._effects[widget].opacity() < 1.0:
-                self._fade(widget, 1.0)
-        self._idle.start()
+        self.floating.poke()
 
     def _fade_out(self) -> None:
-        if self.bar.underMouse():
-            self._idle.start()                                              # the mouse is on the bar: leave it
-            return
-        for widget in (self.bar, self.caption):
-            self._fade(widget, 0.0)
-
-    def eventFilter(self, obj, event) -> bool:
-        if event.type() == QEvent.Type.MouseMove:
-            self._poke()
-        return False
+        self.floating.fade_out()
 
     def mouseMoveEvent(self, event) -> None:
         self._poke()
@@ -286,7 +241,7 @@ class GlassViewer(QWidget):
             super().keyPressEvent(event)
 
     def closeEvent(self, event) -> None:
-        self._idle.stop()
+        self.floating._idle.stop()
         self._runner.shutdown(wait=False)
         super().closeEvent(event)
         self.closed.emit()

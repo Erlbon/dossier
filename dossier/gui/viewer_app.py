@@ -24,8 +24,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("paths", nargs="*", metavar="picture", help="a picture (its folder's pictures follow), several pictures, or a folder")
     parser.add_argument("--glass", metavar="LOOK", help="dim (default), frosted, solid, a number 0-100 for how much shows through, or frosted:60")
     parser.add_argument("--scheme", choices=("auto", "light", "dark"), help="the colour scheme of the glass and the bar")
-    parser.add_argument("--blur", choices=("acrylic", "plain"), default="acrylic",
-                        help="frosted only: acrylic (the strong frosted blur, default) or plain (Windows' older, lighter blur); experimental")
+    parser.add_argument("--blur", choices=("snapshot", "acrylic", "plain"), default="snapshot",
+                        help="frosted only: snapshot (a blurred picture of the screen, default) or Windows' own blur, acrylic or plain; experimental")
     parser.add_argument("--tint", metavar="RRGGBB", help="frosted only: the colour laid over the blur (default ffffff); experimental")
     return parser
 

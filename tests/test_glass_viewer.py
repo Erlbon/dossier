@@ -244,19 +244,47 @@ def test_the_glass_settings_page_through_a_real_exec_is_saved_and_used(world):
     assert saved_look(win.settings)[0] == glass.SOLID and win.settings.value("viewer/glass_level") is None
 
 
-def test_the_blur_kind_and_tint_reach_windows_and_the_default_is_a_nearly_clear_white(viewers, tmp_path, monkeypatch):
+def test_frosted_blurs_a_picture_of_the_screen_itself_and_asks_windows_for_nothing(viewers, tmp_path, monkeypatch):
+    from PyQt6.QtGui import QPixmap
+    from dossier.core import platform
+    seen = []
+    monkeypatch.setattr(platform, "set_blur_behind", lambda *a, **k: seen.append(a) or True)
+    shot = QPixmap(64, 48)
+    shot.fill(QColor("#c04020"))
+    paths = make_pictures(tmp_path)
+    window = GlassViewer(paths, 0, glass.FROSTED, None, capabilities=FULL, backdrop=lambda: shot)
+    viewers.append(window)
+    window.show()
+    assert window.mode == glass.FROSTED and window._backdrop is not None and seen == []
+    assert not window.testAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)       # the window paints its own backdrop
+    painted = window.grab().toImage().pixelColor(5, 5)
+    assert painted.red() > painted.blue()                                              # the screen's colour shows through, darkened
+    none = GlassViewer(paths, 0, glass.FROSTED, None, capabilities=FULL, backdrop=lambda: None)
+    viewers.append(none)
+    assert none.mode == glass.DIM                                                       # no picture of the screen: see-through without blur
+
+
+def test_the_blur_is_soft_but_keeps_the_size_and_the_average_colour(app):
+    from PyQt6.QtGui import QPixmap
+    shot = QImage(160, 100, QImage.Format.Format_RGB32)
+    shot.fill(QColor("#000000"))
+    for x in range(80, 160):
+        for y in range(100):
+            shot.setPixelColor(x, y, QColor("#ffffff"))
+    soft = glass_viewer.blurred(QPixmap.fromImage(shot)).toImage()
+    assert (soft.width(), soft.height()) == (160, 100)
+    edge = soft.pixelColor(80, 50).red()
+    assert 40 < edge < 215 and soft.pixelColor(2, 50).red() < 30 and soft.pixelColor(157, 50).red() > 225      # a soft edge, not a cut
+
+
+def test_windows_blur_is_still_available_when_asked_for(viewers, tmp_path, monkeypatch):
     from dossier.core import platform
     seen = []
     monkeypatch.setattr(platform, "set_blur_behind", lambda hwnd, tint=0x01ffffff, kind="acrylic": seen.append((tint, kind)) or True)
-    paths = make_pictures(tmp_path)
-    default = GlassViewer(paths, 0, glass.FROSTED, None, capabilities=FULL)
-    viewers.append(default)
-    default.show()
-    custom = GlassViewer(paths, 0, glass.FROSTED, None, capabilities=FULL, blur_kind="plain", tint=0x01202020)
+    custom = GlassViewer(make_pictures(tmp_path), 0, glass.FROSTED, None, capabilities=FULL, blur_kind="plain", tint=0x01202020)
     viewers.append(custom)
     custom.show()
-    assert seen == [(0x01ffffff, "acrylic"), (0x01202020, "plain")] or seen == [(0x01ffffff, "acrylic")][:0] + seen
-    assert seen[0][1] == "acrylic" and seen[1] == (0x01202020, "plain")
+    assert seen == [(0x01202020, "plain")]
 
 
 def test_dossier_view_takes_the_experimental_blur_and_tint_and_refuses_a_bad_tint(app, tmp_path):
