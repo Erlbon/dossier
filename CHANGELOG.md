@@ -2,6 +2,10 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-28#06 -- Glass viewer: the sharp "dim" look is now the default
+
+- **`dossier view` now starts in the dim look**, half open (50 % of the desktop shows through, sharp), because Windows' acrylic blur turned the desktop into a flat grey cloud. Frosted is still there with `--glass frosted`; `--glass dim:30` is darker and `dim:70` lets more through.
+
 ## 2026-10-28#05 -- Glass viewer: a lighter frosted look, and two ways to try other blurs
 
 - **The frosted look is lighter by default:** more of the desktop shows through (65 % instead of 50 %), and the tint Windows lays over the blur is a nearly clear white instead of grey. Windows' acrylic blur is strong and its radius cannot be set, so the desktop is a soft cloud of colour; the **dim** look (`--glass dim`) is the sharp one.

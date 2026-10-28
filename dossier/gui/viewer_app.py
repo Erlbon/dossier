@@ -4,7 +4,7 @@
 
 One picture opens it with the other pictures of its folder following (the arrow keys and the wheel step through them); several pictures
 open just those; a folder opens its first picture. The look is what was chosen in Settings, unless a parameter says otherwise for this
-run: ``--glass`` is a mode (``frosted``, the default, then ``dim`` or ``solid``), how much shows through (0 is solid, 100 almost clear), or
+run: ``--glass`` is a mode (``dim``, the default, then ``frosted`` or ``solid``), how much shows through (0 is solid, 100 almost clear), or
 both as ``frosted:60``; ``--scheme`` is the colour scheme of the layer and the bar.
 """
 from __future__ import annotations
@@ -22,7 +22,7 @@ USAGE = "dossier view [--glass frosted|dim|solid|0-100] [--scheme auto|light|dar
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="dossier view", description="Show pictures in the see-through glass viewer.")
     parser.add_argument("paths", nargs="*", metavar="picture", help="a picture (its folder's pictures follow), several pictures, or a folder")
-    parser.add_argument("--glass", metavar="LOOK", help="frosted (default), dim, solid, a number 0-100 for how much shows through, or frosted:60")
+    parser.add_argument("--glass", metavar="LOOK", help="dim (default), frosted, solid, a number 0-100 for how much shows through, or frosted:60")
     parser.add_argument("--scheme", choices=("auto", "light", "dark"), help="the colour scheme of the glass and the bar")
     parser.add_argument("--blur", choices=("acrylic", "plain"), default="acrylic",
                         help="frosted only: acrylic (the strong frosted blur, default) or plain (Windows' older, lighter blur); experimental")

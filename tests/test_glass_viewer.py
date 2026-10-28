@@ -188,7 +188,7 @@ def test_the_glass_settings_dialog_hands_back_the_look(app):
     dlg = GlassDialog(glass.FROSTED, None, FULL)
     assert dlg.values() == (glass.FROSTED, 65)
     dlg.mode.setCurrentIndex(dlg.mode.findData(glass.DIM))
-    assert dlg.values() == (glass.DIM, 28)                                 # each look starts from its own usual setting
+    assert dlg.values() == (glass.DIM, 50)                                 # each look starts from its own usual setting
     dlg.slider.setValue(70)
     assert dlg.values() == (glass.DIM, 70)
     dlg.mode.setCurrentIndex(dlg.mode.findData(glass.SOLID))

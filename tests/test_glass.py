@@ -13,7 +13,7 @@ def test_each_look_falls_back_one_step_at_a_time_to_what_the_computer_can_do():
     assert [glass.resolve(FROSTED, c) for c in (FULL, NO_BLUR, NOTHING)] == [FROSTED, DIM, SOLID]
     assert [glass.resolve(DIM, c) for c in (FULL, NO_BLUR, NOTHING)] == [DIM, DIM, SOLID]
     assert [glass.resolve(SOLID, c) for c in (FULL, NO_BLUR, NOTHING)] == [SOLID, SOLID, SOLID]
-    assert glass.resolve("nonsense", FULL) == FROSTED                    # an unknown name gets the default look
+    assert glass.resolve("nonsense", FULL) == DIM                        # an unknown name gets the default look
 
 
 def test_the_computer_is_asked_and_a_remote_session_gets_solid(monkeypatch):
@@ -35,8 +35,8 @@ def test_what_the_owner_types_is_understood():
 
 
 def test_how_much_shows_through_and_the_opacity_of_the_dark_layer():
-    assert glass.level_for(FROSTED, None) == 65 and glass.level_for(DIM, None) == 28 and glass.level_for(SOLID, 70) == 0
+    assert glass.level_for(FROSTED, None) == 65 and glass.level_for(DIM, None) == 50 and glass.level_for(SOLID, 70) == 0
     assert glass.level_for(FROSTED, 100) == glass.MAX_LEVEL and glass.level_for(DIM, 0) == 1      # never fully clear
     assert glass.alpha_for(SOLID) == 255
-    assert glass.alpha_for(FROSTED) == round(255 * 0.35) and glass.alpha_for(DIM) == round(255 * 0.72)
+    assert glass.alpha_for(FROSTED) == round(255 * 0.35) and glass.alpha_for(DIM) == round(255 * 0.5)
     assert glass.alpha_for(DIM, 60) == round(255 * 0.4)
