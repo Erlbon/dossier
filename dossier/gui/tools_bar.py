@@ -18,7 +18,7 @@ from PyQt6.QtWidgets import (QAbstractItemView, QComboBox, QDialog, QDialogButto
 from ..core import startmenu as SM
 from ..core import tools as T
 from ..core.drives import is_network_path
-from . import icon_set, theme
+from . import frost, icon_set, theme
 from .owned_dialog import OwnedDialog
 from .background import run_in_background
 from .bar_grip import BarGrip
@@ -378,7 +378,7 @@ class ToolsBar(QWidget):
         t = theme.current()
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         edge = {"below_menu": f"border-bottom:1px solid {t['line']};", "bottom": f"border-top:1px solid {t['line']};"}.get(self.place, "")
-        self.setStyleSheet(f"#toolsbar{{background:{t['card']};{edge}}}"
+        self.setStyleSheet(f"#toolsbar{{background:{frost.fill(t['card'])};{edge}}}"
                            f"#toolsbar QToolButton{{color:{t['fg']};padding:2px 8px;border:none;border-radius:4px;}}"
                            f"#toolsbar QToolButton:hover{{background:{t['line']};}}"
                            f"#toolsbar QToolButton::menu-indicator{{image:none;}}"

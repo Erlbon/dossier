@@ -14,6 +14,8 @@ from PyQt6.QtCore import QObject, Qt, pyqtSignal
 from PyQt6.QtGui import QColor, QPalette, QPen
 from PyQt6.QtWidgets import QApplication, QProxyStyle, QStyle
 
+from . import frost
+
 LIGHT = {
     "bg": "#ffffff", "fg": "#1d2330", "dim": "#636b7d", "line": "#d9dde7", "card": "#f5f6fa",
     "accent": "#8a6410", "accent_fg": "#ffffff", "danger": "#b3382c",
@@ -107,8 +109,10 @@ class FusionEdges(QProxyStyle):
     Fusion draws no edge there, so it could not be seen at all."""
 
     def drawPrimitive(self, element, option, painter, widget=None) -> None:
-        super().drawPrimitive(element, option, painter, widget)
         P = QStyle.PrimitiveElement
+        if element == P.PE_PanelMenuBar and frost.active():
+            return                                                      # the frosted window shows through the menu bar
+        super().drawPrimitive(element, option, painter, widget)
         if element not in (P.PE_IndicatorCheckBox, P.PE_IndicatorRadioButton):
             return
         painter.save()

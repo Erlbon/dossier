@@ -2,6 +2,12 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-28#09 -- A frosted background for the file manager (Settings > Appearance > Frosted Background...)
+
+- **The frame of the window can show a blurred picture of your screen**, so the file manager stands out against it: the menu bar, tools bar, command line, function-key bar, status line and the gaps around the panels. **The file lists, tabs and address bars stay solid**, so names are always easy to read. A slider sets how much of the screen shows through (40 % by default).
+- The picture is taken when Dossier opens, or when you turn the setting on (the window hides for a moment so it is not in the picture). It is not live: it is the screen as it was, and it moves with the window like glass over a still desktop. A remote desktop session gets no frost.
+- The blur code is now shared with the picture viewer (`frost.py`).
+
 ## 2026-10-28#08 -- No old toolbar over a picture; frosted is the default again
 
 - **The F3 viewer shows no top toolbar over a picture.** Its two remaining jobs moved into the floating bar as buttons: **ⓘ** (the file's facts and EXIF, also the I key) and **⋯** (View this file as...: the picture as hex, and so on). Text, hex and Markdown files keep their toolbar, and a picture shown as hex has it back so you can return.

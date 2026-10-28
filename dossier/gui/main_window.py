@@ -62,6 +62,7 @@ from .app_settings import open_settings
 from ..core import fkey_config
 from .keys_help import KeysMixin
 from .glass_viewer import GlassViewMixin
+from .frost_window import FrostMixin
 from .tailnet import TailnetMixin
 from .compare_folders import CompareFoldersMixin
 from .servers import ServersMixin
@@ -92,7 +93,7 @@ SUMMARY_ITEMS = 12    # the confirmation lists this many items, then says how ma
 SIZE_LIMIT = 1000    # the status line sizes at most this many marked items
 
 
-class MainWindow(GlassViewMixin, KeysMixin, AutoRefreshMixin, MetadataEditMixin, HealthMixin, QuarantineMixin, NewFromContentMixin, TabSetsMixin, CommandCompletionMixin, DatesLinksMixin, ViewModesMixin, ToolsBarMixin, ContextMenuMixin, DragDropMixin, LookMixin, ZipEditMixin, ArchiveCommandsMixin, CopySettingsMixin, AssistantMixin, OpenFilesMixin, MenusMixin, WheelMixin, ToolsBarPlaceMixin, TailnetMixin, CompareFoldersMixin, ServersMixin, DuplicatesMixin, FolderLayoutsMixin, QueueResumeMixin, ColumnsMixin, PropertiesMixin, MountMixin, ChecksumMixin, MarksAndNotesMixin, SearchCommandMixin, BatchRenameMixin, OperationQueueMixin, StallLogMixin, GoingPlacesMixin, FolderSizesMixin, UnpackMixin, QMainWindow):
+class MainWindow(FrostMixin, GlassViewMixin, KeysMixin, AutoRefreshMixin, MetadataEditMixin, HealthMixin, QuarantineMixin, NewFromContentMixin, TabSetsMixin, CommandCompletionMixin, DatesLinksMixin, ViewModesMixin, ToolsBarMixin, ContextMenuMixin, DragDropMixin, LookMixin, ZipEditMixin, ArchiveCommandsMixin, CopySettingsMixin, AssistantMixin, OpenFilesMixin, MenusMixin, WheelMixin, ToolsBarPlaceMixin, TailnetMixin, CompareFoldersMixin, ServersMixin, DuplicatesMixin, FolderLayoutsMixin, QueueResumeMixin, ColumnsMixin, PropertiesMixin, MountMixin, ChecksumMixin, MarksAndNotesMixin, SearchCommandMixin, BatchRenameMixin, OperationQueueMixin, StallLogMixin, GoingPlacesMixin, FolderSizesMixin, UnpackMixin, QMainWindow):
     def __init__(self, fs: Optional[FileSystem] = None, *, settings_path: Optional[str] = None, start=(None, None),
                  dialogs=None, trasher=None, terminal_launcher=None, which=None) -> None:
         super().__init__()
@@ -106,6 +107,7 @@ class MainWindow(GlassViewMixin, KeysMixin, AutoRefreshMixin, MetadataEditMixin,
         self._which = which or shutil.which
         self.dialogs = dialogs or Dialogs(self)
         self.settings = self._open_settings(settings_path)
+        self.init_frost()
         self._fkey_table = fkey_config.resolve(fkey_config.load(str(self.settings.value("fkeys/config", ""))), known=fkeys.COMMANDS)
         self.home_provider = HomeProvider(pins=lambda: self._saved_list("home/pins"),
                                           network=lambda: self._saved_list("home/network"),

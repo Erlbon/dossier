@@ -244,6 +244,7 @@ class MenusMixin:
         look.addAction(self._action("Fonts and Bold...", None, self.open_look_settings))
         look.addAction(self._action("Thumbnails...", None, self.open_thumbnail_settings))
         look.addAction(self._action("Picture Viewer Glass...", None, self.open_glass_settings))
+        look.addAction(self._action("Frosted Background...", None, self.open_frost_settings))
         columns_menu = look.addMenu("Columns")
         columns_menu.addAction(self._action("Add or Remove Columns...", None, self.open_column_settings))
         columns_menu.addAction(self._action("Back to the Default Columns", None, self.reset_columns))

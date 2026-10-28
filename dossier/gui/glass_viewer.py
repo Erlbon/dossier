@@ -22,6 +22,7 @@ from ..core import glass, platform, viewmodes
 from ..core.platform import has_scheme
 from ..core.worker import JobRunner, JobState
 from . import theme
+from .frost import blurred, grab_backdrop, screen_under_cursor  # noqa: F401  (shared with the file manager)
 from .floating_bar import FADE_MS, BAR_IDLE_MS, FloatingBar  # noqa: F401  (re-exported)
 from .image_view import ImageView, read_image
 from .qt_bridge import QtDispatcher
@@ -52,26 +53,6 @@ def saved_look(settings) -> tuple:
         mode, level = None, None
     saved_level = str(settings.value("viewer/glass_level", ""))
     return mode or glass.DEFAULT_MODE, int(saved_level) if saved_level.isdigit() else level
-
-
-def screen_under_cursor():
-    return QGuiApplication.screenAt(QCursor.pos()) or QGuiApplication.primaryScreen()
-
-
-def grab_backdrop() -> Optional[QPixmap]:
-    """A picture of the screen the viewer will cover (taken before the viewer shows), or None when the system will not give one."""
-    screen = screen_under_cursor()
-    if screen is None:
-        return None
-    pixmap = screen.grabWindow(0)
-    return None if pixmap.isNull() else pixmap
-
-
-def blurred(pixmap: QPixmap, shrink: int = 16) -> QPixmap:
-    """``pixmap`` softened: scaled far down and back up with smoothing, so the blur is ours and works on every computer."""
-    w, h = pixmap.width(), pixmap.height()
-    small = pixmap.scaled(max(1, w // shrink), max(1, h // shrink), Qt.AspectRatioMode.IgnoreAspectRatio, Qt.TransformationMode.SmoothTransformation)
-    return small.scaled(w, h, Qt.AspectRatioMode.IgnoreAspectRatio, Qt.TransformationMode.SmoothTransformation)
 
 
 class GlassImageView(ImageView):
