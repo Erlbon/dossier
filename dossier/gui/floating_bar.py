@@ -28,7 +28,7 @@ class FloatingBar(QObject):
         text = fg.name()
         self.bar = QFrame(host)
         self.bar.setObjectName("glassbar")
-        row = QHBoxLayout(self.bar)
+        row = self.row = QHBoxLayout(self.bar)
         row.setContentsMargins(8, 4, 8, 4)
         row.setSpacing(2)
         self.buttons: dict = {}
@@ -52,7 +52,7 @@ class FloatingBar(QObject):
         self.bar.setStyleSheet(
             f"QFrame#glassbar {{ background: {shade}; border-radius: 14px; }}"
             f"QPushButton {{ color: {text}; border: 0; padding: 4px 11px; font-size: 16px; border-radius: 8px; }}"
-            f"QPushButton:hover {{ background: {shade}; }}")
+            f"QPushButton:hover, QPushButton:checked {{ background: {shade}; }}")
         self.caption = QLabel(host)
         self.caption.setObjectName("glasscaption")
         self.caption.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -75,6 +75,20 @@ class FloatingBar(QObject):
         view.viewport().installEventFilter(self)
         view.installEventFilter(self)                                       # a resize of the picture moves the bar with it
         self.enabled = True
+
+    def add_button(self, key: str, glyph: str, tip: str, slot: Callable, checkable: bool = False) -> QPushButton:
+        """An extra button just before the close button (the F3 viewer adds Info and View as)."""
+        b = QPushButton(glyph)
+        b.setToolTip(tip)
+        b.setFlat(True)
+        b.setCheckable(checkable)
+        b.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        b.setMouseTracking(True)
+        b.clicked.connect(lambda _c=False: slot())
+        self.row.insertWidget(self.row.count() - 1, b)
+        self.buttons[key] = b
+        self.bar.adjustSize()
+        return b
 
     def _widgets(self) -> tuple:
         return (self.bar, self.caption) if self.captioned else (self.bar,)

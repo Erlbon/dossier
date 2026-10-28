@@ -487,5 +487,13 @@ def test_the_toolbar_no_longer_carries_the_buttons_the_floating_bar_has(viewer, 
     win = viewer([picture(tmp_path / "a.png")])
     texts = {b.text() for b in win.findChildren(type(win.prev_file))}
     assert not texts & {"Fit", "100%", "Turn left", "Turn right"}
+    wait(lambda: win.image_page.view.has_image())
+    assert win.toolbar.isHidden()                                                          # no old top bar over a picture
+    win.floating.buttons["info"].click()
+    assert win.image_info.isChecked() and win.image_page.info.isVisibleTo(win.image_page)
+    win.floating.buttons["info"].click()
+    assert not win.image_info.isChecked()
+    win.enter_mode("hex")
+    assert not win.toolbar.isHidden()                                                      # other files keep theirs
     only = viewer([picture(tmp_path / "solo.png")])
     assert not only.floating.buttons["prev"].isVisibleTo(only.floating.bar)               # a single picture: nothing to step to

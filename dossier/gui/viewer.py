@@ -10,9 +10,9 @@ from __future__ import annotations
 import os
 from typing import Optional
 
-from PyQt6.QtCore import QSize, Qt, QTimer, pyqtSignal
+from PyQt6.QtCore import QPoint, QSize, Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QAction, QKeySequence, QTextDocument
-from PyQt6.QtWidgets import (QCheckBox, QComboBox, QInputDialog, QLabel, QLineEdit, QMainWindow, QPushButton,
+from PyQt6.QtWidgets import (QCheckBox, QComboBox, QInputDialog, QLabel, QLineEdit, QMainWindow, QMenu, QPushButton,
                              QStackedWidget, QToolBar, QWidget)
 
 from ..core import markdownsafe, viewmodes
@@ -65,7 +65,7 @@ class TextViewerWindow(QMainWindow):
         self.markdown.open_file_requested.connect(self._open_linked)
         self.markdown.refused.connect(lambda text: self.status.setText(f"This link is not opened: {text}"))
 
-        bar = QToolBar()
+        bar = self.toolbar = QToolBar()
         bar.setMovable(False)
         bar.setIconSize(QSize(16, 16))
         self.addToolBar(bar)
@@ -123,6 +123,10 @@ class TextViewerWindow(QMainWindow):
         self.image_info.toggled.connect(self.image_page.show_info)
         self._tb["image"].append(bar.addWidget(self.image_info))
         self.floating = FloatingBar(self.image_page.view.viewport(), self.image_page.view, self.step, self.close)   # zoom, fit, turn: over the picture
+        self.info_button = self.floating.add_button("info", "ⓘ", "The file's facts and, for a photo, its EXIF (I)", lambda: None, checkable=True)
+        self.info_button.clicked.connect(self.image_info.setChecked)
+        self.image_info.toggled.connect(self.info_button.setChecked)
+        self.floating.add_button("view", "⋯", "View this file as...", self._view_as_menu)
 
         self.status = QLabel()
         self.position = QLabel()
@@ -188,6 +192,17 @@ class TextViewerWindow(QMainWindow):
         self.mode_box.blockSignals(blocked)
         self.enter_mode(self._modes[0])
 
+    def _view_as_menu(self) -> None:
+        """The floating bar's View as: the modes that fit this file, the one in force ticked."""
+        menu = QMenu(self)
+        for m in self._modes:
+            act = menu.addAction(viewmodes.LABELS[m])
+            act.setCheckable(True)
+            act.setChecked(m == self.mode)
+            act.triggered.connect(lambda _c=False, m=m: self.enter_mode(m) if m != self.mode else None)
+        button = self.floating.buttons["view"]
+        menu.popup(button.mapToGlobal(button.rect().topLeft()) - QPoint(0, menu.sizeHint().height()))
+
     def _mode_chosen(self, i: int) -> None:
         if 0 <= i < len(self._modes) and self._modes[i] != self.mode:
             self.enter_mode(self._modes[i])
@@ -223,6 +238,7 @@ class TextViewerWindow(QMainWindow):
             for action in actions:
                 action.setVisible(show)
         self.edit_button.setEnabled(mode in ("text", "markdown"))
+        self.toolbar.setVisible(mode != "image")                  # a picture has its own floating bar and no old toolbar
         self.floating.set_stepping(len(self.paths) > 1)
         self.floating.set_enabled(mode == "image")
         path = self.paths[self.index]

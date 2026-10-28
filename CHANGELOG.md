@@ -2,6 +2,11 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-28#08 -- No old toolbar over a picture; frosted is the default again
+
+- **The F3 viewer shows no top toolbar over a picture.** Its two remaining jobs moved into the floating bar as buttons: **ⓘ** (the file's facts and EXIF, also the I key) and **⋯** (View this file as...: the picture as hex, and so on). Text, hex and Markdown files keep their toolbar, and a picture shown as hex has it back so you can return.
+- **Frosted is the default look again** now that its blur is Dossier's own (it worked on your screen); dim and solid are still chosen in Settings > Appearance > Picture Viewer Glass.
+
 ## 2026-10-28#07 -- The floating picture bar in the normal viewer, and frosted glass done by Dossier itself
 
 - **F3 on a picture now has the floating bar** from the glass viewer: previous and next (only with several pictures), zoom out and in, fit, 1:1 (every pixel), turn left and right, close. It fades in when the mouse moves over the picture and out when it rests. The old Fit, 100% and Turn buttons are gone from the toolbar (the keys 0, 1, L and R are as before); Info stays. One shared piece of code (`floating_bar.py`) draws it in both viewers, and 1:1 is in the glass viewer's bar too.

@@ -118,7 +118,7 @@ frameless window over the screen with the desktop showing through. One picture o
 (Right, Page Down and Space for the next, Left, Page Up and Backspace for the previous, the mouse wheel too; Esc closes); several pictures
 open just those; a folder opens its first picture. A floating bar fades in when the mouse moves.
 
-`--glass` is `dim` (the default: the desktop sharp, half dimmed), `frosted` (the desktop blurred, Windows only), `solid` (no transparency), a number 0
+`--glass` is `frosted` (the default: a blurred picture of the screen under a dark layer), `dim` (the desktop sharp), `solid` (no transparency), a number 0
 to 100 for how much shows through (0 is solid), or both as `frosted:60`. A look the computer cannot do falls back one step: frosted to
 dim, dim to solid; a remote desktop session gets solid. Without parameters the look chosen in Settings > Appearance > Picture Viewer Glass
 is used. The same viewer opens from the window with Files > View as Glass.

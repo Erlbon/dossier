@@ -1,10 +1,10 @@
 """The see-through look of the picture viewer: three modes, how much of the desktop shows through, and what to fall back to.
 
-* ``frosted``: the desktop behind the window is blurred (Windows' own blur effect) under a dark layer.
+* ``frosted``: a blurred picture of the screen, taken as the viewer opens, under a dark layer (the blur is Dossier's own).
 * ``dim``: the same dark layer, with the desktop showing through sharp.
 * ``solid``: no transparency at all.
 
-The viewer asks for a mode (the default is ``dim``) and gets the best one the computer can do: frosted falls back to dim, dim to solid.
+The viewer asks for a mode (the default is ``frosted``) and gets the best one the computer can do: frosted falls back to dim, dim to solid.
 A remote desktop session, or a system without window transparency, ends in solid. The level is how much of the desktop shows through,
 in percent: 0 is solid, 50 is half. No Qt in this module; the Windows calls are in ``platform.py``.
 """
@@ -15,7 +15,7 @@ from typing import Optional
 
 SOLID, DIM, FROSTED = "solid", "dim", "frosted"
 MODES = (FROSTED, DIM, SOLID)
-DEFAULT_MODE = DIM                                       # the owner found Windows' acrylic blur a flat grey blob; sharp is closest to Picasa
+DEFAULT_MODE = FROSTED                                   # the owner chose it (2026-10-28) once the blur was our own, not Windows' acrylic
 DEFAULT_LEVEL = {FROSTED: 65, DIM: 50, SOLID: 0}          # percent of the desktop that shows through
 MAX_LEVEL = 90                                           # never fully clear: the picture and the bar must stay readable
 _ORDER = {FROSTED: (FROSTED, DIM, SOLID), DIM: (DIM, SOLID), SOLID: (SOLID,)}

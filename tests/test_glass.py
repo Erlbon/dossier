@@ -13,7 +13,7 @@ def test_each_look_falls_back_one_step_at_a_time_to_what_the_computer_can_do():
     assert [glass.resolve(FROSTED, c) for c in (FULL, NO_BLUR, NOTHING)] == [FROSTED, DIM, SOLID]
     assert [glass.resolve(DIM, c) for c in (FULL, NO_BLUR, NOTHING)] == [DIM, DIM, SOLID]
     assert [glass.resolve(SOLID, c) for c in (FULL, NO_BLUR, NOTHING)] == [SOLID, SOLID, SOLID]
-    assert glass.resolve("nonsense", FULL) == DIM                        # an unknown name gets the default look
+    assert glass.resolve("nonsense", FULL) == FROSTED                       # an unknown name gets the default look
 
 
 def test_the_computer_is_asked_and_a_remote_session_gets_solid(monkeypatch):
