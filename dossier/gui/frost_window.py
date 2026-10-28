@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from PyQt6.QtCore import QEventLoop, QPoint, QRect, Qt, QTimer
+from PyQt6.QtCore import QEventLoop, QPoint, QRect, Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QColor, QPainter
 from PyQt6.QtWidgets import (QApplication, QCheckBox, QDialogButtonBox, QFormLayout, QHBoxLayout, QLabel, QSlider, QVBoxLayout)
 
@@ -18,6 +18,8 @@ from .owned_dialog import OwnedDialog
 
 
 class FrostDialog(OwnedDialog):
+    applied = pyqtSignal(bool, int)             # Apply: show the effect now, with the dialog still open
+
     def __init__(self, on: bool, level: int, available: bool, parent=None) -> None:
         super().__init__(parent)
         self.setWindowTitle("Frosted Background")
@@ -41,7 +43,9 @@ class FrostDialog(OwnedDialog):
                       + ("" if available else " This is not available in a remote desktop session."))
         note.setWordWrap(True)
         layout.addWidget(note)
-        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+                                   | QDialogButtonBox.StandardButton.Apply)
+        buttons.button(QDialogButtonBox.StandardButton.Apply).clicked.connect(lambda: self.applied.emit(*self.values()))
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
@@ -83,17 +87,18 @@ class FrostMixin:
             self._say("The frosted background is not available in a remote desktop session")
             on = False
         if on and (not frost.active() or grabber is not None):
-            visible = self.isVisible()
-            if visible:
-                self.hide()                                             # so Dossier itself is not in the picture
+            shown = [w for w in QApplication.topLevelWidgets() if w.isVisible()]
+            for w in shown:
+                w.hide()                                                # so no Dossier window (this dialog included) is in the picture
+            if shown:
                 QApplication.processEvents()
                 if wait_ms:
                     loop = QEventLoop()
                     QTimer.singleShot(wait_ms, loop.quit)
                     loop.exec()
             self._frost_shots = (grabber or frost.grab_screens)()
-            if visible:
-                self.show()
+            for w in shown:
+                w.show()
             on = bool(self._frost_shots)
         frost.set_active(on)
         self.tools_bar.restyle()
@@ -102,8 +107,12 @@ class FrostMixin:
         return on
 
     def open_frost_settings(self) -> None:
-        dlg = FrostDialog(frost.active(), self._frost_level, glass.detect().transparent, self)
+        before = (frost.active(), self._frost_level)
+        dlg = FrostDialog(*before, glass.detect().transparent, self)
+        dlg.applied.connect(lambda on, level: self.set_frost(on, level))
         if dlg.exec() != FrostDialog.DialogCode.Accepted:
+            if (frost.active(), self._frost_level) != before:
+                self.set_frost(*before)                                 # Cancel after Apply: back to how it was
             return
         on, level = dlg.values()
         if on != frost.active() or level != self._frost_level:

@@ -2,6 +2,11 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-28#10 -- Frosted background: an Apply button, and the menu bar is frosted too
+
+- **The Frosted Background dialog has an Apply button**: the effect shows at once with the dialog still open, so the strength can be judged while moving the slider. Cancel after Apply puts it back as it was; OK keeps it.
+- **The menu bar now shows the frost.** It painted its own opaque background and hid the frost across the whole top row. The default strength is 50 % (was 40 %).
+
 ## 2026-10-28#09 -- A frosted background for the file manager (Settings > Appearance > Frosted Background...)
 
 - **The frame of the window can show a blurred picture of your screen**, so the file manager stands out against it: the menu bar, tools bar, command line, function-key bar, status line and the gaps around the panels. **The file lists, tabs and address bars stay solid**, so names are always easy to read. A slider sets how much of the screen shows through (40 % by default).

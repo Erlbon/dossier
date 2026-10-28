@@ -11,8 +11,8 @@ from __future__ import annotations
 from typing import Optional
 
 from PyQt6.QtCore import QObject, Qt, pyqtSignal
-from PyQt6.QtGui import QColor, QPalette, QPen
-from PyQt6.QtWidgets import QApplication, QProxyStyle, QStyle
+from PyQt6.QtGui import QBrush, QColor, QPalette, QPen
+from PyQt6.QtWidgets import QApplication, QProxyStyle, QStyle, QStyleOptionMenuItem
 
 from . import frost
 
@@ -107,6 +107,17 @@ def system_is_dark(app: QApplication) -> bool:
 class FusionEdges(QProxyStyle):
     """Fusion, with an outline on check boxes and radio buttons: in the light scheme an unchecked box is white on a pale card and
     Fusion draws no edge there, so it could not be seen at all."""
+
+    def drawControl(self, element, option, painter, widget=None) -> None:
+        if element == QStyle.ControlElement.CE_MenuBarEmptyArea and frost.active():
+            return                                                      # the frosted window shows through the menu bar
+        if element == QStyle.ControlElement.CE_MenuBarItem and frost.active() and not option.state & QStyle.StateFlag.State_Selected:
+            clear = QStyleOptionMenuItem(option)                         # an idle menu bar entry: its text only, no fill of its own
+            for role in (QPalette.ColorRole.Window, QPalette.ColorRole.Button, QPalette.ColorRole.Base):
+                clear.palette.setBrush(role, QBrush(Qt.GlobalColor.transparent))
+            super().drawControl(element, clear, painter, widget)
+            return
+        super().drawControl(element, option, painter, widget)
 
     def drawPrimitive(self, element, option, painter, widget=None) -> None:
         P = QStyle.PrimitiveElement

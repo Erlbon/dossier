@@ -12,7 +12,7 @@ from typing import Optional
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QCursor, QGuiApplication, QPixmap
 
-DEFAULT_LEVEL = 40            # percent of the screen that shows through the file manager's frame (the viewer has its own, higher)
+DEFAULT_LEVEL = 50            # percent of the screen that shows through the file manager's frame (the viewer has its own, higher)
 MAX_LEVEL = 80                # never clear: the menu and the bars must stay readable
 
 _active = False

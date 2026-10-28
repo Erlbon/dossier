@@ -97,3 +97,21 @@ def test_the_settings_page_through_a_real_exec_turns_it_on(world, monkeypatch):
     menus = {a.text().replace("&", ""): a.menu() for a in win.menuBar().actions()}
     appearance = next(a.menu() for a in menus["Settings"].actions() if a.text() == "Appearance")
     assert "Frosted Background..." in [a.text() for a in appearance.actions()]
+
+
+def test_apply_shows_the_effect_with_the_dialog_open_and_cancel_puts_it_back(world, monkeypatch):
+    win, *_ = world
+    monkeypatch.setattr(frost, "grab_screens", lambda: fake_screens(win))
+    seen = []
+
+    def apply_then_cancel():
+        box = QApplication.activeModalWidget()
+        box.on.setChecked(True)
+        box.slider.setValue(35)
+        box.applied.emit(*box.values())
+        seen.append((frost.active(), win._frost_level, box.isVisible()))         # the effect is on while the dialog is still there
+        box.reject()
+    QTimer.singleShot(50, apply_then_cancel)
+    win.open_frost_settings()
+    assert seen == [(True, 35, True)]
+    assert not frost.active() and str(win.settings.value("frost/on")) == "false"      # cancelled: as before
