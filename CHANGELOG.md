@@ -2,6 +2,10 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-28#01 -- The Help menu is filled out, with About last
+
+- **Help** now reads: Keyboard Shortcuts (F1), Documentation (Online), What's New (Online), the Slowness Log submenu, and About Dossier last, as in other programs. The two online items open the project page and its changelog in the browser. The Slowness Log, a debugging tool, moved below the help items.
+
 ## 2026-10-27#01 -- SSH sessions from the terminal button
 
 - **A terminal on a server's folder is now an SSH session.** With an SFTP or SCP server in the panel, the Terminal button, Ctrl+Shift+T and F12 open a terminal window running `ssh` on that server, in the folder shown (`cd` to it, then the server's own shell for your user as a login shell). Before, they said a terminal only opens on this computer. The same is in **Tools > SSH Terminal Here** (any function key can be given to it in Settings > Function Keys) and in the Terminal button's right-click menu as **Open an SSH Session to This Server**.

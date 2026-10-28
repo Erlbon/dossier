@@ -7,10 +7,11 @@ and the slowness log. Every command keeps its shortcut wherever it lives.
 """
 from __future__ import annotations
 
-from PyQt6.QtGui import QAction, QActionGroup, QKeySequence
+from PyQt6.QtCore import QUrl
+from PyQt6.QtGui import QAction, QActionGroup, QDesktopServices, QKeySequence
 
 from ..core import fkey_config
-from ..core.version import APP_NAME
+from ..core.version import APP_NAME, APP_REPO_URL
 from . import fkeys
 
 
@@ -286,8 +287,17 @@ class MenusMixin:
         self.act_ask_error.toggled.connect(lambda on: self.settings.setValue("copy/ask_on_error", "true" if on else "false"))
 
     # Help -----------------------------------------------------------------------------------------------------------------------
+    def open_web_page(self, url: str) -> None:
+        """Open a page in the system's browser (a seam: the tests replace it, so no browser opens)."""
+        QDesktopServices.openUrl(QUrl(url))
+
     def _build_help_menu(self) -> None:
         help_menu = self.menuBar().addMenu("&Help")
+        help_menu.addAction(self._action("Keyboard Shortcuts...", None, self.show_keys))
+        help_menu.addSeparator()
+        help_menu.addAction(self._action("Documentation (Online)", None, lambda: self.open_web_page(APP_REPO_URL)))
+        help_menu.addAction(self._action("What's New (Online)", None, lambda: self.open_web_page(APP_REPO_URL + "/blob/main/CHANGELOG.md")))
+        help_menu.addSeparator()
         slow_menu = help_menu.addMenu("Slowness Log")
         self.act_stall_log = QAction("Record Slow Moments (window stalls over 200 ms)", self)
         self.act_stall_log.setCheckable(True)
@@ -296,6 +306,5 @@ class MenusMixin:
         slow_menu.addAction(self.act_stall_log)
         slow_menu.addAction(self._action("Open the Log", None, self.open_stall_log))
         slow_menu.addAction(self._action("Delete the Log", None, self.delete_stall_log))
-        help_menu.addAction(self._action("Keyboard Shortcuts...", None, self.show_keys))
         help_menu.addSeparator()
         help_menu.addAction(self._action(f"About {APP_NAME}...", None, self.about))

@@ -86,4 +86,17 @@ def test_the_build_number_is_in_the_status_line_and_in_the_about_box(world):
 def test_the_help_menu_has_about(world):
     win, *_ = world
     menus = {a.text().replace("&", ""): a.menu() for a in win.menuBar().actions()}
-    assert [a.text() for a in menus["Help"].actions() if not a.isSeparator()] == ["Slowness Log", "Keyboard Shortcuts...", "About Dossier..."]
+    assert [a.text() for a in menus["Help"].actions() if not a.isSeparator()] == ["Keyboard Shortcuts...", "Documentation (Online)", "What's New (Online)",
+                                                                                   "Slowness Log", "About Dossier..."]
+    assert menus["Help"].actions()[-1].text() == "About Dossier..."                     # About comes last, as in every other program
+
+
+def test_the_help_menu_opens_the_project_pages(world, monkeypatch):
+    win, *_ = world
+    opened = []
+    monkeypatch.setattr(win, "open_web_page", opened.append)
+    menus = {a.text().replace("&", ""): a.menu() for a in win.menuBar().actions()}
+    for action in menus["Help"].actions():
+        if action.text() in ("Documentation (Online)", "What's New (Online)"):
+            action.trigger()
+    assert opened == [version.APP_REPO_URL, version.APP_REPO_URL + "/blob/main/CHANGELOG.md"]
