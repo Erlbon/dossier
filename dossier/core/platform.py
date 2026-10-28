@@ -211,6 +211,43 @@ def set_window_border(hwnd: int, color: Optional[str]) -> bool:
         return False
 
 
+def is_remote_session() -> bool:
+    """True inside a remote desktop session, where window transparency and blur are not available."""
+    if not IS_WINDOWS:
+        return False
+    import ctypes
+    try:
+        return bool(ctypes.windll.user32.GetSystemMetrics(0x1000))                    # SM_REMOTESESSION
+    except (AttributeError, OSError):
+        return False
+
+
+def set_blur_behind(hwnd: int, tint: int = 0) -> bool:
+    """Blur whatever is behind this window (Windows 10 and 11: the acrylic effect, else plain blur-behind). ``tint`` is a colour ``0xAABBGGRR``
+    laid over the blur (0 for none). Returns False when the system refuses, so the caller can fall back to a plain see-through window."""
+    if not IS_WINDOWS:
+        return False
+    import ctypes
+
+    class Accent(ctypes.Structure):
+        _fields_ = [("state", ctypes.c_int), ("flags", ctypes.c_int), ("tint", ctypes.c_uint), ("animation", ctypes.c_int)]
+
+    class Attribute(ctypes.Structure):
+        _fields_ = [("attribute", ctypes.c_int), ("data", ctypes.c_void_p), ("size", ctypes.c_size_t)]
+
+    try:
+        call = ctypes.windll.user32.SetWindowCompositionAttribute
+        call.argtypes = [ctypes.c_void_p, ctypes.POINTER(Attribute)]
+        for state in (4, 3):                                                           # ACCENT_ENABLE_ACRYLICBLURBEHIND, then ..._BLURBEHIND
+            accent = Accent(state, 2, tint, 0)
+            data = Attribute(19, ctypes.cast(ctypes.pointer(accent), ctypes.c_void_p), ctypes.sizeof(accent))   # WCA_ACCENT_POLICY
+            if call(ctypes.c_void_p(int(hwnd)), ctypes.byref(data)):
+                return True
+        return False
+    except (AttributeError, OSError, ValueError):
+        return False
+
+
 def machine_name() -> str:
     """This computer's name, for the file manager's title."""
     import socket

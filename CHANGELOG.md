@@ -2,6 +2,14 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-28#03 -- A stand-alone picture viewer with a see-through glass look
+
+- **`dossier view picture.jpg`** opens only the picture viewer, with no file manager behind it: a frameless window over the screen, the desktop showing through, the picture on top. The other pictures of the folder follow (Right, Page Down, Space and the wheel for the next, Left, Page Up and Backspace for the previous, Home and End, Esc to close); several pictures open just those; a folder opens its first picture. Zoom, fit, turn and every-pixel are the same as in F3. A floating bar (previous, next, zoom, fit, turn, close) fades in when the mouse moves and out when it rests.
+- **Three looks, with a fallback:** **frosted** (the default: the desktop blurred under a dark layer, with Windows' own blur effect), **dim** (the dark layer, the desktop sharp) and **solid** (no transparency). A look the computer cannot do falls back one step, frosted to dim to solid; a remote desktop session gets solid.
+- **Parameters:** `--glass frosted|dim|solid|0-100|frosted:60` (a number is how much of the desktop shows through; 0 is solid) and `--scheme auto|light|dark` for this run. Without them the saved look is used.
+- **In the window:** **Files > View as Glass** opens the picture under the cursor (or the marked pictures) in the same viewer, and **Settings > Appearance > Picture Viewer Glass...** sets the look and how much shows through. "Glass view" can be given a function key in Settings > Function Keys.
+- The F3 viewer is unchanged. This is a first version to try the look; the same effect for the whole file manager is planned after it.
+
 ## 2026-10-28#02 -- Unpack beside the archive; moved files are not left marked
 
 - **Unpack (Alt+F9) now suggests a folder beside the archive**, named like it, in the folder the archive stands in. It used to suggest the other panel's folder. The question can still be edited to any folder. Pack (Alt+F5) still suggests the other panel.

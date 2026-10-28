@@ -33,6 +33,7 @@ COMMANDS: dict = {
     "rename": Command("Rename", "pencil"),
     "view_file": Command("View", "file-text"),
     "edit_file": Command("Edit", "file-code"),
+    "glass_view": Command("Glass view", "photo"),
     "copy": Command("Copy", "copy"),
     "move": Command("Move", "arrows-right-left"),
     "new_folder": Command("Folder", "folder-plus"),

@@ -55,6 +55,7 @@ class MenusMixin:
     def _build_files_menu(self, files) -> None:
         self.act_view = self._action("View", None, self.view_file)
         self.act_edit = self._action("Edit", None, self.edit_file)
+        self.act_glass_view = self._action("View as Glass", None, self.glass_view)
         self.act_rename = self._action("Rename", None, self.rename)
         self.act_copy = self._action("Copy to Other Panel", None, self.copy)
         self.act_move = self._action("Move to Other Panel", None, self.move)
@@ -64,7 +65,7 @@ class MenusMixin:
         self.act_delete_perm = self._action("Delete Permanently", None, self.delete_permanently)
         self.act_properties = self._action("Properties", "Alt+Return", self.show_properties)
         quit_ = self._action("Quit", "Ctrl+Q", self.close)
-        for a in (self.act_view, self.act_edit, self.act_rename, self.act_copy, self.act_move, self.act_mkdir, self.act_new_file, self.act_delete,
+        for a in (self.act_view, self.act_edit, self.act_glass_view, self.act_rename, self.act_copy, self.act_move, self.act_mkdir, self.act_new_file, self.act_delete,
                   self.act_delete_perm):
             files.addAction(a)
         files.addSeparator()
@@ -242,6 +243,7 @@ class MenusMixin:
         self._rebuild_icon_menu()
         look.addAction(self._action("Fonts and Bold...", None, self.open_look_settings))
         look.addAction(self._action("Thumbnails...", None, self.open_thumbnail_settings))
+        look.addAction(self._action("Picture Viewer Glass...", None, self.open_glass_settings))
         columns_menu = look.addMenu("Columns")
         columns_menu.addAction(self._action("Add or Remove Columns...", None, self.open_column_settings))
         columns_menu.addAction(self._action("Back to the Default Columns", None, self.reset_columns))

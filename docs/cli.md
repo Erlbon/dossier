@@ -111,6 +111,18 @@ different content) and `type-differs` (a file against a folder). `--tolerance` i
 are alike too. `--sync` makes the folders alike, in a direction: `update_right`, `update_left`, `both`, `mirror_right`, `mirror_left`
 (the mirror modes also delete what is only on the other side, to the recycle bin). Combine with `--dry-run` to see the plan first.
 
+### view (the picture viewer, not a command-line command)
+
+`dossier view [--glass LOOK] [--scheme auto|light|dark] picture...` opens only the picture viewer, with no file manager window behind it: a
+frameless window over the screen with the desktop showing through. One picture opens it with the other pictures of its folder following
+(Right, Page Down and Space for the next, Left, Page Up and Backspace for the previous, the mouse wheel too; Esc closes); several pictures
+open just those; a folder opens its first picture. A floating bar fades in when the mouse moves.
+
+`--glass` is `frosted` (the default: the desktop blurred, Windows only), `dim` (the desktop sharp), `solid` (no transparency), a number 0
+to 100 for how much shows through (0 is solid), or both as `frosted:60`. A look the computer cannot do falls back one step: frosted to
+dim, dim to solid; a remote desktop session gets solid. Without parameters the look chosen in Settings > Appearance > Picture Viewer Glass
+is used. The same viewer opens from the window with Files > View as Glass.
+
 ## Examples
 
 ```

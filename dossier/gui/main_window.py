@@ -11,7 +11,7 @@ import shutil
 import threading
 from typing import Optional
 
-from PyQt6.QtCore import QSettings, QSize, QStandardPaths, Qt
+from PyQt6.QtCore import QSettings, QSize, Qt
 from PyQt6.QtGui import QAction, QActionGroup, QKeySequence
 from PyQt6.QtWidgets import (QApplication, QHBoxLayout, QLabel, QMainWindow, QMenu, QPushButton, QSplitter,
                              QToolButton, QVBoxLayout, QWidget)
@@ -58,8 +58,10 @@ from .wheel_settings import WheelMixin
 from .tools_bar_place import ToolsBarPlaceMixin
 from .bar_grip import BarGrip
 from . import fkeys
+from .app_settings import open_settings
 from ..core import fkey_config
 from .keys_help import KeysMixin
+from .glass_viewer import GlassViewMixin
 from .tailnet import TailnetMixin
 from .compare_folders import CompareFoldersMixin
 from .servers import ServersMixin
@@ -90,7 +92,7 @@ SUMMARY_ITEMS = 12    # the confirmation lists this many items, then says how ma
 SIZE_LIMIT = 1000    # the status line sizes at most this many marked items
 
 
-class MainWindow(KeysMixin, AutoRefreshMixin, MetadataEditMixin, HealthMixin, QuarantineMixin, NewFromContentMixin, TabSetsMixin, CommandCompletionMixin, DatesLinksMixin, ViewModesMixin, ToolsBarMixin, ContextMenuMixin, DragDropMixin, LookMixin, ZipEditMixin, ArchiveCommandsMixin, CopySettingsMixin, AssistantMixin, OpenFilesMixin, MenusMixin, WheelMixin, ToolsBarPlaceMixin, TailnetMixin, CompareFoldersMixin, ServersMixin, DuplicatesMixin, FolderLayoutsMixin, QueueResumeMixin, ColumnsMixin, PropertiesMixin, MountMixin, ChecksumMixin, MarksAndNotesMixin, SearchCommandMixin, BatchRenameMixin, OperationQueueMixin, StallLogMixin, GoingPlacesMixin, FolderSizesMixin, UnpackMixin, QMainWindow):
+class MainWindow(GlassViewMixin, KeysMixin, AutoRefreshMixin, MetadataEditMixin, HealthMixin, QuarantineMixin, NewFromContentMixin, TabSetsMixin, CommandCompletionMixin, DatesLinksMixin, ViewModesMixin, ToolsBarMixin, ContextMenuMixin, DragDropMixin, LookMixin, ZipEditMixin, ArchiveCommandsMixin, CopySettingsMixin, AssistantMixin, OpenFilesMixin, MenusMixin, WheelMixin, ToolsBarPlaceMixin, TailnetMixin, CompareFoldersMixin, ServersMixin, DuplicatesMixin, FolderLayoutsMixin, QueueResumeMixin, ColumnsMixin, PropertiesMixin, MountMixin, ChecksumMixin, MarksAndNotesMixin, SearchCommandMixin, BatchRenameMixin, OperationQueueMixin, StallLogMixin, GoingPlacesMixin, FolderSizesMixin, UnpackMixin, QMainWindow):
     def __init__(self, fs: Optional[FileSystem] = None, *, settings_path: Optional[str] = None, start=(None, None),
                  dialogs=None, trasher=None, terminal_launcher=None, which=None) -> None:
         super().__init__()
@@ -228,11 +230,7 @@ class MainWindow(KeysMixin, AutoRefreshMixin, MetadataEditMixin, HealthMixin, Qu
     # setup ---------------------------------------------------------------------------
     @staticmethod
     def _open_settings(path: Optional[str]) -> QSettings:
-        if path is None:
-            folder = QStandardPaths.writableLocation(QStandardPaths.StandardLocation.AppConfigLocation)
-            os.makedirs(folder, exist_ok=True)
-            path = os.path.join(folder, "dossier.ini")      # a plain file, never the registry
-        return QSettings(path, QSettings.Format.IniFormat)
+        return open_settings(path)                           # a plain file, never the registry
 
     def _build_fkey_bar(self) -> QWidget:
         bar = fkeys.ShrinkingKeys()

@@ -44,6 +44,9 @@ def main(argv=None) -> int:
     if "--check" in args:
         print("Everything Dossier needs is installed.")
         return 0
+    if args[:1] == ["view"]:                      # the picture viewer on its own, without the file manager (dossier view picture.jpg)
+        from .viewer_app import main as view_main
+        return view_main(args[1:])
     from PyQt6.QtWidgets import QApplication
 
     from ..core.platform import set_app_id
