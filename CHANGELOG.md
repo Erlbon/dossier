@@ -2,6 +2,11 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-28#02 -- Unpack beside the archive; moved files are not left marked
+
+- **Unpack (Alt+F9) now suggests a folder beside the archive**, named like it, in the folder the archive stands in. It used to suggest the other panel's folder. The question can still be edited to any folder. Pack (Alt+F5) still suggests the other panel.
+- **After a cut and paste, or a Move (F6, drag and drop), the moved files are no longer marked.** The marks follow a moved file to its new place (that is what keeps a renamed file marked), so after a move all the files stayed marked in the other folder. They are now unmarked once the move is done; a file that failed to move stays marked for a retry. A rename keeps its marks, as before.
+
 ## 2026-10-28#01 -- The Help menu is filled out, with About last
 
 - **Help** now reads: Keyboard Shortcuts (F1), Documentation (Online), What's New (Online), the Slowness Log submenu, and About Dossier last, as in other programs. The two online items open the project page and its changelog in the browser. The Slowness Log, a debugging tool, moved below the help items.

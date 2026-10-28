@@ -6,7 +6,7 @@ import threading
 from dataclasses import replace
 from typing import Optional
 
-from ..core.ops import ExecOptions, Kind, Plan
+from ..core.ops import ExecOptions, Kind, Plan, selection_effects
 from ..core.progress import check
 from ..core.queue_journal import plan_entry
 from ..core.worker import Job, JobState, run_plan_job
@@ -168,6 +168,12 @@ class OperationQueueMixin:
             options.on_error = on_error
         return options
 
+    @staticmethod
+    def _moved_to(result) -> list:
+        """Where the items that were moved are now. The marks follow a moved file to its new place (so a rename keeps them), but after a
+        move or a cut and paste the owner is done with those files: they must not stay marked over there."""
+        return list(selection_effects(result).moved.values())
+
     def _report(self, job: Job, unmark: Optional[list]) -> None:
         if job.state is JobState.FAILED:
             self.dialogs.info("Operation failed", str(job.error))
@@ -178,6 +184,7 @@ class OperationQueueMixin:
             failed = [r.op.src for r in result.failed]
             if unmark:                           # what went well is unmarked; what failed stays marked for a retry
                 self.selection.remove([u for u in unmark if not any(f.startswith(u) for f in failed)])
+                self.selection.remove(self._moved_to(result))
             lines = [f"{self.fs.basename(r.op.src or r.op.dst)}: {r.error}" for r in result.failed[:10]]
             self.dialogs.info("Some items failed", "\n".join(lines))
         elif job.state is JobState.CANCELLED:
@@ -185,5 +192,6 @@ class OperationQueueMixin:
         else:
             if unmark:
                 self.selection.remove(unmark)
+                self.selection.remove(self._moved_to(result))
             self._say("Done" if not lost else
                       f"Done. {lost} item{'s were' if lost != 1 else ' was'} copied without tags: the drive cannot store them")

@@ -122,14 +122,15 @@ class ArchiveCommandsMixin:
 
     # unpack --------------------------------------------------------------------------------------------------------------
     def unpack_archive(self) -> None:
-        """Alt+F9: unpack the archive under the cursor into a folder (named like the archive, in the other panel by default)."""
+        """Alt+F9: unpack the archive under the cursor into a folder named like the archive, beside the archive (the folder it stands
+        in, not the other panel's: the folder can be changed in the question)."""
         targets = self._local_targets()
         if len(targets) != 1:
             self._say("Put the cursor on one archive to unpack it")
             return
         archive = targets[0]
         stem = os.path.splitext(self.fs.basename(archive))[0]
-        default = self.fs.join(self._folder_for_new_file(), stem)
+        default = self.fs.join(self.fs.parent(archive) or self.active.real_folder(), stem)
         dest = self.dialogs.ask_text("Unpack", f"Unpack {self.fs.basename(archive)} into this folder:", default)
         if not dest or not dest.strip():
             return

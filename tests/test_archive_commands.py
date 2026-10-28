@@ -122,3 +122,17 @@ def test_the_menu_has_the_three_commands(world):
     sub = [a for a in menus["Tools"].actions() if a.text() == "Archives"][0].menu()
     texts = [a.text() for a in sub.actions()]
     assert {"Pack to Zip...", "Unpack...", "Convert Archive to Zip", "Open as Archive"} <= set(texts)
+
+
+def test_unpack_suggests_a_folder_beside_the_archive_not_in_the_other_panel(world):
+    win, d, left, right, *_ = world
+    z = left / "stuff.zip"
+    with zipfile.ZipFile(z, "w") as w:
+        w.writestr("one.txt", "1")
+    win.left.refresh()
+    win.select_all()
+    asked = []
+    d.ask_text = lambda title, label, default="": asked.append(default)          # the question is only looked at, then cancelled
+    win.unpack_archive()
+    assert asked == [str(left / "stuff")]
+    assert win.other.path == str(right)                                          # the other panel was right there, and was not used

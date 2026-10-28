@@ -133,3 +133,54 @@ def test_files_that_vanished_are_not_pasted(world):
     wait_planned(win)                                           # the sources are looked at while the plan is made
     assert dialogs.infos and "Nothing to do" in dialogs.infos[-1][1] and "no longer there" in dialogs.infos[-1][1]
     assert list(right.iterdir()) == []
+
+
+def mark_three(win, left):
+    for n in "abc":
+        (left / (n + ".txt")).write_text(n)
+    win.left.refresh()
+    win.select_all()
+    assert len(win.selection.paths()) == 3
+
+
+def test_after_cut_and_paste_the_moved_files_are_not_marked_anywhere(world):
+    win, _d, left, right, _t = world
+    mark_three(win, left)
+    key(win, Qt.Key.Key_X, CTRL)
+    key(win, Qt.Key.Key_Tab)
+    key(win, Qt.Key.Key_V, CTRL)
+    pump(win, lambda: (right / "c.txt").exists())
+    pump(win, lambda: not win.busy and win.selection.paths() == [])
+    assert win.selection.paths() == [] and not (left / "a.txt").exists()
+
+
+def test_after_copy_and_paste_nothing_is_marked_either(world):
+    win, _d, left, right, _t = world
+    mark_three(win, left)
+    key(win, Qt.Key.Key_C, CTRL)
+    key(win, Qt.Key.Key_Tab)
+    key(win, Qt.Key.Key_V, CTRL)
+    pump(win, lambda: (right / "c.txt").exists())
+    pump(win, lambda: not win.busy and win.selection.paths() == [])
+    assert win.selection.paths() == [] and (left / "a.txt").exists()
+
+
+def test_after_the_move_command_the_moved_files_are_not_marked_either(world):
+    win, d, left, right, _t = world
+    mark_three(win, left)
+    win.move()
+    pump(win, lambda: d.confirms or (right / "c.txt").exists())
+    pump(win, lambda: (right / "c.txt").exists())
+    pump(win, lambda: not win.busy and win.selection.paths() == [])
+    assert win.selection.paths() == []
+
+
+def test_a_rename_still_keeps_the_marks_of_the_renamed_file(world):
+    win, d, left, right, _t = world
+    mark_three(win, left)
+    win.left.table.setCurrentIndex(win.left.model.index(1, 0))
+    d.texts.append("z.txt")
+    win.rename()
+    pump(win, lambda: (left / "z.txt").exists())
+    pump(win, lambda: not win.busy)
+    assert any(p.endswith("z.txt") for p in win.selection.paths()) and len(win.selection.paths()) == 3
