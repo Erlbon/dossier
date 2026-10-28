@@ -177,7 +177,7 @@ class GlassViewer(QWidget):
 
     def showEvent(self, event) -> None:
         super().showEvent(event)
-        if self.mode == glass.FROSTED and not self._blur(int(self.winId()), 0):
+        if self.mode == glass.FROSTED and not self._blur(int(self.winId())):
             self.mode = glass.DIM                                           # the system would not blur: see-through without the blur
             self.update()
         self.activateWindow()

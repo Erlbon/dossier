@@ -40,7 +40,7 @@ def viewers(app):
 
 def open_viewer(viewers, paths, mode=glass.FROSTED, level=None, caps=FULL, blur=None, show=True):
     calls = []
-    window = GlassViewer(paths, 0, mode, level, capabilities=caps, blur=blur or (lambda hwnd, tint: calls.append((hwnd, tint)) or True))
+    window = GlassViewer(paths, 0, mode, level, capabilities=caps, blur=blur or (lambda hwnd: calls.append(hwnd) or True))
     window.blur_calls = calls
     viewers.append(window)
     if show:
@@ -51,9 +51,9 @@ def open_viewer(viewers, paths, mode=glass.FROSTED, level=None, caps=FULL, blur=
 def test_frosted_asks_windows_to_blur_and_a_refusal_falls_back_to_dim(viewers, tmp_path):
     paths = make_pictures(tmp_path)
     ok = open_viewer(viewers, paths)
-    assert ok.mode == glass.FROSTED and len(ok.blur_calls) == 1 and ok.blur_calls[0][1] == 0
+    assert ok.mode == glass.FROSTED and len(ok.blur_calls) == 1
     assert ok.testAttribute(Qt.WidgetAttribute.WA_TranslucentBackground) and ok.alpha() == glass.alpha_for(glass.FROSTED)
-    refused = open_viewer(viewers, paths, blur=lambda hwnd, tint: False)
+    refused = open_viewer(viewers, paths, blur=lambda hwnd: False)
     assert refused.mode == glass.DIM and refused.alpha() == glass.alpha_for(glass.DIM)
 
 

@@ -2,6 +2,10 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-28#04 -- Fix: the frosted glass viewer was all black
+
+- **The frosted look showed a plain black window.** Windows' blur effect lays a tint colour over the blurred desktop, and with no tint it uses black, which hid the picture's see-through layer completely. The viewer now gives it a nearly clear neutral grey, measured on Windows 11 over a white-and-coloured backdrop: the desktop shows through blurred and darkened, as in the mockup. The dim look was right already. A computer where Windows refuses the blur falls back to dim, as before.
+
 ## 2026-10-28#03 -- A stand-alone picture viewer with a see-through glass look
 
 - **`dossier view picture.jpg`** opens only the picture viewer, with no file manager behind it: a frameless window over the screen, the desktop showing through, the picture on top. The other pictures of the folder follow (Right, Page Down, Space and the wheel for the next, Left, Page Up and Backspace for the previous, Home and End, Esc to close); several pictures open just those; a folder opens its first picture. Zoom, fit, turn and every-pixel are the same as in F3. A floating bar (previous, next, zoom, fit, turn, close) fades in when the mouse moves and out when it rests.

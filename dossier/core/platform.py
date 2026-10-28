@@ -222,9 +222,11 @@ def is_remote_session() -> bool:
         return False
 
 
-def set_blur_behind(hwnd: int, tint: int = 0) -> bool:
-    """Blur whatever is behind this window (Windows 10 and 11: the acrylic effect, else plain blur-behind). ``tint`` is a colour ``0xAABBGGRR``
-    laid over the blur (0 for none). Returns False when the system refuses, so the caller can fall back to a plain see-through window."""
+def set_blur_behind(hwnd: int, tint: int = 0x01808080) -> bool:
+    """Blur whatever is behind this window (Windows 10 and 11: the acrylic effect). ``tint`` is a colour ``0xAABBGGRR`` laid over the blur.
+    The default, a nearly clear neutral grey, matters: with no tint (black) Windows turns the whole window black, and a white one washes it
+    out (measured on Windows 11, 2026-10-28). Returns False when the system refuses, so the caller can fall back to a plain see-through
+    window."""
     if not IS_WINDOWS:
         return False
     import ctypes
@@ -238,12 +240,9 @@ def set_blur_behind(hwnd: int, tint: int = 0) -> bool:
     try:
         call = ctypes.windll.user32.SetWindowCompositionAttribute
         call.argtypes = [ctypes.c_void_p, ctypes.POINTER(Attribute)]
-        for state in (4, 3):                                                           # ACCENT_ENABLE_ACRYLICBLURBEHIND, then ..._BLURBEHIND
-            accent = Accent(state, 2, tint, 0)
-            data = Attribute(19, ctypes.cast(ctypes.pointer(accent), ctypes.c_void_p), ctypes.sizeof(accent))   # WCA_ACCENT_POLICY
-            if call(ctypes.c_void_p(int(hwnd)), ctypes.byref(data)):
-                return True
-        return False
+        accent = Accent(4, 2, tint, 0)                                                 # ACCENT_ENABLE_ACRYLICBLURBEHIND, with the tint in use
+        data = Attribute(19, ctypes.cast(ctypes.pointer(accent), ctypes.c_void_p), ctypes.sizeof(accent))   # WCA_ACCENT_POLICY
+        return bool(call(ctypes.c_void_p(int(hwnd)), ctypes.byref(data)))
     except (AttributeError, OSError, ValueError):
         return False
 
