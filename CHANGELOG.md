@@ -2,6 +2,11 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-28#05 -- Glass viewer: a lighter frosted look, and two ways to try other blurs
+
+- **The frosted look is lighter by default:** more of the desktop shows through (65 % instead of 50 %), and the tint Windows lays over the blur is a nearly clear white instead of grey. Windows' acrylic blur is strong and its radius cannot be set, so the desktop is a soft cloud of colour; the **dim** look (`--glass dim`) is the sharp one.
+- **Experimental parameters** for `dossier view`: `--blur plain` (Windows' older, lighter blur-behind instead of acrylic) and `--tint RRGGBB` (the colour over the blur). They are for finding the look that suits; the settings page does not have them yet.
+
 ## 2026-10-28#04 -- Fix: the frosted glass viewer was all black
 
 - **The frosted look showed a plain black window.** Windows' blur effect lays a tint colour over the blurred desktop, and with no tint it uses black, which hid the picture's see-through layer completely. The viewer now gives it a nearly clear neutral grey, measured on Windows 11 over a white-and-coloured backdrop: the desktop shows through blurred and darkened, as in the mockup. The dim look was right already. A computer where Windows refuses the blur falls back to dim, as before.

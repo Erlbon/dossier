@@ -35,8 +35,8 @@ def test_what_the_owner_types_is_understood():
 
 
 def test_how_much_shows_through_and_the_opacity_of_the_dark_layer():
-    assert glass.level_for(FROSTED, None) == 50 and glass.level_for(DIM, None) == 28 and glass.level_for(SOLID, 70) == 0
+    assert glass.level_for(FROSTED, None) == 65 and glass.level_for(DIM, None) == 28 and glass.level_for(SOLID, 70) == 0
     assert glass.level_for(FROSTED, 100) == glass.MAX_LEVEL and glass.level_for(DIM, 0) == 1      # never fully clear
     assert glass.alpha_for(SOLID) == 255
-    assert glass.alpha_for(FROSTED) == round(255 * 0.5) and glass.alpha_for(DIM) == round(255 * 0.72)
+    assert glass.alpha_for(FROSTED) == round(255 * 0.35) and glass.alpha_for(DIM) == round(255 * 0.72)
     assert glass.alpha_for(DIM, 60) == round(255 * 0.4)

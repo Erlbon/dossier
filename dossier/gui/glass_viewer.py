@@ -10,6 +10,7 @@ scrolls with the arrows first); Home and End go to the first and last; ``+``, ``
 """
 from __future__ import annotations
 
+import functools
 import os
 from typing import Callable, Optional
 
@@ -82,7 +83,8 @@ class GlassViewer(QWidget):
     closed = pyqtSignal()
 
     def __init__(self, paths: list, index: int = 0, mode: str = glass.DEFAULT_MODE, level: Optional[int] = None, *,
-                 capabilities: Optional[glass.Capabilities] = None, blur: Optional[Callable] = None, dispatch=None, parent=None) -> None:
+                 capabilities: Optional[glass.Capabilities] = None, blur: Optional[Callable] = None, blur_kind: str = "acrylic",
+                 tint: Optional[int] = None, dispatch=None, parent=None) -> None:
         super().__init__(parent, Qt.WindowType.Window | Qt.WindowType.FramelessWindowHint)
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
         self.setWindowTitle("Dossier picture viewer")
@@ -91,7 +93,7 @@ class GlassViewer(QWidget):
         self.requested = mode
         self.level = level
         self.capabilities = capabilities if capabilities is not None else glass.detect()
-        self._blur = blur or platform.set_blur_behind
+        self._blur = blur or functools.partial(platform.set_blur_behind, kind=blur_kind, **({} if tint is None else {"tint": tint}))
         self.mode = glass.resolve(mode, self.capabilities)                  # the best look this computer can do
         self._dispatch = dispatch or QtDispatcher(self)
         self._runner = JobRunner(self._dispatch)

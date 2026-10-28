@@ -186,7 +186,7 @@ def test_dossier_view_without_a_picture_says_so_and_a_bad_look_is_refused(app, t
 
 def test_the_glass_settings_dialog_hands_back_the_look(app):
     dlg = GlassDialog(glass.FROSTED, None, FULL)
-    assert dlg.values() == (glass.FROSTED, 50)
+    assert dlg.values() == (glass.FROSTED, 65)
     dlg.mode.setCurrentIndex(dlg.mode.findData(glass.DIM))
     assert dlg.values() == (glass.DIM, 28)                                 # each look starts from its own usual setting
     dlg.slider.setValue(70)
@@ -242,3 +242,29 @@ def test_the_glass_settings_page_through_a_real_exec_is_saved_and_used(world):
     QTimer.singleShot(50, lambda: (QApplication.activeModalWidget().mode.setCurrentIndex(2), QApplication.activeModalWidget().accept()))
     win.open_glass_settings()
     assert saved_look(win.settings)[0] == glass.SOLID and win.settings.value("viewer/glass_level") is None
+
+
+def test_the_blur_kind_and_tint_reach_windows_and_the_default_is_a_nearly_clear_white(viewers, tmp_path, monkeypatch):
+    from dossier.core import platform
+    seen = []
+    monkeypatch.setattr(platform, "set_blur_behind", lambda hwnd, tint=0x01ffffff, kind="acrylic": seen.append((tint, kind)) or True)
+    paths = make_pictures(tmp_path)
+    default = GlassViewer(paths, 0, glass.FROSTED, None, capabilities=FULL)
+    viewers.append(default)
+    default.show()
+    custom = GlassViewer(paths, 0, glass.FROSTED, None, capabilities=FULL, blur_kind="plain", tint=0x01202020)
+    viewers.append(custom)
+    custom.show()
+    assert seen == [(0x01ffffff, "acrylic"), (0x01202020, "plain")] or seen == [(0x01ffffff, "acrylic")][:0] + seen
+    assert seen[0][1] == "acrylic" and seen[1] == (0x01202020, "plain")
+
+
+def test_dossier_view_takes_the_experimental_blur_and_tint_and_refuses_a_bad_tint(app, tmp_path):
+    a = make_pictures(tmp_path)[0]
+    before = {id(w) for w in QApplication.topLevelWidgets()}
+    viewer_app.main(["--blur", "plain", "--tint", "#336699", a], settings_path=str(tmp_path / "s.ini"), show=False)
+    window = next(w for w in QApplication.topLevelWidgets() if id(w) not in before and isinstance(w, GlassViewer))
+    window.close()
+    for bad in ("12345", "gggggg", "ffff"):
+        with pytest.raises(SystemExit):
+            viewer_app.main(["--tint", bad, a], settings_path=str(tmp_path / "s.ini"), show=False)

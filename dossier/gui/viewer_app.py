@@ -24,6 +24,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("paths", nargs="*", metavar="picture", help="a picture (its folder's pictures follow), several pictures, or a folder")
     parser.add_argument("--glass", metavar="LOOK", help="frosted (default), dim, solid, a number 0-100 for how much shows through, or frosted:60")
     parser.add_argument("--scheme", choices=("auto", "light", "dark"), help="the colour scheme of the glass and the bar")
+    parser.add_argument("--blur", choices=("acrylic", "plain"), default="acrylic",
+                        help="frosted only: acrylic (the strong frosted blur, default) or plain (Windows' older, lighter blur); experimental")
+    parser.add_argument("--tint", metavar="RRGGBB", help="frosted only: the colour laid over the blur (default ffffff); experimental")
     return parser
 
 
@@ -50,6 +53,13 @@ def main(args: list, *, settings_path: Optional[str] = None, show: bool = True) 
         asked_mode, asked_level = glass.parse(ns.glass) if ns.glass else (None, None)
     except ValueError as e:
         parser.error(str(e))
+    tint = None
+    if ns.tint:
+        digits = ns.tint.lstrip("#")
+        if len(digits) != 6 or any(c not in "0123456789abcdefABCDEF" for c in digits):
+            parser.error("--tint is six hex digits, such as ffffff or 202020")
+        rgb = int(digits, 16)
+        tint = 0x01000000 | ((rgb & 0xFF) << 16) | (rgb & 0xFF00) | (rgb >> 16)           # 0xAABBGGRR with a nearly clear alpha
     from PyQt6.QtWidgets import QApplication, QMessageBox
 
     from ..core.platform import set_app_id
@@ -73,7 +83,7 @@ def main(args: list, *, settings_path: Optional[str] = None, show: bool = True) 
     saved_mode, saved_level = saved_look(settings)
     mode = asked_mode or saved_mode
     level = asked_level if asked_level is not None else (None if asked_mode else saved_level)
-    window = GlassViewer(pictures, first, mode, level)
+    window = GlassViewer(pictures, first, mode, level, blur_kind=ns.blur, tint=tint)
     window._theme = manager                                              # kept alive as long as the window
     window.show()
     if not show:

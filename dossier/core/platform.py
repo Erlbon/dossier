@@ -222,11 +222,11 @@ def is_remote_session() -> bool:
         return False
 
 
-def set_blur_behind(hwnd: int, tint: int = 0x01808080) -> bool:
-    """Blur whatever is behind this window (Windows 10 and 11: the acrylic effect). ``tint`` is a colour ``0xAABBGGRR`` laid over the blur.
-    The default, a nearly clear neutral grey, matters: with no tint (black) Windows turns the whole window black, and a white one washes it
-    out (measured on Windows 11, 2026-10-28). Returns False when the system refuses, so the caller can fall back to a plain see-through
-    window."""
+def set_blur_behind(hwnd: int, tint: int = 0x01ffffff, kind: str = "acrylic") -> bool:
+    """Blur whatever is behind this window (Windows 10 and 11). ``kind`` is ``acrylic`` (the strong frosted blur) or ``plain`` (the older,
+    lighter blur-behind). ``tint`` is a colour ``0xAABBGGRR`` laid over the blur: a black one (alpha 0 counts as black) turns the whole
+    window black and a dark one makes it too dark, so the default is a nearly clear white (measured on Windows 11, 2026-10-28). Returns
+    False when the system refuses, so the caller can fall back to a plain see-through window."""
     if not IS_WINDOWS:
         return False
     import ctypes
@@ -240,7 +240,7 @@ def set_blur_behind(hwnd: int, tint: int = 0x01808080) -> bool:
     try:
         call = ctypes.windll.user32.SetWindowCompositionAttribute
         call.argtypes = [ctypes.c_void_p, ctypes.POINTER(Attribute)]
-        accent = Accent(4, 2, tint, 0)                                                 # ACCENT_ENABLE_ACRYLICBLURBEHIND, with the tint in use
+        accent = Accent(3 if kind == "plain" else 4, 2, tint, 0)                      # ACCENT_ENABLE_BLURBEHIND / ..._ACRYLICBLURBEHIND, with the tint
         data = Attribute(19, ctypes.cast(ctypes.pointer(accent), ctypes.c_void_p), ctypes.sizeof(accent))   # WCA_ACCENT_POLICY
         return bool(call(ctypes.c_void_p(int(hwnd)), ctypes.byref(data)))
     except (AttributeError, OSError, ValueError):

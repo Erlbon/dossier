@@ -16,7 +16,7 @@ from typing import Optional
 SOLID, DIM, FROSTED = "solid", "dim", "frosted"
 MODES = (FROSTED, DIM, SOLID)
 DEFAULT_MODE = FROSTED
-DEFAULT_LEVEL = {FROSTED: 50, DIM: 28, SOLID: 0}          # percent of the desktop that shows through
+DEFAULT_LEVEL = {FROSTED: 65, DIM: 28, SOLID: 0}          # percent of the desktop that shows through
 MAX_LEVEL = 90                                           # never fully clear: the picture and the bar must stay readable
 _ORDER = {FROSTED: (FROSTED, DIM, SOLID), DIM: (DIM, SOLID), SOLID: (SOLID,)}
 
