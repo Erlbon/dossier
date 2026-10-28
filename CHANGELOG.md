@@ -2,6 +2,10 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-28#14 -- The floating picture bar is 50 % bigger
+
+- **The bar over a picture (glass viewer and F3) has bigger buttons**: glyphs, padding and margins are 50 % larger, in both viewers.
+
 ## 2026-10-28#13 -- Frosted background: the slider goes to 95 %
 
 - **The Frosted Background slider now goes up to 95 %** (it stopped at 85 %): more of the screen shows through the frame. Near the top the menus and bars get harder to read, which is the owner's call to make.

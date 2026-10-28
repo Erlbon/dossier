@@ -29,7 +29,7 @@ class FloatingBar(QObject):
         self.bar = QFrame(host)
         self.bar.setObjectName("glassbar")
         row = self.row = QHBoxLayout(self.bar)
-        row.setContentsMargins(8, 4, 8, 4)
+        row.setContentsMargins(12, 6, 12, 6)
         row.setSpacing(2)
         self.buttons: dict = {}
         for key, glyph, tip, slot in (("prev", "◀", "Previous picture (Left)", lambda: step(-1)),
@@ -50,8 +50,8 @@ class FloatingBar(QObject):
             row.addWidget(b)
             self.buttons[key] = b
         self.bar.setStyleSheet(
-            f"QFrame#glassbar {{ background: {shade}; border-radius: 14px; }}"
-            f"QPushButton {{ color: {text}; border: 0; padding: 4px 11px; font-size: 16px; border-radius: 8px; }}"
+            f"QFrame#glassbar {{ background: {shade}; border-radius: 21px; }}"
+            f"QPushButton {{ color: {text}; border: 0; padding: 6px 16px; font-size: 24px; border-radius: 12px; }}"
             f"QPushButton:hover, QPushButton:checked {{ background: {shade}; }}")
         self.caption = QLabel(host)
         self.caption.setObjectName("glasscaption")
