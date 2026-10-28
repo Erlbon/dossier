@@ -2,6 +2,10 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-28#12 -- Frosted background: more of the screen shows through by default
+
+- **The default strength is 65 % (was 50 %) and the slider goes to 85 % (was 80 %)**: on a dark screen the frame looked grey, because half of it was the window's own dark colour laid over a dark blur. The title bar's own tint is Windows' and cannot be changed from Dossier.
+
 ## 2026-10-28#11 -- Frosted background: the title bar too
 
 - **The title bar is frosted while the frame is frosted** (Windows 11): Dossier asks Windows for its own frosted material on the title bar and the border. It is Windows' look, not our blurred picture, so the two are close but not identical. On Windows 10 the title bar stays plain. The Frosted Background note no longer claims the "title row" was part of the picture.
