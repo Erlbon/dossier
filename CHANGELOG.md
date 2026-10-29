@@ -2,6 +2,12 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-29#01 -- The notepad and the viewer are frosted, and the notepad has the floating bar
+
+- **The frosted background now covers the notepad (F4) and the text viewer (F3)** as well as the file manager: same setting (Settings > Appearance > Frosted Background...), same picture and strength. Only the frame is frosted (menu bar, bars, status line, title bar); the text itself stays solid, like the file lists.
+- **The notepad has the picture viewer's floating bar** over the text, fading in when the mouse moves and out when it rests: Save, Find, Replace, Go to, Wrap and Colour (syntax highlighting) as switches, and Close. The menus keep everything else.
+- The F3 viewer keeps its toolbar for text, hex and Markdown (it holds the find box and the encoding choice).
+
 ## 2026-10-28#15 -- The notepad (F4) can colour code and fold blocks
 
 - **View > Syntax Highlighting** (off by default, remembered once you turn it on) colours the text by the language of the file and lets blocks fold, with fold arrows in a margin beside the line numbers. 22 languages: Python, JavaScript and TypeScript, JSON, HTML, XML, CSS, YAML, SQL, shell and batch scripts, C and C++, C#, Java, Ruby, Perl, Lua, Markdown, settings files (ini, toml, properties), diff, Makefile, CMake and TeX.

@@ -20,9 +20,10 @@ from ..core.exif import read_exif
 from ..core.hexview import HexFile, inspect, parse_hex
 from ..core.textview import AUTO, ENCODINGS, TextSource, TextTooLarge, detect_encoding
 from ..core.worker import Job, JobRunner, JobState
-from . import icon_set, theme
+from . import frost, icon_set, theme
 from .dialogs import ProgressBox
 from .floating_bar import FloatingBar
+from .frost_window import FrostSurface
 from .hex_view import HexView
 from .image_view import ImagePage, read_image
 from .line_view import LineView
@@ -31,7 +32,7 @@ from .models import human_size
 from .qt_bridge import QtDispatcher
 
 
-class TextViewerWindow(QMainWindow):
+class TextViewerWindow(FrostSurface, QMainWindow):
     edit_requested = pyqtSignal(str, bool)       # path, open the replace bar too
 
     def __init__(self, paths: list, index: int = 0, dispatch=None, parent=None) -> None:
@@ -191,6 +192,9 @@ class TextViewerWindow(QMainWindow):
             self.mode_box.addItem(viewmodes.LABELS[m], m)
         self.mode_box.blockSignals(blocked)
         self.enter_mode(self._modes[0])
+
+    def frost_changed(self) -> None:
+        self.toolbar.setStyleSheet(f"QToolBar {{ background: {frost.fill(theme.current()['card'])}; border: 0; }}" if frost.active() else "")
 
     def _view_as_menu(self) -> None:
         """The floating bar's View as: the modes that fit this file, the one in force ticked."""

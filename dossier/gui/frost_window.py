@@ -62,8 +62,47 @@ class FrostDialog(OwnedDialog):
         return self.on.isChecked(), self.slider.value()
 
 
-class FrostMixin:
-    """Part of ``MainWindow``: the frosted frame."""
+class FrostSurface:
+    """A window whose frame is frosted while the file manager's frost is on (the notepad, the viewer): it paints the shared picture and
+    tint, and gives its title bar the frosted material. The bars and menus go transparent through ``frost.active()``."""
+
+    def paintEvent(self, event) -> None:
+        super().paintEvent(event)
+        shots, level = frost.shared()
+        screen = self.screen()
+        shot = shots.get(screen.name()) if (frost.active() and screen is not None) else None
+        if shot is None:
+            return
+        geometry, picture = shot
+        origin = self.mapToGlobal(QPoint(0, 0)) - geometry.topLeft()
+        painter = QPainter(self)
+        painter.drawPixmap(QRect(-origin.x(), -origin.y(), geometry.width(), geometry.height()), picture)
+        tint = QColor(theme.current()["card"])
+        tint.setAlpha(frost.tint_alpha(level))
+        painter.fillRect(self.rect(), tint)
+
+    def frost_changed(self) -> None:
+        """The frost went on or off: a window with bars of its own restyles them here."""
+
+    def apply_title_backdrop(self) -> None:
+        """The title bar is Windows' own, so it gets Windows' frosted material while the frame is frosted (Windows 11)."""
+        self.frost_changed()
+        if self.isVisible():
+            platform.set_title_backdrop(int(self.winId()), frost.active(), dark=theme.is_dark())
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        if frost.active():
+            self.apply_title_backdrop()                                # a frosted window that starts frosted: the title bar too
+
+    def moveEvent(self, event) -> None:
+        super().moveEvent(event)
+        if frost.active():
+            self.update()                                              # the glass moves over the still picture
+
+
+class FrostMixin(FrostSurface):
+    """Part of ``MainWindow``: the frosted frame, and the setting that turns it on for every window."""
 
     def init_frost(self) -> None:
         """Called before any bar is built, so they know whether to paint their own background."""
@@ -73,6 +112,7 @@ class FrostMixin:
         if str(self.settings.value("frost/on", "false")).lower() == "true" and glass.detect().transparent:
             self._frost_shots = frost.grab_screens()                    # the window is not on the screen yet: it is not in the picture
             frost.set_active(bool(self._frost_shots))
+        frost.share(self._frost_shots, self._frost_level)
 
     def _saved_frost_level(self) -> int:
         text = str(self.settings.value("frost/level", ""))
@@ -101,17 +141,17 @@ class FrostMixin:
             for w in shown:
                 w.show()
             on = bool(self._frost_shots)
+        frost.share(self._frost_shots, self._frost_level)
         frost.set_active(on)
         self.apply_title_backdrop()
+        for win in QApplication.topLevelWidgets():
+            if win is not self and isinstance(win, FrostSurface):
+                win.apply_title_backdrop()                              # the editor and viewer windows follow the switch
+                win.update()
         self.tools_bar.restyle()
         self.menuBar().update()
         self.update()
         return on
-
-    def apply_title_backdrop(self) -> None:
-        """The title bar is Windows' own, so it gets Windows' frosted material while the frame is frosted (Windows 11)."""
-        if self.isVisible():
-            platform.set_title_backdrop(int(self.winId()), frost.active(), dark=theme.is_dark())
 
     def open_frost_settings(self) -> None:
         before = (frost.active(), self._frost_level)
@@ -124,28 +164,3 @@ class FrostMixin:
         on, level = dlg.values()
         if on != frost.active() or level != self._frost_level:
             self.set_frost(on, level)
-
-    # painting --------------------------------------------------------------------------------------------------------------------
-    def paintEvent(self, event) -> None:
-        super().paintEvent(event)
-        screen = self.screen()
-        shot = self._frost_shots.get(screen.name()) if (frost.active() and screen is not None) else None
-        if shot is None:
-            return
-        geometry, picture = shot
-        origin = self.mapToGlobal(QPoint(0, 0)) - geometry.topLeft()
-        painter = QPainter(self)
-        painter.drawPixmap(QRect(-origin.x(), -origin.y(), geometry.width(), geometry.height()), picture)
-        tint = QColor(theme.current()["card"])
-        tint.setAlpha(frost.tint_alpha(self._frost_level))
-        painter.fillRect(self.rect(), tint)
-
-    def showEvent(self, event) -> None:
-        super().showEvent(event)
-        if frost.active():
-            self.apply_title_backdrop()                                # a frosted window that starts frosted: the title bar too
-
-    def moveEvent(self, event) -> None:
-        super().moveEvent(event)
-        if frost.active():
-            self.update()                                              # the glass moves over the still picture

@@ -16,6 +16,8 @@ DEFAULT_LEVEL = 65            # percent of the screen that shows through the fil
 MAX_LEVEL = 95                # never clear: the menu and the bars must stay readable
 
 _active = False
+_shots: dict = {}             # the blurred pictures and the strength, shared so the notepad and the viewer frost like the file manager
+_level = DEFAULT_LEVEL
 
 
 def active() -> bool:
@@ -25,6 +27,16 @@ def active() -> bool:
 def set_active(on: bool) -> None:
     global _active
     _active = bool(on)
+
+
+def share(shots: dict, level: int) -> None:
+    """The file manager hands over its picture and strength; the other windows paint from the same ones."""
+    global _shots, _level
+    _shots, _level = shots, level
+
+
+def shared() -> tuple:
+    return _shots, _level
 
 
 def fill(color: str) -> str:

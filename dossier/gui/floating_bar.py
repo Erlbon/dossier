@@ -1,6 +1,8 @@
 """The floating bar over a picture: previous, next, zoom out, zoom in, fit, every pixel, turn left, turn right, close. It fades in when the
 mouse moves over the picture and out when it rests. Shared by the glass viewer and the F3 viewer, so a picture looks and behaves the same in both.
 
+Other windows give their own buttons through ``specs`` (the notepad does): ``(key, glyph, tip, slot)`` tuples, the last one the close button.
+
 ``host`` is the widget the bar floats in, ``view`` the picture (an ``ImageView``) whose geometry it floats over. With ``captioned`` a
 caption (the file name and place in the folder) floats at the top as well.
 """
@@ -19,7 +21,7 @@ FADE_MS = 180
 
 
 class FloatingBar(QObject):
-    def __init__(self, host: QWidget, view, step: Callable, close: Callable, captioned: bool = False) -> None:
+    def __init__(self, host: QWidget, view, step: Callable, close: Callable, captioned: bool = False, specs=None) -> None:
         super().__init__(host)
         self.host = host
         self.view = view
@@ -32,7 +34,7 @@ class FloatingBar(QObject):
         row.setContentsMargins(12, 6, 12, 6)
         row.setSpacing(2)
         self.buttons: dict = {}
-        for key, glyph, tip, slot in (("prev", "◀", "Previous picture (Left)", lambda: step(-1)),
+        for key, glyph, tip, slot in (specs if specs is not None else (("prev", "◀", "Previous picture (Left)", lambda: step(-1)),
                                       ("next", "▶", "Next picture (Right)", lambda: step(1)),
                                       ("out", "−", "Zoom out (-)", lambda: view.zoom_by(0.8)),
                                       ("in", "+", "Zoom in (+)", lambda: view.zoom_by(1.25)),
@@ -40,12 +42,14 @@ class FloatingBar(QObject):
                                       ("actual", "1:1", "Every pixel (1)", lambda: view.actual_size()),
                                       ("left", "↶", "Turn left (L)", lambda: view.turn(-1)),
                                       ("right", "↷", "Turn right (R)", lambda: view.turn(1)),
-                                      ("close", "✕", "Close (Esc)", close)):
+                                      ("close", "✕", "Close (Esc)", close))):
             b = QPushButton(glyph)
             b.setToolTip(tip)
             b.setFlat(True)
             b.setFocusPolicy(Qt.FocusPolicy.NoFocus)
             b.setMouseTracking(True)
+            if len(glyph) > 2 and glyph != "1:1":
+                b.setStyleSheet("font-size: 16px;")                             # a word, not a symbol
             b.clicked.connect(lambda _c=False, s=slot: s())
             row.addWidget(b)
             self.buttons[key] = b
@@ -84,6 +88,8 @@ class FloatingBar(QObject):
         b.setCheckable(checkable)
         b.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         b.setMouseTracking(True)
+        if len(glyph) > 2:
+            b.setStyleSheet("font-size: 16px;")                                 # a word, not a symbol
         b.clicked.connect(lambda _c=False: slot())
         self.row.insertWidget(self.row.count() - 1, b)
         self.buttons[key] = b
@@ -106,8 +112,9 @@ class FloatingBar(QObject):
 
     def set_stepping(self, on: bool) -> None:
         """Previous and next only make sense with more than one picture."""
-        self.buttons["prev"].setVisible(on)
-        self.buttons["next"].setVisible(on)
+        for key in ("prev", "next"):
+            if key in self.buttons:
+                self.buttons[key].setVisible(on)
         self.bar.adjustSize()
         self.place()
 

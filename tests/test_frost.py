@@ -131,3 +131,49 @@ def test_the_title_backdrop_call_is_a_harmless_no_on_other_systems(monkeypatch):
     from dossier.core import platform
     monkeypatch.setattr(platform, "IS_WINDOWS", False)
     assert platform.set_title_backdrop(1, True) is False
+
+
+# the notepad and the viewer ------------------------------------------------------------------------------------------------------
+def test_the_notepad_has_the_floating_bar_with_its_buttons_wired(tmp_path):
+    pytest.importorskip("PyQt6.Qsci")
+    from dossier.core.textedit import load_document
+    from dossier.gui.notepad import NotepadWindow
+    p = tmp_path / "a.py"
+    p.write_text("x = 1\n", encoding="utf-8")
+    win = NotepadWindow(load_document(str(p)), FakeDialogs())
+    win.show()
+    QApplication.processEvents()
+    assert {"save", "find", "replace", "goto", "wrap", "syntax", "close"} <= set(win.floating.buttons)
+    assert win.floating.row.itemAt(win.floating.row.count() - 1).widget() is win.floating.buttons["close"]
+    win.floating.buttons["wrap"].click()
+    assert win.act_wrap.isChecked() and win.floating.buttons["wrap"].isChecked()
+    win.act_syntax.setChecked(True)
+    assert win.floating.buttons["syntax"].isChecked() and win.editor.language == "python"
+    win.floating.buttons["find"].click()
+    assert win.bar.isVisible()
+    win.close()
+
+
+def test_the_notepad_and_the_viewer_follow_the_frost_with_the_same_picture(world, tmp_path):
+    pytest.importorskip("PyQt6.Qsci")
+    from dossier.core.textedit import load_document
+    from dossier.gui.notepad import NotepadWindow
+    from dossier.gui.viewer import TextViewerWindow
+    win, *_ = world
+    p = tmp_path / "a.txt"
+    p.write_text("hello\n", encoding="utf-8")
+    pad = NotepadWindow(load_document(str(p)), FakeDialogs())
+    viewer = TextViewerWindow([str(p)])
+    for w in (pad, viewer):
+        w.show()
+    win.set_frost(True, 40, grabber=lambda: fake_screens(win), wait_ms=0)
+    QApplication.processEvents()
+    for w in (pad, viewer):
+        edge = w.statusBar().mapTo(w, w.statusBar().rect().bottomLeft())
+        colour = w.grab().toImage().pixelColor(max(1, edge.x() + 2), edge.y() - 2)
+        assert colour.red() - colour.blue() > 60                       # the red picture shows through the frame
+    assert "transparent" in viewer.toolbar.styleSheet()
+    win.set_frost(False)
+    assert viewer.toolbar.styleSheet() == ""
+    pad.close()
+    viewer.close()

@@ -19,6 +19,8 @@ from ..core.textedit import (Document, EncodingProblem, FileChangedOnDisk, conve
 from ..core.textview import ENCODINGS
 from . import theme
 from .editor import EditorView, from_line_index, line_starts
+from .floating_bar import FloatingBar
+from .frost_window import FrostSurface
 from .markdown_view import MarkdownView
 
 EOLS = (("Windows (CRLF)", "\r\n"), ("Unix (LF)", "\n"), ("Classic Mac (CR)", "\r"))
@@ -107,7 +109,7 @@ class FindBar(QWidget):
         self.message.setText(text)
 
 
-class NotepadWindow(QMainWindow):
+class NotepadWindow(FrostSurface, QMainWindow):
     saved = pyqtSignal(str)
     closed = pyqtSignal(object)
     preview_toggled = pyqtSignal(bool)        # the owner switched the Markdown preview on or off (the window remembers it for Markdown files)
@@ -142,6 +144,7 @@ class NotepadWindow(QMainWindow):
         self.setCentralWidget(central)
         self._build_menus()
         self._build_status()
+        self._build_floating_bar()
         self.editor.set_document_text(doc.text)
         self.editor.modificationChanged.connect(lambda _m: self._update_title())
         self.editor.cursorPositionChanged.connect(lambda *_a: self._update_position())
@@ -245,6 +248,20 @@ class NotepadWindow(QMainWindow):
                                  ("Actual Size", "Ctrl+0", lambda: self.editor.zoomTo(0))):
             v.addAction(self._action(text, keys, slot))
         self._action("Hide the find bar", "Esc", self._escape)
+
+    def _build_floating_bar(self) -> None:
+        """The same floating bar as the picture viewer, over the text: it fades in when the mouse moves and out when it rests."""
+        self.floating = FloatingBar(self.editor.viewport(), self.editor, lambda _d: None, self.close,
+                                    specs=(("close", "✕", "Close (Ctrl+W)", self.close),))
+        self.floating.add_button("save", "Save", "Save (Ctrl+S)", self.save)
+        self.floating.add_button("find", "Find", "Find (Ctrl+F)", self.bar.show_find)
+        self.floating.add_button("replace", "Replace", "Replace (Ctrl+H)", self.bar.show_replace)
+        self.floating.add_button("goto", "Go to", "Go to line (Ctrl+G)", self.ask_goto)
+        for key, text, tip, action in (("wrap", "Wrap", "Word wrap", self.act_wrap), ("syntax", "Colour", "Syntax highlighting and folding", self.act_syntax)):
+            button = self.floating.add_button(key, text, tip, action.toggle, checkable=True)
+            button.setChecked(action.isChecked())
+            action.toggled.connect(button.setChecked)
+        self.floating.set_enabled(True)
 
     def _build_status(self) -> None:
         self.message = QLabel()
