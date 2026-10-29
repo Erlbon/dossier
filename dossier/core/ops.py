@@ -23,7 +23,7 @@ from enum import Enum
 from typing import Callable, Iterable, Optional, Sequence
 
 from .drives import drive_of, is_network_path, list_drives
-from .platform import IS_WINDOWS, has_scheme, path_key, strip_longpath
+from .platform import IS_WINDOWS, SERVER_SCHEMES, has_scheme, path_key, strip_longpath
 from .progress import Cancelled, CancelToken, ProgressFn, SpeedLimit, check
 from .transfer import Swap, carry_tags, copy_file, flush_file, move_item as _move_item, verify_copy
 from .undo_log import Step, UndoAction, UndoLog
@@ -355,7 +355,7 @@ def _place(path: str) -> str:
     if not has_scheme(path):
         return ""
     scheme, _sep, rest = path.partition("://")
-    return scheme + "://" + (rest.split("/", 1)[0] if scheme in ("sftp", "scp", "webdav", "ftp", "opds", "subsonic") else "")
+    return scheme + "://" + (rest.split("/", 1)[0] if scheme + "://" in SERVER_SCHEMES else "")
 
 
 def _folders_to_make(fs: FileSystem, folder: str, blocking: list) -> list:

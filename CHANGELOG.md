@@ -2,6 +2,14 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-29#05 -- Google Drive
+
+- **Google Drive opens like a folder:** add it on the Home page (Type: Google Drive), open it, and your browser shows Google's own sign-in page. Dossier never sees your Google password. It keeps only a sign-in token in the system's password store (switch off "Stay signed in" to be asked every time), so nothing runs in the background and nothing needs to be running to open the drive again: the next time it opens in a moment, with no browser.
+- **What you see:** My Drive, plus the folders *Shared with me* and *Shared drives*. Google Docs, Sheets, Slides and Drawings show as .docx, .xlsx, .pptx and .pdf (opening or copying one downloads that export); shortcuts show as what they point to; two files with the same name get (2). Forms and Sites are left out.
+- **Reading and writing:** view, copy, move, rename, make folders, upload. Like every server it is read-only until you switch that off for it. Delete goes to Google Drive's bin, never for good.
+- **One-time setup:** Google wants the program registered by you. The dialog explains it: a Google Cloud project, the Drive API switched on, an OAuth client ID of type Desktop app, then paste the client ID and secret (the secret goes to the password store, not to the settings).
+- **Under the hood:** a general OAuth sign-in (browser, one-time code, PKCE, refresh token) that other drives such as Dropbox can reuse.
+
 ## 2026-10-29#04 -- A share that wants a login asks for one
 
 - **A network folder that refuses you (wrong or missing user name and password) now prompts:** Dossier shows Windows' own sign-in dialog for that share, with its "remember my credentials" box, and opens the folder when the login is accepted. Dossier never sees or stores the password. If the login is cancelled the status line says so; if the share still refuses after a login you get the normal "Cannot open" message, not another prompt.

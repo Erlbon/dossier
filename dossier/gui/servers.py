@@ -13,13 +13,15 @@ read-only until the owner switches that off for it.
 from __future__ import annotations
 
 import os
+import webbrowser
 from typing import Callable, Optional
 
 from PyQt6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFileDialog, QFormLayout, QHBoxLayout, QLabel, QLineEdit,
                              QPushButton, QSpinBox, QVBoxLayout)
 
-from ..core import davclient, ftpclient, opdsclient, servers, sshlink, subsonicclient, terminals
+from ..core import davclient, ftpclient, gdriveclient, oauth, opdsclient, servers, sshlink, subsonicclient, terminals
 from ..core.home import ADD_SERVER, TAILNET_PREFIX, ServerItem
+from ..core.platform import is_server_path
 from ..core.sftpfs import Session, scheme_of, split_path
 from .owned_dialog import OwnedDialog
 from .background import run_in_background
@@ -64,11 +66,17 @@ class ConnectionDialog(OwnedDialog):
         self.read_only.setChecked(c.read_only)
         self.remember = QCheckBox("Keep the password in the system's password store (otherwise it is asked for when needed)")
         self.remember.setChecked(c.save_password)
+        self.client_id = QLineEdit(c.client_id)                              # a cloud drive: the app the owner registered with the provider
+        self.client_id.setPlaceholderText("for example  1234567890-abc.apps.googleusercontent.com")
+        self.client_secret = QLineEdit(servers.get_secret(servers.client_secret_account(c.client_id)) if c.client_id else "")
+        self.client_secret.setEchoMode(QLineEdit.EchoMode.Password)
+        self.client_secret.setPlaceholderText("kept in the system's password store, not in the settings")
         self.type_note = QLabel()
         self.type_note.setWordWrap(True)
         self.secure = QCheckBox("Encrypted (HTTPS)")
         self.secure.setChecked(c.secure)
         self._form, self._key_row = form, key_row
+        self._cloud_seen = False
         self._last_default = servers.default_port(c.protocol, c.secure)
         self.protocol.currentIndexChanged.connect(self._type_changed)
         self.secure.toggled.connect(self._type_changed)
@@ -82,6 +90,8 @@ class ConnectionDialog(OwnedDialog):
         form.addRow("User", self.user)
         form.addRow("Key file", key_row)
         form.addRow("Start in", self.start_dir)
+        form.addRow("Client ID", self.client_id)
+        form.addRow("Client secret", self.client_secret)
         form.addRow("", self.read_only)
         form.addRow("", self.remember)
         layout.addLayout(form)
@@ -136,6 +146,23 @@ class ConnectionDialog(OwnedDialog):
                                           "empty: the folder the server opens on login")
         self.remember.setText("Keep the app password in the system's password store (otherwise it is asked for when needed)" if nextcloud
                               else "Keep the password in the system's password store (otherwise it is asked for when needed)")
+        cloud = kind in servers.CLOUD
+        for widget in (self.client_id, self.client_secret):
+            self._form.setRowVisible(widget, cloud)
+        if cloud:
+            for widget in (self.host, self.secure, self.port, self.user, self.start_dir):
+                self._form.setRowVisible(widget, False)
+            self._form.setRowVisible(self._key_row, False)
+            self.type_note.setText(servers.GDRIVE_HINT)
+            self.remember.setText("Stay signed in: keep the sign-in token in the system's password store (otherwise you sign in again each time)")
+            if not self.base.name and not self._cloud_seen:
+                self.remember.setChecked(True)                                # the point of a cloud drive: no sign-in each time
+            self._cloud_seen = True
+            self.note.setText("Nothing is contacted until you open the drive. Then your browser opens Google's own sign-in page; "
+                              "Dossier never sees your Google password.")
+            return
+        for widget in (self.host, self.port, self.user):
+            self._form.setRowVisible(widget, True)
         self.note.setText("This connection is NOT encrypted: a password and every file travel as plain text. Use it only inside a network "
                           "you trust." if web and not self.secure.isChecked() else
                           ("Nothing is contacted until you open the server. A certificate that is not from a known authority is shown to you "
@@ -171,6 +198,10 @@ class ConnectionDialog(OwnedDialog):
     def connection(self) -> servers.Connection:
         nextcloud = self.protocol.currentData() == servers.NEXTCLOUD
         user = self.user.text().strip()
+        if self._kind() in servers.CLOUD:                                    # no host or user: the connection is named by its id
+            host = self.base.host if self.base.protocol in servers.CLOUD and self.base.host else "gd-" + self.base.id[:8]
+            return servers.Connection(self.name.text().strip(), host, "", servers.DEFAULT_PORT, self._kind(), "", "", self.read_only.isChecked(),
+                                      self.remember.isChecked(), self.base.id, True, "", "", self.client_id.text().strip())
         return servers.Connection(self.name.text().strip(), self.host.text().strip(), user, int(self.port.value()),
                                   self._kind(), self.key_file.text().strip(),
                                   servers.nextcloud_start(self._nc_prefix, user) if nextcloud else self.start_dir.text().strip(),
@@ -333,7 +364,7 @@ class ServersMixin:
     def server_fs(self, conn: servers.Connection):
         """The file system that holds the sessions of this kind of connection."""
         return {"scp": self.fs.scp, "webdav": self.fs.dav, "ftp": self.fs.ftp, "opds": self.fs.opds,
-                "subsonic": self.fs.subsonic}.get(conn.protocol, self.fs.sftp)
+                "subsonic": self.fs.subsonic, "gdrive": self.fs.gdrive}.get(conn.protocol, self.fs.sftp)
 
     def server_connected(self, conn: servers.Connection) -> bool:
         return self.server_fs(conn).connected(conn.authority())
@@ -370,8 +401,16 @@ class ServersMixin:
         if servers.find(items, new.authority(), new.protocol) is not None:
             self.dialogs.info("Add a Server", f"{new.authority()} is already on the Home page.")
             return
+        self._keep_client_secret(new, dlg)
         self._save_connections(items + [new])
         self._say(f"Added {new.name} to the Home page")
+
+    @staticmethod
+    def _keep_client_secret(conn, dlg) -> None:
+        """A cloud drive's client secret goes to the system's password store (its id is in the settings, the secret never is)."""
+        secret = dlg.client_secret.text().strip()
+        if conn.protocol in servers.CLOUD and secret:
+            servers.set_secret(servers.client_secret_account(conn.client_id), secret)
 
     def edit_server(self, conn: servers.Connection) -> None:
         dlg = ConnectionDialog(self, conn)
@@ -382,6 +421,7 @@ class ServersMixin:
             self.server_fs(conn).drop(conn.authority())
         if not changed.save_password:
             servers.forget_password(conn)
+        self._keep_client_secret(changed, dlg)
         self._save_connections([changed if c.id == conn.id else c for c in self.connections()])
         session = self.server_fs(changed).sessions.get(changed.authority())
         if session is not None:
@@ -436,6 +476,9 @@ class ServersMixin:
         if existing is not None and existing.alive:
             existing.read_only = conn.read_only
             then(existing)
+            return
+        if conn.protocol in servers.CLOUD:
+            self._connect_cloud(conn, then)
             return
         if conn.protocol in servers.WEB:
             saved = servers.get_password(conn) if conn.save_password else ""
@@ -499,6 +542,51 @@ class ServersMixin:
 
         run_in_background(self, self.cmd_runner, f"Connecting to {conn.host}", login, on_result=finished, tracked=self._size_jobs,
                           indeterminate=True, failed_title="Connect")
+
+    # cloud drives: no host key, no password; the browser signs in and a token is kept ---------------------------------------------------
+    cloud_transport = None                                  # tests put a fake web here (``transport(method, url, headers, body)``)
+    open_browser = None                                     # tests put a fake browser here (``open_browser(url)``)
+
+    def _connect_cloud(self, conn, then) -> None:
+        """Open a cloud drive: with the token kept from last time when there is one (no browser, a moment), else through the browser's
+        sign-in page. Nothing runs between uses; the token is all that is kept."""
+        secret = servers.get_secret(servers.client_secret_account(conn.client_id))
+        app = gdriveclient.app_for(conn.client_id, secret)
+        kept = servers.get_password(conn) if conn.save_password else ""
+        transport = self.cloud_transport or oauth.default_transport
+
+        def login(progress, cancel):
+            progress(0, 0)
+            if kept:
+                client = gdriveclient.GoogleDriveClient(oauth.TokenSource(app, oauth.Tokens(kept), transport), transport)
+                try:
+                    client.connect()
+                    return client, client.tokens.tokens.refresh
+                except oauth.OAuthError:                         # the token was revoked or has run out: the browser, then
+                    client.close()
+            tokens = oauth.sign_in(app, self.open_browser or webbrowser.open, transport, cancelled=lambda: cancel.cancelled)
+            client = gdriveclient.GoogleDriveClient(oauth.TokenSource(app, tokens, transport), transport)
+            try:
+                client.connect()
+            except Exception:
+                client.close()
+                raise
+            return client, tokens.refresh
+
+        run_in_background(self, self.cmd_runner, "Signing in (finish in your browser)" if not kept else "Opening the drive", login,
+                          on_result=lambda result: self._connected_cloud(conn, result[0], result[1], then), tracked=self._size_jobs,
+                          indeterminate=True, failed_title="Connect")
+
+    def _connected_cloud(self, conn, client, refresh: str, then) -> None:
+        session = Session(conn.authority(), client, read_only=conn.read_only, scheme=conn.protocol)
+        self.server_fs(conn).add_session(session)
+        if conn.save_password and refresh and not servers.set_password(conn, refresh):
+            self._say("The sign-in could not be kept: this computer has no password store")
+        self._say(f"Connected to {conn.name}" + (f" ({client.account})" if client.account else "") + (" (read-only)" if conn.read_only else ""))
+        for panel in (self.left, self.right):
+            if panel.is_home:
+                panel.refresh()
+        then(session)
 
     # WebDAV: no host key, but a certificate; the login is the web's -------------------------------------------------------------------------
     def _try_dav(self, conn, password: str, then, asked: bool, remember: bool = False) -> None:
@@ -613,14 +701,14 @@ class ServersMixin:
 
     def disconnect_active_server(self) -> None:
         path = self.active.path
-        conn = self.connection_for(path) if path.startswith(("sftp://", "scp://", "webdav://", "ftp://", "opds://", "subsonic://")) else None
+        conn = self.connection_for(path) if is_server_path(path) else None
         if conn is None:
             self._say("This panel is not on a server")
             return
         self.disconnect_server(conn)
 
     def disconnect_all_servers(self) -> None:
-        for fs in (self.fs.sftp, self.fs.scp, self.fs.dav, self.fs.ftp, self.fs.opds, self.fs.subsonic):
+        for fs in (self.fs.sftp, self.fs.scp, self.fs.dav, self.fs.ftp, self.fs.opds, self.fs.subsonic, self.fs.gdrive):
             for authority in list(fs.sessions):
                 fs.drop(authority)
         self._links.clear()

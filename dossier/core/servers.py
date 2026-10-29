@@ -18,8 +18,16 @@ PROTOCOLS = (("sftp", "SFTP (the server's file service, over SSH)"),
              ("webdav", "WebDAV (a web folder, over HTTPS or HTTP)"),
              ("ftp", "FTP or FTPS (the old file transfer service)"),
              ("opds", "OPDS (a book catalogue: Calibre, Calibre-Web, Kavita, Komga; read-only)"),
-             ("subsonic", "Subsonic (a music server: Navidrome, Airsonic, Gonic; read-only)"))
-NAMES = {"sftp": "SFTP", "scp": "SCP", "webdav": "WebDAV", "ftp": "FTP", "opds": "OPDS", "subsonic": "Subsonic"}
+             ("subsonic", "Subsonic (a music server: Navidrome, Airsonic, Gonic; read-only)"),
+             ("gdrive", "Google Drive (you sign in with your Google account in the browser)"))
+NAMES = {"sftp": "SFTP", "scp": "SCP", "webdav": "WebDAV", "ftp": "FTP", "opds": "OPDS", "subsonic": "Subsonic", "gdrive": "Google Drive"}
+GDRIVE = "gdrive"
+CLOUD = (GDRIVE,)                                  # cloud drives: signed in with OAuth in the browser; no host, port, user or password
+GDRIVE_HINT = ("Google wants every program that opens your Drive to be registered once, by you: in the Google Cloud console create a "
+               "project, switch on the Google Drive API, and make an OAuth client ID of the type Desktop app. Paste its client ID and "
+               "client secret here. Google shows an 'unverified app' page the first time you sign in; for your own account that is "
+               "expected: choose Advanced and continue. Dossier keeps only a sign-in token (in the system's password store); it never sees your "
+               "Google password.")
 NEXTCLOUD = "nextcloud"
 PRESETS = ((NEXTCLOUD, "Nextcloud or ownCloud (a WebDAV web folder; the address of your files is filled in)"),)   # a preset is a WebDAV connection
 APP_PASSWORD_HINT = ("Log in with an app password, not your main password: in Nextcloud open Settings > Security > Devices and sessions, "
@@ -53,6 +61,7 @@ class Connection:
     secure: bool = True                # WebDAV: HTTPS (else plain HTTP, where a password is sent in the clear)
     cert: str = ""                     # WebDAV: the fingerprint of a certificate the owner approved for this server
     preset: str = ""                   # "nextcloud": made from the Nextcloud preset (still a WebDAV connection; the start folder follows the user)
+    client_id: str = ""                # a cloud drive: the id of the app the owner registered (public; its secret is in the password store)
 
     def authority(self) -> str:
         host = f"[{self.host}]" if ":" in self.host and not self.host.startswith("[") else self.host
@@ -62,6 +71,8 @@ class Connection:
         return f"{self.protocol}://" + self.authority() + (path if path.startswith("/") else "/" + path)
 
     def describe(self) -> str:
+        if self.protocol in CLOUD:
+            return NAMES[self.protocol] + ("  (read-only)" if self.read_only else "")
         shown_dir = self.start_dir if self.protocol in ("webdav",) + CATALOGS and self.start_dir and not self.preset else ""
         where = self.authority() + shown_dir
         plain = "  (not encrypted)" if self.protocol in WEB and not self.secure else ""
@@ -78,6 +89,8 @@ class Connection:
             return "the port is a number from 1 to 65535"
         if self.protocol not in dict(PROTOCOLS):
             return "choose SFTP or SCP"
+        if self.protocol in CLOUD and not self.client_id.strip():
+            return "paste the client ID of your Google app (see the note above)"
         if any(c in self.user for c in " /\\@:"):
             return "the user name cannot hold spaces, slashes, colons or @"
         if self.preset == NEXTCLOUD and not self.user.strip():
@@ -164,7 +177,7 @@ def from_json(text) -> list:
                            int(item.get("port", DEFAULT_PORT)), str(item.get("protocol", "sftp")), str(item.get("key_file", "")),
                            str(item.get("start_dir", "")), bool(item.get("read_only", True)), bool(item.get("save_password", False)),
                            str(item.get("id") or uuid.uuid4().hex), bool(item.get("secure", True)), str(item.get("cert", "")),
-                           str(item.get("preset", "")))
+                           str(item.get("preset", "")), str(item.get("client_id", "")))
         except (TypeError, ValueError):
             continue
         if not c.problem():
@@ -177,30 +190,48 @@ def _account(c: Connection) -> str:
     return f"{c.protocol}:{c.authority()}"
 
 
-def get_password(c: Connection) -> str:
-    """The password kept for ``c`` in the system's store, or an empty string (none kept, or no store on this computer)."""
+def get_secret(account: str) -> str:
+    """What the system's store keeps under ``account``, or an empty string (nothing kept, or no store on this computer)."""
     try:
         import keyring
-        return keyring.get_password(SERVICE, _account(c)) or ""
+        return keyring.get_password(SERVICE, account) or ""
     except Exception:   # noqa: BLE001 -- no password store is the same as no saved password
         return ""
 
 
-def set_password(c: Connection, password: str) -> bool:
+def set_secret(account: str, value: str) -> bool:
     try:
         import keyring
-        keyring.set_password(SERVICE, _account(c), password)
+        keyring.set_password(SERVICE, account, value)
         return True
     except Exception:   # noqa: BLE001
         return False
 
 
-def forget_password(c: Connection) -> None:
+def forget_secret(account: str) -> None:
     try:
         import keyring
-        keyring.delete_password(SERVICE, _account(c))
+        keyring.delete_password(SERVICE, account)
     except Exception:   # noqa: BLE001 -- nothing was kept
         pass
+
+
+def get_password(c: Connection) -> str:
+    """The password kept for ``c`` in the system's store, or an empty string. For a cloud drive it is the long-lasting sign-in token."""
+    return get_secret(_account(c))
+
+
+def set_password(c: Connection, password: str) -> bool:
+    return set_secret(_account(c), password)
+
+
+def forget_password(c: Connection) -> None:
+    forget_secret(_account(c))
+
+
+def client_secret_account(client_id: str) -> str:
+    """Where the client secret of a cloud-drive app is kept (the id is public; the secret goes to the store, never to the settings)."""
+    return f"{GDRIVE}-client:{client_id}"
 
 
 def find(connections: list, authority: str, protocol: str = "") -> Optional[Connection]:

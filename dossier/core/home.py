@@ -219,7 +219,8 @@ class RouterFileSystem(FileSystem):
         self.ftp = SftpFileSystem("ftp")              # ftp://user@host/path: FTP and FTPS servers
         self.opds = SftpFileSystem("opds")            # opds://user@host/path: OPDS book catalogues (read-only)
         self.subsonic = SftpFileSystem("subsonic")    # subsonic://user@host/path: Subsonic music servers (read-only)
-        self.flat = FlatFileSystem(self)              # flat://<folder>: every file below a folder, as one list
+        self.gdrive = SftpFileSystem("gdrive")        # gdrive://<account>/path: Google Drive, signed in through the browser
+        self.flat = FlatFileSystem(self)            # flat://<folder>: every file below a folder, as one list
         self.found = FoundFileSystem(self)            # found://<n>: the result list of a search
         self.sep = local.sep
         self.case_sensitive = local.case_sensitive
@@ -241,6 +242,8 @@ class RouterFileSystem(FileSystem):
             return self.opds
         if path.startswith("subsonic:"):
             return self.subsonic
+        if path.startswith("gdrive:"):
+            return self.gdrive
         if path.startswith("flat:"):
             return self.flat
         return self.found if path.startswith("found:") else self.local
