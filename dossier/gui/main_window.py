@@ -200,6 +200,7 @@ class MainWindow(FrostMixin, GlassViewMixin, KeysMixin, AutoRefreshMixin, Metada
             panel.home_action.connect(self._home_action)
             panel.server_requested.connect(lambda path, new_tab, p=panel: self.open_server(path, new_tab, p))
             panel.connect_needed.connect(lambda path, p=panel: self._connect_needed(path, p))
+            panel.login_needed.connect(lambda path, p=panel: self.ask_share_login(path, p))
             panel.note_edit_requested.connect(self.edit_folder_note)
             panel.sizes_requested.connect(lambda p=panel: self.calculate_folder_sizes(p))
             panel.flatten_requested.connect(lambda p=panel: self.show_all_files_below(p))

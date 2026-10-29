@@ -26,6 +26,7 @@ from ..core.drives import drive_of, probe_async, usage_async
 from ..core.lights import FAILED, OK, describe
 from ..core.home import HOME_URL, is_home
 from ..core.platform import has_scheme, path_key
+from ..core import netlogin
 from ..core.sftpfs import NotConnected
 from . import icon_set, look, theme
 from .address_bar import AddressBar
@@ -674,6 +675,8 @@ class Panel(QFrame):
     home_action = pyqtSignal(str)         # an action entry of the Home page was opened (its path says which)
     server_requested = pyqtSignal(str, bool)   # a server of the Home page was opened: (its address, in a new tab)
     connect_needed = pyqtSignal(str)      # a folder of a server that is not connected was asked for (its address)
+    login_needed = pyqtSignal(str)        # a network share refused us (user name or password): the window asks for a login
+    _login_retry_path = ""                # the folder being tried again after a login: a second refusal is only reported
 
     def __init__(self, fs: FileSystem, selection: SelectionStore, parent=None, dispatch=None) -> None:
         super().__init__(parent)
@@ -1383,6 +1386,10 @@ class Panel(QFrame):
             e = listing.error
             if isinstance(e, NotConnected):                  # the window offers to connect, and comes back here
                 self.connect_needed.emit(path)
+                return False
+            retried, self._login_retry_path = self._login_retry_path == path, ""
+            if not retried and netlogin.needs_login(e, path):    # the window shows Windows' sign-in and comes back here
+                self.login_needed.emit(path)
                 return False
             if provider is not None and not is_home(path):
                 provider.board.record(path, FAILED, str(getattr(e, "strerror", None) or e))

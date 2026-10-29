@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from PyQt6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFormLayout, QLabel, QLineEdit, QVBoxLayout)
 
-from ..core import mounting
+from ..core import mounting, netlogin
 from ..core.drives import list_drives
 from .owned_dialog import OwnedDialog
 from .background import run_in_background
@@ -114,6 +114,19 @@ class MountMixin:
                           indeterminate=True, failed_title="Mount a Network Share")
 
     mount_runner = None                                       # tests put a fake subprocess.run here
+    login_connector = None                                    # tests put a fake (share, hwnd) -> Windows result code here
+
+    def ask_share_login(self, path: str, panel) -> None:
+        """A share refused us: Windows' own sign-in dialog asks for the user name and password (Dossier never sees them), then
+        the folder is opened again."""
+        if self._closing:
+            return
+        self._say(f"{netlogin.share_of(path)} wants a login")
+        if netlogin.ask_login(path, int(self.winId()), self.login_connector):
+            panel._login_retry_path = path
+            panel.set_folder(path)
+        else:
+            self._say(f"Cannot open {path}: not logged in")
 
     def nfs_status_text(self) -> str:
         on = mounting.nfs_client_installed()

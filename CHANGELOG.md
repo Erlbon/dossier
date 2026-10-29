@@ -2,6 +2,10 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-29#04 -- A share that wants a login asks for one
+
+- **A network folder that refuses you (wrong or missing user name and password) now prompts:** Dossier shows Windows' own sign-in dialog for that share, with its "remember my credentials" box, and opens the folder when the login is accepted. Dossier never sees or stores the password. If the login is cancelled the status line says so; if the share still refuses after a login you get the normal "Cannot open" message, not another prompt.
+
 ## 2026-10-29#03 -- One floating bar in the notepad and the viewer
 
 - **The notepad (F4) and the viewer (F3) have one bar each, the floating one, and nothing else around the text:** no menu bar, no toolbar, no status line. The bar fades in when the mouse moves and out when it rests.
