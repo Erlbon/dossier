@@ -467,33 +467,61 @@ def test_a_spin_that_is_still_scrolling_does_not_jump_to_the_next_picture(viewer
     assert win.index == 0
 
 
-def test_a_picture_has_the_floating_bar_and_other_files_do_not(viewer, tmp_path):
+def shown(win):
+    """The keys of the buttons in the bar that are shown."""
+    return {k for k, b in win.floating.buttons.items() if b.isVisibleTo(win.floating.bar)}
+
+
+def test_one_floating_bar_serves_every_kind_of_file_with_the_buttons_that_fit(viewer, tmp_path):
     a, b = picture(tmp_path / "a.png", 400, 300), picture(tmp_path / "b.png", 40, 20)
-    (tmp_path / "n.txt").write_text("text\n")
+    (tmp_path / "n.txt").write_text("text" + chr(10))
     win = viewer([a, b, str(tmp_path / "n.txt")])
     bar = win.floating
-    assert bar.enabled and bar.is_visible() and bar.bar.parent() is win.image_page.view.viewport()
-    assert bar.buttons["next"].isVisibleTo(bar.bar) and set(bar.buttons) >= {"prev", "next", "out", "in", "fit", "actual", "left", "right", "close"}
+    assert bar.enabled and bar.is_visible()
+    assert shown(win) >= {"prev", "next", "out", "in", "fit", "actual", "left", "right", "info", "settings", "close"}
+    assert not shown(win) & {"find", "goto", "edit"}                                      # a picture is not searched or edited
     wait(lambda: win.image_page.view.has_image())
     bar.buttons["next"].click()
     assert win.index == 1
     win.step(1)
-    assert win.mode != "image" and not bar.enabled and bar.bar.isHidden()              # text: no bar
+    assert win.mode == "text" and bar.enabled
+    assert shown(win) >= {"prev", "next", "find", "goto", "edit", "settings", "close"}
+    assert not shown(win) & {"out", "in", "fit", "left", "right", "info"}
     win.step(-1)
-    assert bar.enabled and not bar.bar.isHidden()
+    assert "out" in shown(win)
 
 
-def test_the_toolbar_no_longer_carries_the_buttons_the_floating_bar_has(viewer, tmp_path):
+def test_the_old_toolbar_and_status_line_are_gone_and_the_pill_has_the_settings(viewer, tmp_path):
     win = viewer([picture(tmp_path / "a.png")])
-    texts = {b.text() for b in win.findChildren(type(win.prev_file))}
-    assert not texts & {"Fit", "100%", "Turn left", "Turn right"}
+    assert not hasattr(win, "toolbar") and win.statusBar().isHidden()
     wait(lambda: win.image_page.view.has_image())
-    assert win.toolbar.isHidden()                                                          # no old top bar over a picture
     win.floating.buttons["info"].click()
     assert win.image_info.isChecked() and win.image_page.info.isVisibleTo(win.image_page)
     win.floating.buttons["info"].click()
     assert not win.image_info.isChecked()
-    win.enter_mode("hex")
-    assert not win.toolbar.isHidden()                                                      # other files keep theirs
     only = viewer([picture(tmp_path / "solo.png")])
     assert not only.floating.buttons["prev"].isVisibleTo(only.floating.bar)               # a single picture: nothing to step to
+
+
+def test_the_settings_menu_offers_view_as_and_for_text_the_encoding_and_follow(viewer, tmp_path):
+    p = tmp_path / "log.txt"
+    p.write_text("one" + chr(10))
+    win = viewer([str(p)])
+    menu = win._settings_menu()
+    names = [a.text() for a in menu.actions() if a.text()]
+    assert names == ["View As", "Encoding", "Follow the End of the File"]
+    view_as = next(a for a in menu.actions() if a.text() == "View As").menu()
+    view_as.actions()[1].trigger()                                                        # the second way to see it: hex
+    assert win.mode != "text"
+    assert [a.text() for a in win._settings_menu().actions() if a.text()] == ["View As"]   # no encoding for hex
+
+
+def test_find_is_a_strip_that_shows_on_request_and_esc_hides_it_before_closing(viewer, tmp_path):
+    p = tmp_path / "a.txt"
+    p.write_text("hello needle" + chr(10))
+    win = viewer([str(p)])
+    assert not win.find_strip.isVisibleTo(win)
+    win.floating.buttons["find"].click()
+    assert win.find_strip.isVisibleTo(win)
+    win._escape()
+    assert not win.find_strip.isVisibleTo(win) and win.isVisible()

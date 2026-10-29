@@ -94,9 +94,25 @@ def test_save_as_to_another_kind_of_file_changes_the_language(pad):
     assert win.editor.language == "python"
 
 
-def test_the_menu_has_the_switch_the_language_choices_and_the_fold_commands(pad):
+def test_the_settings_menu_has_the_switches_and_the_view_menu_the_fold_commands(pad):
     win, _d, _p = pad(CODE, "tool.py")
+    settings = [a.text() for a in win.settings_menu.actions()]
+    assert "Word Wrap" in settings and "Show Spaces and Tabs" in settings and "Language" in settings and "Encoding" in settings and "Line Break" in settings
+    assert any("Syntax Highlighting" in t for t in settings)
     view = next(a.menu() for a in win.menuBar().actions() if a.text().replace("&", "") == "View")
     texts = [a.text() for a in view.actions()]
-    assert "Syntax Highlighting" in texts and "Language" in texts and "Fold All Blocks" in texts and "Unfold All Blocks" in texts
+    assert "Fold All Blocks" in texts and "Unfold All Blocks" in texts and "Markdown Preview" in texts
+    assert "Word Wrap" not in texts                                      # a setting, not a view action
     assert len(win.lang_actions) == 2 + len(languages.LANGUAGES)
+
+
+def test_encoding_and_line_break_are_chosen_from_the_settings_menu(pad):
+    win, _d, _p = pad("a" + chr(10) + "b" + chr(10), "t.txt")
+    win.encoding_menu.aboutToShow.emit()
+    assert any(a.text() == "utf-8" and a.isChecked() for a in win.encoding_menu.actions())
+    win.eol_menu.aboutToShow.emit()
+    unix = next(a for a in win.eol_menu.actions() if a.text().startswith("Unix"))
+    assert unix.isChecked()
+    windows = next(a for a in win.eol_menu.actions() if a.text().startswith("Windows"))
+    windows.trigger()
+    assert win.doc.eol == chr(13) + chr(10) and win.is_modified()

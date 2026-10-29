@@ -10,11 +10,11 @@ from __future__ import annotations
 
 from typing import Callable
 
-from PyQt6.QtCore import QEvent, QObject, QPropertyAnimation, Qt, QTimer
-from PyQt6.QtGui import QColor
+from PyQt6.QtCore import QEvent, QObject, QPropertyAnimation, QSize, Qt, QTimer
+from PyQt6.QtGui import QColor, QPainter
 from PyQt6.QtWidgets import QFrame, QGraphicsOpacityEffect, QHBoxLayout, QLabel, QPushButton, QWidget
 
-from . import theme
+from . import icon_set, theme
 
 BAR_IDLE_MS = 2500           # the bar fades out after this long without the mouse moving
 FADE_MS = 180
@@ -74,27 +74,49 @@ class FloatingBar(QObject):
         self._idle.setSingleShot(True)
         self._idle.setInterval(BAR_IDLE_MS)
         self._idle.timeout.connect(self.fade_out)
-        view.setMouseTracking(True)
-        view.viewport().setMouseTracking(True)
-        view.viewport().installEventFilter(self)
+        self.watch(view)
         view.installEventFilter(self)                                       # a resize of the picture moves the bar with it
         self.enabled = True
 
-    def add_button(self, key: str, glyph: str, tip: str, slot: Callable, checkable: bool = False) -> QPushButton:
-        """An extra button just before the close button (the F3 viewer adds Info and View as)."""
-        b = QPushButton(glyph)
+    def add_button(self, key: str, glyph: str, tip: str, slot: Callable, checkable: bool = False, icon: str = "") -> QPushButton:
+        """An extra button just before the close button. With ``icon`` (a name in the icon set) the button shows that icon, not ``glyph``."""
+        b = QPushButton("" if icon else glyph)
+        if icon:
+            b.setIcon(icon_set.icon(icon, theme.current()["fg"]))
+            b.setIconSize(QSize(24, 24))
+            b.setStyleSheet("padding: 6px 10px;")
         b.setToolTip(tip)
         b.setFlat(True)
         b.setCheckable(checkable)
         b.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         b.setMouseTracking(True)
-        if len(glyph) > 2:
+        if len(glyph) > 2 and not icon:
             b.setStyleSheet("font-size: 16px;")                                 # a word, not a symbol
         b.clicked.connect(lambda _c=False: slot())
         self.row.insertWidget(self.row.count() - 1, b)
         self.buttons[key] = b
         self.bar.adjustSize()
         return b
+
+    def watch(self, widget) -> None:
+        """Mouse movement over ``widget`` (and its viewport) shows the bar."""
+        for w in (widget, widget.viewport() if hasattr(widget, "viewport") else None):
+            if w is not None:
+                w.setMouseTracking(True)
+                w.installEventFilter(self)
+
+    def add_separator(self) -> QWidget:
+        """A thin line between clusters of buttons (before the close button)."""
+        line = _Separator(self.bar)
+        self.row.insertWidget(self.row.count() - 1, line)
+        return line
+
+    def add_label(self, text: str = "") -> QLabel:
+        """A readout in the bar (the cursor position), before the close button."""
+        label = QLabel(text, self.bar)
+        label.setStyleSheet(f"color: {QColor(theme.current()['fg']).name()}; font-size: 14px; padding: 0 8px;")
+        self.row.insertWidget(self.row.count() - 1, label)
+        return label
 
     def _widgets(self) -> tuple:
         return (self.bar, self.caption) if self.captioned else (self.bar,)
@@ -172,4 +194,62 @@ class FloatingBar(QObject):
             self.poke()
         elif kind == QEvent.Type.Resize:
             self.place()
+        return False
+
+
+class _Separator(QWidget):
+    def __init__(self, parent) -> None:
+        super().__init__(parent)
+        self.setFixedSize(11, 26)
+
+    def paintEvent(self, event) -> None:
+        painter = QPainter(self)
+        fg = QColor(theme.current()["fg"])
+        fg.setAlpha(70)
+        painter.fillRect(5, 3, 1, 20, fg)
+
+
+class Toast(QLabel):
+    """A short message that floats at the top of ``host`` and goes away by itself (the status line of a window that has none).
+    ``setText`` shows it; an empty text hides it. ``text()`` is the message, so a test can read it."""
+
+    SHOW_MS = 5000
+
+    def __init__(self, host: QWidget) -> None:
+        super().__init__(host)
+        self.host = host
+        fg = QColor(theme.current()["fg"])
+        self.setStyleSheet(f"background: rgba({fg.red()}, {fg.green()}, {fg.blue()}, 38); color: {fg.name()}; border-radius: 10px; padding: 3px 12px;")
+        self.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._timer = QTimer(self)
+        self._timer.setSingleShot(True)
+        self._timer.setInterval(self.SHOW_MS)
+        self._timer.timeout.connect(self.hide)
+        host.installEventFilter(self)
+        self.hide()
+
+    def setText(self, text: str) -> None:
+        super().setText(text)
+        if not text:
+            self.hide()
+            return
+        self.setMaximumWidth(max(120, self.host.width() - 40))
+        self.adjustSize()
+        self._place()
+        self.show()
+        self.raise_()
+        self._timer.start()
+
+    def set_quiet(self, text: str) -> None:
+        """Keep ``text`` (it can be read back) without showing it: a standing fact, not news."""
+        super().setText(text)
+        if not self._timer.isActive():
+            self.hide()
+
+    def _place(self) -> None:
+        self.move(max(0, (self.host.width() - self.width()) // 2), max(10, self.host.height() // 40))
+
+    def eventFilter(self, obj, event) -> bool:
+        if event.type() == QEvent.Type.Resize and self.isVisible():
+            self._place()
         return False

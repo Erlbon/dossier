@@ -2,6 +2,16 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-29#03 -- One floating bar in the notepad and the viewer
+
+- **The notepad (F4) and the viewer (F3) have one bar each, the floating one, and nothing else around the text:** no menu bar, no toolbar, no status line. The bar fades in when the mouse moves and out when it rests.
+- **Icons in clusters:** File, Edit, View | Save, Find and replace, Go to line | cursor position and a settings button | Close. In the viewer: the files (previous, next) | Edit in the notepad, Find, Go to | the picture tools (zoom, fit, turn, info) | position and settings | Close. Only the buttons that fit the kind of file are shown.
+- **Settings are one menu (the gear):** the notepad has word wrap, spaces and tabs, colouring and language, encoding and line break; the viewer has View as and, for text, the encoding and following a growing file.
+- **Menu check:** the notepad's Edit menu now has Cut, Copy, Paste and Select All; View keeps only actions (preview, fold, zoom); the settings left it. Find and replace is one button (the replace field opens in the find bar).
+- **Find in the viewer is a strip under the page** that shows when you press Find or Ctrl+F and hides on Esc.
+- **Messages float over the text for a few seconds** instead of sitting in a status line. Encoding and size of a file are in the position readout's tooltip.
+- The frost now shows in the title bar of these windows (and the find strip); the text itself stays solid.
+
 ## 2026-10-29#02 -- One bar in the notepad, and the frost keeps to the colour scheme
 
 - **The notepad has one bar, not two:** the menu bar is gone and **File**, **Edit** and **View** are buttons in the floating bar (their menus open upwards, with the same keys as before).

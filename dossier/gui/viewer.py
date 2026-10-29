@@ -10,19 +10,19 @@ from __future__ import annotations
 import os
 from typing import Optional
 
-from PyQt6.QtCore import QPoint, QSize, Qt, QTimer, pyqtSignal
+from PyQt6.QtCore import QPoint, Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QAction, QKeySequence, QTextDocument
-from PyQt6.QtWidgets import (QCheckBox, QComboBox, QInputDialog, QLabel, QLineEdit, QMainWindow, QMenu, QPushButton,
-                             QStackedWidget, QToolBar, QWidget)
+from PyQt6.QtWidgets import (QCheckBox, QComboBox, QHBoxLayout, QInputDialog, QLabel, QLineEdit, QMainWindow, QMenu,
+                             QPushButton, QStackedWidget, QVBoxLayout, QWidget)
 
 from ..core import markdownsafe, viewmodes
 from ..core.exif import read_exif
 from ..core.hexview import HexFile, inspect, parse_hex
 from ..core.textview import AUTO, ENCODINGS, TextSource, TextTooLarge, detect_encoding
 from ..core.worker import Job, JobRunner, JobState
-from . import frost, icon_set, theme
+from . import icon_set, theme
 from .dialogs import ProgressBox
-from .floating_bar import FloatingBar
+from .floating_bar import FloatingBar, Toast
 from .frost_window import FrostSurface
 from .hex_view import HexView
 from .image_view import ImagePage, read_image
@@ -58,7 +58,12 @@ class TextViewerWindow(FrostSurface, QMainWindow):
         self.stack = QStackedWidget()
         for page in (self.view, self.image_page, self.hex, self.markdown):
             self.stack.addWidget(page)
-        self.setCentralWidget(self.stack)
+        central = QWidget()
+        self._central_layout = QVBoxLayout(central)
+        self._central_layout.setContentsMargins(0, 0, 0, 0)
+        self._central_layout.setSpacing(0)
+        self._central_layout.addWidget(self.stack, 1)
+        self.setCentralWidget(central)
         self.view.changed.connect(self._update_status)
         self.hex.changed.connect(self._update_status)
         self.image_page.view.changed.connect(self._update_status)
@@ -66,86 +71,31 @@ class TextViewerWindow(FrostSurface, QMainWindow):
         self.markdown.open_file_requested.connect(self._open_linked)
         self.markdown.refused.connect(lambda text: self.status.setText(f"This link is not opened: {text}"))
 
-        bar = self.toolbar = QToolBar()
-        bar.setMovable(False)
-        bar.setIconSize(QSize(16, 16))
-        self.addToolBar(bar)
-        self.prev_file = QPushButton()
-        self.next_file = QPushButton()
-        for b, name, tip in ((self.prev_file, "arrow-left", "Previous file (Ctrl+Page Up)"),
-                             (self.next_file, "arrow-right", "Next file (Ctrl+Page Down)")):
-            b.setIcon(icon_set.icon(name, theme.current()["fg"]))
-            b.setToolTip(tip)
-            b.setFlat(True)
-            b.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-            bar.addWidget(b)
-        self.prev_file.clicked.connect(lambda: self.step(-1))
-        self.next_file.clicked.connect(lambda: self.step(1))
-        self.file_buttons_visible = len(self.paths) > 1
-        self.prev_file.setVisible(self.file_buttons_visible)
-        self.next_file.setVisible(self.file_buttons_visible)
-
-        self._tb: dict = {"text": [], "find": [], "hex": [], "image": []}      # toolbar entries that belong to some modes only
+        # no toolbar and no status line: one floating bar over the page (built below), a find strip under it that shows on request, and
+        # messages that float for a few seconds. The widgets below hold the state and the settings menu drives them.
         self.mode_box = QComboBox()
-        self.mode_box.setToolTip("View this file as")
         self.mode_box.currentIndexChanged.connect(self._mode_chosen)
-        bar.addWidget(self.mode_box)
         self.encoding = QComboBox()
         self.encoding.addItems(["Auto"] + list(ENCODINGS))
-        self.encoding.setToolTip("Text encoding")
         self.encoding.currentTextChanged.connect(self._encoding_changed)
-        self._tb["text"].append(bar.addWidget(self.encoding))
-
-        self.find_edit = QLineEdit()
-        self.find_edit.setPlaceholderText("Find (Ctrl+F)")
-        self.find_edit.setClearButtonEnabled(True)
-        self.find_edit.setMinimumWidth(200)
-        self.find_edit.returnPressed.connect(lambda: self.find(forward=True))
-        self._tb["find"].append(bar.addWidget(self.find_edit))
         self.hex_find_kind = QComboBox()
         self.hex_find_kind.addItems(["Text", "Hex bytes"])
         self.hex_find_kind.setToolTip("What the find box holds")
-        self._tb["hex"].append(bar.addWidget(self.hex_find_kind))
         self.case = QCheckBox("Match case")
-        self._tb["find"].append(bar.addWidget(self.case))
-        for text, icon, forward in (("Previous", "arrow-up", False), ("Next", "chevron-down", True)):
-            b = QPushButton(text)
-            b.setIcon(icon_set.icon(icon, theme.current()["fg"]))
-            b.setFlat(True)
-            b.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-            b.clicked.connect(lambda _c=False, f=forward: self.find(forward=f))
-            self._tb["find"].append(bar.addWidget(b))
         self.follow = QCheckBox("Follow")
         self.follow.setToolTip("Keep the end of a growing file (a log) in view")
         self.follow.toggled.connect(self._follow_toggled)
-        self._tb["text"].append(bar.addWidget(self.follow))
         self.image_info = QCheckBox("Info (I)")
-        self.image_info.setToolTip("The file's facts and, for a photo, its EXIF")
         self.image_info.toggled.connect(self.image_page.show_info)
-        self._tb["image"].append(bar.addWidget(self.image_info))
-        self.floating = FloatingBar(self.image_page.view.viewport(), self.image_page.view, self.step, self.close)   # zoom, fit, turn: over the picture
-        self.info_button = self.floating.add_button("info", "ⓘ", "The file's facts and, for a photo, its EXIF (I)", lambda: None, checkable=True)
-        self.info_button.clicked.connect(self.image_info.setChecked)
-        self.image_info.toggled.connect(self.info_button.setChecked)
-        self.floating.add_button("view", "⋯", "View this file as...", self._view_as_menu)
-
-        self.status = QLabel()
-        self.position = QLabel()
-        self.statusBar().addWidget(self.status, 1)
-        self.statusBar().addPermanentWidget(self.position)
-
+        self.file_buttons_visible = len(self.paths) > 1
+        self._build_find_strip()
+        self.status = Toast(self.stack)
+        self._build_pill()
+        self.statusBar().hide()
         self._timer = QTimer(self)
         self._timer.setInterval(1000)
         self._timer.timeout.connect(self._poll)
 
-        edit = QPushButton("Edit (F4)")
-        edit.setFlat(True)
-        edit.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        edit.setIcon(icon_set.icon("file-code", theme.current()["fg"]))
-        edit.setToolTip("Open this file in the notepad: Ctrl+H there finds and replaces")
-        edit.clicked.connect(lambda: self._edit(False))
-        self.edit_button = edit
-        bar.addWidget(edit)
         for keys, slot in ((["F4"], lambda: self._edit(False)), (["Ctrl+H"], lambda: self._edit(True)),
                            (["Esc"], self._escape), (["F3"], self.close), (["Ctrl+F"], self._focus_find),
                            (["Ctrl+G"], self.ask_goto), (["Ctrl+PgDown"], lambda: self.step(1)),
@@ -168,8 +118,11 @@ class TextViewerWindow(FrostSurface, QMainWindow):
             self.edit_requested.emit(self.paths[self.index], replace)
 
     def _escape(self) -> None:
-        """Esc first clears a selection or a found match, and only then closes the window."""
-        if self.mode == "text" and self.view.has_selection():
+        """Esc first clears a selection or a found match (or hides the find strip), and only then closes the window."""
+        if self.find_strip.isVisible():
+            self.find_strip.hide()
+            self._focus_page()
+        elif self.mode == "text" and self.view.has_selection():
             self.view.clear_selection()
         elif self.mode == "text" and self.view.match is not None:
             self.view.clear_match()
@@ -193,18 +146,103 @@ class TextViewerWindow(FrostSurface, QMainWindow):
         self.mode_box.blockSignals(blocked)
         self.enter_mode(self._modes[0])
 
-    def frost_changed(self) -> None:
-        self.toolbar.setStyleSheet(f"QToolBar {{ background: {frost.fill(theme.current()['card'])}; border: 0; }}" if frost.active() else "")
+    def _build_find_strip(self) -> None:
+        """The find box, under the page, shown by the Find button or Ctrl+F and hidden by Esc."""
+        strip = self.find_strip = QWidget()
+        row = QHBoxLayout(strip)
+        row.setContentsMargins(8, 4, 8, 4)
+        self.find_edit = QLineEdit()
+        self.find_edit.setPlaceholderText("Find (Ctrl+F)")
+        self.find_edit.setClearButtonEnabled(True)
+        self.find_edit.setMinimumWidth(200)
+        self.find_edit.returnPressed.connect(lambda: self.find(forward=True))
+        row.addWidget(self.find_edit, 1)
+        row.addWidget(self.hex_find_kind)
+        row.addWidget(self.case)
+        for text, icon, forward in (("Previous", "arrow-up", False), ("Next", "chevron-down", True)):
+            b = QPushButton(text)
+            b.setIcon(icon_set.icon(icon, theme.current()["fg"]))
+            b.setFlat(True)
+            b.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+            b.clicked.connect(lambda _c=False, f=forward: self.find(forward=f))
+            row.addWidget(b)
+        strip.hide()
+        self._central_layout.addWidget(strip)
 
-    def _view_as_menu(self) -> None:
-        """The floating bar's View as: the modes that fit this file, the one in force ticked."""
+    def _build_pill(self) -> None:
+        """The window's one bar, over the page: the buttons that fit the kind of file are shown (see ``_arrange_pill``)."""
+        view = self.image_page.view
+        bar = self.floating = FloatingBar(self.stack, self.stack, self.step, self.close,
+                                          specs=(("prev", "◀", "Previous file (Ctrl+Page Up)", lambda: self.step(-1)),
+                                                 ("next", "▶", "Next file (Ctrl+Page Down)", lambda: self.step(1)),
+                                                 ("close", "✕", "Close (Esc, F3)", self.close)))
+        self._pill = {"sep_files": bar.add_separator()}
+        self.edit_button = bar.add_button("edit", "Edit", "Open this file in the notepad (F4): Ctrl+H there finds and replaces",
+                                          lambda: self._edit(False), icon="file-code")
+        bar.add_button("find", "Find", "Find (Ctrl+F)", self._focus_find, icon="search")
+        bar.add_button("goto", "Go to", "Go to a line or an offset (Ctrl+G)", self.ask_goto, icon="hash")
+        for key, glyph, tip, slot in (("out", "−", "Zoom out (-)", lambda: view.zoom_by(0.8)),
+                                      ("in", "+", "Zoom in (+)", lambda: view.zoom_by(1.25)),
+                                      ("fit", "▢", "Fit to the window (0)", lambda: view.fit()),
+                                      ("actual", "1:1", "Every pixel (1)", lambda: view.actual_size()),
+                                      ("left", "↶", "Turn left (L)", lambda: view.turn(-1)),
+                                      ("right", "↷", "Turn right (R)", lambda: view.turn(1))):
+            bar.add_button(key, glyph, tip, slot)
+        self.info_button = bar.add_button("info", "ⓘ", "The file's facts and, for a photo, its EXIF (I)", lambda: None, checkable=True)
+        self.info_button.clicked.connect(self.image_info.setChecked)
+        self.image_info.toggled.connect(self.info_button.setChecked)
+        self._pill["sep_tools"] = bar.add_separator()
+        self.position = bar.add_label()
+        bar.add_button("settings", "Settings", "View as, encoding, follow", self._popup_settings, icon="settings")
+        for page in (self.view, self.hex, self.markdown, view):
+            bar.watch(page)
+
+    PILL_KEYS = {"text": ("edit", "find", "goto"), "hex": ("find", "goto"), "markdown": ("edit", "find"),
+                 "image": ("out", "in", "fit", "actual", "left", "right", "info")}
+
+    def _arrange_pill(self) -> None:
+        """Show the buttons that belong to this kind of file and the file buttons only when there is more than one file."""
+        bar = self.floating
+        every = {key for keys in self.PILL_KEYS.values() for key in keys}
+        wanted = set(self.PILL_KEYS.get(self.mode, ()))
+        for key in every:
+            bar.buttons[key].setVisible(key in wanted)
+        stepping = len(self.paths) > 1
+        bar.buttons["prev"].setVisible(stepping)
+        bar.buttons["next"].setVisible(stepping)
+        self._pill["sep_files"].setVisible(stepping)
+        self.position.setVisible(self.mode != "markdown")
+        bar.set_enabled(True)
+        bar.bar.adjustSize()
+        bar.place()
+
+    def _settings_menu(self) -> QMenu:
+        """View as, and for text the encoding and following a growing file: what stays set while you read."""
         menu = QMenu(self)
+        view_as = menu.addMenu("View As")
         for m in self._modes:
-            act = menu.addAction(viewmodes.LABELS[m])
+            act = view_as.addAction(viewmodes.LABELS[m])
             act.setCheckable(True)
             act.setChecked(m == self.mode)
             act.triggered.connect(lambda _c=False, m=m: self.enter_mode(m) if m != self.mode else None)
-        button = self.floating.buttons["view"]
+        if self.mode == "text":
+            menu.addSeparator()
+            encoding = menu.addMenu("Encoding")
+            for i in range(self.encoding.count()):
+                act = encoding.addAction(self.encoding.itemText(i))
+                act.setCheckable(True)
+                act.setChecked(i == self.encoding.currentIndex())
+                act.triggered.connect(lambda _c=False, i=i: self.encoding.setCurrentIndex(i))
+            follow = menu.addAction("Follow the End of the File")
+            follow.setToolTip(self.follow.toolTip())
+            follow.setCheckable(True)
+            follow.setChecked(self.follow.isChecked())
+            follow.triggered.connect(lambda checked=False: self.follow.setChecked(bool(checked)))
+        return menu
+
+    def _popup_settings(self) -> None:
+        menu = self._settings_menu()
+        button = self.floating.buttons["settings"]
         menu.popup(button.mapToGlobal(button.rect().topLeft()) - QPoint(0, menu.sizeHint().height()))
 
     def _mode_chosen(self, i: int) -> None:
@@ -236,15 +274,12 @@ class TextViewerWindow(FrostSurface, QMainWindow):
         blocked = self.mode_box.blockSignals(True)
         self.mode_box.setCurrentIndex(max(0, self.mode_box.findData(mode)))
         self.mode_box.blockSignals(blocked)
-        for kind, actions in self._tb.items():
-            show = {"text": mode == "text", "find": mode in ("text", "hex", "markdown"), "hex": mode == "hex",
-                    "image": mode == "image"}[kind]
-            for action in actions:
-                action.setVisible(show)
-        self.edit_button.setEnabled(mode in ("text", "markdown"))
-        self.toolbar.setVisible(mode != "image")                  # a picture has its own floating bar and no old toolbar
-        self.floating.set_stepping(len(self.paths) > 1)
-        self.floating.set_enabled(mode == "image")
+        if mode == "image":
+            self.find_strip.hide()
+        self.hex_find_kind.setVisible(mode == "hex")
+        self.case.setVisible(mode in ("text", "hex", "markdown"))
+        self.file_buttons_visible = len(self.paths) > 1
+        self._arrange_pill()
         path = self.paths[self.index]
         {"text": self._open_text, "hex": self._open_hex, "image": self._open_image, "markdown": self._open_markdown}[mode](path)
         self._focus_page()
@@ -333,8 +368,6 @@ class TextViewerWindow(FrostSurface, QMainWindow):
             self.status.setText(f"No such file: {path}")
             return
         self.paths.insert(self.index + 1, path)
-        self.prev_file.setVisible(True)
-        self.next_file.setVisible(True)
         self.load(self.index + 1)
 
     def _toggle_info(self) -> None:
@@ -392,6 +425,9 @@ class TextViewerWindow(FrostSurface, QMainWindow):
 
     # find ------------------------------------------------------------------------------------
     def _focus_find(self) -> None:
+        if self.mode == "image":
+            return
+        self.find_strip.show()
         self.find_edit.setFocus()
         self.find_edit.selectAll()
 
@@ -560,10 +596,12 @@ class TextViewerWindow(FrostSurface, QMainWindow):
                               + ("" if s.complete else " (reading)"))
         pinned = bool(self._pinned) and self.status.text() == self._pinned
         if not self.busy and s.binary and not pinned:
-            self.status.setText("This looks like a binary file; text may be unreadable. "
-                                f"{s.encoding}, {human_size(s.size)}")
+            warning = f"This looks like a binary file; text may be unreadable. {s.encoding}, {human_size(s.size)}"
+            if self.status.text() != warning:
+                self.status.setText(warning)
         elif not self.busy and not pinned and not self.status.text().startswith(("Found", "Not found", "Search")):
-            self.status.setText(f"{s.encoding}, {human_size(s.size)}")
+            self.status.set_quiet(f"{s.encoding}, {human_size(s.size)}")
+            self.position.setToolTip(self.status.text())
 
     def _hex_status(self) -> None:
         f = self.hexfile
@@ -574,7 +612,8 @@ class TextViewerWindow(FrostSurface, QMainWindow):
         self.position.setText(f"Offset 0x{lo:X} ({lo:,}) of {f.size:,}" + (f"   {n:,} bytes selected" if n > 1 else ""))
         if not self.status.text().startswith(("Found", "Not found", "Search", "Hex bytes")):
             numbers = "   ".join(f"{label} {text.split('  ')[0]}" for label, text in inspect(f.read(lo, 8))[:3])
-            self.status.setText(f"{human_size(f.size)}   {numbers}")
+            self.status.set_quiet(f"{human_size(f.size)}   {numbers}")
+            self.position.setToolTip(self.status.text())
 
     def closeEvent(self, event) -> None:
         self._timer.stop()

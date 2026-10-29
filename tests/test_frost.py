@@ -134,70 +134,51 @@ def test_the_title_backdrop_call_is_a_harmless_no_on_other_systems(monkeypatch):
 
 
 # the notepad and the viewer ------------------------------------------------------------------------------------------------------
-def test_the_notepad_has_the_floating_bar_with_its_buttons_wired(tmp_path):
+def test_the_notepad_has_one_floating_bar_with_everything_in_it(tmp_path):
     pytest.importorskip("PyQt6.Qsci")
     from dossier.core.textedit import load_document
     from dossier.gui.notepad import NotepadWindow
     p = tmp_path / "a.py"
-    p.write_text("x = 1\n", encoding="utf-8")
+    p.write_text("x = 1" + chr(10), encoding="utf-8")
     win = NotepadWindow(load_document(str(p)), FakeDialogs())
     win.show()
     QApplication.processEvents()
-    assert {"save", "find", "replace", "goto", "wrap", "syntax", "close"} <= set(win.floating.buttons)
-    assert win.floating.row.itemAt(win.floating.row.count() - 1).widget() is win.floating.buttons["close"]
-    win.floating.buttons["wrap"].click()
-    assert win.act_wrap.isChecked() and win.floating.buttons["wrap"].isChecked()
-    win.act_syntax.setChecked(True)
-    assert win.floating.buttons["syntax"].isChecked() and win.editor.language == "python"
+    assert {"file", "edit", "view", "save", "find", "goto", "settings", "close"} <= set(win.floating.buttons)
+    assert not win.menuBar().isVisible() and win.statusBar().isHidden()          # no menu bar, no status line
+    assert win.position.text()                                                   # the cursor position is in the bar
     win.floating.buttons["find"].click()
     assert win.bar.isVisible()
-    win.close()
-
-
-def test_the_notepad_and_the_viewer_follow_the_frost_with_the_same_picture(world, tmp_path):
-    pytest.importorskip("PyQt6.Qsci")
-    from dossier.core.textedit import load_document
-    from dossier.gui.notepad import NotepadWindow
-    from dossier.gui.viewer import TextViewerWindow
-    win, *_ = world
-    p = tmp_path / "a.txt"
-    p.write_text("hello\n", encoding="utf-8")
-    pad = NotepadWindow(load_document(str(p)), FakeDialogs())
-    viewer = TextViewerWindow([str(p)])
-    for w in (pad, viewer):
-        w.show()
-    win.set_frost(True, 40, grabber=lambda: fake_screens(win), wait_ms=0)
-    QApplication.processEvents()
-    for w in (pad, viewer):
-        edge = w.statusBar().mapTo(w, w.statusBar().rect().bottomLeft())
-        colour = w.grab().toImage().pixelColor(max(1, edge.x() + 2), edge.y() - 2)
-        assert colour.red() - colour.blue() > 30                       # the red picture shows through the frame
-    assert "transparent" in viewer.toolbar.styleSheet()
-    win.set_frost(False)
-    assert viewer.toolbar.styleSheet() == ""
-    pad.close()
-    viewer.close()
-
-
-def test_the_notepad_has_one_bar_the_menus_are_in_the_floating_bar(tmp_path):
-    pytest.importorskip("PyQt6.Qsci")
-    from dossier.core.textedit import load_document
-    from dossier.gui.notepad import NotepadWindow
-    p = tmp_path / "a.txt"
-    p.write_text("x\n", encoding="utf-8")
-    win = NotepadWindow(load_document(str(p)), FakeDialogs())
-    win.show()
-    QApplication.processEvents()
-    assert not win.menuBar().isVisible()
-    assert {"file", "edit", "view"} <= set(win.floating.buttons)
     win.floating.buttons["view"].click()
     assert win.view_menu.isVisible()
     win.view_menu.close()
     win.close()
 
 
+def test_the_notepad_and_the_viewer_give_their_title_bars_the_frost(world, tmp_path, monkeypatch):
+    pytest.importorskip("PyQt6.Qsci")
+    from dossier.core import platform
+    from dossier.core.textedit import load_document
+    from dossier.gui.notepad import NotepadWindow
+    from dossier.gui.viewer import TextViewerWindow
+    win, *_ = world
+    p = tmp_path / "a.txt"
+    p.write_text("hello" + chr(10), encoding="utf-8")
+    pad = NotepadWindow(load_document(str(p)), FakeDialogs())
+    viewer = TextViewerWindow([str(p)])
+    for w in (pad, viewer):
+        w.show()
+    calls = []
+    monkeypatch.setattr(platform, "set_title_backdrop", lambda hwnd, on, dark=False: calls.append(on) or True)
+    win.set_frost(True, 40, grabber=lambda: fake_screens(win), wait_ms=0)
+    QApplication.processEvents()
+    assert calls.count(True) >= 3                                        # the file manager and both windows
+    win.set_frost(False)
+    assert calls.count(False) >= 3
+    pad.close()
+    viewer.close()
+
+
 def test_a_bright_picture_does_not_make_a_bright_patch_in_the_dark_scheme(world, monkeypatch):
-    from PyQt6.QtGui import QPainter
     from dossier.gui import frost_window, theme
     win, *_ = world
     monkeypatch.setattr(theme, "_current", dict(theme.DARK))

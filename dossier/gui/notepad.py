@@ -10,7 +10,7 @@ from typing import Optional
 from PyQt6.QtCore import QPoint, Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QAction, QActionGroup, QKeySequence
 from PyQt6.QtWidgets import (QCheckBox, QComboBox, QHBoxLayout, QInputDialog, QLabel, QLineEdit, QMainWindow,
-                             QPushButton, QSplitter, QVBoxLayout, QWidget)
+                             QMenu, QPushButton, QSplitter, QVBoxLayout, QWidget)
 
 from ..core import markdownsafe, viewmodes
 from ..core.languages import HIGHLIGHT_LIMIT, LANGUAGES, label, language_for
@@ -19,7 +19,7 @@ from ..core.textedit import (Document, EncodingProblem, FileChangedOnDisk, conve
 from ..core.textview import ENCODINGS
 from . import theme
 from .editor import EditorView, from_line_index, line_starts
-from .floating_bar import FloatingBar
+from .floating_bar import FloatingBar, Toast
 from .frost_window import FrostSurface
 from .markdown_view import MarkdownView
 
@@ -143,8 +143,8 @@ class NotepadWindow(FrostSurface, QMainWindow):
         lay.addWidget(self.bar)
         self.setCentralWidget(central)
         self._build_menus()
-        self._build_status()
         self._build_floating_bar()
+        self._build_status()
         self.editor.set_document_text(doc.text)
         self.editor.modificationChanged.connect(lambda _m: self._update_title())
         self.editor.cursorPositionChanged.connect(lambda *_a: self._update_position())
@@ -193,25 +193,18 @@ class NotepadWindow(FrostSurface, QMainWindow):
                   self._action("Reload from Disk", None, self.reload), self._action("Close", "Ctrl+W", self.close)):
             f.addAction(a)
         e = self.edit_menu = bar.addMenu("&Edit")
-        for text, keys, slot in (("Undo", None, self.editor.undo), ("Redo", None, self.editor.redo)):
-            e.addAction(self._action(text, keys, slot))
-        e.addSeparator()
-        for text, keys, slot in (("Find...", "Ctrl+F", self.bar.show_find), ("Replace...", "Ctrl+H", self.bar.show_replace),
+        for text, keys, slot in (("Undo", None, self.editor.undo), ("Redo", None, self.editor.redo), (None, None, None),
+                                 ("Cut", None, self.editor.cut), ("Copy", None, self.editor.copy), ("Paste", None, self.editor.paste),
+                                 ("Select All", None, self.editor.selectAll), (None, None, None),
+                                 ("Find...", "Ctrl+F", self.bar.show_find), ("Replace...", "Ctrl+H", self.bar.show_replace),
                                  ("Find Next", "F3", lambda: self.find(True)),
                                  ("Find Previous", "Shift+F3", lambda: self.find(False)),
                                  ("Go to Line...", "Ctrl+G", self.ask_goto)):
-            e.addAction(self._action(text, keys, slot))
+            if text is None:
+                e.addSeparator()
+            else:
+                e.addAction(self._action(text, keys, slot))
         v = self.view_menu = bar.addMenu("&View")
-        self.act_wrap = QAction("Word Wrap", self)
-        self.act_wrap.setCheckable(True)
-        self.act_wrap.toggled.connect(lambda on: self.editor.setWrapMode(
-            self.editor.WrapMode.WrapWord if on else self.editor.WrapMode.WrapNone))
-        v.addAction(self.act_wrap)
-        self.act_space = QAction("Show Spaces and Tabs", self)
-        self.act_space.setCheckable(True)
-        self.act_space.toggled.connect(lambda on: self.editor.setWhitespaceVisibility(
-            self.editor.WhitespaceVisibility.WsVisible if on else self.editor.WhitespaceVisibility.WsInvisible))
-        v.addAction(self.act_space)
         self.act_preview = QAction("Markdown Preview", self)
         self.act_preview.setCheckable(True)
         self.act_preview.setShortcut(QKeySequence("Ctrl+Shift+M"))
@@ -220,13 +213,38 @@ class NotepadWindow(FrostSurface, QMainWindow):
         self.addAction(self.act_preview)
         v.addAction(self.act_preview)
         v.addSeparator()
-        self.act_syntax = QAction("Syntax Highlighting", self)
+        self.act_fold = self._action("Fold All Blocks", None, lambda: self.editor.set_all_folds(True))
+        self.act_unfold = self._action("Unfold All Blocks", None, lambda: self.editor.set_all_folds(False))
+        v.addAction(self.act_fold)
+        v.addAction(self.act_unfold)
+        v.addSeparator()
+        for text, keys, slot in (("Zoom In", "Ctrl+=", self.editor.zoomIn), ("Zoom Out", "Ctrl+-", self.editor.zoomOut),
+                                 ("Actual Size", "Ctrl+0", lambda: self.editor.zoomTo(0))):
+            v.addAction(self._action(text, keys, slot))
+        self._build_settings_menu()
+        self._action("Hide the find bar", "Esc", self._escape)
+
+    def _build_settings_menu(self) -> None:
+        """What stays set while you work: wrap, spaces, colouring and language, encoding, line break. Not on the menu bar: the gear button."""
+        m = self.settings_menu = QMenu(self)
+        self.act_wrap = QAction("Word Wrap", self)
+        self.act_wrap.setCheckable(True)
+        self.act_wrap.toggled.connect(lambda on: self.editor.setWrapMode(
+            self.editor.WrapMode.WrapWord if on else self.editor.WrapMode.WrapNone))
+        m.addAction(self.act_wrap)
+        self.act_space = QAction("Show Spaces and Tabs", self)
+        self.act_space.setCheckable(True)
+        self.act_space.toggled.connect(lambda on: self.editor.setWhitespaceVisibility(
+            self.editor.WhitespaceVisibility.WsVisible if on else self.editor.WhitespaceVisibility.WsInvisible))
+        m.addAction(self.act_space)
+        m.addSeparator()
+        self.act_syntax = QAction("Colour the Text (Syntax Highlighting)", self)
         self.act_syntax.setCheckable(True)
         self.act_syntax.setToolTip("Colour the text by the language of the file and let blocks fold. Off by default; big files are not coloured")
         self.act_syntax.toggled.connect(self._set_syntax)
-        v.addAction(self.act_syntax)
+        m.addAction(self.act_syntax)
         self._language_choice = "auto"
-        self.lang_menu = v.addMenu("Language")
+        self.lang_menu = m.addMenu("Language")
         group = QActionGroup(self)
         self.lang_actions: dict = {}
         for choice, text in (("auto", "Automatic (by the file name)"), ("none", "Plain Text")) + tuple(
@@ -239,31 +257,42 @@ class NotepadWindow(FrostSurface, QMainWindow):
             if choice == "none":
                 self.lang_menu.addSeparator()
         self.lang_actions["auto"].setChecked(True)
-        self.act_fold = self._action("Fold All Blocks", None, lambda: self.editor.set_all_folds(True))
-        self.act_unfold = self._action("Unfold All Blocks", None, lambda: self.editor.set_all_folds(False))
-        v.addAction(self.act_fold)
-        v.addAction(self.act_unfold)
-        v.addSeparator()
-        for text, keys, slot in (("Zoom In", "Ctrl+=", self.editor.zoomIn), ("Zoom Out", "Ctrl+-", self.editor.zoomOut),
-                                 ("Actual Size", "Ctrl+0", lambda: self.editor.zoomTo(0))):
-            v.addAction(self._action(text, keys, slot))
-        self._action("Hide the find bar", "Esc", self._escape)
+        m.addSeparator()
+        self.encoding_menu = m.addMenu("Encoding")
+        self.eol_menu = m.addMenu("Line Break")
+        self.encoding_menu.aboutToShow.connect(lambda: self._fill_choice_menu(self.encoding_menu, self.encoding, self._encoding_chosen))
+        self.eol_menu.aboutToShow.connect(lambda: self._fill_choice_menu(self.eol_menu, self.eol, self._eol_chosen))
+
+    @staticmethod
+    def _fill_choice_menu(menu, combo, chosen) -> None:
+        """A submenu with the entries of ``combo`` and the current one ticked; choosing one sets the combo and calls ``chosen``."""
+        menu.clear()
+        group = QActionGroup(menu)
+        for i in range(combo.count()):
+            act = menu.addAction(combo.itemText(i))
+            act.setCheckable(True)
+            act.setActionGroup(group)
+            act.setChecked(i == combo.currentIndex())
+            act.triggered.connect(lambda _c=False, i=i: (combo.setCurrentIndex(i), chosen(i)))
 
     def _build_floating_bar(self) -> None:
-        """The same floating bar as the picture viewer, over the text: it fades in when the mouse moves and out when it rests."""
+        """The same floating bar as the picture viewer, over the text: it fades in when the mouse moves and out when it rests. It is the
+        window's only bar: menus, the few tools, the cursor position and the settings all live in it."""
         self.floating = FloatingBar(self.editor.viewport(), self.editor, lambda _d: None, self.close,
                                     specs=(("close", "✕", "Close (Ctrl+W)", self.close),))
-        for key, text, menu in (("file", "File", self.file_menu), ("edit", "Edit", self.edit_menu), ("view", "View", self.view_menu)):
-            self.floating.add_button(key, text, f"The {text} menu", lambda m=menu, k=key: self._popup_menu(m, k))
-        self.floating.add_button("save", "Save", "Save (Ctrl+S)", self.save)
-        self.floating.add_button("find", "Find", "Find (Ctrl+F)", self.bar.show_find)
-        self.floating.add_button("replace", "Replace", "Replace (Ctrl+H)", self.bar.show_replace)
-        self.floating.add_button("goto", "Go to", "Go to line (Ctrl+G)", self.ask_goto)
-        for key, text, tip, action in (("wrap", "Wrap", "Word wrap", self.act_wrap), ("syntax", "Colour", "Syntax highlighting and folding", self.act_syntax)):
-            button = self.floating.add_button(key, text, tip, action.toggle, checkable=True)
-            button.setChecked(action.isChecked())
-            action.toggled.connect(button.setChecked)
-        self.floating.set_enabled(True)
+        bar = self.floating
+        for key, text, icon, menu in (("file", "File", "file", self.file_menu), ("edit", "Edit", "pencil", self.edit_menu),
+                                      ("view", "View", "eye", self.view_menu)):
+            bar.add_button(key, text, f"The {text} menu", lambda m=menu, k=key: self._popup_menu(m, k), icon=icon)
+        bar.add_separator()
+        bar.add_button("save", "Save", "Save (Ctrl+S)", self.save, icon="device-floppy")
+        bar.add_button("find", "Find", "Find and replace (Ctrl+F, Ctrl+H)", self.bar.show_find, icon="search")
+        bar.add_button("goto", "Go to", "Go to line (Ctrl+G)", self.ask_goto, icon="hash")
+        bar.add_separator()
+        self.position = bar.add_label()
+        bar.add_button("settings", "Settings", "Word wrap, colouring, language, encoding and line break",
+                       lambda: self._popup_menu(self.settings_menu, "settings"), icon="settings")
+        bar.set_enabled(True)
         self.menuBar().hide()                       # the menus live in the floating bar: one bar, not a menu bar as well (the actions keep their keys)
 
     def _popup_menu(self, menu, key: str) -> None:
@@ -272,8 +301,9 @@ class NotepadWindow(FrostSurface, QMainWindow):
         menu.popup(button.mapToGlobal(button.rect().topLeft()) - QPoint(0, menu.sizeHint().height()))
 
     def _build_status(self) -> None:
-        self.message = QLabel()
-        self.position = QLabel()
+        """No status line: messages float over the text for a few seconds, the position is in the bar, encoding and line break are in
+        Settings (the two combo boxes only hold the choice and are never shown)."""
+        self.message = Toast(self.editor.viewport())
         self.encoding = QComboBox()
         self.encoding.setToolTip("Encoding of the file (changing it rereads the file)")
         names = ["utf-8", "utf-16-le", "utf-16-be"] + [e for e in ENCODINGS if e not in ("utf-8", "utf-16")]
@@ -282,11 +312,9 @@ class NotepadWindow(FrostSurface, QMainWindow):
         self.eol.setToolTip("Kind of line break written when saving")
         for label, value in EOLS:
             self.eol.addItem(label, value)
-        self.statusBar().addWidget(self.message, 1)
-        for w in (self.position, self.encoding, self.eol):
-            self.statusBar().addPermanentWidget(w)
         self.encoding.activated.connect(self._encoding_chosen)
         self.eol.activated.connect(self._eol_chosen)
+        self.statusBar().hide()
 
     def _update_status_fields(self) -> None:
         blocked = self.encoding.blockSignals(True)
@@ -318,7 +346,7 @@ class NotepadWindow(FrostSurface, QMainWindow):
         if self.act_syntax.isChecked() and self._language_choice != "none":
             key = language_for(self.doc.path) if self._language_choice == "auto" else self._language_choice
             if key is None:
-                self.message.setText("No highlighting for this kind of file. View > Language picks one")
+                self.message.setText("No highlighting for this kind of file. View > Settings > Language picks one")
             elif self.editor.length() > HIGHLIGHT_LIMIT:
                 self.message.setText("This text is too big to colour (the limit is 1 MB)")
                 key = None
