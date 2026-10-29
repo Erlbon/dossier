@@ -41,7 +41,7 @@ def test_turning_it_on_frosts_the_frame_and_leaves_the_lists_solid(world):
     assert win.set_frost(True, 40, grabber=lambda: fake_screens(win), wait_ms=0)
     QApplication.processEvents()
     frame, lists = frame_pixel(win)
-    assert frame.red() - frame.blue() > 60                          # the red picture shows through the frame, tinted
+    assert frame.red() - frame.blue() > 30                          # the red picture shows through the frame, tinted
     assert abs(lists.red() - lists.blue()) < 30                     # the list is its own solid colour, not the picture
     assert "transparent" in win.tools_bar.styleSheet()
     win.set_frost(False)
@@ -171,9 +171,41 @@ def test_the_notepad_and_the_viewer_follow_the_frost_with_the_same_picture(world
     for w in (pad, viewer):
         edge = w.statusBar().mapTo(w, w.statusBar().rect().bottomLeft())
         colour = w.grab().toImage().pixelColor(max(1, edge.x() + 2), edge.y() - 2)
-        assert colour.red() - colour.blue() > 60                       # the red picture shows through the frame
+        assert colour.red() - colour.blue() > 30                       # the red picture shows through the frame
     assert "transparent" in viewer.toolbar.styleSheet()
     win.set_frost(False)
     assert viewer.toolbar.styleSheet() == ""
     pad.close()
     viewer.close()
+
+
+def test_the_notepad_has_one_bar_the_menus_are_in_the_floating_bar(tmp_path):
+    pytest.importorskip("PyQt6.Qsci")
+    from dossier.core.textedit import load_document
+    from dossier.gui.notepad import NotepadWindow
+    p = tmp_path / "a.txt"
+    p.write_text("x\n", encoding="utf-8")
+    win = NotepadWindow(load_document(str(p)), FakeDialogs())
+    win.show()
+    QApplication.processEvents()
+    assert not win.menuBar().isVisible()
+    assert {"file", "edit", "view"} <= set(win.floating.buttons)
+    win.floating.buttons["view"].click()
+    assert win.view_menu.isVisible()
+    win.view_menu.close()
+    win.close()
+
+
+def test_a_bright_picture_does_not_make_a_bright_patch_in_the_dark_scheme(world, monkeypatch):
+    from PyQt6.QtGui import QPainter
+    from dossier.gui import frost_window, theme
+    win, *_ = world
+    monkeypatch.setattr(theme, "_current", dict(theme.DARK))
+    white = {win.screen().name(): (win.screen().geometry(), QPixmap(win.screen().geometry().size()))}
+    white[win.screen().name()][1].fill(QColor("#ffffff"))
+    win.set_frost(True, 90, grabber=lambda: white, wait_ms=0)
+    QApplication.processEvents()
+    frame, _ = frame_pixel(win)
+    ceiling = QColor(theme.current()["card"]).lighter(frost_window.CEILING)
+    assert frame.lightness() <= ceiling.lightness() + 2
+    win.set_frost(False)

@@ -2,6 +2,11 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-10-29#02 -- One bar in the notepad, and the frost keeps to the colour scheme
+
+- **The notepad has one bar, not two:** the menu bar is gone and **File**, **Edit** and **View** are buttons in the floating bar (their menus open upwards, with the same keys as before).
+- **The frosted frame no longer shows a bright patch in the dark scheme** (or a dark one in the light scheme): the picture is held within reach of the scheme's colours, so the menu, bars and status line read the same all round, and the text in the status line stays readable. This applies to the file manager, the notepad and the viewer.
+
 ## 2026-10-29#01 -- The notepad and the viewer are frosted, and the notepad has the floating bar
 
 - **The frosted background now covers the notepad (F4) and the text viewer (F3)** as well as the file manager: same setting (Settings > Appearance > Frosted Background...), same picture and strength. Only the frame is frosted (menu bar, bars, status line, title bar); the text itself stays solid, like the file lists.

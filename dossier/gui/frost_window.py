@@ -17,6 +17,10 @@ from . import frost, theme
 from .owned_dialog import OwnedDialog
 
 
+CEILING = 260                   # the brightest the glass gets in the dark scheme: the scheme's card colour, lightened this much (percent)
+FLOOR = 160                     # the darkest it gets in the light scheme: the card colour, darkened this much
+
+
 class FrostDialog(OwnedDialog):
     applied = pyqtSignal(bool, int)             # Apply: show the effect now, with the dialog still open
 
@@ -77,7 +81,13 @@ class FrostSurface:
         origin = self.mapToGlobal(QPoint(0, 0)) - geometry.topLeft()
         painter = QPainter(self)
         painter.drawPixmap(QRect(-origin.x(), -origin.y(), geometry.width(), geometry.height()), picture)
-        tint = QColor(theme.current()["card"])
+        card = QColor(theme.current()["card"])
+        # keep the glass within reach of the scheme: no bright patch under dark-scheme text, no dark patch under light-scheme text
+        painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_Darken if theme.is_dark()
+                                   else QPainter.CompositionMode.CompositionMode_Lighten)
+        painter.fillRect(self.rect(), card.lighter(CEILING) if theme.is_dark() else card.darker(FLOOR))
+        painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceOver)
+        tint = QColor(card)
         tint.setAlpha(frost.tint_alpha(level))
         painter.fillRect(self.rect(), tint)
 

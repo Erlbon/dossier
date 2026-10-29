@@ -7,7 +7,7 @@ import os
 from dataclasses import replace as dc_replace
 from typing import Optional
 
-from PyQt6.QtCore import Qt, QTimer, pyqtSignal
+from PyQt6.QtCore import QPoint, Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QAction, QActionGroup, QKeySequence
 from PyQt6.QtWidgets import (QCheckBox, QComboBox, QHBoxLayout, QInputDialog, QLabel, QLineEdit, QMainWindow,
                              QPushButton, QSplitter, QVBoxLayout, QWidget)
@@ -188,11 +188,11 @@ class NotepadWindow(FrostSurface, QMainWindow):
 
     def _build_menus(self) -> None:
         bar = self.menuBar()
-        f = bar.addMenu("&File")
+        f = self.file_menu = bar.addMenu("&File")
         for a in (self._action("Save", "Ctrl+S", self.save), self._action("Save As...", "Ctrl+Shift+S", self.save_as),
                   self._action("Reload from Disk", None, self.reload), self._action("Close", "Ctrl+W", self.close)):
             f.addAction(a)
-        e = bar.addMenu("&Edit")
+        e = self.edit_menu = bar.addMenu("&Edit")
         for text, keys, slot in (("Undo", None, self.editor.undo), ("Redo", None, self.editor.redo)):
             e.addAction(self._action(text, keys, slot))
         e.addSeparator()
@@ -201,7 +201,7 @@ class NotepadWindow(FrostSurface, QMainWindow):
                                  ("Find Previous", "Shift+F3", lambda: self.find(False)),
                                  ("Go to Line...", "Ctrl+G", self.ask_goto)):
             e.addAction(self._action(text, keys, slot))
-        v = bar.addMenu("&View")
+        v = self.view_menu = bar.addMenu("&View")
         self.act_wrap = QAction("Word Wrap", self)
         self.act_wrap.setCheckable(True)
         self.act_wrap.toggled.connect(lambda on: self.editor.setWrapMode(
@@ -253,6 +253,8 @@ class NotepadWindow(FrostSurface, QMainWindow):
         """The same floating bar as the picture viewer, over the text: it fades in when the mouse moves and out when it rests."""
         self.floating = FloatingBar(self.editor.viewport(), self.editor, lambda _d: None, self.close,
                                     specs=(("close", "✕", "Close (Ctrl+W)", self.close),))
+        for key, text, menu in (("file", "File", self.file_menu), ("edit", "Edit", self.edit_menu), ("view", "View", self.view_menu)):
+            self.floating.add_button(key, text, f"The {text} menu", lambda m=menu, k=key: self._popup_menu(m, k))
         self.floating.add_button("save", "Save", "Save (Ctrl+S)", self.save)
         self.floating.add_button("find", "Find", "Find (Ctrl+F)", self.bar.show_find)
         self.floating.add_button("replace", "Replace", "Replace (Ctrl+H)", self.bar.show_replace)
@@ -262,6 +264,12 @@ class NotepadWindow(FrostSurface, QMainWindow):
             button.setChecked(action.isChecked())
             action.toggled.connect(button.setChecked)
         self.floating.set_enabled(True)
+        self.menuBar().hide()                       # the menus live in the floating bar: one bar, not a menu bar as well (the actions keep their keys)
+
+    def _popup_menu(self, menu, key: str) -> None:
+        """A menu of the bar, opened upwards from its button (the bar floats near the bottom)."""
+        button = self.floating.buttons[key]
+        menu.popup(button.mapToGlobal(button.rect().topLeft()) - QPoint(0, menu.sizeHint().height()))
 
     def _build_status(self) -> None:
         self.message = QLabel()
