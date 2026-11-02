@@ -17,9 +17,17 @@ def test_the_build_number_has_the_redactor_form():
     assert version.tag_of("2026-10-19#03") == "v2026-10-19-03"
 
 
-def test_a_release_has_its_own_version_and_tag():
+def test_a_release_is_named_by_its_number_and_tagged_by_its_build():
     assert re.fullmatch(r"\d+\.\d+(\.\d+)?", version.RELEASE)
-    assert version.release_tag() == "v" + version.RELEASE and version.release_tag("0.4") == "v0.4" and version.release_title() == f"Dossier {version.RELEASE}"
+    assert version.release_title() == f"Dossier {version.RELEASE}"
+    assert version.release_tag() == version.tag_of(version.APP_VERSION) and version.release_tag("2026-11-02#01") == "v2026-11-02-01"
+    assert version.release_notes("0.5") == "docs/releases/v0.5.md"
+
+
+def test_the_updater_reads_the_release_tag_as_this_build():
+    from redactor_common.core import selfupdate
+    assert selfupdate.parse_version(version.release_tag()) == selfupdate.parse_version(version.APP_VERSION)
+    assert selfupdate.asset_name("dossier", "win32") == "dossier.exe"                # the file the release workflow uploads
 
 
 def test_the_same_day_counts_up_and_a_new_day_starts_again_at_one():
@@ -87,6 +95,7 @@ def test_the_help_menu_has_about(world):
     win, *_ = world
     menus = {a.text().replace("&", ""): a.menu() for a in win.menuBar().actions()}
     assert [a.text() for a in menus["Help"].actions() if not a.isSeparator()] == ["Keyboard Shortcuts...", "Documentation (Online)", "What's New (Online)",
+                                                                                   "Check for Updates...", "Check for Updates Once a Day",
                                                                                    "Slowness Log", "About Dossier..."]
     assert menus["Help"].actions()[-1].text() == "About Dossier..."                     # About comes last, as in every other program
 
@@ -100,3 +109,40 @@ def test_the_help_menu_opens_the_project_pages(world, monkeypatch):
         if action.text() in ("Documentation (Online)", "What's New (Online)"):
             action.trigger()
     assert opened == [version.APP_REPO_URL, version.APP_REPO_URL + "/blob/main/CHANGELOG.md"]
+
+
+# updates -----------------------------------------------------------------------------------------------------------------------------
+def test_the_daily_check_is_off_by_default_and_the_switch_is_kept_beside_the_settings(world):
+    win, *_ = world
+    assert win.updates.repo == "Erlbon/dossier" and win.updates.slug == "dossier"
+    assert os.path.normpath(os.path.dirname(str(win.updates.settings.path))) == os.path.normpath(os.path.dirname(win.settings.fileName()))
+    assert not win.act_daily_update.isChecked() and not win.updates.settings.enabled and not win.updates.settings.due()
+    win.act_daily_update.setChecked(True)
+    assert win.updates.settings.enabled and win.updates.settings.due()
+    win.act_daily_update.setChecked(False)
+    assert not win.updates.settings.enabled
+
+
+def test_check_for_updates_asks_github_and_says_when_this_is_the_newest(world, monkeypatch):
+    from redactor_common.core import selfupdate
+    from redactor_common.gui import update_controller
+    win, *_ = world
+    asked, told = [], []
+    newest = selfupdate.Release(version.release_tag(), selfupdate.parse_version(version.APP_VERSION), "", "")
+    monkeypatch.setattr(win.updates, "_latest", lambda: asked.append(1) or newest)
+    monkeypatch.setattr(update_controller, "run_busy", lambda parent, label, fn, **kw: fn())
+    monkeypatch.setattr(update_controller.QMessageBox, "information", lambda *a: told.append(a[2]))
+    menus = {a.text().replace("&", ""): a.menu() for a in win.menuBar().actions()}
+    next(a for a in menus["Help"].actions() if a.text() == "Check for Updates...").trigger()
+    assert asked == [1] and "newest version of Dossier" in told[-1]
+
+
+def test_an_update_left_behind_is_cleaned_up_at_start(tmp_path, monkeypatch):
+    from dossier.gui import app as app_module
+    exe = tmp_path / "dossier.exe"
+    exe.write_bytes(b"new")
+    (tmp_path / "dossier.exe.old").write_bytes(b"old")
+    monkeypatch.setattr(app_module.sys, "executable", str(exe))
+    monkeypatch.setattr(app_module.sys, "frozen", True, raising=False)
+    app_module.clean_up_after_update()
+    assert exe.exists() and not (tmp_path / "dossier.exe.old").exists()

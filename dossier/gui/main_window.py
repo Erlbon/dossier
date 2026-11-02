@@ -22,6 +22,8 @@ from ..core.commandline import Placeholders, expand, run_command
 from ..core import patterns, stage, viewmodes
 from ..core.platform import IS_WINDOWS, has_scheme, is_elevated, machine_name, path_key, set_window_border
 from ..core.selection import SelectionStore
+from redactor_common.gui.update_controller import UpdateController
+
 from ..core.version import APP_NAME, APP_REPO_URL, APP_VERSION, RELEASE
 from ..core.textedit import BinaryFile, EncodingProblem, FileTooLarge, load_document
 from ..core.terminals import (UnsafeArgument, builtin_profiles, default_launcher, default_profile, detect,
@@ -119,6 +121,10 @@ class MainWindow(FrostMixin, GlassViewMixin, KeysMixin, AutoRefreshMixin, Metada
         icon_set.set_user_dir(os.path.join(os.path.dirname(self.settings.fileName()), "icon-sets"))
         icon_set.use(str(self.settings.value("view/icon_set", icon_set.DEFAULT_SET)))
         self.theme = ThemeManager(QApplication.instance(), str(self.settings.value("view/scheme", "auto")))
+        # Help > Check for Updates (redactor_common): the daily check's switch lives in its own small file beside dossier.ini, off by default
+        self.updates = UpdateController(self, APP_NAME, APP_VERSION, APP_REPO_URL,
+                                        os.path.join(os.path.dirname(self.settings.fileName()), "dossier_updates.json"))
+        self._update_check_started = False
 
         self.dispatcher = QtDispatcher(self)
         self.selection = SelectionStore(dispatch=self.dispatcher)
@@ -295,6 +301,9 @@ class MainWindow(FrostMixin, GlassViewMixin, KeysMixin, AutoRefreshMixin, Metada
         super().showEvent(event)
         self._tint_window_border()
         self.schedule_resume_offer()
+        if not self._update_check_started:                    # once a day at most, and only when switched on
+            self._update_check_started = True
+            self.updates.start_auto_check()
 
     def _on_theme_changed(self) -> None:
         self._tint_window_border()

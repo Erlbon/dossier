@@ -28,7 +28,7 @@ python -m pip install -r requirements.txt
 python -m dossier
 ```
 
-`python -m dossier --check` only checks that everything is installed and says what is missing. 7z archives also need `python -m pip install py7zr` (or 7-Zip on the path); RAR and the other formats need 7-Zip. Windows 10 or 11, or Debian/Ubuntu, with Python 3.10 or newer. If you install with `pip install .` the same packages come with it, and `dossier` starts the program. Updating: `git pull` and the pip line again, since the shared Redactor package is pinned to a tag that moves.
+`python -m dossier --check` only checks that everything is installed and says what is missing. 7z archives also need `python -m pip install py7zr` (or 7-Zip on the path); RAR and the other formats need 7-Zip. Windows 10 or 11, or Debian/Ubuntu, with Python 3.10 or newer. If you install with `pip install .` the same packages come with it, and `dossier` starts the program. Updating: `git pull` and the pip line again, since the shared Redactor package is pinned to a tag that moves. The Windows exe updates itself: Help > Check for Updates (or switch on Help > Check for Updates Once a Day) downloads the new `dossier.exe`, checks it against the checksum GitHub lists, and puts it in place.
 
 To build the exe yourself: `build_exe.bat` (or `python -m PyInstaller dossier.spec`). A release is made by pushing a tag `v` + `RELEASE` from `dossier/core/version.py`; the workflow tests, builds and publishes it.
 

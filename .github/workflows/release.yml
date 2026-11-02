@@ -1,9 +1,10 @@
 name: Release
 
-# Push a tag like v0.4 (``v`` + RELEASE in dossier/core/version.py) to build dossier.exe on Windows and publish it as a GitHub Release.
-# The notes of the release are the file docs/releases/<tag>.md (written by hand for each release). The tag must match RELEASE and the
-# notes file must exist, or nothing is built. The tests run first and the built exe is started once (--version and a file listing)
-# before anything is published.
+# Push the build's tag (v2026-11-02-01 for APP_VERSION 2026-11-02#01, as in the Redactor apps) to build dossier.exe on Windows and
+# publish it as a GitHub Release named "Dossier <RELEASE> (build ...)". Help > Check for Updates compares that tag with the running
+# build, so the tag must be this build's and the asset must be called dossier.exe. The notes are docs/releases/v<RELEASE>.md (written
+# by hand for each release); a RELEASE that already has a release under another tag is refused, so the number goes up first. The tests
+# run first and the built exe is started once (--version and a file listing) before anything is published.
 # Re-running on an existing tag (Actions tab > Release > Run workflow) re-uploads the exe to that tag's release instead of failing.
 
 on:
@@ -12,7 +13,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Existing tag to (re)build and publish, e.g. v0.4"
+        description: "Existing tag to (re)build and publish, e.g. v2026-11-02-01"
         required: true
 
 permissions:
@@ -43,18 +44,22 @@ jobs:
       - name: Install dependencies
         run: python -m pip install -r requirements.txt "pyinstaller>=6.6"
 
-      - name: Check the tag against RELEASE and find the notes
+      - name: Check the tag against the build and find the notes
         shell: python
         run: |
-          import os, sys
+          import json, os, subprocess, sys
           sys.path.insert(0, ".")
-          from dossier.core.version import APP_NAME, APP_VERSION, RELEASE, release_tag
+          from dossier.core.version import APP_NAME, APP_VERSION, RELEASE, release_notes, release_tag
           tag = os.environ["TAG"]
           if tag != release_tag():
-              sys.exit(f"Tag {tag} does not match RELEASE {RELEASE} in dossier/core/version.py (expected {release_tag()})")
-          notes = os.path.join("docs", "releases", tag + ".md")
+              sys.exit(f"Tag {tag} is not this build's tag: APP_VERSION {APP_VERSION} in dossier/core/version.py wants {release_tag()}")
+          notes = release_notes()
           if not os.path.isfile(notes):
               sys.exit(f"There are no release notes: write {notes} first")
+          listed = subprocess.run(["gh", "release", "list", "--limit", "200", "--json", "name,tagName"], capture_output=True, text=True, check=True)
+          for other in json.loads(listed.stdout or "[]"):
+              if other["name"].startswith(f"{APP_NAME} {RELEASE} (") and other["tagName"] != tag:
+                  sys.exit(f"{APP_NAME} {RELEASE} is already released as {other['tagName']}: raise RELEASE in dossier/core/version.py first")
           with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as f:
               f.write(f"RELEASE_TITLE={APP_NAME} {RELEASE} (build {APP_VERSION})\n")
               f.write(f"RELEASE_NOTES={notes}\n")

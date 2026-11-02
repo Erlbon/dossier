@@ -24,6 +24,16 @@ def leave(code: int, grace: float = 2.0) -> int:
     return code
 
 
+def clean_up_after_update() -> None:
+    """The copy an update replaced (``dossier.exe.old``) and a half-finished download are deleted at the next start. Only the
+    built exe has them; from source this does nothing."""
+    try:
+        from redactor_common.core.selfupdate import remove_leftovers
+    except ImportError:                              # the shared package is missing: the install check explains it
+        return
+    remove_leftovers()
+
+
 def main(argv=None) -> int:
     args = list(sys.argv[1:] if argv is None else argv[1:])
     if args[:1] == ["--askpass"]:                   # ssh asking for a password: answered at once, with no window and no checks
@@ -54,6 +64,7 @@ def main(argv=None) -> int:
     from .main_window import MainWindow
 
     set_app_id("Erlbon.Dossier")
+    clean_up_after_update()
 
     app = QApplication(list(sys.argv if argv is None else argv))
     app.setApplicationName("Dossier")

@@ -2,6 +2,13 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-02#03 -- Dossier updates itself
+
+- **Help > Check for Updates...** asks GitHub for the newest release, shows its notes, and offers Update Now: the new `dossier.exe` is downloaded, checked against the size and SHA-256 checksum GitHub lists for it (an unverified file is never used), and put in place of the running one, which is kept as `dossier.exe.old` until the next start deletes it. Restart Now closes the window the normal way and starts the new version; Later starts it next time. Skip This Version stops the offer for that release. From source (or on Linux) the check works and links to the download page instead.
+- **Help > Check for Updates Once a Day** is off unless you switch it on (the switch is kept in `dossier_updates.json` beside `dossier.ini`). Nothing is sent except the request itself.
+- **Release tags are now the build's tag** (`v2026-11-02-01`), as in the Redactor apps, because the updater compares that tag with the running build. The release keeps its name ("Dossier 0.5") and its notes file (`docs/releases/v0.5.md`). The 0.5 release was moved from `v0.5` to `v2026-11-02-01`; the release workflow refuses a tag that is not the build's and a release number that is already out.
+- The shared `redactor_common` package is pinned to `2026-10-25-01`, which has the updater.
+
 ## 2026-11-02#02 -- Copy in the viewers
 
 - **The picture viewers copy:** Ctrl+C or the new Copy button in the F3 viewer and in the glass viewer puts the picture on the clipboard as it is shown (turned too) together with its file, so Paint, Word or a chat pastes the picture and a folder (in Dossier or Explorer) pastes the file. The viewer says what was copied; the glass viewer says it in the caption for a moment.
