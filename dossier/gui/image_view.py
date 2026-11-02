@@ -1,7 +1,8 @@
 """The picture view of the F3 viewer: fit to the window or zoom, turn, and an information panel with the EXIF of a photo.
 
 The picture is decoded on a thread by the window (``read_image``); this file only shows it. Zoom: ``+`` and ``-`` or Ctrl+wheel, ``0`` fits
-the window, the wheel steps to the next or previous picture, ``1`` shows every pixel, double-click toggles between the two; ``L`` and ``R`` turn the picture a quarter (the file is
+the window, the wheel steps to the next or previous picture and so do Right, Page Down and Space (forward) and Left, Page Up and
+Backspace (back) unless a zoomed picture needs them to scroll, ``1`` shows every pixel, double-click toggles between the two; ``L`` and ``R`` turn the picture a quarter (the file is
 never changed); dragging moves a zoomed picture. A photo taken upright but stored sideways is turned by its EXIF orientation when it is
 read. Ctrl+C copies the picture as it is shown (turned too) and its file.
 """
@@ -192,9 +193,18 @@ class ImageView(QGraphicsView):
     def mouseDoubleClickEvent(self, event) -> None:
         self.toggle_fit()
 
+    def _can_scroll(self) -> bool:
+        h, v = self.horizontalScrollBar(), self.verticalScrollBar()
+        return h.maximum() > h.minimum() or v.maximum() > v.minimum()
+
     def keyPressEvent(self, event) -> None:
         key = event.key()
-        if event.matches(QKeySequence.StandardKey.Copy):
+        forward = key in (Qt.Key.Key_Right, Qt.Key.Key_PageDown, Qt.Key.Key_Space)
+        back = key in (Qt.Key.Key_Left, Qt.Key.Key_PageUp, Qt.Key.Key_Backspace)
+        plain = not (event.modifiers() & ~Qt.KeyboardModifier.KeypadModifier)     # the number pad's arrows count as plain
+        if (forward or back) and plain and not self._can_scroll():
+            self.step_requested.emit(1 if forward else -1)
+        elif event.matches(QKeySequence.StandardKey.Copy):
             self.copy()
         elif key in (Qt.Key.Key_Plus, Qt.Key.Key_Equal):
             self.zoom_by(1.25)

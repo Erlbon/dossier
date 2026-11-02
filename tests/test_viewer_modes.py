@@ -346,6 +346,31 @@ def test_the_wheel_steps_to_the_next_and_previous_picture_and_ctrl_wheel_still_z
     assert win.index == 1 and view.zoom > before        # Ctrl+wheel zooms and does not step
 
 
+def test_the_arrows_page_keys_space_and_backspace_step_through_the_pictures(viewer, tmp_path):
+    paths = [picture(tmp_path / f"k{n}.png") for n in range(3)]
+    win = viewer(paths)
+    wait(lambda: win.image_page.view.has_image())
+    view = win.image_page.view
+    for key, index in ((Qt.Key.Key_Right, 1), (Qt.Key.Key_Space, 2), (Qt.Key.Key_Left, 1), (Qt.Key.Key_Backspace, 0),
+                       (Qt.Key.Key_PageDown, 1), (Qt.Key.Key_PageUp, 0)):
+        QTest.keyClick(view, key)
+        wait(lambda: win.index == index and view.has_image())
+
+
+def test_the_arrows_scroll_a_zoomed_picture_before_they_step(viewer, tmp_path):
+    paths = [picture(tmp_path / f"z{n}.png", 800, 600) for n in range(2)]
+    win = viewer(paths)
+    wait(lambda: win.image_page.view.has_image())
+    view = win.image_page.view
+    view.actual_size()
+    view.zoom_by(4)
+    QTest.keyClick(view, Qt.Key.Key_Right)
+    assert win.index == 0                                # it scrolls instead
+    QTest.keyClick(view, Qt.Key.Key_0)                   # fitted again: the arrow steps
+    QTest.keyClick(view, Qt.Key.Key_Right)
+    wait(lambda: win.index == 1)
+
+
 def test_small_touchpad_steps_add_up_to_one_picture(viewer, tmp_path):
     paths = [picture(tmp_path / f"q{n}.png") for n in range(2)]
     win = viewer(paths)

@@ -32,7 +32,6 @@ def build_parser() -> argparse.ArgumentParser:
 
 def pictures_for(paths: list) -> tuple:
     """``(pictures, first index)`` for what was named on the command line; ``([], 0)`` when there is no picture in it."""
-    from .glass_viewer import pictures_around
     named = [os.path.abspath(p) for p in paths]
     if len(named) == 1:
         path = named[0]
@@ -42,7 +41,7 @@ def pictures_for(paths: list) -> tuple:
             except OSError:
                 return [], 0
             return [os.path.join(path, n) for n in found], 0
-        return pictures_around(path) if os.path.isfile(path) and viewmodes.is_image_name(path) else ([], 0)
+        return viewmodes.pictures_around(path) if os.path.isfile(path) and viewmodes.is_image_name(path) else ([], 0)
     return [p for p in named if os.path.isfile(p) and viewmodes.is_image_name(p)], 0
 
 

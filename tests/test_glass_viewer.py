@@ -12,7 +12,8 @@ from dossier.core import glass  # noqa: E402
 from dossier.core.glass import Capabilities  # noqa: E402
 from dossier.gui import glass_viewer, viewer_app  # noqa: E402
 from dossier.gui.glass_settings import GlassDialog  # noqa: E402
-from dossier.gui.glass_viewer import GlassViewer, pictures_around, saved_look  # noqa: E402
+from dossier.core.viewmodes import pictures_around  # noqa: E402
+from dossier.gui.glass_viewer import GlassViewer, saved_look  # noqa: E402
 from tests.test_gui_commander import app, key, pump, world  # noqa: E402,F401
 
 FULL = Capabilities(True, True)
@@ -129,6 +130,15 @@ def test_pictures_around_lists_the_folder_in_natural_order_with_the_place_of_the
     paths, index = pictures_around(str(tmp_path / "img2.png"))
     assert [p.rsplit("\\", 1)[-1].rsplit("/", 1)[-1] for p in paths] == ["img1.png", "img2.png", "img10.png"] and index == 1
     assert pictures_around(str(tmp_path / "missing.png")) == ([str(tmp_path / "missing.png")], 0)
+    assert pictures_around(str(tmp_path / "IMG2.PNG"))[1] == 1                         # the case of the name does not matter
+
+
+def test_the_folder_of_pictures_is_found_in_one_place_only():
+    import pathlib
+    root = pathlib.Path(viewer_app.__file__).resolve().parents[1]
+    found = [str(p.relative_to(root)) for p in root.rglob("*.py") if "def pictures_around" in p.read_text(encoding="utf-8")
+             or "def _pictures_around" in p.read_text(encoding="utf-8")]
+    assert found == [str(pathlib.Path("core", "viewmodes.py"))]
 
 
 def test_what_is_named_on_the_command_line_becomes_the_pictures(tmp_path):

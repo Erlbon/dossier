@@ -29,22 +29,6 @@ from .qt_bridge import QtDispatcher
 
 
 
-def pictures_around(path: str) -> tuple:
-    """The pictures in the folder of ``path`` in natural order, and the place of ``path`` among them."""
-    folder, name = os.path.dirname(os.path.abspath(path)), os.path.basename(path)
-    try:
-        names = viewmodes.image_siblings(os.listdir(folder))
-    except OSError:
-        return [path], 0
-    if name not in names:
-        lower = [n.lower() for n in names]
-        if name.lower() in lower:
-            name = names[lower.index(name.lower())]
-        else:
-            return [path], 0
-    return [os.path.join(folder, n) for n in names], names.index(name)
-
-
 def saved_look(settings) -> tuple:
     """``(mode, level)`` the owner chose in Settings (``viewer/glass``, ``viewer/glass_level``); the default look when nothing was chosen."""
     try:
@@ -56,23 +40,13 @@ def saved_look(settings) -> tuple:
 
 
 class GlassImageView(ImageView):
-    """The picture, on a clear background; the arrow keys, Page keys, Space and Backspace step through the pictures when the picture
-    does not need them to scroll."""
+    """The picture, on a clear background; the stepping keys are the shared view's, the closing and first/last keys the window's."""
 
     def restyle(self) -> None:
         self.setBackgroundBrush(QBrush(Qt.BrushStyle.NoBrush))
 
-    def _can_scroll(self) -> bool:
-        h, v = self.horizontalScrollBar(), self.verticalScrollBar()
-        return h.maximum() > h.minimum() or v.maximum() > v.minimum()
-
     def keyPressEvent(self, event) -> None:
         key = event.key()
-        forward = key in (Qt.Key.Key_Right, Qt.Key.Key_PageDown, Qt.Key.Key_Space)
-        back = key in (Qt.Key.Key_Left, Qt.Key.Key_PageUp, Qt.Key.Key_Backspace)
-        if (forward or back) and not self._can_scroll():
-            self.step_requested.emit(1 if forward else -1)
-            return
         if key in (Qt.Key.Key_Escape, Qt.Key.Key_Q, Qt.Key.Key_Home, Qt.Key.Key_End):
             event.ignore()                                    # to the window
             return
@@ -253,7 +227,7 @@ class GlassViewMixin:
         if not local:
             self._say("Put the cursor on a picture on this computer to view it as glass")
             return
-        shown, first = pictures_around(local[0]) if len(local) == 1 else (local, 0)
+        shown, first = viewmodes.pictures_around(local[0]) if len(local) == 1 else (local, 0)
         mode, level = saved_look(self.settings)
         win = GlassViewer(shown, first, mode, level, dispatch=self.dispatcher)
         self.viewers.append(win)

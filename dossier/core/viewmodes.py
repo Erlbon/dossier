@@ -11,7 +11,7 @@ and any file as hex. Qt-free; the window decides how each mode is drawn.
 from __future__ import annotations
 
 import os
-from typing import Optional
+from typing import Callable, Optional
 
 from .textview import SAMPLE, detect_encoding, looks_binary
 from .vfs import natural_key
@@ -99,6 +99,23 @@ def opens_in_viewer(path: str, choice: str, alternate: bool = False, local: bool
 def image_siblings(names: list) -> list:
     """The picture files among ``names`` (plain file names), in the order a person counts them: ``img2`` before ``img10``."""
     return sorted((n for n in names if n.lower().endswith(IMAGE_EXTENSIONS)), key=natural_key)
+
+
+def pictures_around(path: str, list_names: Optional[Callable] = None) -> tuple:
+    """The pictures in the folder of ``path`` in natural order, and the place of ``path`` among them (so next and previous step through
+    the folder). ``list_names(folder)`` gives the file names there (``os.listdir`` when not given); ``[path], 0`` when the folder cannot be
+    read or ``path`` is not among them. The name is matched as Windows does, without regard to case."""
+    folder = os.path.dirname(os.path.abspath(path))
+    try:
+        names = image_siblings((list_names or os.listdir)(folder))
+    except OSError:
+        return [path], 0
+    paths = [os.path.join(folder, n) for n in names]
+    key = os.path.normcase(os.path.abspath(path))
+    for i, p in enumerate(paths):
+        if os.path.normcase(p) == key:
+            return paths, i
+    return [path], 0
 
 
 def is_image_name(path: str) -> bool:

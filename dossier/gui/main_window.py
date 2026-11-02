@@ -399,7 +399,8 @@ class MainWindow(FrostMixin, GlassViewMixin, KeysMixin, AutoRefreshMixin, Metada
         def open_viewer(unpacked: dict) -> None:
             shown, first = [unpacked.get(p, p) for p in ordered], 0
             if len(shown) == 1 and not archived and viewmodes.mode_for(shown[0]) == "image":     # a picture: its folder's pictures follow
-                shown, first = self._pictures_around(shown[0])
+                shown, first = viewmodes.pictures_around(
+                    shown[0], lambda folder: [e.name for e in self.fs.list(folder) if not e.is_dir])
             win = TextViewerWindow(shown, first, dispatch=self.dispatcher)
             win.set_wheel_map(self.wheel_map())
             self.viewers.append(win)
@@ -411,21 +412,6 @@ class MainWindow(FrostMixin, GlassViewMixin, KeysMixin, AutoRefreshMixin, Metada
             self._unpack_then(archived, lambda local: open_viewer(dict(zip(archived, local))))
         else:
             open_viewer({})
-
-    def _pictures_around(self, path: str) -> tuple:
-        """The pictures in the folder of ``path`` in natural order, and the place of ``path`` among them (so next and previous
-        step through the folder)."""
-        folder = self.fs.dirname(path)
-        try:
-            names = viewmodes.image_siblings([e.name for e in self.fs.list(folder) if not e.is_dir])
-        except OSError:
-            return [path], 0
-        paths = [self.fs.join(folder, n) for n in names]
-        key = os.path.normcase(os.path.normpath(path))
-        for i, p in enumerate(paths):
-            if os.path.normcase(os.path.normpath(p)) == key:
-                return paths, i
-        return [path], 0
 
     def edit_file(self, path: Optional[str] = None, show_replace: bool = False) -> None:
         """F4: open one file in the notepad. A file that is already open is brought forward, not opened twice."""

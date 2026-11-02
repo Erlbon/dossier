@@ -2,6 +2,11 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-02#04 -- The arrow keys step through pictures in F3 too
+
+- **The F3 viewer steps through pictures with the keys**, as the glass viewer already did: Right, Page Down and Space go to the next picture, Left, Page Up and Backspace to the previous. A zoomed picture that is bigger than the window scrolls with them first; `0` fits it again. Before, only the wheel, Ctrl+Page Down/Up and the buttons stepped, and the arrows did nothing on a fitted picture.
+- The keys live in the picture view both viewers share, and the pictures of a folder are found by one function (`viewmodes.pictures_around`) for F3, the glass viewer and `dossier view`, with a test that keeps it that way.
+
 ## 2026-11-02#03 -- Dossier updates itself
 
 - **Help > Check for Updates...** asks GitHub for the newest release, shows its notes, and offers Update Now: the new `dossier.exe` is downloaded, checked against the size and SHA-256 checksum GitHub lists for it (an unverified file is never used), and put in place of the running one, which is kept as `dossier.exe.old` until the next start deletes it. Restart Now closes the window the normal way and starts the new version; Later starts it next time. Skip This Version stops the offer for that release. From source (or on Linux) the check works and links to the download page instead.
