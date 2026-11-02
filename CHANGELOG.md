@@ -2,6 +2,10 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-02#01 -- Release 0.5
+
+- **Dossier 0.5** is released from this build: `RELEASE` is `0.5` and the notes are in `docs/releases/v0.5.md` (the glass look, Google Drive, the Health window, metadata writing for mp3 and cbz, and everything else since 0.4).
+
 ## 2026-10-29#05 -- Google Drive
 
 - **Google Drive opens like a folder:** add it on the Home page (Type: Google Drive), open it, and your browser shows Google's own sign-in page. Dossier never sees your Google password. It keeps only a sign-in token in the system's password store (switch off "Stay signed in" to be asked every time), so nothing runs in the background and nothing needs to be running to open the drive again: the next time it opens in a moment, with no browser.
