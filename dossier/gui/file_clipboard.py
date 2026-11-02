@@ -27,11 +27,14 @@ DROP_COPY, DROP_MOVE = 1, 2
 _inner: Optional[tuple] = None        # (paths, cut, mime data we put there): for items a URL cannot name
 
 
-def put(paths: list, cut: bool) -> None:
-    """Copy or cut ``paths`` to the clipboard."""
+def put(paths: list, cut: bool, image=None) -> None:
+    """Copy or cut ``paths`` to the clipboard. With ``image`` (a ``QImage``, from a picture viewer) the picture goes along, so a program
+    that takes pictures pastes the picture and a file manager pastes the file."""
     global _inner
     paths = list(paths)
     data = QMimeData()
+    if image is not None:
+        data.setImageData(image)
     real = [p for p in paths if not has_scheme(p)]
     if real and len(real) == len(paths):
         urls = [QUrl.fromLocalFile(p) for p in paths]
@@ -41,7 +44,8 @@ def put(paths: list, cut: bool) -> None:
         data.setData(GNOME, QByteArray((("cut" if cut else "copy") + "\n" + lines).encode("utf-8")))
         if cut:
             data.setData(KDE_CUT, QByteArray(b"1"))
-    data.setText("\n".join(paths))                      # pasting into a text field gives the paths
+    if paths:
+        data.setText("\n".join(paths))                  # pasting into a text field gives the paths
     QApplication.clipboard().setMimeData(data)
     _inner = (paths, cut, data)
 

@@ -134,6 +134,16 @@ class LineView(QAbstractScrollArea):
     def has_selection(self) -> bool:
         return self.anchor is not None and self.head is not None and self.anchor != self.head
 
+    def select_all(self) -> None:
+        """Ctrl+A: every line, as a normal (not vertical) selection. A copy of a huge file is still cut at COPY_LIMIT."""
+        if self.source is None or self.total == 0:
+            return
+        last = self.total - 1
+        self.block = False
+        self.anchor, self.head = (0, 0), (last, len(self.source.line(last)))
+        self.viewport().update()
+        self.changed.emit()
+
     def clear_selection(self) -> None:
         self.anchor = self.head = None
         self.viewport().update()
@@ -225,6 +235,8 @@ class LineView(QAbstractScrollArea):
         bar = self.verticalScrollBar()
         if event.matches(QKeySequence.StandardKey.Copy):
             self.copy()
+        elif event.matches(QKeySequence.StandardKey.SelectAll):
+            self.select_all()
         elif key == Qt.Key.Key_Escape and self.has_selection():
             self.clear_selection()
         elif shift and key in (Qt.Key.Key_Left, Qt.Key.Key_Right, Qt.Key.Key_Up, Qt.Key.Key_Down, Qt.Key.Key_Home,

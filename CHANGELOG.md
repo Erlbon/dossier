@@ -2,6 +2,11 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-02#02 -- Copy in the viewers
+
+- **The picture viewers copy:** Ctrl+C or the new Copy button in the F3 viewer and in the glass viewer puts the picture on the clipboard as it is shown (turned too) together with its file, so Paint, Word or a chat pastes the picture and a folder (in Dossier or Explorer) pastes the file. The viewer says what was copied; the glass viewer says it in the caption for a moment.
+- **The text viewer:** Ctrl+A selects the whole text, and the floating bar has a Copy button in every mode: the selected text, the selected hex bytes (as hex; Ctrl+Shift+C still copies them as text) or the selected Markdown. With nothing selected it says how to select.
+
 ## 2026-11-02#01 -- Release 0.5
 
 - **Dossier 0.5** is released from this build: `RELEASE` is `0.5` and the notes are in `docs/releases/v0.5.md` (the glass look, Google Drive, the Health window, metadata writing for mp3 and cbz, and everything else since 0.4).

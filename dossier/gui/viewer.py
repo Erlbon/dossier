@@ -68,6 +68,7 @@ class TextViewerWindow(FrostSurface, QMainWindow):
         self.hex.changed.connect(self._update_status)
         self.image_page.view.changed.connect(self._update_status)
         self.image_page.view.step_requested.connect(self.step)        # the wheel turns the pages of a folder of pictures
+        self.image_page.view.copied.connect(lambda text: self.status.setText(text))
         self.markdown.open_file_requested.connect(self._open_linked)
         self.markdown.refused.connect(lambda text: self.status.setText(f"This link is not opened: {text}"))
 
@@ -181,6 +182,7 @@ class TextViewerWindow(FrostSurface, QMainWindow):
                                           lambda: self._edit(False), icon="file-code")
         bar.add_button("find", "Find", "Find (Ctrl+F)", self._focus_find, icon="search")
         bar.add_button("goto", "Go to", "Go to a line or an offset (Ctrl+G)", self.ask_goto, icon="hash")
+        bar.add_button("copy", "Copy", "Copy what is selected, or the picture and its file (Ctrl+C)", self.copy_selection, icon="copy")
         for key, glyph, tip, slot in (("out", "−", "Zoom out (-)", lambda: view.zoom_by(0.8)),
                                       ("in", "+", "Zoom in (+)", lambda: view.zoom_by(1.25)),
                                       ("fit", "▢", "Fit to the window (0)", lambda: view.fit()),
@@ -197,8 +199,24 @@ class TextViewerWindow(FrostSurface, QMainWindow):
         for page in (self.view, self.hex, self.markdown, view):
             bar.watch(page)
 
-    PILL_KEYS = {"text": ("edit", "find", "goto"), "hex": ("find", "goto"), "markdown": ("edit", "find"),
-                 "image": ("out", "in", "fit", "actual", "left", "right", "info")}
+    PILL_KEYS = {"text": ("edit", "find", "goto", "copy"), "hex": ("find", "goto", "copy"), "markdown": ("edit", "find", "copy"),
+                 "image": ("copy", "out", "in", "fit", "actual", "left", "right", "info")}
+
+    def copy_selection(self) -> None:
+        """The Copy button: what is selected in the text, the hex bytes or the Markdown, or the picture and its file."""
+        if self.mode == "image":
+            self.image_page.view.copy()
+        elif self.mode == "hex":
+            self.hex.copy_hex()
+            self.status.setText(f"Copied {self.hex.selection()[1]:,} bytes as hex (Ctrl+Shift+C copies them as text)")
+        elif self.mode == "markdown" and self.markdown.textCursor().hasSelection():
+            self.markdown.copy()
+            self.status.setText("Copied the selected text")
+        elif self.mode == "text" and self.view.has_selection():
+            self.view.copy()
+            self.status.setText(f"Copied {len(self.view.selected_text()):,} characters")
+        else:
+            self.status.setText("Nothing is selected: drag over the text, or Ctrl+A selects all of it")
 
     def _arrange_pill(self) -> None:
         """Show the buttons that belong to this kind of file and the file buttons only when there is more than one file."""
@@ -347,7 +365,7 @@ class TextViewerWindow(FrostSurface, QMainWindow):
                 self.status.setText("This picture cannot be decoded here. View as: Hex shows what is in the file")
                 return
             image, exif = job.result
-            self.image_page.view.set_image(image)
+            self.image_page.view.set_image(image, path)
             try:
                 size = os.path.getsize(path)
             except OSError:

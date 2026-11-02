@@ -3,7 +3,7 @@
 The picture is decoded on a thread by the window (``read_image``); this file only shows it. Zoom: ``+`` and ``-`` or Ctrl+wheel, ``0`` fits
 the window, the wheel steps to the next or previous picture, ``1`` shows every pixel, double-click toggles between the two; ``L`` and ``R`` turn the picture a quarter (the file is
 never changed); dragging moves a zoomed picture. A photo taken upright but stored sideways is turned by its EXIF orientation when it is
-read.
+read. Ctrl+C copies the picture as it is shown (turned too) and its file.
 """
 from __future__ import annotations
 
@@ -11,13 +11,13 @@ import time
 from typing import Optional
 
 from PyQt6.QtCore import QRectF, Qt, pyqtSignal
-from PyQt6.QtGui import QColor, QImage, QImageReader, QPainter, QPixmap, QTransform
+from PyQt6.QtGui import QColor, QImage, QImageReader, QKeySequence, QPainter, QPixmap, QTransform
 from PyQt6.QtWidgets import (QAbstractItemView, QGraphicsPixmapItem, QGraphicsScene, QGraphicsView, QHeaderView, QSplitter,
                              QTreeWidget, QTreeWidgetItem, QWidget)
 
 from ..core import wheel
 from ..core.exif import Exif
-from . import theme
+from . import file_clipboard, theme
 
 MIN_ZOOM, MAX_ZOOM = 0.02, 32.0
 SETTLE = 0.35        # seconds after the wheel last scrolled the picture before the same spin may step to the next one
@@ -33,6 +33,7 @@ def read_image(path: str) -> QImage:
 class ImageView(QGraphicsView):
     changed = pyqtSignal()
     step_requested = pyqtSignal(int)                    # the wheel asks for the next (1) or previous (-1) picture
+    copied = pyqtSignal(str)                            # what a copy did, for the window to say
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -43,7 +44,8 @@ class ImageView(QGraphicsView):
         self.setScene(self._scene)
         self._item: Optional[QGraphicsPixmapItem] = None
         self._image: Optional[QImage] = None
-        self._turn = 0                                   # quarter turns clockwise, by the owner
+        self._path = ""                                  # the file of the picture, copied along with it
+        self._turn = 0                                 # quarter turns clockwise, by the owner
         self._fit = True
         self.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
         self.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
@@ -56,10 +58,11 @@ class ImageView(QGraphicsView):
         self.setBackgroundBrush(QColor(theme.current()["bg"]))
 
     # the picture ------------------------------------------------------------------------------------------------------------------
-    def set_image(self, image: Optional[QImage]) -> None:
+    def set_image(self, image: Optional[QImage], path: str = "") -> None:
         self._scene.clear()
         self._item = None
         self._image = image if image is not None and not image.isNull() else None
+        self._path = path if self._image is not None else ""
         self._turn = 0
         if self._image is not None:
             self._show()
@@ -72,10 +75,25 @@ class ImageView(QGraphicsView):
     def image_size(self) -> tuple:
         return (self._image.width(), self._image.height()) if self._image is not None else (0, 0)
 
+    def shown_image(self) -> Optional[QImage]:
+        """The picture as it is shown: turned when the owner turned it."""
+        if self._image is None or not self._turn:
+            return self._image
+        return self._image.transformed(QTransform().rotate(90 * self._turn), Qt.TransformationMode.SmoothTransformation)
+
+    def copy(self) -> str:
+        """The picture to the clipboard as it is shown, with its file: a program pastes the picture, a folder the file."""
+        image = self.shown_image()
+        if image is None:
+            message = "There is no picture to copy"
+        else:
+            file_clipboard.put([self._path] if self._path else [], False, image=image)
+            message = f"Copied the picture ({image.width()} x {image.height()}): paste it into a program, or into a folder as the file"
+        self.copied.emit(message)
+        return message
+
     def _show(self) -> None:
-        image = self._image
-        if self._turn:
-            image = image.transformed(QTransform().rotate(90 * self._turn), Qt.TransformationMode.SmoothTransformation)
+        image = self.shown_image()
         self._scene.clear()
         self._item = self._scene.addPixmap(QPixmap.fromImage(image))
         self._scene.setSceneRect(QRectF(self._item.boundingRect()))
@@ -176,7 +194,9 @@ class ImageView(QGraphicsView):
 
     def keyPressEvent(self, event) -> None:
         key = event.key()
-        if key in (Qt.Key.Key_Plus, Qt.Key.Key_Equal):
+        if event.matches(QKeySequence.StandardKey.Copy):
+            self.copy()
+        elif key in (Qt.Key.Key_Plus, Qt.Key.Key_Equal):
             self.zoom_by(1.25)
         elif key == Qt.Key.Key_Minus:
             self.zoom_by(0.8)

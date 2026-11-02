@@ -6,7 +6,7 @@ The look comes from ``core/glass.py`` (``frosted``, ``dim`` or ``solid``, with t
 
 Keys: Esc or Q closes; Right, Page Down and Space step to the next picture, Left, Page Up and Backspace to the previous (a zoomed picture
 scrolls with the arrows first); Home and End go to the first and last; ``+``, ``-``, ``0`` (fit), ``1`` (every pixel), ``L`` and ``R``
-(turn) are the picture's own.
+(turn) are the picture's own, and so is Ctrl+C (copy the picture and its file).
 """
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ from ..core.platform import has_scheme
 from ..core.worker import JobRunner, JobState
 from . import theme
 from .frost import blurred, grab_backdrop, screen_under_cursor  # noqa: F401  (shared with the file manager)
-from .floating_bar import FADE_MS, BAR_IDLE_MS, FloatingBar  # noqa: F401  (re-exported)
+from .floating_bar import FADE_MS, BAR_IDLE_MS, FloatingBar, Toast  # noqa: F401  (re-exported)
 from .image_view import ImageView, read_image
 from .qt_bridge import QtDispatcher
 
@@ -122,7 +122,13 @@ class GlassViewer(QWidget):
         box.addWidget(self.view)
 
         self.floating = FloatingBar(self, self.view, self.step, self.close, captioned=True)
+        self.floating.add_button("copy", "Copy", "Copy the picture and its file (Ctrl+C)", self.view.copy, icon="copy")
         self.bar, self.caption, self.buttons = self.floating.bar, self.floating.caption, self.floating.buttons
+        self._said = QTimer(self)                                           # the window's own, so it dies with the window
+        self._said.setSingleShot(True)
+        self._said.setInterval(Toast.SHOW_MS)
+        self._said.timeout.connect(self._unsay)
+        self.view.copied.connect(self._say)
         self._cover_screen()
         self._show_current()
         self._poke()
@@ -174,7 +180,7 @@ class GlassViewer(QWidget):
                 self.view.set_image(None)
                 self._set_caption(f"{os.path.basename(path)} cannot be decoded here   {self.index + 1} / {len(self.paths)}")
                 return
-            self.view.set_image(job.result)
+            self.view.set_image(job.result, path)
 
         if path:
             self._runner.submit("Picture", work, on_done=finished)
@@ -187,7 +193,17 @@ class GlassViewer(QWidget):
         self._poke()
 
     def _set_caption(self, text: str) -> None:
+        self._name_caption = text
         self.floating.set_caption(text)
+
+    def _say(self, text: str) -> None:
+        """A message in the caption for a few seconds (the window has no status line), then the name of the picture again."""
+        self.floating.set_caption(text)
+        self._poke()
+        self._said.start()
+
+    def _unsay(self) -> None:
+        self.floating.set_caption(self._name_caption)
 
     def _place_overlay(self) -> None:
         self.floating.place()
@@ -223,6 +239,7 @@ class GlassViewer(QWidget):
 
     def closeEvent(self, event) -> None:
         self.floating._idle.stop()
+        self._said.stop()
         self._runner.shutdown(wait=False)
         super().closeEvent(event)
         self.closed.emit()
