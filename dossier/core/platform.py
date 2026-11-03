@@ -229,6 +229,64 @@ def set_title_backdrop(hwnd: int, on: bool, dark: bool = False) -> bool:
         return False
 
 
+class _TaskbarList3:
+    """The progress fill on a window's taskbar button (Windows 7 and later), through the shell's ITaskbarList3 COM object. Made
+    on the first use; a system without it (or a refusal) turns every later call into nothing."""
+
+    _FLAGS = {"none": 0, "indeterminate": 1, "normal": 2, "error": 4, "paused": 8}       # TBPF_*
+
+    def __init__(self, hwnd) -> None:
+        self._hwnd = hwnd
+        self._object = None
+        self._calls = None
+        self._broken = False
+
+    def _make(self) -> None:
+        import ctypes
+        import uuid
+        from ctypes import wintypes
+
+        ole32 = ctypes.windll.ole32
+        ole32.CoInitialize(None)                         # the GUI thread is already a COM apartment (Qt): this only counts one more user
+        clsid = (ctypes.c_byte * 16).from_buffer_copy(uuid.UUID("56FDF344-FD6D-11D0-958A-006097C9A090").bytes_le)   # CLSID_TaskbarList
+        iid = (ctypes.c_byte * 16).from_buffer_copy(uuid.UUID("EA1AFB91-9E28-4B86-90E9-9E9F8A5EEFAF").bytes_le)     # IID_ITaskbarList3
+        pointer = ctypes.c_void_p()
+        ole32.CoCreateInstance.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint32, ctypes.c_void_p, ctypes.POINTER(ctypes.c_void_p)]
+        ole32.CoCreateInstance.restype = ctypes.HRESULT
+        ole32.CoCreateInstance(ctypes.byref(clsid), None, 1, ctypes.byref(iid), ctypes.byref(pointer))   # CLSCTX_INPROC_SERVER
+        table = ctypes.cast(pointer, ctypes.POINTER(ctypes.POINTER(ctypes.c_void_p))).contents
+
+        def method(index, *args):
+            return ctypes.WINFUNCTYPE(ctypes.HRESULT, ctypes.c_void_p, *args)(table[index])
+
+        method(3)(pointer)                                                                 # HrInit
+        self._calls = (method(9, wintypes.HWND, ctypes.c_ulonglong, ctypes.c_ulonglong),  # SetProgressValue
+                       method(10, wintypes.HWND, ctypes.c_int))                            # SetProgressState
+        self._object = pointer
+
+    def set(self, state: str, done: int, total: int) -> None:
+        if self._broken:
+            return
+        try:
+            if self._object is None:
+                self._make()
+            set_value, set_state = self._calls
+            hwnd = int(self._hwnd())
+            set_state(self._object, hwnd, self._FLAGS[state])
+            if state in ("normal", "paused", "error"):                                     # the colour first: a value alone turns the bar green
+                set_value(self._object, hwnd, done, total)
+        except (AttributeError, OSError, ValueError, KeyError):
+            self._broken = True
+
+
+def taskbar_button(hwnd):
+    """Something with ``set(state, done, total)`` that shows progress on the taskbar button of the window ``hwnd()`` gives (asked at
+    every call, as the window may be made again), or None where the system has no such thing. ``core.taskbar`` decides what it shows.
+    Linux: None (the Unity launcher's progress needs a desktop file id and D-Bus; not worth it while the Linux build has no
+    desktop entry)."""
+    return _TaskbarList3(hwnd) if IS_WINDOWS else None
+
+
 def is_remote_session() -> bool:
     """True inside a remote desktop session, where window transparency and blur are not available."""
     if not IS_WINDOWS:

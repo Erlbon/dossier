@@ -140,6 +140,7 @@ class MainWindow(FrostMixin, GlassViewMixin, KeysMixin, AutoRefreshMixin, Metada
         self._closing = False                      # the program is being closed: unfinished jobs stay in the journal
         threading.Thread(target=stage.clean_up, daemon=True, name="dossier-stage-clean").start()   # temporary copies a crash left behind
         self._jobs: list = []                      # running first, then the ones waiting
+        self._init_taskbar()                       # the queue's progress on the taskbar button
         self._links: dict = {}                     # the ssh process of each connected server
         self._size_jobs: list = []                 # folder size walks in the background
         self._size_thread = None                   # the thread that looks up sizes for the status line

@@ -6,9 +6,13 @@ import threading
 from dataclasses import replace
 from typing import Optional
 
+from PyQt6.QtGui import QGuiApplication
+
 from ..core.ops import ExecOptions, Kind, Plan, selection_effects
 from ..core.progress import check
+from ..core.platform import taskbar_button
 from ..core.queue_journal import plan_entry
+from ..core.taskbar import TaskbarProgress
 from ..core.worker import Job, JobState, run_plan_job
 from .background import run_in_background
 
@@ -35,7 +39,8 @@ class OperationQueueMixin:
             return build(watch)
 
         run_in_background(self, self.cmd_runner, title, work, on_result=then, tracked=self._plans,
-                          detail=lambda: f"{count['n']:,} items found so far", indeterminate=True)
+                          detail=lambda: f"{count['n']:,} items found so far", indeterminate=True, on_end=self._update_taskbar)
+        self._update_taskbar()
 
     def _run(self, plan: Plan, *, unmark: Optional[list] = None, select: str = "", remember=None, on_done=None) -> None:
         """Queue a plan. Plans run one after the other (one disk is never fought over); the progress box of a
@@ -64,6 +69,8 @@ class OperationQueueMixin:
                 shown["box"].plan_bytes = plan_bytes
             shown["box"].detail = current.get("text", "")
             shown["box"].update(done, total)
+            self._job_progress = (done, total)
+            self._update_taskbar()
 
         def finished(job: Job) -> None:
             if journal is not None and not self._closing:      # closing the program cancels the jobs: that is not finishing
@@ -77,8 +84,9 @@ class OperationQueueMixin:
             if job in self._jobs:
                 self._jobs.remove(job)
             self._job = self._jobs[0] if self._jobs else None
+            self._job_progress = (0, 0)
             self._update_queue_label()
-            self._report(job, unmark)
+            self._report_with_red_button(job, unmark)
             keep = select or self.active.current_name()
             self.active.set_folder(self.active.path, select=keep)
             self.other.refresh()
@@ -124,7 +132,36 @@ class OperationQueueMixin:
         self._say(f"Cancelled {len(waiting)} waiting operation{'s' if len(waiting) != 1 else ''}" if waiting
                   else "No operations are waiting")
 
+    def _init_taskbar(self) -> None:
+        """The taskbar button of this window shows the queue (core/taskbar.py). Only a real Windows window has one: the offscreen
+        platform of the tests gets none."""
+        button = taskbar_button(self.winId) if QGuiApplication.platformName() == "windows" else None
+        self.taskbar = TaskbarProgress(button)
+        self._job_progress = (0, 0)                # the running operation's last report
+        self._taskbar_red = False                  # a file could not be copied: the owner is being asked, or told
+
+    def _update_taskbar(self) -> None:
+        self.taskbar.show(jobs=len(self._jobs), planning=bool(self._plans), done=self._job_progress[0],
+                          total=self._job_progress[1], paused=self.paused, error=self._taskbar_red)
+
+    def _red_button(self, on: bool) -> None:
+        self._taskbar_red = on
+        self._update_taskbar()
+
+    def _report_with_red_button(self, job: Job, unmark: Optional[list]) -> None:
+        """The report of an operation that failed somewhere is read with the taskbar button red, so a window in the background
+        says so."""
+        failed = job.state is JobState.FAILED or bool(getattr(job.result, "failed", None))
+        if failed:
+            self._red_button(True)
+        try:
+            self._report(job, unmark)
+        finally:
+            if failed:
+                self._red_button(False)
+
     def _update_queue_label(self) -> None:
+        self._update_taskbar()
         waiting = sum(1 for j in self._jobs if j.state is JobState.QUEUED)
         parts = []
         if self._jobs:
@@ -152,9 +189,11 @@ class OperationQueueMixin:
 
                 def ask() -> None:
                     try:
+                        self._red_button(True)
                         name = self.fs.basename(op.src or op.dst)
                         answer["v"] = self.dialogs.ask_error(name + chr(10) * 2 + text)
                     finally:
+                        self._red_button(False)
                         ready.set()
 
                 self.dispatcher(ask)

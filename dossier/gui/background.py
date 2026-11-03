@@ -13,11 +13,11 @@ from ..core.worker import Job, JobState
 
 def run_in_background(window, runner, title: str, work, *, on_result: Callable, tracked: list,
                       detail: Callable[[], str] = lambda: "", plan_bytes=None, indeterminate: bool = False,
-                      partial_on_cancel: bool = False, failed_title: str = "") -> Job:
+                      partial_on_cancel: bool = False, failed_title: str = "", on_end: Callable[[], None] = lambda: None) -> Job:
     """Run ``work(progress, cancel)`` on ``runner``. Progress reports go to a box (made on the first one, so a quick job
     shows none) whose second line is ``detail()``. When the job ends, on the window's thread: the box is closed, the job
-    leaves ``tracked``, and ``on_result(result)`` is called, unless it was cancelled (the window says "Cancelled", unless
-    ``partial_on_cancel``: then what was done is handed over) or failed (the error is shown)."""
+    leaves ``tracked``, ``on_end()`` is called however it ended, and ``on_result(result)`` is called, unless it was cancelled
+    (the window says "Cancelled", unless ``partial_on_cancel``: then what was done is handed over) or failed (the error is shown)."""
     holder: dict = {}
     shown: dict = {}
     lock = threading.Lock()
@@ -42,6 +42,7 @@ def run_in_background(window, runner, title: str, work, *, on_result: Callable, 
             ended["yes"] = True
             if job in tracked:
                 tracked.remove(job)
+        on_end()
         if job.token.cancelled and not partial_on_cancel:
             window._say("Cancelled")
         elif job.state is JobState.FAILED:

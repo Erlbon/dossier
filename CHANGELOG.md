@@ -2,6 +2,11 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-03#03 -- Copy and move progress on the taskbar button
+
+- **Dossier's taskbar button shows the operation queue** (Windows): the bar under the button fills as a copy or move runs, moves back and forth while a plan is being worked out, turns yellow while the queue is paused, and turns red while Dossier asks about a file it could not copy and while the report of a failed operation is open. It clears when the queue is empty. Windows 11 draws the fill in the accent colour, Windows 10 in green. Each window shows its own queue.
+- Linux shows nothing on the launcher yet (the Unity launcher's progress needs a desktop entry, which the Linux build does not have).
+
 ## 2026-11-03#02 -- Another computer's shared folders, also over the tailnet
 
 - **A computer opens as the list of its shared folders:** type `\\machine` or `\\100.x.y.z` in the address bar (or go up from one of its shares) and its shares are listed as folders, as in Explorer. Hidden shares (ending in $) are left out. The address bar now shows the computer above the share (`\\nas` > `Media` > ...), and each part can be clicked.
