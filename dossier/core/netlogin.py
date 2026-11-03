@@ -34,6 +34,8 @@ def share_of(path: str) -> str:
     if not text.startswith(back * 2) or text.startswith(back * 2 + "?"):
         return ""
     parts = [p for p in text[2:].split(back) if p]
+    if len(parts) == 1:                          # a computer's list of shares: the login goes to its IPC$
+        return back * 2 + parts[0] + back + "IPC$"
     if len(parts) < 2:
         return ""
     return back * 2 + back.join(parts[:2])
@@ -67,7 +69,7 @@ def _connect(share: str, hwnd: int) -> int:
                     ("lpComment", wintypes.LPWSTR), ("lpProvider", wintypes.LPWSTR)]
 
     resource = NetResource()
-    resource.dwType = RESOURCETYPE_DISK
+    resource.dwType = 0 if share.upper().endswith("IPC$") else RESOURCETYPE_DISK      # IPC$ is no disk: RESOURCETYPE_ANY
     resource.lpRemoteName = share
     mpr = ctypes.WinDLL("mpr")                                                  # type: ignore[attr-defined]
     mpr.WNetAddConnection3W.argtypes = [wintypes.HWND, ctypes.POINTER(NetResource), wintypes.LPCWSTR, wintypes.LPCWSTR,

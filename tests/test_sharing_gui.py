@@ -263,3 +263,58 @@ def test_a_shared_folder_gets_a_mark_and_sorts_first_by_its_share(shared):
 def test_the_shared_as_column_starts_hidden(shared):
     win, *_ = shared
     assert win.left.table.isColumnHidden(index_of("shared"))
+
+
+# another computer's shares -------------------------------------------------------------------------------------------------------
+@pytest.fixture
+def machine(world, monkeypatch):
+    """A computer called nas with two shares, listed through the real file system with only the network call faked."""
+    if sys.platform != "win32":
+        pytest.skip("another computer's shares are listed on Windows only")
+    win, d, left, right, tmp = world
+    monkeypatch.setattr(sharing, "list_remote", lambda host: [Share("Media", B * 2 + host + B + "Media", "films"),
+                                                              Share("Backup", B * 2 + host + B + "Backup")])
+    yield win, d, B * 2 + "nas"
+
+
+def test_a_computer_opens_as_the_list_of_its_shares(machine):
+    win, d, path = machine
+    win.show_machine_shares("nas")
+    pump(win, lambda: win.left.model.path == path and win.left.model.entry_count() >= 2)
+    m = win.left.model
+    names = [m.entry_at(r).name for r in range(m.entry_count())]
+    assert "Backup" in names and "Media" in names and ".." not in names
+
+
+def test_a_share_in_the_list_can_be_opened_saved_or_mounted_but_not_deleted(machine, monkeypatch):
+    win, d, path = machine
+    win.show_machine_shares("nas")
+    pump(win, lambda: win.left.model.row_of("Media") >= 0)
+    menu = win.build_context_menu(win.left, win.left.model.row_of("Media"))
+    t = texts(menu)
+    assert t[:3] == ["Open", "Open in a New Tab", "Open in the Other Panel"]
+    assert "Save on the Home Page" in t and "Mount on a Drive Letter" in t
+    assert "Delete" not in t and "Rename" not in t and "Share..." not in t
+    find(menu, "Save on the Home Page").trigger()
+    assert any(p.rstrip(B) == path + B + "Media" for p in win._saved_list("home/network"))
+    empty = texts(win.build_context_menu(win.left, -1))
+    assert empty == ["Refresh", "Save This Computer on the Home Page"]
+
+
+def test_a_tailnet_device_offers_its_shared_folders(machine, monkeypatch):
+    win, d, path = machine
+    from dossier.core.home import TAILNET_PREFIX, TailnetItem
+    item = TailnetItem(name="nas", host="100.1.2.3", detail="100.1.2.3")
+    monkeypatch.setattr(type(win), "tailnet_item", lambda self, p: item if p == TAILNET_PREFIX + "nas" else None)
+    opened = []
+    monkeypatch.setattr(type(win), "show_machine_shares", lambda self, host, new_tab=False: opened.append((host, new_tab)))
+    entry = sharing.Share("x", "y")
+    from dossier.core.vfs import Entry
+    win.left.set_folder("home://")
+    pump(win, lambda: win.left.is_home)
+    monkeypatch.setattr(win.left.model, "entry_at", lambda row: Entry("nas", TAILNET_PREFIX + "nas", False, kind="tailnet"))
+    menu = win.build_context_menu(win.left, 0)
+    assert texts(menu)[:2] == ["Show Shared Folders", "Show Shared Folders in a New Tab"] and entry
+    find(menu, "Show Shared Folders").trigger()
+    find(menu, "Show Shared Folders in a New Tab").trigger()
+    assert opened == [("100.1.2.3", False), ("100.1.2.3", True)]

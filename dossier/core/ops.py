@@ -22,6 +22,7 @@ from dataclasses import dataclass, field, replace
 from enum import Enum
 from typing import Callable, Iterable, Optional, Sequence
 
+from . import sharing
 from .drives import drive_of, is_network_path, list_drives
 from .platform import IS_WINDOWS, SERVER_SCHEMES, has_scheme, path_key, strip_longpath
 from .progress import Cancelled, CancelToken, ProgressFn, SpeedLimit, check
@@ -295,7 +296,9 @@ def _check_destination(fs: FileSystem, dest_dir: str, blocking: list) -> None:
 
 
 def _check_sources_writable(fs: FileSystem, sources: Sequence[str], what: str, blocking: list) -> None:
-    if any(not fs.is_writable(s) for s in sources):
+    if any(sharing.is_share_root(s) for s in sources):
+        blocking.append(f"cannot {what} another computer's shared folders themselves; open one to work on the files in it")
+    elif any(not fs.is_writable(s) for s in sources):
         blocking.append(f"cannot {what} items inside an archive (read-only); copy them out instead")
 
 

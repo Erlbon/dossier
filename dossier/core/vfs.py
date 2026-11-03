@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from typing import BinaryIO, Iterator, Optional
 
 from .platform import IS_WINDOWS, decode_name, is_link_like, longpath, path_key, strip_longpath
+from . import sharing
 
 
 class NotWritable(OSError):
@@ -129,10 +130,15 @@ class LocalFileSystem(FileSystem):
     def root(self) -> str:
         return ""
 
+    def is_writable(self, path: str) -> bool:
+        return not sharing.machine_of(path)          # a computer's list of shares: open a share to change anything
+
     def join(self, base: str, *parts: str) -> str:
         return os.path.join(base, *parts)
 
     def basename(self, path: str) -> str:
+        if sharing.is_share_root(path):              # Python sees \\machine\share as a root without a name; in its list it has one
+            return path.replace("/", "\\").rstrip("\\").rsplit("\\", 1)[-1]
         return os.path.basename(path)
 
     def dirname(self, path: str) -> str:
@@ -143,6 +149,8 @@ class LocalFileSystem(FileSystem):
         return os.path.dirname(norm) == norm
 
     def parent(self, path: str) -> Optional[str]:
+        if sharing.is_share_root(path):
+            return sharing.machine_root(path)        # above a share of another computer: the list of its shares
         norm = os.path.normpath(path)
         above = os.path.dirname(norm)
         return above if above and above != norm else None
@@ -151,6 +159,11 @@ class LocalFileSystem(FileSystem):
         return list(self.scan(path))
 
     def scan(self, path: str) -> Iterator[Entry]:
+        host = sharing.machine_of(path)
+        if host:                                     # a computer (\\machine): its shares, as folders
+            for s in sharing.list_remote(host):
+                yield Entry(name=s.name, path=s.path, is_dir=True, detail=s.remark)
+            return
         with os.scandir(longpath(path)) as it:
             for de in it:
                 yield self._entry(de)
@@ -201,6 +214,9 @@ class LocalFileSystem(FileSystem):
         os.utime(longpath(path), (mtime, mtime))
 
     def stat(self, path: str) -> Entry:
+        host = sharing.machine_of(path)
+        if host:                                     # a computer is not a folder on a disk: its list is read when it is listed
+            return Entry(name=host, path=path, is_dir=True)
         p = longpath(path)
         lst = os.lstat(p)
         is_link = is_link_like(stat.S_ISLNK(lst.st_mode), getattr(lst, "st_file_attributes", None))

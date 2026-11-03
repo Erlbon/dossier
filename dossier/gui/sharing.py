@@ -425,6 +425,17 @@ class SharingMixin:
         else:
             menu.addAction("Share This Folder..." if here else "Share...", lambda: self.new_share(path, label=label))
 
+    def show_machine_shares(self, host: str, new_tab: bool = False) -> None:
+        """Another computer's shared folders in the active panel, as the folder ``\\\\host``."""
+        if not sharing.IS_WINDOWS:
+            self._say("Listing another computer's shares is only built for Windows")
+            return
+        path = "\\\\" + host
+        if new_tab:
+            self.active.new_tab(path)
+        else:
+            self.active.set_folder(path)
+
     def copy_share_address(self, text: str) -> None:
         QGuiApplication.clipboard().setText(text)
         self._say(f"Copied {text}")

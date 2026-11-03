@@ -2,6 +2,14 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-03#02 -- Another computer's shared folders, also over the tailnet
+
+- **A computer opens as the list of its shared folders:** type `\\machine` or `\\100.x.y.z` in the address bar (or go up from one of its shares) and its shares are listed as folders, as in Explorer. Hidden shares (ending in $) are left out. The address bar now shows the computer above the share (`\\nas` > `Media` > ...), and each part can be clicked.
+- **Tailnet devices on the Home page** have **Show Shared Folders** (and in a New Tab) on their right-click menu: the device's shares by its Tailscale address.
+- **A share in such a list** has its own short right-click menu: Open, Open in a New Tab, Open in the Other Panel, **Save on the Home Page** (under Network drives), **Mount on a Drive Letter**, Copy the Path as Text. Empty space has Refresh and **Save This Computer on the Home Page**. A share itself cannot be deleted, moved or renamed from the list; the files inside it can, as in any network folder.
+- When the computer wants a login before it shows its shares, Windows' own sign-in box is shown (for its IPC$), as for a share. When it does not answer, the message says so and why that often is: Windows marks a Tailscale or new network as Public and blocks file sharing there, which is set on that computer (Dossier never changes it).
+- Listing a computer's shares is built for Windows; elsewhere a share opens by its full path as before.
+
 ## 2026-11-03#01 -- Share folders and drives on the network
 
 - **Right-click > Share...** on a folder, a drive on the Home page (or a place or pin there), or empty space (Share This Folder...) shares it over SMB. The Share dialog asks for the share name (the folder's name, or the drive's label; a name in use is refused), and who may use it: one line per person or group, each with Read only, Read and change or Full control. The Who list offers Everyone on the network, Only me, the user accounts of this computer, and any user or group you type. A mistyped name is refused before anything is asked of Windows.

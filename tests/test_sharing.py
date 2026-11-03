@@ -201,3 +201,57 @@ def test_accounts_are_looked_up_before_the_prompt():
 def test_listing_this_computers_shares_needs_no_rights_and_hides_the_special_ones():
     names = [s.name for s in sharing.list_shares()]
     assert "C$" not in names and "IPC$" not in names and "ADMIN$" not in names
+
+
+# another computer's shares -------------------------------------------------------------------------------------------------------
+@WINDOWS
+def test_machine_and_share_paths_are_told_apart():
+    assert sharing.machine_of(B * 2 + "nas") == "nas" and sharing.machine_of(B * 2 + "nas" + B) == "nas"
+    assert sharing.machine_of(B * 2 + "nas" + B + "media") == "" and sharing.machine_of("C:" + B) == ""
+    assert sharing.machine_of(B * 2 + "?" + B + "C:") == ""                       # a long path is no computer
+    assert sharing.is_share_root(B * 2 + "nas" + B + "media") and not sharing.is_share_root(B * 2 + "nas" + B + "media" + B + "tv")
+    assert sharing.machine_root(B * 2 + "nas" + B + "media" + B + "tv") == B * 2 + "nas"
+
+
+def test_a_computers_shares_are_listed_without_the_hidden_and_special_ones(monkeypatch):
+    rows = [("Media", 0, "films"), ("C$", 0x80000000, ""), ("IPC$", 0x80000003, ""), ("print", 1, ""), ("old$", 0, "")]
+    got = sharing.list_remote("nas", enum=lambda host: (0, rows))
+    assert [(s.name, s.path, s.remark) for s in got] == [("Media", B * 2 + "nas" + B + "Media", "films")]
+
+
+@pytest.mark.parametrize("rc, words", [(53, "firewall"), (1722, "Public"), (5, "user name and password"), (2102, "did not list")])
+def test_a_computer_that_does_not_list_its_shares_says_why(rc, words):
+    with pytest.raises(OSError) as caught:
+        sharing.list_remote("nas", enum=lambda host: (rc, []))
+    assert words in caught.value.strerror and caught.value.winerror == rc if sys.platform == "win32" else words in caught.value.strerror
+
+
+@WINDOWS
+def test_the_local_file_system_lists_a_computer_as_its_shares(monkeypatch):
+    from dossier.core.vfs import LocalFileSystem
+    monkeypatch.setattr(sharing, "list_remote", lambda host: [Share("Media", B * 2 + host + B + "Media", "films")])
+    fs = LocalFileSystem()
+    machine = B * 2 + "nas"
+    entries = fs.list(machine)
+    assert [(e.name, e.path, e.is_dir) for e in entries] == [("Media", machine + B + "Media", True)]
+    assert fs.stat(machine).is_dir and not fs.is_writable(machine) and fs.is_writable(machine + B + "Media")
+    assert fs.parent(machine + B + "Media") == machine and fs.parent(machine) is None
+    assert fs.parent(machine + B + "Media" + B + "tv") == machine + B + "Media" + B
+
+
+@WINDOWS
+def test_a_computers_shares_themselves_cannot_be_deleted_moved_or_renamed():
+    from dossier.core import ops
+    from dossier.core.vfs import LocalFileSystem
+    blocking = []
+    ops._check_sources_writable(LocalFileSystem(), [B * 2 + "nas" + B + "Media"], "delete", blocking)
+    assert blocking and "shared folders themselves" in blocking[0]
+
+
+@WINDOWS
+def test_the_address_bar_shows_the_computer_then_the_share():
+    from dossier.core.pathparts import segments
+    from dossier.core.vfs import LocalFileSystem
+    machine = B * 2 + "nas"
+    assert segments(LocalFileSystem(), machine + B + "Media" + B + "tv") == [
+        (machine, machine), ("Media", machine + B + "Media" + B), ("tv", machine + B + "Media" + B + "tv")]

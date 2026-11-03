@@ -20,7 +20,8 @@ def refusal(code: int) -> OSError:
 def test_share_of_gives_the_server_and_share_only():
     assert netlogin.share_of(FOLDER + B + "s01") == SHARE
     assert netlogin.share_of("//nas/media/tv") == SHARE
-    assert netlogin.share_of(B * 2 + "nas") == "" and netlogin.share_of("C:" + B + "x") == ""
+    assert netlogin.share_of(B * 2 + "nas") == B * 2 + "nas" + B + "IPC$"        # a computer: its login goes to IPC$
+    assert netlogin.share_of("C:" + B + "x") == ""
     assert netlogin.share_of("sftp://host/x") == ""
 
 

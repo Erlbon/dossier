@@ -201,6 +201,80 @@ class ShareIndex:
 KNOWN = ShareIndex()
 
 
+# the shares of another computer ------------------------------------------------------------------------------------------------
+BACK = "\\"
+UNREACHABLE = {53, 64, 67, 1231, 1722, 2114}       # no such computer, the connection dropped, no Server service or RPC: often the firewall
+NEEDS_LOGIN = {5, 86, 1326, 1327, 1330, 1331, 1907, 1219}
+FIREWALL_HINT = ("If that computer is on, its firewall may block file sharing. Windows often marks a Tailscale or new network as Public, "
+                 "and blocks file sharing there: on that computer, allow File and Printer Sharing for that network, or mark it "
+                 "Private.")
+
+
+def _unc_parts(path: str) -> list:
+    if not IS_WINDOWS:                               # a backslash is an ordinary character in a name elsewhere
+        return []
+    text = (path or "").replace("/", BACK)
+    if not text.startswith(BACK * 2) or text.startswith((BACK * 2 + "?", BACK * 2 + ".")):
+        return []
+    return [p for p in text[2:].split(BACK) if p]
+
+
+def machine_of(path: str) -> str:
+    """The computer of ``\\\\machine`` (the list of its shares), or an empty string for any other path."""
+    parts = _unc_parts(path)
+    return parts[0] if len(parts) == 1 else ""
+
+
+def is_share_root(path: str) -> bool:
+    """``\\\\machine\\share`` itself: a share of another computer, as listed in its machine's list."""
+    return len(_unc_parts(path)) == 2
+
+
+def machine_root(path: str) -> str:
+    """``\\\\machine`` of a network path, or an empty string."""
+    parts = _unc_parts(path)
+    return BACK * 2 + parts[0] if parts else ""
+
+
+def list_remote(host: str, enum: Optional[Callable] = None) -> list:
+    """The visible folder shares of the computer ``host`` (a name or an address), as Windows lists them to any user. Takes a moment
+    and may wait for a computer that does not answer: call it on a thread. Raises OSError (with ``winerror``) saying why not."""
+    if not IS_WINDOWS and enum is None:
+        raise OSError(0, "Listing another computer's shares is only built for Windows. Open a share by its full address "
+                         "(smb://machine/share in your system's file manager, or mount it), and it opens here as a folder.")
+    rc, rows = (enum or _enum_remote)(host)
+    if rc != 0:
+        if rc in UNREACHABLE:
+            why = f"{host} does not answer for file sharing (Windows error {rc}). {FIREWALL_HINT}"
+        elif rc in NEEDS_LOGIN:
+            why = f"{host} wants a user name and password before it shows its shares (Windows error {rc})."
+        else:
+            why = f"{host} did not list its shares (Windows error {rc})."
+        raise OSError(0, why, BACK * 2 + host, rc)
+    return [Share(name, BACK * 2 + host + BACK + name, remark) for name, kind, remark in rows
+            if kind & 0xFF == 0 and not kind & 0x80000000 and not is_hidden_name(name)]
+
+
+def _enum_remote(host: str) -> tuple:
+    import ctypes
+    from ctypes import wintypes as w
+
+    class SHARE_INFO_1(ctypes.Structure):
+        _fields_ = [("netname", w.LPWSTR), ("type", w.DWORD), ("remark", w.LPWSTR)]
+
+    netapi = ctypes.windll.netapi32
+    buf, read, total = ctypes.c_void_p(), w.DWORD(), w.DWORD()
+    rc = netapi.NetShareEnum(BACK * 2 + host, 1, ctypes.byref(buf), 0xFFFFFFFF, ctypes.byref(read), ctypes.byref(total), None)
+    try:
+        if rc != 0 or not read.value:
+            return rc, []
+        rows = ctypes.cast(buf, ctypes.POINTER(SHARE_INFO_1 * read.value)).contents
+        return 0, [(r.netname, r.type, r.remark or "") for r in rows if r.netname]
+    finally:
+        if buf:
+            netapi.NetApiBufferFree(buf)
+
+
 # who may use a share ----------------------------------------------------------------------------------------------------------
 RIGHTS_FROM_WINDOWS = {0: FULL, 1: CHANGE, 2: READ}
 

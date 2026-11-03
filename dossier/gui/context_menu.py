@@ -13,7 +13,8 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QAction
 from PyQt6.QtWidgets import QApplication, QMenu
 
-from ..core import archives, shellmenu
+from ..core import archives, sharing, shellmenu
+from ..core.mounting import SMB
 from ..core.home import is_home
 from . import file_clipboard
 from .tailnet import KINDS as TAILNET_KINDS
@@ -99,6 +100,8 @@ class ContextMenuMixin:
 
     # the menus -----------------------------------------------------------------------------------------------------------
     def _item_menu(self, panel, entry, row: int = -1) -> QMenu:
+        if sharing.machine_of(panel.path):
+            return self._machine_share_menu(panel, entry, row)
         marked = panel.marked_here()
         paths = marked if entry.path in marked else [entry.path]
         many = len(paths) > 1
@@ -151,10 +154,28 @@ class ContextMenuMixin:
             add("More Options (Windows Menu)...", lambda: self._windows_menu(panel, paths, False))
         return menu
 
+    def _machine_share_menu(self, panel, entry, row: int = -1) -> QMenu:
+        """A share in another computer's list (``\\\\machine``): open it, keep it on the Home page or mount it. Nothing that would
+        change, move or delete the share itself."""
+        menu = QMenu(self)
+        add = lambda text, slot, enabled=True, keys="": self._entry_action(menu, text, slot, panel, [entry.path], enabled, keys, row)  # noqa: E731
+        add("Open", panel.open_current, keys="Enter")
+        add("Open in a New Tab", lambda: panel.open_current(new_tab=True), keys="Ctrl+Enter")
+        add("Open in the Other Panel", self.open_in_other_panel, keys="Ctrl+Left/Right")
+        menu.addSeparator()
+        add("Save on the Home Page", lambda: self.save_network_location(entry.path))
+        add("Mount on a Drive Letter", lambda: self.mount_share_with(SMB, entry.path))
+        add("Copy the Path as Text", self.copy_marked_paths)
+        return menu
+
     def _empty_menu(self, panel) -> QMenu:
         menu = QMenu(self)
         here = [panel.path]
         add = lambda text, slot, enabled=True, keys="": self._entry_action(menu, text, slot, panel, None, enabled, keys)  # noqa: E731
+        if sharing.machine_of(panel.path):                       # another computer's list of shares
+            add("Refresh", self.refresh, keys="Ctrl+R")
+            add("Save This Computer on the Home Page", lambda: self.save_network_location(panel.path))
+            return menu
         add("New Folder", self.new_folder, keys="F7")
         add("Paste", self.clip_paste, enabled=bool(file_clipboard.get()[0]), keys="Ctrl+V")
         add("Select All", self.select_all, keys="Ctrl+A")
@@ -180,6 +201,9 @@ class ContextMenuMixin:
             if entry.kind == "action":
                 add(entry.name.rstrip("."), panel.open_current)
             elif entry.kind == "tailnet":
+                add("Show Shared Folders", lambda p=entry.path: self.show_tailnet_shares(p))
+                add("Show Shared Folders in a New Tab", lambda p=entry.path: self.show_tailnet_shares(p, new_tab=True))
+                menu.addSeparator()
                 for kind, label in TAILNET_KINDS:
                     add(f"Add as {label}...", lambda k=kind, p=entry.path: self.add_tailnet_server(p, k))
                 menu.addSeparator()

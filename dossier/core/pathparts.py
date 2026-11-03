@@ -21,6 +21,8 @@ def label_of(fs, path: str) -> str:
     if has_scheme(path):
         return fs.basename(path) or trimmed
     if fs.is_root(path):
+        if fs.parent(path):                         # a share of another computer, below the computer: just its name
+            return trimmed.replace("/", chr(92)).rsplit(chr(92), 1)[-1] or trimmed
         return trimmed or path
     return fs.basename(trimmed) or trimmed
 

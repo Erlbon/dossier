@@ -36,8 +36,8 @@ def test_a_drive_root_is_called_by_its_letter_and_a_share_by_its_name():
     assert labels(pathparts.segments(fs, "C:" + BACKSLASH + "Temp" + BACKSLASH + "Export")) == ["C:", "Temp", "Export"]
     unc = BACKSLASH * 2 + "server" + BACKSLASH + "share"
     parts = pathparts.segments(fs, unc + BACKSLASH + "Photos" + BACKSLASH + "2022")
-    assert labels(parts) == [unc, "Photos", "2022"]
-    assert parts[0][1].rstrip(BACKSLASH) == unc
+    assert labels(parts) == [BACKSLASH * 2 + "server", "share", "Photos", "2022"]      # the computer above, its list of shares
+    assert parts[0][1] == BACKSLASH * 2 + "server" and parts[1][1].rstrip(BACKSLASH) == unc
 
 
 def test_the_home_page_is_one_part(router):

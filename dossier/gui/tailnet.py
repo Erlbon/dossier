@@ -104,6 +104,14 @@ class TailnetMixin:
             return
         self.add_server(prefill=servers.Connection(item.name, item.host, "", servers.default_port(kind, True), kind))
 
+    def show_tailnet_shares(self, path: str, new_tab: bool = False) -> None:
+        """The shared folders of this device, listed like a folder (``\\\\100.x.y.z``): its SMB shares, by its Tailscale address."""
+        item = self.tailnet_item(path)
+        if item is None:
+            self._say("This device is no longer in the list")
+            return
+        self.show_machine_shares(item.host, new_tab)
+
     def copy_tailnet_address(self, path: str) -> None:
         item = self.tailnet_item(path)
         if item is not None:
