@@ -63,7 +63,7 @@ def test_enter_on_a_device_row_does_the_same_and_the_context_menu_offers_every_k
     assert seen and seen[0].host.text() == "100.118.213.22"
     menu = win._home_menu(win.left, win.left.model.entry_at(row), row)
     texts = [a.text() for a in menu.actions() if not a.isSeparator()]
-    assert texts == ["Add as SFTP Server...", "Add as WebDAV Server...", "Add as OPDS Book Catalogue...", "Add as Subsonic Music Server...",
+    assert texts == ["Show Shared Folders", "Show Shared Folders in a New Tab", "Add as SFTP Server...", "Add as WebDAV Server...", "Add as OPDS Book Catalogue...", "Add as Subsonic Music Server...",
                      "Copy the Address", "Read the Tailnet Again"]
 
 
