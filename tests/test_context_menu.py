@@ -141,8 +141,9 @@ def test_the_home_page_gets_its_own_short_menus(world):
     m = win.left.model
     drive = next(r for r in range(m.entry_count()) if m.entry_at(r).kind in ("fixed", "other", "removable"))
     t = texts(win.build_context_menu(win.left, drive))
-    assert t == ["Open", "Open in a New Tab"]
-    action = next(r for r in range(m.entry_count()) if m.entry_at(r).kind == "action")
+    assert t[:2] == ["Open", "Open in a New Tab"] and len(t) in (3, 4)
+    assert t[2] == "Share..." or t[2].startswith("Shared as")             # a drive of this computer can be shared
+    action =next(r for r in range(m.entry_count()) if m.entry_at(r).kind == "action")
     assert texts(win.build_context_menu(win.left, action)) == ["Add a network share"]
     header = next(r for r in range(m.entry_count()) if m.entry_at(r).kind == "header")
     assert texts(win.build_context_menu(win.left, header)) == ["Add a Network Share..."]

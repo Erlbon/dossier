@@ -14,6 +14,7 @@ from ..core.filetags import CannotHoldTags, TagChange, apply_change, clean_tags
 from ..core.properties import Gathered, gather
 from .owned_dialog import OwnedDialog
 from .background import run_in_background
+from .sharing import SharingTab, can_share
 
 KIND_TITLES = {"audio": "Audio tags", "comic": "ComicInfo", "video": "Video details"}
 DIFFERENT = "(different)"
@@ -32,7 +33,7 @@ def split_tags(text: str) -> list:
 
 
 class PropertiesDialog(OwnedDialog):
-    def __init__(self, parent, data: Gathered, known_tags=()) -> None:
+    def __init__(self, parent, data: Gathered, known_tags=(), sharing_tab=None) -> None:
         super().__init__(parent)
         self.setWindowTitle(data.title)
         self.setMinimumWidth(560)
@@ -61,6 +62,9 @@ class PropertiesDialog(OwnedDialog):
         if data.tags or data.tags_reason:
             self.tags_tab = self._tags_tab(data)
             self.tabs.addTab(self.tags_tab, "Tags")
+        self.sharing_tab = sharing_tab
+        if sharing_tab is not None:
+            self.tabs.addTab(sharing_tab, "Sharing")
         buttons = QDialogButtonBox()
         self.save_button = QPushButton("Save Tags")
         self.save_button.setAutoDefault(False)
@@ -371,12 +375,14 @@ class PropertiesMixin:
         """Every tag seen or saved in this session (the "used before" list). Nothing is stored."""
         return self.__dict__.setdefault("_known_tag_set", set())
 
-    def show_properties(self) -> None:
+    def show_properties(self, paths=None, tab: str = "") -> None:
+        """The Properties of the marked items (or of ``paths``), opened on the tab called ``tab`` when it has one."""
         panel = self.active
-        if panel.is_home:
+        if paths is None and panel.is_home:
             self._say("The Home page lists shortcuts: open a folder to see the properties of its items")
             return
-        paths = [p for p in panel.targets() if self.fs.basename(p) != ".."]
+        if paths is None:
+            paths = [p for p in panel.targets() if self.fs.basename(p) != ".."]
         if not paths:
             self._say("Nothing to show: mark items or put the cursor on one")
             return
@@ -388,7 +394,11 @@ class PropertiesMixin:
         def finished(data) -> None:
             for t in data.tags.values():
                 self._known_tags.update(t.tags)
-            dlg = PropertiesDialog(self, data, self._known_tags)
+            tab_widget = SharingTab(self, data.share_path) if data.share_path and can_share(data.share_path) else None
+            dlg = PropertiesDialog(self, data, self._known_tags, sharing_tab=tab_widget)
+            for i in range(dlg.tabs.count()):
+                if tab and dlg.tabs.tabText(i) == tab:
+                    dlg.tabs.setCurrentIndex(i)
             self._show_properties_dialog(dlg)
             if dlg.change is not None and not dlg.change.is_empty():
                 self._write_tags(list(data.paths), dlg.change)

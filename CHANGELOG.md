@@ -2,6 +2,16 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-03#01 -- Share folders and drives on the network
+
+- **Right-click > Share...** on a folder, a drive on the Home page (or a place or pin there), or empty space (Share This Folder...) shares it over SMB. The Share dialog asks for the share name (the folder's name, or the drive's label; a name in use is refused), and who may use it: one line per person or group, each with Read only, Read and change or Full control. The Who list offers Everyone on the network, Only me, the user accounts of this computer, and any user or group you type. A mistyped name is refused before anything is asked of Windows.
+- **Sharing a whole drive** first says that everything on it is shared, and needs a confirm.
+- **The addresses** others type are shown with a Copy button each: by the computer's name, by its Tailscale address when it is on a tailnet, and by each local network address (only adapters with a gateway, so the virtual ones of Hyper-V and WSL are left out).
+- **Properties > Sharing** (new tab, for one folder or drive) lists every share of it with who may use it, and has Add..., Change... and Stop Sharing (after a confirm). On a shared folder the right-click menu says **Shared as Comics...** and opens that tab, and has **Copy Share Address** with every address of every share of it.
+- **Shared folders and drives get a small share mark** on their icon, and the new **Shared as** column (off until you switch it on in the column chooser) names their shares and sorts the shared ones first.
+- Each change is one administrator prompt (UAC) on Windows; Dossier itself still never runs as administrator. A refused prompt changes nothing and says so. "Everyone" is written and read by its SID, so it works on a Windows in any language. Deny entries made elsewhere are kept. The folder's own file permissions still apply, as with Explorer's Advanced Sharing. On Linux, Samba's usershares are used (no root needed when the system allows them).
+- **Properties of a whole drive** shows used and free space instead of adding up every folder on the drive.
+
 ## 2026-11-02#04 -- The arrow keys step through pictures in F3 too
 
 - **The F3 viewer steps through pictures with the keys**, as the glass viewer already did: Right, Page Down and Space go to the next picture, Left, Page Up and Backspace to the previous. A zoomed picture that is bigger than the window scrolls with them first; `0` fits it again. Before, only the wheel, Ctrl+Page Down/Up and the buttons stepped, and the arrows did nothing on a fitted picture.

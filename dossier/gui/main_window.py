@@ -44,6 +44,7 @@ from .auto_refresh import AutoRefreshMixin
 from .dates_links import DatesLinksMixin
 from .checksums import ChecksumMixin
 from .mounting import MountMixin
+from .sharing import SharingMixin
 from .properties import PropertiesMixin
 from .columns import ColumnsMixin
 from .archive_commands import ArchiveCommandsMixin
@@ -95,7 +96,7 @@ SUMMARY_ITEMS = 12    # the confirmation lists this many items, then says how ma
 SIZE_LIMIT = 1000    # the status line sizes at most this many marked items
 
 
-class MainWindow(FrostMixin, GlassViewMixin, KeysMixin, AutoRefreshMixin, MetadataEditMixin, HealthMixin, QuarantineMixin, NewFromContentMixin, TabSetsMixin, CommandCompletionMixin, DatesLinksMixin, ViewModesMixin, ToolsBarMixin, ContextMenuMixin, DragDropMixin, LookMixin, ZipEditMixin, ArchiveCommandsMixin, CopySettingsMixin, AssistantMixin, OpenFilesMixin, MenusMixin, WheelMixin, ToolsBarPlaceMixin, TailnetMixin, CompareFoldersMixin, ServersMixin, DuplicatesMixin, FolderLayoutsMixin, QueueResumeMixin, ColumnsMixin, PropertiesMixin, MountMixin, ChecksumMixin, MarksAndNotesMixin, SearchCommandMixin, BatchRenameMixin, OperationQueueMixin, StallLogMixin, GoingPlacesMixin, FolderSizesMixin, UnpackMixin, QMainWindow):
+class MainWindow(FrostMixin, GlassViewMixin, KeysMixin, AutoRefreshMixin, MetadataEditMixin, HealthMixin, QuarantineMixin, NewFromContentMixin, TabSetsMixin, CommandCompletionMixin, DatesLinksMixin, ViewModesMixin, ToolsBarMixin, ContextMenuMixin, DragDropMixin, LookMixin, ZipEditMixin, ArchiveCommandsMixin, CopySettingsMixin, AssistantMixin, OpenFilesMixin, MenusMixin, WheelMixin, ToolsBarPlaceMixin, TailnetMixin, CompareFoldersMixin, ServersMixin, DuplicatesMixin, FolderLayoutsMixin, QueueResumeMixin, ColumnsMixin, PropertiesMixin, SharingMixin, MountMixin, ChecksumMixin, MarksAndNotesMixin, SearchCommandMixin, BatchRenameMixin, OperationQueueMixin, StallLogMixin, GoingPlacesMixin, FolderSizesMixin, UnpackMixin, QMainWindow):
     def __init__(self, fs: Optional[FileSystem] = None, *, settings_path: Optional[str] = None, start=(None, None),
                  dialogs=None, trasher=None, terminal_launcher=None, which=None) -> None:
         super().__init__()
@@ -225,6 +226,7 @@ class MainWindow(FrostMixin, GlassViewMixin, KeysMixin, AutoRefreshMixin, Metada
         self.build_auto_refresh()                    # a change made by another program shows without a manual refresh (the two switches are in Settings)
         self.build_layouts()                         # folder layouts: applied when a folder is shown
         self.build_assistant()                       # the assistant feature (off until the owner switches it on)
+        self.build_sharing()                         # which folders are shared (read on a thread), for their mark and column
         self.build_tailnet()                         # the Tailnet section of the Home page (read from the local Tailscale, on a thread)
 
         self._restore(start)
@@ -344,6 +346,7 @@ class MainWindow(FrostMixin, GlassViewMixin, KeysMixin, AutoRefreshMixin, Metada
     def refresh(self) -> None:
         self.left.refresh()
         self.right.refresh()
+        self.refresh_shares()
 
     def _rebuild_icon_menu(self) -> None:
         for act in list(self.icon_set_actions.values()):

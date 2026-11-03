@@ -16,7 +16,7 @@ from PyQt6.QtWidgets import QApplication
 
 from ..core.columns import KEYS as column_keys, LABELS as column_labels, RIGHT_ALIGNED, attributes_text, location_text, type_text
 from ..core.columns import LABEL_COLORS, META_KEYS, label_text, rating_text, when
-from ..core import covers
+from ..core import covers, sharing
 from ..core.drives import is_remote_quick
 from ..core.filetypes import DRIVE_ICONS, icon_name
 from ..core.home import HOME_URL, TYPE_NAMES, USER_FOLDER_NOTE
@@ -25,6 +25,7 @@ from ..core.vfs import Entry, FileSystem, natural_key
 from . import icon_set, look, theme
 
 COLUMNS = tuple(column_labels[k] for k in column_keys)       # one per logical column, see core/columns.py
+SHARED_COL = column_keys.index("shared")
 HOME_COLUMNS = ("Name", "Type", "Details")
 ENTRY_ROLE = Qt.ItemDataRole.UserRole
 SORT_ROLE = Qt.ItemDataRole.UserRole + 1
@@ -88,6 +89,37 @@ def with_light(icon: QIcon, status: str) -> QIcon:
     p.end()
     result = QIcon(pm)
     _light_cache[key] = result
+    return result
+
+
+_share_cache: dict = {}
+
+
+def with_share_mark(icon: QIcon) -> QIcon:
+    """The icon with the share symbol in its lower right corner, on a dark disc so it reads on any row colour: the folder or
+    drive is shared on the network."""
+    key = icon.cacheKey()
+    if key in _share_cache:
+        return _share_cache[key]
+    ratio = 2
+    pm = QPixmap(icon.pixmap(16 * ratio, 16 * ratio))
+    pm.setDevicePixelRatio(1)
+    size = pm.width()
+    r = size * 0.30
+    cx, cy = size - r - 0.5, size - r - 0.5
+    p = QPainter(pm)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    p.setPen(Qt.PenStyle.NoPen)
+    p.setBrush(QColor(0, 0, 0, 190))
+    p.drawEllipse(QPointF(cx, cy), r + 1, r + 1)
+    glyph = icon_set.icon("share", "#ffffff").pixmap(int(r * 1.5), int(r * 1.5))
+    side = int(r * 1.5)
+    p.drawPixmap(int(cx - side / 2), int(cy - side / 2), side, side, glyph)
+    p.end()
+    result = QIcon(pm)
+    if len(_share_cache) > 200:
+        _share_cache.clear()
+    _share_cache[key] = result
     return result
 
 
@@ -156,10 +188,20 @@ class FolderModel(QAbstractTableModel):
         those columns is done again with what has arrived."""
         self._meta_info.update(info)
         first = column_keys.index(META_KEYS[0])
-        if self._sort_col >= first:
+        if column_keys[self._sort_col] in META_KEYS:
             self.sort(self._sort_col, self._sort_order)
         if self.entry_count():
             self.dataChanged.emit(self.index(0, first), self.index(self.entry_count() - 1, len(column_keys) - 1))
+
+    def shares_changed(self) -> None:
+        """The list of shared folders was read again: redraw the share marks and the Shared as column."""
+        if self._sort_col == SHARED_COL:
+            self.sort(self._sort_col, self._sort_order)
+        if self.rowCount():
+            self.dataChanged.emit(self.index(0, 0), self.index(self.rowCount() - 1, self.columnCount() - 1))
+
+    def _shared(self, entry: Entry) -> str:
+        return ", ".join(sharing.KNOWN.names_for(entry.path)) if entry.is_dir else ""
 
     def update_detail(self, path: str, detail: str, status: Optional[str] = None, note: str = "") -> None:
         """Fill in the third column of one Home entry (free space arrives after the page is shown), and its light."""
@@ -291,7 +333,8 @@ class FolderModel(QAbstractTableModel):
                 8: lambda e: (self._tag(e.path)[0].lower(), natural_key(e.name)),
                 9: lambda e: (self._tag(e.path)[1], natural_key(e.name)),
                 10: lambda e: (self._tag(e.path)[2], natural_key(e.name))}
-        if self._sort_col >= len(keys):                  # a metadata column: by its text, numbers in their natural order
+        keys[SHARED_COL] = lambda e: (not self._shared(e), self._shared(e).lower(), natural_key(e.name))   # shared first, by share name
+        if self._sort_col not in keys:                   # a metadata column: by its text, numbers in their natural order
             meta_key = column_keys[self._sort_col]
             keys[self._sort_col] = lambda e: (natural_key(self._meta(e.path, meta_key)), natural_key(e.name))
         reverse = self._sort_order == Qt.SortOrder.DescendingOrder
@@ -366,6 +409,8 @@ class FolderModel(QAbstractTableModel):
                 return label_text(self._tag(entry.path)[2])
             if col == 7:
                 return location_text(entry.path, self.fs.dirname)
+            if col == SHARED_COL:
+                return self._shared(entry)
             return self._meta(entry.path, column_keys[col])
         if role == Qt.ItemDataRole.DecorationRole and col == 0:
             if self.icon_px:
@@ -414,6 +459,8 @@ class FolderModel(QAbstractTableModel):
 
     def _home_icon(self, entry: Entry):
         icon = self._home_base_icon(entry)
+        if icon is not None and entry.is_dir and entry.kind != "header" and sharing.KNOWN.names_for(entry.path):
+            icon = with_share_mark(icon)
         return with_light(icon, entry.status) if entry.status and icon is not None else icon
 
     def _home_base_icon(self, entry: Entry):
@@ -489,7 +536,8 @@ class FolderModel(QAbstractTableModel):
         t = theme.current()
         name = icon_name(entry.name, is_dir=entry.is_dir, is_link=entry.is_link, is_up=is_up)
         color = t["marked"] if self.is_marked(entry) else (t["accent"] if entry.is_dir and not is_up else t["dim"])
-        return icon_set.icon(name, color)
+        icon = icon_set.icon(name, color)
+        return with_share_mark(icon) if entry.is_dir and not is_up and sharing.KNOWN.names_for(entry.path) else icon
 
     def refresh_marks(self) -> None:
         if self.entry_count():

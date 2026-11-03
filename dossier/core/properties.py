@@ -7,6 +7,7 @@ readers are the read-only ones of redactor_common (docs/metadata-plan.md, step 1
 from __future__ import annotations
 
 import os
+import shutil
 import stat as stat_module
 import sys
 from dataclasses import dataclass, field
@@ -47,6 +48,7 @@ class Gathered:
     edit_paths: list = field(default_factory=list)  # the items an edit would be written to
     edit_problems: dict = field(default_factory=dict)  # path -> why it cannot be read or changed (the rest can)
     edit_reason: str = ""                           # why nothing can be edited, when that is so
+    share_path: str = ""                            # one folder of this computer: the Sharing tab is about it
 
 
 def kind_of(path: str) -> str:
@@ -107,7 +109,15 @@ def one_item(fs, path: str, cancel: Optional[CancelToken] = None) -> Gathered:
             st = os.lstat(path)
         except OSError:
             st = None
-    if entry.is_dir:
+    if entry.is_dir and local:
+        out.share_path = path
+    if entry.is_dir and local and os.path.dirname(os.path.abspath(path)) == os.path.abspath(path):
+        try:                                           # a whole drive: what the drive says, not a walk through every folder on it
+            du = shutil.disk_usage(path)
+            f.append(Fact("Size", f"{_size_line(du.used)} used, {human_size(du.free)} free of {human_size(du.total)}"))
+        except OSError:
+            f.append(Fact("Size", "unknown"))
+    elif entry.is_dir:
         total = tree_size(fs, path, cancel)
         f.append(Fact("Size", f"{_size_line(total.size)} in {total.files:,} files and {total.folders:,} folders"
                       + (f"; {total.unreadable} folder(s) could not be read" if total.unreadable else "")))

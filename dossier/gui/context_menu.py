@@ -19,6 +19,7 @@ from . import file_clipboard
 from .tailnet import KINDS as TAILNET_KINDS
 
 ARCHIVE_NAMES = archives.FOLDER_EXTENSIONS
+SHARABLE_HOME_KINDS = ("fixed", "removable", "other", "place", "pin")     # drives and folders of this computer (not network, servers)
 
 
 class ContextMenuMixin:
@@ -112,6 +113,8 @@ class ContextMenuMixin:
             add("Open in the Other Panel", self.open_in_other_panel, keys="Ctrl+Left/Right")
             add("Terminal Here", lambda: self.open_terminal(folder=entry.path), enabled=not many, keys="Ctrl+Shift+T")
             add("Pin to the Home Page", lambda: self.pin_folder(entry.path), enabled=not many, keys="Ctrl+D")
+            if not many:
+                self.add_share_entries(menu, entry.path)
             add("Find Duplicate Files in This Folder...", lambda: self.find_duplicate_files(panel, entry.path), enabled=not many)
         else:
             add("View", self.view_file, enabled=not many, keys="F3")
@@ -157,6 +160,7 @@ class ContextMenuMixin:
         add("Select All", self.select_all, keys="Ctrl+A")
         menu.addSeparator()
         add("Terminal Here", self.open_terminal, keys="Ctrl+Shift+T")
+        self.add_share_entries(menu, panel.path, here=True)
         add("Search...", self.search_files, keys="Alt+F7")
         add("Find Duplicate Files...", self.find_duplicate_files, keys="Alt+Shift+F7")
         add("Compare with the Other Panel...", self.compare_folders, keys="Alt+Shift+F8")
@@ -197,6 +201,10 @@ class ContextMenuMixin:
                 if entry.kind in ("pin", "netloc"):
                     menu.addSeparator()
                     add("Remove from the Home Page", self.remove_from_home)
+                if entry.kind in SHARABLE_HOME_KINDS:
+                    menu.addSeparator()
+                    label = entry.name.split("  ", 1)[1] if "  " in entry.name else ""
+                    self.add_share_entries(menu, entry.path, label=label)
         if not menu.actions():
             add("Add a Network Share...", self.add_network_share)
         return menu
