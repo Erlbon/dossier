@@ -2,6 +2,12 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-03#04 -- Enter runs scripts
+
+- **Enter (or a double-click) on a script runs it**: `.bat`, `.cmd`, `.ps1` and `.py` on Windows (`.sh` and `.py` elsewhere). Before, a script counted as text and opened in the viewer. Ctrl+Enter now shows it in the viewer; F3 views and F4 edits as before.
+- A script runs in its own console window with **its own folder as the working folder**, so a batch file with relative paths works as when it is double-clicked in Explorer, also in a folder called something like `a & b (1)`. A PowerShell script starts the way Explorer's Run with PowerShell does it (execution policy Bypass for that one process unless the machine demands AllSigned; no setting is changed). A `.py` goes to the program Windows has for it.
+- **Settings > Opening Files > Run Scripts on Enter** (on by default) switches it off for those who would rather look first: then Enter shows a script and Ctrl+Enter runs it. With "Everything in the viewer" chosen, scripts are shown too.
+
 ## 2026-11-03#03 -- Copy and move progress on the taskbar button
 
 - **Dossier's taskbar button shows the operation queue** (Windows): the bar under the button fills as a copy or move runs, moves back and forth while a plan is being worked out, turns yellow while the queue is paused, and turns red while Dossier asks about a file it could not copy and while the report of a failed operation is open. It clears when the queue is empty. Windows 11 draws the fill in the accent colour, Windows 10 in green. Each window shows its own queue.
