@@ -6,6 +6,10 @@ Nothing here changes an archive in place. A new file is written beside the old o
 at the end (``rewrite`` through ``Swap``, so the old file goes to the recycle bin only after the new one is in place); a
 failure or a cancel leaves the original exactly as it was. Passwords are not written (the standard library cannot).
 Everything runs on a thread: the window passes a ``CancelToken`` and a ``progress(done, total)`` in bytes.
+
+The writing itself is redactor_common's ``core/zip_rewrite`` (since 2026-11-04 the one zip writer Dossier, cbzredactor and the
+other Redactor apps share): entries streamed in chunks, every entry's metadata and extra fields kept, legacy entry names kept byte
+for byte, every CRC checked before the swap. ``tests/test_shared_writers.py`` fails if a zip is written anywhere else.
 """
 from __future__ import annotations
 
@@ -19,8 +23,10 @@ import zipfile
 from dataclasses import dataclass, field
 from typing import Callable, Optional, Sequence
 
+from redactor_common.core.zip_rewrite import (Action, NewEntry, RewriteCancelled, RewriteError, RewritePlan, rewrite_archive,
+                                              write_new_archive, zip_date_time)
+
 from . import archives
-from .fsretry import replace_with_retry
 from .progress import Cancelled, CancelToken, check
 
 ZIP_BASED = (".zip", ".cbz", ".epub", ".docx", ".xlsx", ".pptx", ".odt", ".ods", ".odp", ".jar", ".apk", ".xpi", ".kmz",
@@ -29,8 +35,6 @@ STORE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".gif", ".webp", ".avif", ".zip", "
                     ".m4a", ".flac", ".ogg", ".opus", ".mp4", ".m4v", ".mkv", ".avi", ".mov", ".webm", ".docx", ".xlsx",
                     ".pptx", ".epub", ".cbz", ".jar")
 LEVELS = {"store": None, "fast": 1, "normal": 6, "maximum": 9}
-CHUNK = 1 << 20
-ZIP64_LIMIT = (1 << 31) - 1
 MAX_MEMBERS = 1_000_000
 TEMP_SUFFIX = ".dossier-part"
 
@@ -90,70 +94,21 @@ def _method(name: str, level: str, store_compressed: bool) -> tuple:
     return zipfile.ZIP_DEFLATED, LEVELS.get(level, 6)
 
 
-_UTF8_FLAG = 0x800
+def _attrs(mode: int, is_dir: bool) -> int:
+    """The external attributes of an entry for a file or folder with this ``st_mode`` (Unix mode, plus the DOS folder bit)."""
+    return ((stat.S_IFDIR | 0o755 if is_dir else (mode & 0xFFFF) | stat.S_IFREG) << 16) | (0x10 if is_dir else 0)
 
 
-class _RawNameInfo(zipfile.ZipInfo):
-    """A ZipInfo whose name is written as exactly these bytes (``_encodeFilenameFlags`` is the one hook zipfile has for both headers).
-    As cbzredactor's ``zip_names.RawNameInfo``: to be one shared module in redactor_common."""
-
-    def __init__(self, filename: str, date_time: tuple, raw_name: bytes) -> None:
-        super().__init__(filename, date_time)
-        self.raw_name = raw_name
-
-    def _encodeFilenameFlags(self):
-        return self.raw_name, self.flag_bits & ~_UTF8_FLAG
+def _new_entry(arcname: str, path: Optional[str], mtime: float, mode: int, is_dir: bool,
+               method: tuple = (zipfile.ZIP_STORED, None)) -> NewEntry:
+    """The entry for a file (streamed from ``path``) or a folder, with its own date and attributes, made on Unix (3)."""
+    return NewEntry(arcname + "/" if is_dir else arcname, date_time=zip_date_time(mtime), source_path=None if is_dir else path,
+                    compress_type=method[0], compresslevel=method[1], external_attr=_attrs(mode, is_dir), create_system=3)
 
 
-def _same_name_info(zi: zipfile.ZipInfo, name: str) -> zipfile.ZipInfo:
-    """The ZipInfo for an entry copied into the new archive under ``name``. An entry that keeps its name and was stored without the
-    UTF-8 flag keeps its name's bytes: zipfile read them as cp437, and writing that text back as UTF-8 turned ``Märchen.jpg`` (stored as
-    UTF-8 or Shift-JIS bytes by an old packer) into ``M├ñrchen.jpg`` for every program, for good."""
-    arcname = name + "/" if zi.is_dir() else name
-    unchanged = arcname == zi.filename
-    if unchanged and not zi.flag_bits & _UTF8_FLAG and not arcname.isascii() and callable(getattr(zipfile.ZipInfo, "_encodeFilenameFlags", None)):
-        return _RawNameInfo(arcname, zi.date_time, zi.orig_filename.encode("cp437"))
-    return zipfile.ZipInfo(arcname, zi.date_time)
-
-
-def _info(arcname: str, mtime: float, mode: int, is_dir: bool) -> zipfile.ZipInfo:
-    try:
-        stamp = time.localtime(max(mtime, 315532800))             # a zip cannot hold a date before 1980
-        zi = zipfile.ZipInfo(arcname + "/" if is_dir else arcname, stamp[:6])
-    except (OverflowError, OSError, ValueError):
-        zi = zipfile.ZipInfo(arcname + "/" if is_dir else arcname, (1980, 1, 1, 0, 0, 0))
-    zi.external_attr = ((stat.S_IFDIR | 0o755 if is_dir else (mode & 0xFFFF) | stat.S_IFREG) << 16) | (0x10 if is_dir else 0)
-    zi.create_system = 3
-    return zi
-
-
-def _set_method(zi: zipfile.ZipInfo, method: tuple) -> None:
-    zi.compress_type = method[0]
-    try:
-        zi._compresslevel = method[1]                               # the documented way to choose it per entry is private
-    except AttributeError:
-        pass
-
-
-class _Counter:
-    def __init__(self, total: int, progress: Optional[Callable]) -> None:
-        self.total, self.done, self.progress = max(total, 1), 0, progress
-
-    def add(self, n: int) -> None:
-        self.done += n
-        if self.progress is not None:
-            self.progress(min(self.done, self.total), self.total)
-
-
-def _copy_into(zf: zipfile.ZipFile, zi: zipfile.ZipInfo, src, size: int, counter: _Counter, cancel) -> None:
-    with zf.open(zi, "w", force_zip64=size > ZIP64_LIMIT) as out:
-        while True:
-            check(cancel)
-            block = src.read(CHUNK)
-            if not block:
-                break
-            out.write(block)
-            counter.add(len(block))
+def _should_cancel(cancel: Optional[CancelToken]) -> Callable[[], bool]:
+    """The shared writer's cancel poll: ``check`` raises ``Cancelled`` (and waits while paused)."""
+    return lambda: check(cancel) or False
 
 
 # pack ------------------------------------------------------------------------------------------------------------
@@ -194,27 +149,21 @@ def pack(sources: Sequence[str], dest: str, level: str = "normal", store_compres
                 total += os.path.getsize(p)
             except OSError:
                 pass
-    counter = _Counter(total, progress)
+
+    def entries():
+        for arcname, path, is_dir in items:
+            check(cancel)
+            try:
+                st = os.stat(path)
+            except OSError as e:
+                result.skipped.append((path, e.strerror or str(e)))
+                continue
+            yield _new_entry(arcname, path, st.st_mtime, st.st_mode, is_dir, _method(arcname, level, store_compressed))
+
     part = dest + TEMP_SUFFIX
     try:
-        with zipfile.ZipFile(part, "w", allowZip64=True) as zf:
-            for arcname, path, is_dir in items:
-                check(cancel)
-                try:
-                    st = os.stat(path)
-                    zi = _info(arcname, st.st_mtime, st.st_mode, is_dir)
-                    if is_dir:
-                        zf.writestr(zi, b"")
-                        result.folders += 1
-                        continue
-                    _set_method(zi, _method(arcname, level, store_compressed))
-                    zi.file_size = st.st_size
-                    with open(path, "rb") as src:
-                        _copy_into(zf, zi, src, st.st_size, counter, cancel)
-                    result.files += 1
-                    result.bytes_in += st.st_size
-                except OSError as e:
-                    result.skipped.append((path, e.strerror or str(e)))
+        written = write_new_archive(part, entries(), total_bytes=total, byte_progress=progress,
+                                    should_cancel=_should_cancel(cancel), on_unreadable=lambda _entry, _error: None)
         os.replace(part, dest)
     except BaseException:
         try:
@@ -222,6 +171,8 @@ def pack(sources: Sequence[str], dest: str, level: str = "normal", store_compres
         except OSError:
             pass
         raise
+    result.files, result.folders, result.bytes_in = written.files, written.folders, written.bytes_out
+    result.skipped.extend(written.skipped)
     return result
 
 
@@ -237,113 +188,68 @@ def rewrite(archive: str, *, remove: Sequence[str] = (), rename: Optional[dict] 
     members or folders (``rename``: old -> new), and add files (``add``: (name inside, local path) pairs; a path of ``None``
     makes an empty folder). The members that stay are copied with their own method, date and attributes and in their own order,
     so an epub's ``mimetype`` stays first and stored. The new zip is swapped in at the end and the old one goes to the
-    recycle bin (``trasher``)."""
+    recycle bin (``trasher``); when the bin refuses it, the new zip stays and the old one waits beside it as ``.dossier-old``."""
     reason = why_not_editable(archive)
     if reason:
         raise ZipWriteError(reason)
     rename = {k.strip("/"): v.strip("/") for k, v in (rename or {}).items()}
     remove = [r.strip("/") for r in remove]
-    result = WriteResult(path=archive)
-    part = archive + TEMP_SUFFIX
+    added = {name.strip("/"): src for name, src in add}
+
+    def new_name(name: str) -> Optional[str]:
+        """Where the member called ``name`` (no trailing slash) goes: its new name, or None when it is taken out."""
+        if any(_under(name, r) for r in remove):
+            return None
+        for old, new in rename.items():
+            if _under(name, old):
+                name = new + name[len(old):]
+                break
+        return None if name in added else name                   # replaced by an added item of the same name
+
+    with zipfile.ZipFile(archive) as zin:
+        kept = [n for n in (new_name(zi.filename.rstrip("/")) for zi in zin.infolist()) if n is not None]
+    names = kept + list(added)
+    if len(set(names)) != len(names):                            # names differing only in case are allowed: such cbz files exist
+        raise ZipWriteError("two entries would get the same name")
+
+    def decide(entry, _read):
+        name = new_name(entry.name.rstrip("/"))
+        if name is None:
+            return Action(drop=True)
+        target = name + "/" if entry.is_dir else name
+        return Action(rename=target) if target != entry.name else None
+
+    after: list = []
+    bytes_in = 0
+    for name, src_path in added.items():
+        if src_path is None:
+            after.append(_new_entry(name, None, time.time(), 0o755, True))
+            continue
+        st = os.stat(src_path)
+        bytes_in += st.st_size
+        after.append(_new_entry(name, src_path, st.st_mtime, st.st_mode, False, _method(name, level, True)))
     try:
-        with zipfile.ZipFile(archive) as zin:
-            infos = zin.infolist()
-            added = {name.strip("/"): src for name, src in add}
-            plan: list = []
-            for zi in infos:
-                name = zi.filename.rstrip("/")
-                if any(_under(name, r) for r in remove):
-                    continue
-                for old, new in rename.items():
-                    if _under(name, old):
-                        name = new + name[len(old):]
-                        break
-                if name in added:
-                    continue                                    # replaced by an added item of the same name
-                plan.append((zi, name))
-            names = [n for _z, n in plan] + [n for n in added]
-            if len(set(n.casefold() for n in names)) != len(names):
-                raise ZipWriteError("two entries would get the same name")
-            total = sum(zi.file_size for zi, _n in plan if not zi.is_dir())
-            for src in added.values():
-                if src is not None:
-                    total += os.path.getsize(src)
-            counter = _Counter(total, progress)
-            with zipfile.ZipFile(part, "w", allowZip64=True) as zout:
-                zout.comment = zin.comment
-                for zi, name in plan:
-                    check(cancel)
-                    copy = _same_name_info(zi, name)
-                    copy.compress_type = zi.compress_type
-                    copy.external_attr, copy.create_system, copy.comment, copy.extra = (zi.external_attr, zi.create_system,
-                                                                                      zi.comment, b"")
-                    copy.flag_bits = zi.flag_bits & 0x800
-                    if zi.is_dir():
-                        zout.writestr(copy, b"")
-                        result.folders += 1
-                        continue
-                    copy.file_size = zi.file_size
-                    with zin.open(zi) as src:
-                        _copy_into(zout, copy, src, zi.file_size, counter, cancel)
-                    result.files += 1
-                for name, src_path in added.items():
-                    check(cancel)
-                    if src_path is None:
-                        zout.writestr(_info(name, time.time(), 0o755, True), b"")
-                        result.folders += 1
-                        continue
-                    st = os.stat(src_path)
-                    zi = _info(name, st.st_mtime, st.st_mode, False)
-                    _set_method(zi, _method(name, level, True))
-                    zi.file_size = st.st_size
-                    with open(src_path, "rb") as src:
-                        _copy_into(zout, zi, src, st.st_size, counter, cancel)
-                    result.files += 1
-                    result.bytes_in += st.st_size
-        with zipfile.ZipFile(part) as check_zip:                 # the new file must read back before it replaces anything
-            if check_zip.testzip() is not None:
-                raise ZipWriteError("the new archive did not read back correctly; the original was kept")
-        _swap_in(archive, part, trasher)
-    except BaseException:
-        try:
-            os.remove(part)
-        except OSError:
-            pass
-        raise
-    return result
+        done = rewrite_archive(archive, archive, RewritePlan(decide=decide, after=after), dispose_original=trasher,
+                               temp_suffix=TEMP_SUFFIX, error_prefix="could not change the archive", byte_progress=progress,
+                               should_cancel=_should_cancel(cancel), namer=_old_name, keep_new_if_dispose_fails=True)
+    except RewriteError as e:
+        raise _write_error(e) from e
+    except RewriteCancelled as e:
+        raise Cancelled() from e
+    return WriteResult(path=archive, files=done.files, folders=done.folders, bytes_in=bytes_in)
 
 
-REPLACE_TRIES = 12                       # a program that has the archive open for a moment (the panel's listing, a virus
-REPLACE_WAIT = 0.1                       # scanner, a preview) lets go within a second or two: wait for it, do not give up
+def _old_name(archive: str) -> str:
+    """Where the old archive waits (and goes to the bin from): ``<name>.dossier-old``."""
+    return unique_path(archive + ".dossier-old")
 
 
-def _replace(src: str, dst: str) -> None:
-    """``os.replace`` that waits a little when another program has either file open (a sharing violation on Windows)."""
-    try:
-        replace_with_retry(src, dst, REPLACE_TRIES, REPLACE_WAIT)
-    except PermissionError as e:
-        raise ZipWriteError(f"the archive is in use by another program ({e.strerror or e}); nothing was changed") from e
-
-
-def _swap_in(archive: str, part: str, trasher: Optional[Callable]) -> None:
-    """Put the new file in the old one's place; the old one is set aside first and sent to the bin once the new one is there."""
-    old = unique_path(archive + ".dossier-old")
-    _replace(archive, old)
-    try:
-        _replace(part, archive)
-    except BaseException:
-        _replace(old, archive)
-        raise
-    try:
-        if trasher is not None:
-            trasher(old)
-        else:
-            os.remove(old)
-    except OSError:
-        pass                                                      # the old file stays beside the new one, named .dossier-old
-
-
-swap_in = _swap_in                       # public: other writers (the tags of an mp3, ComicInfo) put their new file in place the same way
+def _write_error(e: RewriteError) -> ZipWriteError:
+    """The shared writer's error in Dossier's words; a file another program holds open says so."""
+    cause = e.__cause__
+    if isinstance(cause, PermissionError) or (isinstance(cause, OSError) and getattr(cause, "winerror", None) in (32, 33)):
+        return ZipWriteError(f"the archive is in use by another program ({cause.strerror or cause}); nothing was changed")
+    return ZipWriteError(f"{e.detail}; the original was kept")
 
 
 # convert ---------------------------------------------------------------------------------------------------------

@@ -2,7 +2,8 @@
 
 On Windows a virus scanner, the search indexer or a preview often holds a file for a moment right after it was written, and the next
 rename then fails with a sharing violation (PermissionError). Waiting a little always helped; giving up at the first try lost the save.
-Shared by the text editor's save and the archive writer, so there is one rule.
+Used by the text editor's save. The archive and tag writers are redactor_common's (since 2026-11-04) and wait through a lock with its
+``os_utils.retry_on_lock``.
 """
 from __future__ import annotations
 

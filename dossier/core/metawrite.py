@@ -9,38 +9,41 @@ A file is never changed in place. The new version is made beside the old one (a 
 read back and checked, and only then put in the old one's place; the old file goes to the recycle bin (to be deleted at once on a drive
 that has none). Any failure or a cancel leaves the original exactly as it was. The tags Dossier keeps on the file itself (rating, label)
 follow the file.
+
+The writing is redactor_common's (since 2026-11-04 the one tag writer Dossier, cbzredactor and mp3redactor share): ``audio_write`` for
+the tags (an ID3 v2.3 tag stays v2.3; the copy reads back before the swap) and ``comicinfo_write`` for ComicInfo.xml (schema order, the
+xsi/xsd namespaces declared, empty elements dropped, PageCount refreshed from the pages, a nested ComicInfo.xml moved to the root, the new
+XML checked before the swap). ``tests/test_shared_writers.py`` fails if tags, ComicInfo.xml or a zip are written anywhere else.
 """
 from __future__ import annotations
 
 import os
-import shutil
-import tempfile
-import xml.etree.ElementTree as ET
 import zipfile
 from dataclasses import dataclass, field
 from typing import Callable, Iterable, Optional
+
+from redactor_common.cli import CliError
+from redactor_common.cli.values import check_text
+from redactor_common.core import audio_write, comicinfo_write
+from redactor_common.core.zip_rewrite import RewriteCancelled, RewriteError
 
 from . import zipwrite
 from .platform import has_scheme
 from .progress import Cancelled, CancelToken, check
 
 AUDIO, COMIC = "audio", "comic"
-AUDIO_EXTENSIONS = (".mp3", ".flac", ".ogg", ".oga", ".opus", ".m4a", ".m4b", ".mp4a")
+AUDIO_EXTENSIONS = audio_write.AUDIO_EXTENSIONS
 COMIC_EXTENSIONS = (".cbz",)
 TEMP_SUFFIX = ".dossier-part"
-MAX_XML = 2 * 1024 * 1024
-MAX_VALUE = 20_000
-CHUNK = 1 << 20
+MAX_XML = comicinfo_write.MAX_COMICINFO_BYTES
+MAX_VALUE = comicinfo_write.MAX_VALUE
 
 # (key, label). An audio key is mutagen's "easy" name; a comic key is the ComicInfo element.
-AUDIO_FIELDS = (("title", "Title"), ("artist", "Artist"), ("album", "Album"), ("albumartist", "Album artist"), ("tracknumber", "Track"),
-                ("discnumber", "Disc"), ("date", "Year or date"), ("genre", "Genre"), ("composer", "Composer"))
-# ComicInfo.xml keeps its elements in this order (schema 2.0); a new element goes where it belongs.
-COMIC_ORDER = ("Title", "Series", "Number", "Count", "Volume", "AlternateSeries", "AlternateNumber", "AlternateCount", "Summary", "Notes", "Year",
-               "Month", "Day", "Writer", "Penciller", "Inker", "Colorist", "Letterer", "CoverArtist", "Editor", "Translator", "Publisher", "Imprint",
-               "Genre", "Tags", "Web", "PageCount", "LanguageISO", "Format", "BlackAndWhite", "Manga", "Characters", "Teams", "Locations",
-               "ScanInformation", "StoryArc", "StoryArcNumber", "SeriesGroup", "AgeRating", "Pages", "CommunityRating", "MainCharacterOrTeam",
-               "Review", "GTIN")
+AUDIO_FIELDS = audio_write.AUDIO_FIELDS
+AUDIO_LIST_FIELDS = ("artist", "albumartist", "genre", "composer")    # may hold several values, shown joined with AUDIO_SEPARATOR
+AUDIO_SEPARATOR = "; "
+# ComicInfo.xml keeps its elements in this order (schema 2.0 and the 2.1 draft); the shared writer puts every element in its place.
+COMIC_ORDER = comicinfo_write.COMICINFO_ORDER
 COMIC_FIELDS = (("Series", "Series"), ("Number", "Number"), ("Count", "Count"), ("Volume", "Volume"), ("Title", "Title"), ("Summary", "Summary"),
                 ("Year", "Year"), ("Month", "Month"), ("Day", "Day"), ("Writer", "Writer"), ("Penciller", "Penciller"), ("Inker", "Inker"),
                 ("Colorist", "Colorist"), ("Letterer", "Letterer"), ("CoverArtist", "Cover artist"), ("Editor", "Editor"),
@@ -48,7 +51,7 @@ COMIC_FIELDS = (("Series", "Series"), ("Number", "Number"), ("Count", "Count"), 
                 ("AgeRating", "Age rating"), ("Manga", "Manga"), ("Web", "Web"))
 INTEGER_FIELDS = ("Count", "Volume", "Year", "Month", "Day")
 MULTILINE_FIELDS = ("Summary", "Notes", "Review", "comment", "lyrics")    # may hold line breaks and tabs
-MANGA_VALUES = ("Unknown", "No", "Yes", "YesAndRightToLeft")
+MANGA_VALUES = comicinfo_write.MANGA_VALUES
 
 
 class MetaWriteError(OSError):
@@ -114,78 +117,44 @@ def why_not_writable(path: str) -> str:
 
 
 def check_value(kind: str, key: str, value: str) -> str:
-    """Why ``value`` cannot be stored in ``key``, or an empty string."""
+    """Why ``value`` cannot be stored in ``key``, or an empty string (the shared writer's checks: control characters, whole numbers,
+    month and day ranges, the fixed value lists)."""
+    if kind == COMIC:
+        return comicinfo_write.check_comicinfo_value(key, value)
     if len(value) > MAX_VALUE:
         return "too long"
-    bad = next((c for c in value if ord(c) < 32 and not (key in MULTILINE_FIELDS and c in "\n\t")), None)
-    if bad is not None:                                  # XML 1.0 cannot hold them: the comic would get a ComicInfo.xml nobody can read
-        return f"cannot contain the control character U+{ord(bad):04X}"
-    if kind == COMIC:
-        if key in INTEGER_FIELDS and value and not (value.isascii() and value.isdigit()):   # "²".isdigit() is True, int("²") fails
-            return "must be a whole number"
-        if key == "Month" and value and not 1 <= int(value) <= 12:
-            return "must be 1 to 12"
-        if key == "Day" and value and not 1 <= int(value) <= 31:
-            return "must be 1 to 31"
-        if key == "Manga" and value and value not in MANGA_VALUES:
-            return "must be one of " + ", ".join(MANGA_VALUES)
+    try:
+        check_text(key, value, multiline=key in MULTILINE_FIELDS)
+    except CliError as e:
+        return str(e)[len(key):].strip()
     return ""
 
 
 # reading ---------------------------------------------------------------------------------------------------------------------------------------
 def _audio_values(path: str) -> dict:
-    import mutagen
     try:
-        easy = mutagen.File(path, easy=True)
-    except Exception as e:   # noqa: BLE001 -- a damaged file is a per-file problem, not a crash
-        raise MetaWriteError(f"the file could not be read: {e}") from e
-    if easy is None:
-        raise MetaWriteError("this is not an audio file Dossier can read")
-    tags = easy.tags or {}
-    out = {}
-    for key, _label in AUDIO_FIELDS:
-        try:
-            values = tags.get(key)
-        except (KeyError, ValueError):
-            values = None
-        out[key] = "; ".join(str(v) for v in values) if values else ""
-    return out
-
-
-def _comic_member(names: list) -> str:
-    best, depth = "", 1 << 30
-    for name in names:
-        flat = name.replace(chr(92), "/")
-        if flat.rsplit("/", 1)[-1].lower() == "comicinfo.xml" and flat.count("/") < depth:
-            best, depth = name, flat.count("/")
-    return best
+        values = audio_write.read_audio_tags(path, [k for k, _label in AUDIO_FIELDS])
+    except audio_write.AudioWriteError as e:
+        raise MetaWriteError(str(e).replace("an audio file that can be read", "an audio file Dossier can read")) from e
+    return {key: AUDIO_SEPARATOR.join(v) for key, v in values.items()}
 
 
 def _comic_root(path: str) -> tuple:
     """``(member name or "", the parsed ComicInfo root or None)`` of the cbz at ``path``."""
     try:
-        with zipfile.ZipFile(path) as z:
-            member = _comic_member([i.filename for i in z.infolist()])
-            if not member:
-                return "", None
-            info = z.getinfo(member)
-            if info.file_size > MAX_XML:
-                raise MetaWriteError(f"ComicInfo.xml is {info.file_size:,} bytes, too large to change safely")
-            try:
-                return member, ET.fromstring(z.read(member))
-            except ET.ParseError as e:
-                raise MetaWriteError(f"ComicInfo.xml is not valid XML ({e}); it was left alone") from e
+        member, root, _names = comicinfo_write.read_comicinfo_from_cbz(path)
     except zipfile.BadZipFile as e:
         raise MetaWriteError("not a zip archive (only cbz comics can be changed; convert a cbr to zip first)") from e
+    except comicinfo_write.ComicInfoError as e:
+        if "too large" in str(e):
+            raise MetaWriteError(str(e)) from e
+        raise MetaWriteError(f"ComicInfo.xml is not valid XML ({e}); it was left alone") from e
+    return member or "", root
 
 
 def _comic_values(path: str) -> dict:
     _member, root = _comic_root(path)
-    out = {}
-    for key, _label in COMIC_FIELDS:
-        node = root.find(key) if root is not None else None
-        out[key] = (node.text or "").strip() if node is not None else ""
-    return out
+    return comicinfo_write.comicinfo_values(root, [key for key, _label in COMIC_FIELDS])
 
 
 def read_values(path: str) -> dict:
@@ -259,61 +228,25 @@ def plan(paths: Iterable[str], edits: dict, cancel: Optional[CancelToken] = None
 
 
 # writing ---------------------------------------------------------------------------------------------------------------------------------------
-def _copy(src: str, dst: str, cancel: Optional[CancelToken]) -> None:
-    with open(src, "rb") as fin, open(dst, "wb") as fout:
-        while True:
-            check(cancel)
-            block = fin.read(CHUNK)
-            if not block:
-                break
-            fout.write(block)
-    shutil.copystat(src, dst)
+def _old_name(path: str) -> str:
+    """Where the old file waits (and goes to the bin from): ``<name>.dossier-old``, as for every other file Dossier replaces."""
+    return zipwrite.unique_path(path + ".dossier-old")
+
+
+def _audio_edit(key: str, value: str) -> list:
+    """The values a field's text stands for: a list field's text is split at AUDIO_SEPARATOR (lists in, lists out)."""
+    if not value:
+        return []
+    if key in AUDIO_LIST_FIELDS:
+        return [part.strip() for part in value.split(AUDIO_SEPARATOR.strip()) if part.strip()]
+    return [value]
 
 
 def _write_audio(path: str, changes: dict, cancel, trasher) -> None:
-    import mutagen
-    part = path + TEMP_SUFFIX
-    try:
-        _copy(path, part, cancel)
-        easy = mutagen.File(part, easy=True)
-        if easy is None:
-            raise MetaWriteError("this is not an audio file Dossier can write")
-        if easy.tags is None:
-            easy.add_tags()
-        for key, value in changes.items():
-            try:
-                if value:
-                    easy[key] = [value]
-                elif key in easy:
-                    del easy[key]
-            except (ValueError, KeyError) as e:
-                raise MetaWriteError(f"{label_of(AUDIO, key)}: {e}") from e
-        easy.save(**_id3_version_kept(part))
-        again = _audio_values(part)                                # the copy must read back with exactly what was asked for
-        for key, value in changes.items():
-            if again.get(key, "") != value and not (key in ("tracknumber", "discnumber", "date") and again.get(key, "").startswith(value)):
-                raise MetaWriteError(f"{label_of(AUDIO, key)} did not read back as written; the file was left as it was")
-        _carry_tags(path, part)
-        check(cancel)
-        zipwrite.swap_in(path, part, trasher)
-    except BaseException:
-        try:
-            os.remove(part)
-        except OSError:
-            pass
-        raise
-
-
-def _id3_version_kept(path: str) -> dict:
-    """The save arguments that keep an mp3's ID3 version: mutagen writes 2.4 unless told, and some car stereos and older players
-    read only 2.3 (mp3redactor keeps the version too). Other formats, and an mp3 without a tag yet, get the defaults."""
-    if not path.lower().endswith(".mp3" + TEMP_SUFFIX) and not path.lower().endswith(".mp3"):
-        return {}
-    try:
-        from mutagen.id3 import ID3
-        return {"v2_version": 3} if ID3(path).version[:2] == (2, 3) else {}
-    except Exception:   # noqa: BLE001 -- no tag yet, or one mutagen cannot read: the default (2.4)
-        return {}
+    audio_write.write_audio_tags(
+        path, {key: _audio_edit(key, value) for key, value in changes.items()}, labels=dict(AUDIO_FIELDS),
+        before_swap=_carry_tags, dispose_original=trasher, namer=_old_name, keep_new_if_dispose_fails=True,
+        should_cancel=lambda: check(cancel) or False, temp_prefix=".dossier-")
 
 
 def _carry_tags(src: str, dst: str) -> None:
@@ -325,61 +258,21 @@ def _carry_tags(src: str, dst: str) -> None:
         pass
 
 
-def _comic_xml(root: ET.Element, changes: dict) -> bytes:
-    for key, value in changes.items():
-        node = root.find(key)
-        if not value:
-            if node is not None:
-                root.remove(node)
-            continue
-        if node is None:
-            node = ET.Element(key)
-            position = len(root)
-            wanted = COMIC_ORDER.index(key) if key in COMIC_ORDER else len(COMIC_ORDER)
-            for i, child in enumerate(root):
-                if child.tag in COMIC_ORDER and COMIC_ORDER.index(child.tag) > wanted:
-                    position = i
-                    break
-            root.insert(position, node)
-        node.text = value
-    ET.indent(root, space="  ")
-    return b'<?xml version="1.0" encoding="utf-8"?>' + b"\n" + ET.tostring(root, encoding="utf-8")
-
-
-def _check_comic_xml(xml: bytes, changes: dict) -> None:
-    """The new ComicInfo.xml must parse and say what was asked for; checked before the archive is rewritten, so a failure leaves the
-    comic as it was (the check after writing comes too late: the old file is in the recycle bin by then)."""
-    try:
-        back = ET.fromstring(xml)
-    except ET.ParseError as e:
-        raise MetaWriteError(f"the new ComicInfo.xml would not be valid XML ({e}); the comic was left as it was") from e
-    for key, value in changes.items():
-        node = back.find(key)
-        if ((node.text or "").strip() if node is not None else "") != value:
-            raise MetaWriteError(f"{label_of(COMIC, key)} would not read back as written; the comic was left as it was")
-
-
 def _write_comic(path: str, changes: dict, cancel, trasher) -> None:
-    member, root = _comic_root(path)
-    if root is None:
-        root = ET.Element("ComicInfo")
-    xml = _comic_xml(root, changes)
-    _check_comic_xml(xml, changes)                                    # before the swap: a bad XML never replaces the comic
-    folder = tempfile.mkdtemp(prefix="dossier-comicinfo-")
+    reason = zipwrite.why_not_editable(path)
+    if reason:
+        raise zipwrite.ZipWriteError(reason)
     try:
-        source = os.path.join(folder, "ComicInfo.xml")
-        with open(source, "wb") as f:
-            f.write(xml)
-        zipwrite.rewrite(path, add=[(member or "ComicInfo.xml", source)], cancel=cancel, trasher=trasher)
-        with zipfile.ZipFile(path) as z:                              # what is in the archive now must say what was asked for
-            name = _comic_member([i.filename for i in z.infolist()])
-            back = ET.fromstring(z.read(name))
-        for key, value in changes.items():
-            node = back.find(key)
-            if ((node.text or "").strip() if node is not None else "") != value:
-                raise MetaWriteError(f"{label_of(COMIC, key)} did not read back as written")
-    finally:
-        shutil.rmtree(folder, ignore_errors=True)
+        comicinfo_write.write_comicinfo_into_cbz(
+            path, changes, dispose_original=trasher, namer=_old_name, keep_new_if_dispose_fails=True,
+            temp_suffix=TEMP_SUFFIX, error_prefix="could not change the comic", should_cancel=lambda: check(cancel) or False)
+    except comicinfo_write.ComicInfoError as e:
+        raise MetaWriteError(f"the new ComicInfo.xml would not be valid XML or would not say what was asked ({e}); "
+                             "the comic was left as it was") from e
+    except RewriteError as e:
+        raise zipwrite._write_error(e) from e
+    except RewriteCancelled as e:
+        raise Cancelled() from e
 
 
 def apply(items: Iterable[Item], cancel: Optional[CancelToken] = None, progress: Optional[Callable[[int, int], None]] = None,

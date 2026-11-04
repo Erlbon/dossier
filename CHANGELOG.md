@@ -2,6 +2,14 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-04#10 -- Tags, ComicInfo and zips are written by the writer the Redactor apps use (review section 6)
+
+Shared part: redactor_common 2026-11-04#02 (`core/zip_rewrite.py`, `core/comicinfo_write.py`, `core/audio_write.py`). Dossier, cbzredactor and mp3redactor now write the same file the same way; the build 2026-11-04#08 fixes (control characters refused, the new ComicInfo.xml checked before the swap, legacy entry names kept, values stripped, ID3 v2.3 kept) are part of the shared writer.
+- **ComicInfo.xml is written as cbzredactor writes it:** the xsi and xsd namespaces declared (its other root attributes kept), every element in the schema's order, empty elements dropped, PageCount set to the number of pages in the archive, and a ComicInfo.xml found in a subfolder moved to the top of the archive (readers look for it there). It stays deflated.
+- **Changing a zip keeps more:** each entry's extra fields and internal attributes are kept (they were dropped), and names that differ only in letter case (`Page.jpg`, `page.jpg`, found in real cbz files) are allowed. An entry name an old packer stored as UTF-8 without saying so is now read and written back as the UTF-8 name it is; any other old encoding is still kept byte for byte.
+- **Audio tags:** a field that holds several values (artist, album artist, genre, composer) is shown joined with "; " and written back as separate values. The new copy reads back before it replaces the file, as before; a symlinked file stays a link (the file it points to is changed).
+- New test `tests/test_shared_writers.py`: fails if anything in Dossier writes a zip, ComicInfo.xml or mutagen tags outside the shared writer.
+
 ## 2026-11-04#09 -- Clean-up and docs from the code review of 2026-11-04 (K1, K2, K5, K6, docs)
 
 Nothing changes in what the program does.

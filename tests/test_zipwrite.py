@@ -4,6 +4,8 @@ import zipfile
 
 import pytest
 
+from redactor_common.core import zip_rewrite as shared
+
 from dossier.core import zipwrite
 from dossier.core.progress import CancelToken, Cancelled
 from dossier.core.zipwrite import ZipWriteError, convert_to_zip, pack, rewrite, unique_path, why_not_editable
@@ -118,7 +120,7 @@ def test_a_failure_leaves_the_original_untouched_and_no_temporary_file(tmp_path,
     make_epub(epub)
     before = open(epub, "rb").read()
     calls = []
-    real = zipwrite._copy_into
+    real = shared._stream                                          # redactor_common's writer streams each kept member
 
     def boom(*a, **k):
         calls.append(1)
@@ -126,7 +128,7 @@ def test_a_failure_leaves_the_original_untouched_and_no_temporary_file(tmp_path,
             raise OSError("disk full")
         return real(*a, **k)
 
-    monkeypatch.setattr(zipwrite, "_copy_into", boom)
+    monkeypatch.setattr(shared, "_stream", boom)
     with pytest.raises(OSError):
         rewrite(epub, remove=["OEBPS/ch2.xhtml"], trasher=lambda p: None)
     assert open(epub, "rb").read() == before and sorted(os.listdir(tmp_path)) == ["book.epub"]
@@ -234,17 +236,17 @@ def test_a_program_that_has_the_archive_open_for_a_moment_is_waited_for(tmp_path
     with zipfile.ZipFile(z, "w") as w:
         w.writestr("a.txt", "1")
         w.writestr("b.txt", "2")
-    real = os.replace
+    real = os.rename
     refused = []
 
-    def busy_twice(src, dst):
+    def busy_twice(src, dst):                                      # the old archive is set aside first: that is where a lock bites
         if src == z and len(refused) < 2:
             refused.append(1)
             raise PermissionError(13, "in use")
         return real(src, dst)
 
-    monkeypatch.setattr(zipwrite.os, "replace", busy_twice)
-    monkeypatch.setattr(zipwrite, "REPLACE_WAIT", 0.01)
+    monkeypatch.setattr(os, "rename", busy_twice)
+    monkeypatch.setattr(shared, "_LOCK_RETRY", {"delay": 0})
     rewrite(z, remove=["a.txt"], trasher=lambda p: os.remove(p))
     assert refused == [1, 1] and names(z) == ["b.txt"]
 
@@ -254,15 +256,15 @@ def test_an_archive_that_stays_in_use_is_reported_and_left_as_it_was(tmp_path, m
     with zipfile.ZipFile(z, "w") as w:
         w.writestr("a.txt", "1")
     before = open(z, "rb").read()
-    real = os.replace
+    real = os.rename
 
     def always_busy(src, dst):
         if src == z:
             raise PermissionError(13, "in use")
         return real(src, dst)
 
-    monkeypatch.setattr(zipwrite.os, "replace", always_busy)
-    monkeypatch.setattr(zipwrite, "REPLACE_WAIT", 0.0)
+    monkeypatch.setattr(os, "rename", always_busy)
+    monkeypatch.setattr(shared, "_LOCK_RETRY", {"delay": 0})
     with pytest.raises(ZipWriteError, match="in use by another program"):
         rewrite(z, remove=["a.txt"], trasher=lambda p: None)
     assert open(z, "rb").read() == before and sorted(os.listdir(tmp_path)) == ["a.zip"]
@@ -270,7 +272,8 @@ def test_an_archive_that_stays_in_use_is_reported_and_left_as_it_was(tmp_path, m
 
 def test_a_name_stored_without_the_utf8_flag_keeps_its_bytes(tmp_path):
     """Old packers store UTF-8 (or Shift-JIS) names without saying so; zipfile reads them as cp437. Writing that text back as UTF-8
-    garbled the name for every program, for good; the name's bytes are now copied as they were."""
+    garbled the name for every program, for good. The shared writer (as cbzredactor did) reads valid UTF-8 bytes as the UTF-8 name
+    they are and writes them back flagged; other bytes are copied as they were (test_a_legacy_code_page_name_keeps_its_bytes)."""
     raw = "Märchen.jpg".encode("utf-8")
     placeholder = b"M" + b"X" * (len(raw) - 1 - len(b"rchen.jpg")) + b"rchen.jpg"
     assert len(placeholder) == len(raw)
@@ -286,4 +289,33 @@ def test_a_name_stored_without_the_utf8_flag_keeps_its_bytes(tmp_path):
     assert data.count(raw) == 2                                                  # the local and the central header, as they were
     assert "M├ñrchen.jpg".encode("utf-8") not in data
     with zipfile.ZipFile(z) as back:
-        assert back.read(raw.decode("cp437")) == b"picture" and back.read("added.txt") == b"x"
+        assert back.read("Märchen.jpg") == b"picture" and back.read("added.txt") == b"x"
+
+
+def test_a_legacy_code_page_name_keeps_its_bytes(tmp_path):
+    raw = "Märchen.jpg".encode("cp1252")                                    # not UTF-8: nobody can say what it is, so it is kept
+    placeholder = b"MXrchen.jpg"
+    z = tmp_path / "old.zip"
+    with zipfile.ZipFile(z, "w") as out:
+        out.writestr(placeholder.decode("ascii"), b"picture")
+    z.write_bytes(z.read_bytes().replace(placeholder, raw))
+    new = tmp_path / "add.txt"
+    new.write_text("x")
+    rewrite(str(z), add=[("added.txt", str(new))], trasher=lambda p: os.remove(p))
+    assert z.read_bytes().count(raw) == 2
+    with zipfile.ZipFile(z) as back:
+        assert back.read(raw.decode("cp437")) == b"picture"
+
+
+def test_extra_fields_internal_attributes_and_names_differing_in_case_are_kept(tmp_path):
+    z = tmp_path / "a.cbz"
+    with zipfile.ZipFile(z, "w") as out:
+        info = zipfile.ZipInfo("Page.jpg", (2001, 2, 3, 4, 5, 6))
+        info.extra = bytes([0x0A, 0, 4, 0]) + b"abcd"
+        info.internal_attr = 1
+        out.writestr(info, b"1")
+        out.writestr("page.jpg", b"2")                                            # such cbz files exist
+    rewrite(str(z), remove=["nothing"], trasher=lambda p: os.remove(p))
+    with zipfile.ZipFile(z) as back:
+        kept = back.getinfo("Page.jpg")
+        assert kept.extra == bytes([0x0A, 0, 4, 0]) + b"abcd" and kept.internal_attr == 1 and back.read("page.jpg") == b"2"

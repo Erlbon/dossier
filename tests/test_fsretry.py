@@ -50,6 +50,8 @@ def test_saving_a_text_file_survives_a_scanner_holding_the_new_file(tmp_path, mo
     assert not (tmp_path / "a.txt.dossier-save").exists()
 
 
-def test_the_editor_and_the_archive_writer_use_the_shared_rule():
+def test_the_editor_uses_the_shared_rule_and_the_archive_writer_the_tag_writers_one():
+    """Since 2026-11-04 the archive writer is redactor_common's zip_rewrite, whose swap waits through a lock with os_utils.retry_on_lock."""
+    from redactor_common.core import zip_rewrite
     assert textedit.replace_with_retry is fsretry.replace_with_retry
-    assert zipwrite.replace_with_retry is fsretry.replace_with_retry
+    assert zipwrite.rewrite_archive is zip_rewrite.rewrite_archive

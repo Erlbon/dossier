@@ -11,6 +11,8 @@ mutagen = pytest.importorskip("mutagen")
 
 from mutagen.id3 import APIC, ID3, TXXX  # noqa: E402
 
+from redactor_common.core import audio_write, comicinfo_write  # noqa: E402
+
 from dossier.core import filetags, metawrite as mw  # noqa: E402
 from dossier.core.progress import CancelToken, Cancelled  # noqa: E402
 
@@ -115,7 +117,7 @@ def test_a_bad_value_is_a_problem_in_the_plan_and_the_file_is_left_alone(tmp_pat
 def test_a_failed_write_leaves_the_original_and_no_leftovers(tmp_path, monkeypatch):
     path = make_mp3(tmp_path / "a.mp3", title="Keep")
     before = open(path, "rb").read()
-    monkeypatch.setattr(mw.zipwrite, "swap_in", lambda *a: (_ for _ in ()).throw(PermissionError(13, "in use")))
+    monkeypatch.setattr(audio_write, "swap_in", lambda *a, **k: (_ for _ in ()).throw(PermissionError(13, "in use")))
     result = mw.apply(mw.plan([path], {"title": "New"}))
     assert result.done == 0 and result.failed and "in use" in result.failed[0][1]
     assert open(path, "rb").read() == before and os.listdir(tmp_path) == ["a.mp3"]
@@ -225,12 +227,25 @@ def test_a_comic_without_comicinfo_gets_one_at_the_top(tmp_path):
         assert z.read("ComicInfo.xml").startswith(b"<?xml")
 
 
-def test_an_existing_comicinfo_in_a_folder_is_changed_where_it_is(tmp_path):
+def test_an_existing_comicinfo_in_a_folder_moves_to_the_top(tmp_path):
+    """As cbzredactor has always done (the shared writer, 2026-11-04): readers look for ComicInfo.xml at the top, and there is never two."""
     path = make_cbz(tmp_path / "a.cbz", member="meta/ComicInfo.xml")
     mw.apply(mw.plan([path], {"Series": "Deep"}))
     with zipfile.ZipFile(path) as z:
-        assert [n for n in z.namelist() if n.lower().endswith("comicinfo.xml")] == ["meta/ComicInfo.xml"]
-    assert comic_root(path, "meta/ComicInfo.xml").find("Series").text == "Deep"
+        assert [n for n in z.namelist() if n.lower().endswith("comicinfo.xml")] == ["ComicInfo.xml"]
+    assert comic_root(path).find("Series").text == "Deep" and comic_root(path).find("CustomThing").text == "keep"
+
+
+def test_comicinfo_is_written_the_way_cbzredactor_writes_it(tmp_path):
+    path = make_cbz(tmp_path / "a.cbz", info=b'<ComicInfo xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" '
+                                         b'xsi:noNamespaceSchemaLocation="ComicInfo.xsd"><Writer>W</Writer><Summary/>'
+                                         b'<Series>S</Series><PageCount>99</PageCount></ComicInfo>')
+    mw.apply(mw.plan([path], {"Title": "T"}))
+    with zipfile.ZipFile(path) as z:
+        xml, info = z.read("ComicInfo.xml"), z.getinfo("ComicInfo.xml")
+    assert b'xmlns:xsd="http://www.w3.org/2001/XMLSchema"' in xml and b'xsi:noNamespaceSchemaLocation="ComicInfo.xsd"' in xml
+    assert [c.tag for c in ET.fromstring(xml)] == ["Title", "Series", "Writer", "PageCount"]           # schema order, empty Summary gone
+    assert ET.fromstring(xml).find("PageCount").text == "3" and info.compress_type == zipfile.ZIP_DEFLATED
 
 
 def test_comic_values_are_checked(tmp_path):
@@ -275,7 +290,7 @@ def test_a_control_character_is_refused_and_never_breaks_a_comic(tmp_path):
 def test_a_new_comicinfo_that_would_not_parse_is_caught_before_the_swap(tmp_path, monkeypatch):
     path = make_cbz(tmp_path / "a.cbz")
     before = open(path, "rb").read()
-    monkeypatch.setattr(mw, "_comic_xml", lambda root, changes: b"<ComicInfo><Series>broken")
+    monkeypatch.setattr(comicinfo_write, "serialize_comicinfo", lambda root, page_count=None: b"<ComicInfo><Series>broken")
     items = mw.plan([path], {"Series": "New"})
     bin_ = Bin()
     result = mw.apply(items, trasher=bin_)
