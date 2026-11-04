@@ -78,11 +78,17 @@ Context        file system, entry, cancel token, progress callback, settings, sh
 
 These live in the apps today. Promote the checks themselves into `redactor_common` (plan step 4 of the 0.1 plan makes that package Qt-free) and let both the apps and Dossier call them.
 
-### E. Library structure and naming rules (folder scope, user-defined)
+### E. Library structure and naming rules: moved out of Dossier
 
-- Port the rule set of the comic structure checker (`C:\Dev\comic-checker\check_comics.py`: name style, country and lineage numbering, duplicate era numbers, loose CBZ beside era folders, wrong container formats, junk, `(N issues)` notes) as the first **rule profile**.
-- Rule profiles are data: a TOML file per library with pattern, condition, severity and optional fix (a rename pattern, F2). Nothing library-specific is hard-coded in Dossier.
-- Filename against pattern, series-number gaps (reuse `series_numbering`), folder-note presence (`about.md`, `artist.md`, `README.md`).
+**Removed from Dossier (owner, 2026-11-04).** Cleaning up a media library's folder tree (naming conventions,
+classification and lineage numbers, release tags, folder levels, series numbering, folder notes) belongs to the
+Ⅎolder Redactor, a Redactor-family app for data curators; Dossier is for programmers and tailscalers. None of it
+is built here, and nothing of it should be: not the comic-checker rules, not rule profiles per library, not
+checks of file names against a library's pattern, series-number gaps or folder-note presence. **Dossier's own
+renamer stays**: Rename by pattern (spec F2, `dossier/gui/batch_rename.py`) and F2 rename are file-manager tools
+and are not affected. The generic hygiene of group A (junk, unsafe
+names, empty files) stays in Dossier; sharing those checks with the Ⅎolder Redactor through one Qt-free module in
+`redactor_common` is looked at when that app's rules are written.
 
 ### F. Duplicates (library scope)
 
@@ -117,7 +123,7 @@ Sizes use the owner's scale (small under 2 minutes of Claude time, medium up to 
 | 4 | Health window: findings list, grouping, severity filter, select-into-selection, fix preview, ignore | L | large | Walk from finding to previewed fix to undo on real folders. **Built 2026-10-24** (layout B: groups by rule on the left, with All findings on top; ignores last one session) |
 | 5 | Redactor adapters (D): promote the checks to `redactor_common`, wrap them | C | large | Apps and Dossier report the same findings for the same files |
 | 6 | Media (C) through the tool locator: mp3val, ffmpeg decode pass, container checks | C | medium | Run on a sample set with and without the tools installed |
-| 7 | Rule profiles (E): TOML loader, the comic profile ported from `comic-checker`, fix patterns | C | large | The profile reproduces the old checker's summary on its sample folder |
+| 7 | ~~Rule profiles (E)~~: **dropped 2026-11-04**, moved to the Ⅎolder Redactor (see E) | — | — | — |
 | 8 | Near-duplicate fingerprints (F) and the mirror compare (G) | C | medium | Known near-duplicates in the sample set are paired |
 | 9 | Scheduling and trends: resumable T2 runs, "check on idle", history of health per folder, MCP read tools (list findings), later an AI helper that explains a finding and proposes a fix through the same plan rule | C then L | large | A night run over a large folder resumes after interruption |
 
@@ -138,7 +144,7 @@ Order logic: wave 0 first because everything hangs off it; wave 1 gives the bigg
 | # | Question | Recommendation |
 | --- | --- | --- |
 | H1 | Allow saving the findings and baseline between runs (opt-in checkbox, delete button)? | Yes as opt-in. Without it bit-rot detection (G) and incremental scans are impossible |
-| H2 | Which library first for real tests: comics (CBZ), EPUB, music, or video? | Comics: the structure checker and rules already exist and the library is the largest |
+| H2 | Which library first for real tests: comics (CBZ), EPUB, music, or video? | Comics, the largest library (the comic structure rules are no longer Dossier's, see E) |
 | H3 | Run checks where: on this PC, or also on the server through the command line? | Both. The core is Qt-free, so this costs nothing extra |
 | H4 | Optional dependencies (Pillow, pypdf) acceptable as extras, or standard library only? | Extras, off when missing |
 | H5 | Quarantine folder policy: one folder per library root, or beside the file? | **Decided (owner, 2026-10-24) and built:** by default `<drive>:\Temp\Quarantine` on each drive, or one folder of the owner's choice (Settings > Quarantine); mirrored paths, so a file can be put back. `core/quarantine.py` |
