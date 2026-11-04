@@ -78,8 +78,17 @@ class JobRunner:
         self._pool.submit(self._run, job, fn, on_progress, on_done)
         return job
 
-    def shutdown(self, wait: bool = True, cancel_futures: bool = False) -> None:
-        self._pool.shutdown(wait=wait, cancel_futures=cancel_futures)
+    def shutdown(self, wait: bool = True, cancel_futures: bool = False, timeout: Optional[float] = None) -> bool:
+        """Stop taking jobs. ``wait`` waits for the running ones, at most ``timeout`` seconds when it is given: a copy stuck on a
+        dead share must not keep a closing window on the screen. Returns False when a job was still running at the end."""
+        if not wait or timeout is None:
+            self._pool.shutdown(wait=wait, cancel_futures=cancel_futures)
+            return True
+        self._pool.shutdown(wait=False, cancel_futures=cancel_futures)
+        end = time.monotonic() + timeout
+        for thread in list(getattr(self._pool, "_threads", ())):
+            thread.join(max(0.0, end - time.monotonic()))
+        return not any(t.is_alive() for t in getattr(self._pool, "_threads", ()))
 
     # internals -----------------------------------------------------------------------------
     def _post(self, fn: Callable[[], None]) -> None:

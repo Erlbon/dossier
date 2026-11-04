@@ -32,6 +32,7 @@ from ..core.undo_log import Step, UndoAction, UndoLog
 from ..core.vfs import FileSystem, LocalFileSystem
 from ..core.worker import Job, JobRunner, JobState
 from .appicon import app_icon
+from .background import run_in_background
 from .command_line import CommandLine
 from .batch_rename import BatchRenameMixin
 from .command_completion import CommandCompletionMixin
@@ -94,6 +95,7 @@ EXTRACT_CONFIRM = 200 * 1024 * 1024     # a file unpacked from an archive: ask f
 STAT_LIMIT = 200      # at most this many sizes are read from the disk for one status line
 SUMMARY_ITEMS = 12    # the confirmation lists this many items, then says how many more
 SIZE_LIMIT = 1000    # the status line sizes at most this many marked items
+CLOSE_WAIT = 5.0     # seconds a closing window waits for a cancelled copy to stop
 
 
 class MainWindow(FrostMixin, GlassViewMixin, KeysMixin, AutoRefreshMixin, MetadataEditMixin, HealthMixin, QuarantineMixin, NewFromContentMixin, TabSetsMixin, CommandCompletionMixin, DatesLinksMixin, ViewModesMixin, ToolsBarMixin, ContextMenuMixin, DragDropMixin, LookMixin, ZipEditMixin, ArchiveCommandsMixin, CopySettingsMixin, AssistantMixin, OpenFilesMixin, MenusMixin, WheelMixin, ToolsBarPlaceMixin, TailnetMixin, CompareFoldersMixin, ServersMixin, DuplicatesMixin, FolderLayoutsMixin, QueueResumeMixin, ColumnsMixin, PropertiesMixin, SharingMixin, MountMixin, ChecksumMixin, MarksAndNotesMixin, SearchCommandMixin, BatchRenameMixin, OperationQueueMixin, StallLogMixin, GoingPlacesMixin, FolderSizesMixin, UnpackMixin, QMainWindow):
@@ -1015,13 +1017,16 @@ class MainWindow(FrostMixin, GlassViewMixin, KeysMixin, AutoRefreshMixin, Metada
         new = self.dialogs.ask_text("Rename", "New name:", old)
         if not new or new == old:
             return
-        plan = plan_rename(self.fs, entry.path, new)
-        if plan.conflicts:
-            self.dialogs.info("Rename", f"An item named {new} already exists here.")
-            return
-        plan = self._settle(plan)
-        if plan is not None:
-            self._run(plan, select=new)
+        path = entry.path
+
+        def go(plan: Plan) -> None:                              # the plan looks at the disk: made on a thread, settled here
+            if plan.conflicts:
+                self.dialogs.info("Rename", f"An item named {new} already exists here.")
+                return
+            plan = self._settle(plan)
+            if plan is not None:
+                self._run(plan, select=new)
+        self._plan_in_background("Preparing the rename", lambda watch: plan_rename(self.fs, path, new), go)
 
     def new_folder(self) -> None:
         if self.active.is_home:
@@ -1043,19 +1048,30 @@ class MainWindow(FrostMixin, GlassViewMixin, KeysMixin, AutoRefreshMixin, Metada
         if why:
             self.dialogs.info("New Folder", why[0].upper() + why[1:] + ".")
             return
-        path = self.fs.join(self.active.path, name)
-        try:
-            self.fs.mkdir(path)
-        except FileExistsError:
-            self.dialogs.info("New Folder", f"An item named {name} already exists here.")
-            return
-        except OSError as e:
-            self.dialogs.info("New Folder", f"Could not create the folder: {e.strerror or e}")
-            return
-        self.undo_log.push(UndoAction("New folder", [Step("created_dir", path)]))
-        self.active.set_folder(self.active.path, select=name)
-        if self.other.path == self.active.path:
-            self.other.refresh()
+        panel, folder = self.active, self.active.path
+        path = self.fs.join(folder, name)
+
+        def work(progress, cancel) -> str:                       # on a server or a slow share this is a round trip: on a thread
+            try:
+                self.fs.mkdir(path)
+            except FileExistsError:
+                return f"An item named {name} already exists here."
+            except OSError as e:
+                return f"Could not create the folder: {e.strerror or e}"
+            return ""
+
+        def made(problem: str) -> None:
+            if problem:
+                self.dialogs.info("New Folder", problem)
+                return
+            self.undo_log.push(UndoAction("New folder", [Step("created_dir", path)]))
+            if panel.path == folder:
+                panel.set_folder(folder, select=name)
+            for other in (self.left, self.right):
+                if other is not panel and other.path == folder:
+                    other.refresh()
+        run_in_background(self, self.cmd_runner, "New Folder", work, on_result=made, tracked=self._size_jobs, indeterminate=True,
+                          failed_title="New Folder")
 
     def delete(self, permanent: bool = False) -> None:
         if self.active.is_home:
@@ -1067,7 +1083,10 @@ class MainWindow(FrostMixin, GlassViewMixin, KeysMixin, AutoRefreshMixin, Metada
         if zip_parts(self.active.path) is not None:     # inside an open zip: the zip is written again without them
             self._delete_in_zip(sources)
             return
-        plan = plan_delete(self.fs, sources, to_trash=not permanent)
+        self._plan_in_background("Preparing the delete", lambda watch: plan_delete(self.fs, sources, to_trash=not permanent),
+                                 lambda plan: self._confirm_delete(plan, sources, permanent))
+
+    def _confirm_delete(self, plan: Plan, sources: list, permanent: bool) -> None:
         if plan.blocking or not plan.ops:
             self._settle(plan)
             return
@@ -1090,9 +1109,19 @@ class MainWindow(FrostMixin, GlassViewMixin, KeysMixin, AutoRefreshMixin, Metada
             self._run(plan, remember=self.intent_for(plan, sources))
 
     def undo(self) -> None:
-        if self.busy:
+        if self.busy or getattr(self, "_undoing", False):
             return
-        report = self.undo_log.undo_last(self.fs)
+        self._undoing = True                         # renames put back on a NAS or a server take a while: on a thread, one at a time
+
+        def done(report) -> None:
+            self._undo_done(report)
+
+        def end() -> None:
+            self._undoing = False
+        run_in_background(self, self.cmd_runner, "Undoing", lambda progress, cancel: self.undo_log.undo_last(self.fs),
+                          on_result=done, tracked=self._size_jobs, indeterminate=True, failed_title="Undo", on_end=end)
+
+    def _undo_done(self, report) -> None:
         if report is None:
             self._say("Nothing to undo (undo covers renames, moves on the same drive, and new folders)")
             return
@@ -1169,5 +1198,7 @@ class MainWindow(FrostMixin, GlassViewMixin, KeysMixin, AutoRefreshMixin, Metada
         self.settings.setValue("panel/left_header", self.left.table.horizontalHeader().saveState())
         self.settings.setValue("panel/right_header", self.right.table.horizontalHeader().saveState())
         self.settings.sync()
-        self.runner.shutdown(wait=True)
+        # The running copy was cancelled above and stops between chunks, removing its part file; one stuck on a dead share cannot
+        # stop, so the window waits a few seconds, not for ever (the program then ends after its own short grace, gui/app.leave).
+        self.runner.shutdown(wait=True, timeout=CLOSE_WAIT)
         super().closeEvent(event)

@@ -201,14 +201,52 @@ def test_a_permanent_delete_stops_between_items_when_cancelled(tmp_path):
 def test_shutdown_can_drop_the_jobs_that_have_not_started():
     runner = JobRunner(workers=1)
     started = []
-    gate = threading.Event()
-    runner.submit("first", lambda progress, cancel: (started.append(1), gate.wait(2)))
-    time.sleep(0.1)
+    gate, running = threading.Event(), threading.Event()
+    runner.submit("first", lambda progress, cancel: (started.append(1), running.set(), gate.wait(2)))
+    assert running.wait(10)                                         # the first one has started (an event, not a guess of time)
     runner.submit("second", lambda progress, cancel: started.append(2))
     runner.shutdown(wait=False, cancel_futures=True)
     gate.set()
     time.sleep(0.3)
     assert started == [1]
+
+
+def test_shutdown_with_a_timeout_does_not_wait_for_a_stuck_job():
+    """A copy stuck on a dead share cannot be stopped: a closing window waits a few seconds for it, not for ever."""
+    runner = JobRunner(workers=1)
+    gate, running = threading.Event(), threading.Event()
+    runner.submit("stuck", lambda progress, cancel: (running.set(), gate.wait(30)))
+    assert running.wait(10)
+    started = time.monotonic()
+    assert runner.shutdown(wait=True, timeout=0.3) is False
+    assert time.monotonic() - started < 5
+    gate.set()
+
+
+def test_a_copy_error_is_never_asked_about_while_the_window_closes(tmp_path):
+    """With Ask When a File Cannot Be Copied on, a cancelled copy used to ask the closing window and wait for an answer that never
+    came, while the window waited for the copy: neither ended."""
+    from tests.test_gui_commander import FakeDialogs
+    pytest.importorskip("PyQt6")
+    from PyQt6.QtWidgets import QApplication
+    from dossier.gui.main_window import MainWindow
+    QApplication.instance() or QApplication([])
+    (tmp_path / "a").mkdir()
+    dialogs = FakeDialogs()
+    win = MainWindow(fs=LocalFileSystem(), settings_path=str(tmp_path / "s.ini"), start=(str(tmp_path / "a"), str(tmp_path / "a")),
+                     dialogs=dialogs)
+    try:
+        win.settings.setValue("copy/ask_on_error", "true")
+        options = win._exec_options()
+        win._closing = True
+        answer = []
+        worker = threading.Thread(target=lambda: answer.append(options.on_error(None, "disk error")), daemon=True)   # a hang fails, never blocks the run
+        worker.start()
+        worker.join(5)
+        assert answer == ["abort"] and not getattr(dialogs, "errors_asked", None)
+    finally:
+        win._closing = False
+        win.close()
 
 
 def run_python(code, *args):

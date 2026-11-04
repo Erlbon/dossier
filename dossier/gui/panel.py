@@ -1640,17 +1640,49 @@ class Panel(QFrame):
             self.new_tab(entry.path)
         elif entry.is_dir:
             self.set_folder(entry.path)
-        elif not has_scheme(entry.path) and archives.opens_by_name(entry.path):
-            self.set_folder(zipfs.archive_root(entry.path))          # an archive opens like a folder
-        elif not has_scheme(entry.path) and archives.missing_reader_by_name(entry.path):
-            self.message.emit(archives.missing_reader_by_name(entry.path))   # say what would open it, then let the system try
-            QDesktopServices.openUrl(QUrl.fromLocalFile(entry.path))
-        elif self.file_hook and self.file_hook(entry.path, new_tab):
-            return                                            # the window opened it (in the viewer, or in the Windows program)
-        elif has_scheme(entry.path):
-            self.open_archived.emit(entry.path)               # the window unpacks it on a thread, then opens it
+        elif not has_scheme(entry.path) and entry.path.lower().endswith(archives.FOLDER_EXTENSIONS) and self._dispatch is not None:
+            self._open_archive_named(entry.path, new_tab)             # whether it opens as a folder is read from the file: on a thread
         else:
-            QDesktopServices.openUrl(QUrl.fromLocalFile(entry.path))
+            self._open_file(entry.path, new_tab)
+
+    def _open_archive_named(self, path: str, new_tab: bool) -> None:
+        """A file whose name says archive: its content decides (a zip opens like a folder; a broken one or one with no reader goes
+        to the system). Reading that is a look into the file, which on a slow share must not hold the window."""
+        shown = self.model.path
+
+        def work() -> None:
+            try:
+                opens = archives.opens_by_name(path)
+                missing = "" if opens else archives.missing_reader_by_name(path)
+            except OSError:
+                opens, missing = False, ""
+
+            def go() -> None:
+                if self.model.path != shown:
+                    return                                            # the owner went elsewhere meanwhile
+                if opens:
+                    self.set_folder(zipfs.archive_root(path))         # an archive opens like a folder
+                elif missing:
+                    self.message.emit(missing)                        # say what would open it, then let the system try
+                    QDesktopServices.openUrl(QUrl.fromLocalFile(path))
+                else:
+                    self._open_file(path, new_tab, archive_checked=True)
+            self._dispatch(go)
+
+        threading.Thread(target=work, daemon=True, name="dossier-archive-check").start()
+
+    def _open_file(self, path: str, new_tab: bool, archive_checked: bool = False) -> None:
+        if not archive_checked and not has_scheme(path) and archives.opens_by_name(path):
+            self.set_folder(zipfs.archive_root(path))                # (no dispatcher: tests without a window) an archive opens like a folder
+        elif not archive_checked and not has_scheme(path) and archives.missing_reader_by_name(path):
+            self.message.emit(archives.missing_reader_by_name(path))
+            QDesktopServices.openUrl(QUrl.fromLocalFile(path))
+        elif self.file_hook and self.file_hook(path, new_tab):
+            return                                            # the window opened it (in the viewer, or in the Windows program)
+        elif has_scheme(path):
+            self.open_archived.emit(path)                     # the window unpacks it on a thread, then opens it
+        else:
+            QDesktopServices.openUrl(QUrl.fromLocalFile(path))
 
     def open_as_archive(self) -> None:
         """Ctrl+PageDown: open the file under the cursor as a folder whatever it is called, when its content is an
@@ -1658,10 +1690,22 @@ class Panel(QFrame):
         entry = self.current_entry()
         if entry is None or entry.is_dir or has_scheme(entry.path):
             self.message.emit("Put the cursor on a file to open it as an archive")
-        elif zipfs.is_archive(entry.path):
-            self.set_folder(zipfs.archive_root(entry.path))
+        elif self._dispatch is None:
+            self._opened_as_archive(entry.path, entry.name, zipfs.is_archive(entry.path))
         else:
-            self.message.emit(archives.missing_reader(entry.path) or f"{entry.name} is not an archive Dossier can read")
+            path, name, shown = entry.path, entry.name, self.model.path
+
+            def work() -> None:                               # the content decides: read on a thread, not on the window's
+                found = zipfs.is_archive(path)
+                why = "" if found else archives.missing_reader(path)
+                self._dispatch(lambda: self._opened_as_archive(path, name, found, why) if self.model.path == shown else None)
+            threading.Thread(target=work, daemon=True, name="dossier-archive-check").start()
+
+    def _opened_as_archive(self, path: str, name: str, found: bool, why: Optional[str] = None) -> None:
+        if found:
+            self.set_folder(zipfs.archive_root(path))
+        else:
+            self.message.emit((why if why is not None else archives.missing_reader(path)) or f"{name} is not an archive Dossier can read")
 
     def _address_entered(self) -> None:
         text = self.address.text().strip()

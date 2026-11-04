@@ -184,6 +184,8 @@ class OperationQueueMixin:
                 """Called on a worker thread: the question is asked on the window's thread and the worker waits."""
                 if skip_all:
                     return "skip"
+                if getattr(self, "_closing", False):
+                    return "abort"                               # the window is going: nobody is there to answer
                 answer: dict = {}
                 ready = threading.Event()
 
@@ -197,7 +199,9 @@ class OperationQueueMixin:
                         ready.set()
 
                 self.dispatcher(ask)
-                ready.wait()
+                while not ready.wait(0.25):
+                    if getattr(self, "_closing", False):          # closing waits for this thread: it must not wait for the window
+                        return "abort"
                 choice = answer.get("v", "skip")
                 if choice == "skip_all":
                     skip_all.append(True)

@@ -2,6 +2,16 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-04#04 -- Freeze fixes from the code review of 2026-11-04
+
+Fixes for the freeze findings F1, F2, F4, F5, F6, F8 and F10 in `docs/code-review-2026-11-04.md`.
+
+- **Choosing Overwrite for many conflicts no longer freezes the window.** Each choice in the conflict dialog used to look up the drive of every file to be replaced, so 250 conflicts took 20 seconds and 500 took a minute. The count of files that will be gone for good is now made once, one lookup per folder. That warning now comes first in the list, so it can no longer be cut off below other warnings.
+- **Closing the window never hangs on a stuck copy.** It waits at most 5 seconds for a cancelled copy to stop. With Ask When a File Cannot Be Copied on, a copy that failed while the window was closing used to ask the closing window and wait for an answer, while the window waited for the copy: neither ended. Now the copy just stops.
+- **These no longer look at the disk on the window's thread:** the plans for Delete, Delete Permanently, Rename, Batch Rename and Synchronize; Undo; and New Folder. On a slow NAS or a hung server each could freeze the window for seconds, or a minute.
+- **Enter on an archive** (and Ctrl+PageDown) reads the file on a thread to see whether it opens as a folder.
+- Tests: `tests/test_window_thread_io.py` checks that each of these runs off the window's thread. A test that guessed a job had started after 0.1 seconds now waits for it.
+
 ## 2026-11-04#03 -- Sharing folders is experimental and off by default
 
 - **Settings > Network Sharing > Allow Sharing Folders (Experimental)**, off by default. Making, changing and stopping a share changes Windows' settings as administrator and can open a disk to the network, and the real elevated flow has not been tried end to end yet. So until you switch it on:

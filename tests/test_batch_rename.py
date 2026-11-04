@@ -136,6 +136,7 @@ def test_a_rename_is_one_undo_and_the_marks_follow_the_files(world, monkeypatch)
     assert listing(left) == ["new_a.txt", "new_b.txt"]
     assert sorted(os.path.basename(p) for p in win.selection.paths()) == ["new_a.txt", "new_b.txt"]
     win.undo()
+    pump(win, lambda: listing(left) == ["a.txt", "b.txt"])                     # undo runs on a thread
     assert listing(left) == ["a.txt", "b.txt"]
 
 

@@ -257,7 +257,11 @@ class CompareFoldersMixin:
         if action != "sync" or not actions:
             return
         summary = sync.summarise(actions)
-        plans = sync.build_plans(self.fs, left, right, actions)
+        self._plan_in_background("Preparing the synchronization", lambda watch: sync.build_plans(self.fs, left, right, actions),
+                                 lambda plans: self._confirm_sync(plans, summary, left, right))
+
+    def _confirm_sync(self, plans: list, summary, left: str, right: str) -> None:
+        """The sync plans were made on a thread (they walk both trees); asked about and queued here."""
         if not plans:
             return
         text = f"Synchronize {left} and {right}:{chr(10)}{chr(10)}{summary.text().capitalize()}." + (

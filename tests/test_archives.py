@@ -254,7 +254,7 @@ def test_enter_on_an_archive_nobody_can_read_says_what_helps_and_does_not_crash(
     from PyQt6.QtWidgets import QApplication
     from dossier.gui import panel as panel_module
     from dossier.gui.main_window import MainWindow
-    from tests.test_gui_commander import FakeDialogs, key
+    from tests.test_gui_commander import FakeDialogs, key, pump
     app = QApplication.instance() or QApplication([])
     monkeypatch.setattr(archives, "have_py7zr", lambda: False)
     monkeypatch.setattr(archives, "find_seven_zip", lambda: None)
@@ -270,6 +270,7 @@ def test_enter_on_an_archive_nobody_can_read_says_what_helps_and_does_not_crash(
         win.left.refresh()
         win.left.table.setCurrentIndex(win.left.model.index(win.left.model.row_of("a.rar"), 0))
         key(win, Qt.Key.Key_Return)
+        pump(win, lambda: opened)                                                # the file is looked into on a thread
         assert "7-Zip" in win.status.text() and len(opened) == 1 and not win.left.path.startswith("zip://")
     finally:
         win.close()

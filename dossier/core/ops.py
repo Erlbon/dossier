@@ -96,11 +96,12 @@ class Plan:
         stay in conflict. The highest step goes first, so dropping one never shifts the numbers still to be used."""
         plan = self
         for i in sorted(choices, reverse=True):
-            plan = plan.resolve(choices[i], fs, only=[i])
-        return plan
+            plan = plan.resolve(choices[i], fs, only=[i], note=False)
+        return plan.with_bin_note()          # once at the end: per choice it made a few hundred conflicts take a minute
 
-    def resolve(self, resolution: Resolution, fs: FileSystem, only: Optional[Iterable[int]] = None) -> "Plan":
-        """Settle conflicts (all of them, or the listed step numbers). Returns a new plan."""
+    def resolve(self, resolution: Resolution, fs: FileSystem, only: Optional[Iterable[int]] = None, *, note: bool = True) -> "Plan":
+        """Settle conflicts (all of them, or the listed step numbers). Returns a new plan. ``note``: say in the warnings how many
+        older files will be gone for good (``with_bin_note``); a caller settling many one by one asks for it once at the end."""
         chosen = None if only is None else set(only)
         ops = list(self.ops)
         skipped = list(self.skipped)
@@ -134,13 +135,25 @@ class Plan:
                 else:
                     ops[i] = replace(op, overwrite=True, conflict="")
         kept = tuple(op for i, op in enumerate(ops) if i not in drop)
-        warnings = self.warnings
-        gone = sum(1 for op in kept if op.overwrite and _no_bin(op.dst))
-        note = (f"{gone} older file{'s' if gone != 1 else ''} on a network drive, server or USB stick will be deleted permanently "
-                "when replaced: a network drive, server or USB stick has no recycle bin, and this cannot be undone")
-        if gone and note not in warnings:
-            warnings = warnings + (note,)
-        return replace(self, ops=kept, skipped=tuple(skipped), warnings=warnings)
+        plan = replace(self, ops=kept, skipped=tuple(skipped))
+        return plan.with_bin_note() if note else plan
+
+    def with_bin_note(self) -> "Plan":
+        """The plan with one warning, first in the list, saying how many older files an overwrite deletes for good (no recycle bin
+        where they are); an earlier count is replaced. Each folder is looked up once, not each file."""
+        no_bin: dict = {}
+        gone = 0
+        for op in self.ops:
+            if op.overwrite:
+                folder = os.path.dirname(op.dst) if not has_scheme(op.dst) else op.dst.rsplit("/", 1)[0]
+                if folder not in no_bin:
+                    no_bin[folder] = _no_bin(op.dst)
+                gone += no_bin[folder]
+        warnings = tuple(w for w in self.warnings if not w.endswith(_BIN_NOTE_TAIL))
+        if gone:
+            warnings = (f"{gone} older file{'s' if gone != 1 else ''} on a network drive, server or USB stick will be deleted "
+                        f"permanently when replaced: {_BIN_NOTE_TAIL}",) + warnings
+        return replace(self, warnings=warnings)
 
 
 def looks_identical(op: "Op") -> bool:
@@ -179,6 +192,7 @@ def conflict_rows(plan: "Plan", fs: FileSystem) -> list:
 
 
 _SAME_ITEM = "this is the same item"
+_BIN_NOTE_TAIL = "a network drive, server or USB stick has no recycle bin, and this cannot be undone"
 _NO_OVERWRITE = "a folder, or the item itself, cannot be overwritten: skip it or keep both"
 
 

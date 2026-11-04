@@ -86,15 +86,17 @@ class BatchRenameMixin:
         if not pairs:
             self._say("Nothing to rename: every name stays as it is")
             return
-        plan = plan_rename_many(self.fs, pairs)
-        if plan.blocking:
-            self.dialogs.info("Batch Rename", chr(10).join(plan.blocking[:8]))
-            return
-        if plan.conflicts:
-            names = [self.fs.basename(plan.ops[i].dst) for i in plan.conflicts[:8]]
-            self.dialogs.info("Batch Rename", f"{len(plan.conflicts)} new names are taken or repeat:{chr(10)}" + chr(10).join(names))
-            return
-        self._run(plan)
+
+        def go(plan) -> None:                                    # two looks at the disk per name: made on a thread, shown here
+            if plan.blocking:
+                self.dialogs.info("Batch Rename", chr(10).join(plan.blocking[:8]))
+                return
+            if plan.conflicts:
+                names = [self.fs.basename(plan.ops[i].dst) for i in plan.conflicts[:8]]
+                self.dialogs.info("Batch Rename", f"{len(plan.conflicts)} new names are taken or repeat:{chr(10)}" + chr(10).join(names))
+                return
+            self._run(plan)
+        self._plan_in_background("Preparing the renames", lambda watch: plan_rename_many(self.fs, pairs), go)
 
     # ---------------------------------------------------------------------------------------------------------
     def rename_by_pattern(self) -> None:

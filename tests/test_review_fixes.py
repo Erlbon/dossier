@@ -250,6 +250,7 @@ def test_ctrl_pagedown_on_a_plain_file_says_it_is_not_an_archive(world):
     win.left.refresh()
     win.left.table.setCurrentIndex(win.left.model.index(win.left.model.row_of("note.txt"), 0))
     key(win, Qt.Key.Key_PageDown, Qt.KeyboardModifier.ControlModifier)
+    pump(win, lambda: "not an archive" in win.status.text())                     # read on a thread
     assert "not an archive" in win.status.text() and not win.left.path.startswith("zip://")
 
 
@@ -309,4 +310,5 @@ def test_undo_in_the_window_after_an_overwrite_says_there_is_nothing_to_undo(wor
     wait_planned(win)
     pump(win, lambda: (right / "a.txt").read_text() == "NEW")
     win.undo()
+    pump(win, lambda: "Nothing to undo" in win.status.text())
     assert "Nothing to undo" in win.status.text() and (right / "a.txt").read_text() == "NEW"

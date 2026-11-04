@@ -181,6 +181,7 @@ def test_f5_copies_marked_files_to_the_other_panel_and_undo_does_not_touch_them(
     assert len(win.selection) == 0                      # marks are cleared after a copy
     assert names(win.right) == ["..", "a.txt", "b.txt"]  # the other panel refreshed
     win.undo()                                          # a copy has no undo: the copies stay
+    pump(win, lambda: "Nothing to undo" in win.status.text())
     assert (right / "a.txt").exists() and (right / "b.txt").exists()
     assert "Nothing to undo" in win.status.text()
 
@@ -233,6 +234,7 @@ def test_f7_creates_a_folder_and_f2_renames(world):
     win, dialogs, left, _r, _t = world
     dialogs.texts = ["newdir"]
     key(win, Qt.Key.Key_F7)
+    pump(win, lambda: win.left.current_name() == "newdir")                   # made on a thread
     assert (left / "newdir").is_dir() and win.left.current_name() == "newdir"
     dialogs.texts = ["renamed"]
     key(win, Qt.Key.Key_F2)
@@ -244,6 +246,7 @@ def test_bad_folder_name_is_refused(world):
     win, dialogs, left, _r, _t = world
     dialogs.texts = ["a/b"]
     key(win, Qt.Key.Key_F7)
+    pump(win, lambda: dialogs.infos)
     assert dialogs.infos and os.listdir(left) == []
 
 

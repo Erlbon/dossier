@@ -180,6 +180,7 @@ def test_the_delete_confirmation_says_there_is_no_recycle_bin_on_a_network_drive
     win.left.refresh()
     win.left.table.setCurrentIndex(win.left.model.index(1, 0))
     win.delete()
+    pump(win, lambda: dialogs.confirms)                                           # the plan is made on a thread first
     title, text = dialogs.confirms[-1]
     assert "Network" in title and "no " in text and "permanently" in text and "cannot be brought back" in text
 
@@ -192,6 +193,7 @@ def test_a_mixed_delete_names_how_many_go_where(world, monkeypatch):
     win.left.refresh()
     win.select_all()
     win.delete()
+    pump(win, lambda: dialogs.confirms)                                           # the plan is made on a thread first
     text = dialogs.confirms[-1][1]
     assert "1 of 2" in text and "The other 1 go to the" in text
 
@@ -202,4 +204,23 @@ def test_a_normal_delete_still_asks_about_the_recycle_bin(world):
     win.left.refresh()
     win.left.table.setCurrentIndex(win.left.model.index(1, 0))
     win.delete()
+    pump(win, lambda: dialogs.confirms)                                           # the plan is made on a thread first
     assert dialogs.confirms[-1][0] == "Delete" and "to the" in dialogs.confirms[-1][1]
+
+
+def test_settling_many_conflicts_one_by_one_looks_at_each_folder_once(tmp_path, monkeypatch):
+    """The conflict dialog settles each conflict on its own; the drive lookup per file per conflict made 500 conflicts freeze
+    the window for a minute. Now the count of files lost for good is made once, one lookup per folder."""
+    (tmp_path / "src").mkdir()
+    (tmp_path / "dst").mkdir()
+    n = 300
+    for i in range(n):
+        write(tmp_path / "src" / f"f{i}.txt", "NEW")
+        write(tmp_path / "dst" / f"f{i}.txt", "OLD")
+    looked = []
+    monkeypatch.setattr(ops_module, "is_network_path", lambda path: looked.append(path) or True)
+    plan = plan_copy(fs, [str(tmp_path / "src" / f"f{i}.txt") for i in range(n)], str(tmp_path / "dst"))
+    settled = plan.resolve_each({i: Resolution.OVERWRITE for i in range(n)}, fs)
+    assert len(looked) <= 2
+    notes = [w for w in settled.warnings if "no recycle bin" in w]
+    assert notes == [settled.warnings[0]] and notes[0].startswith(f"{n} older files")      # one note, first, with the full count

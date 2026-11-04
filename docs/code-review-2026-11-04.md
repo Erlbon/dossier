@@ -390,4 +390,6 @@ Fixed in build 2026-11-04#01 (owner's choice: the data-loss fixes first): D1, D2
 
 Fixed in builds 2026-11-04#02 and #03 (owner's choice: sharing next): S1, S3, S4, S5, S7 and S11. Sharing is now behind Settings > Network Sharing > Allow Sharing Folders (Experimental), off by default; reading shares still works with it off. Still to do for sharing: one hands-on run of the real elevated flow by the owner (create, change, rename, stop, a refused prompt).
 
+Fixed in build 2026-11-04#04 (owner's choice: freezes next): F1, F2, F4, F5, F6, F8 and F10, with tests that fail on the old code. D12 is partly fixed with F1: the "permanent" note now comes first among the warnings (paste and drag-and-drop still have no confirmation). T5 is fixed. Still open among the freezes: F3 (server disconnect), F7 (opening files: F3, F4, Enter on a picture), F9 (drag out of servers) and F11.
+
 Everything else is still open.
