@@ -2,6 +2,14 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-04#03 -- Sharing folders is experimental and off by default
+
+- **Settings > Network Sharing > Allow Sharing Folders (Experimental)**, off by default. Making, changing and stopping a share changes Windows' settings as administrator and can open a disk to the network, and the real elevated flow has not been tried end to end yet. So until you switch it on:
+  - the right-click menu has no Share... or Share This Folder...;
+  - in Properties > Sharing the shares are listed, but Add..., Change... and Stop Sharing are greyed out, with a line saying where the switch is.
+- **Everything that only reads keeps working with the switch off:** the share mark on icons, the Shared as column, Shared as X... (opens the list), Copy Share Address, and another computer's shared folders (`\\machine`, Show Shared Folders on tailnet devices).
+- Shares that already exist are never touched by the switch.
+
 ## 2026-11-04#02 -- Sharing fixes from the code review of 2026-11-04
 
 Fixes for the sharing findings S1, S3, S4, S5, S7 and S11 in `docs/code-review-2026-11-04.md`.

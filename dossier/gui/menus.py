@@ -277,6 +277,12 @@ class MenusMixin:
         self.act_remember_drives.toggled.connect(self.set_remember_drives)
         drives_menu.addAction(self.act_remember_drives)
         drives_menu.addAction(self._action("Forget Remembered Drives", None, self.forget_remembered_drives))
+        sharing_menu = settings.addMenu("Network Sharing")
+        self.act_allow_sharing = QAction("Allow Sharing Folders (Experimental)", self)
+        self.act_allow_sharing.setCheckable(True)
+        self.act_allow_sharing.setChecked(self.sharing_allowed())
+        self.act_allow_sharing.toggled.connect(self.set_sharing_allowed)
+        sharing_menu.addAction(self.act_allow_sharing)
         settings.addSeparator()
         settings.addAction(self._action("Assistant Access...", None, self.open_assistant_settings))
         # these two hold the state of the choices the dialog (and the confirmation box) change; they are not in a menu

@@ -386,4 +386,8 @@ All 17 findings were marked fixed. These three are only partly so:
 
 ## Status
 
-Fixed in build 2026-11-04#01 (owner's choice: the data-loss fixes first): D1, D2, D3, D4, D5, D8, D9, D10 and D15, each with a test that fails on the old code. D13 is fixed with D2 (Move into Zip now says when originals are deleted for good). D2 also brings in pywin32 on Windows, which makes the release exe bigger. Everything else is still open.
+Fixed in build 2026-11-04#01 (owner's choice: the data-loss fixes first): D1, D2, D3, D4, D5, D8, D9, D10 and D15, each with a test that fails on the old code. D13 is fixed with D2 (Move into Zip now says when originals are deleted for good). D2 also brings in pywin32 on Windows, which makes the release exe bigger.
+
+Fixed in builds 2026-11-04#02 and #03 (owner's choice: sharing next): S1, S3, S4, S5, S7 and S11. Sharing is now behind Settings > Network Sharing > Allow Sharing Folders (Experimental), off by default; reading shares still works with it off. Still to do for sharing: one hands-on run of the real elevated flow by the owner (create, change, rename, stop, a refused prompt).
+
+Everything else is still open.

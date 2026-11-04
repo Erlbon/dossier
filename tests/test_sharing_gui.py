@@ -14,7 +14,7 @@ from PyQt6.QtWidgets import QApplication, QDialog  # noqa: E402
 from dossier.core import sharing  # noqa: E402
 from dossier.core.columns import index_of  # noqa: E402
 from dossier.core.sharing import CHANGE, EVERYONE, READ, Grant, Share, ShareError  # noqa: E402
-from dossier.gui.sharing import ShareDialog  # noqa: E402
+from dossier.gui.sharing import SWITCHED_OFF, ShareDialog  # noqa: E402
 from tests.test_gui_commander import app, pump, world  # noqa: E402,F401
 
 B = chr(92)
@@ -56,6 +56,7 @@ def shared(world, monkeypatch):
     monkeypatch.setattr(sharing, "change", change)
     monkeypatch.setattr(sharing, "remove", remove)
     monkeypatch.setattr(type(win), "_say", lambda self, text: state["said"].append(text))
+    win.set_sharing_allowed(True)                          # off by default (experimental); the tests below are about it switched on
     (left / "Comics").mkdir()
     win.left.refresh()
     pump(win, lambda: win.left.model.row_of("Comics") >= 0)
@@ -233,6 +234,38 @@ def test_the_sharing_tab_lists_the_shares_and_changes_and_stops_them(shared, mon
     assert state["calls"][1] == ("remove", "Comics") and "Stop sharing Comics?" in d.confirms[-1][1]
     assert "not shared" in tab.state.text()
     pump(win, lambda: sharing.KNOWN.names_for(folder) == [])
+
+
+def test_while_sharing_is_switched_off_shares_are_shown_but_never_made_changed_or_stopped(shared, monkeypatch):
+    win, d, left, state = shared
+    win.set_sharing_allowed(False)
+    assert not win.act_allow_sharing.isChecked()                                 # the menu follows the setting
+    folder = str(left / "Comics")
+    row = win.left.model.row_of("Comics")
+    assert not any(t.startswith("Share") for t in texts(win.build_context_menu(win.left, row)))
+    state["shares"] = [Share("Comics", folder, "", [Grant(EVERYONE, READ)])]
+    known(win, state)
+    menu = win.build_context_menu(win.left, row)
+    assert "Shared as Comics..." in texts(menu) and find(menu, "Copy Share Address") is not None    # reading still works
+    dialogs = []
+    monkeypatch.setattr(type(win), "_show_properties_dialog", lambda self, dlg: dialogs.append(dlg))
+    win.show_sharing(folder)
+    pump(win, lambda: dialogs and dialogs[0].sharing_tab.tree.topLevelItemCount() == 1)
+    tab = dialogs[0].sharing_tab
+    assert not tab.add_button.isEnabled() and not tab.change_button.isEnabled() and not tab.stop_button.isEnabled()
+    assert not tab.off_note.isHidden() and "Settings > Network Sharing" in tab.off_note.text()
+    win.new_share(folder)
+    win.change_share(state["shares"][0])
+    win.stop_share("Comics")
+    assert state["calls"] == [] and d.confirms == []
+    assert state["said"].count(SWITCHED_OFF) == 3
+    win.act_allow_sharing.setChecked(True)                                       # the menu item switches it back on
+    assert win.sharing_allowed()
+
+
+def test_sharing_is_switched_off_in_a_new_settings_file(world):
+    win, d, left, right, tmp = world
+    assert not win.sharing_allowed() and not win.act_allow_sharing.isChecked()
 
 
 def test_a_refused_prompt_changes_nothing_and_says_so(shared, monkeypatch):

@@ -140,9 +140,12 @@ def test_the_home_page_gets_its_own_short_menus(world):
     pump(win, lambda: win.left.is_home and win.left.model.entry_count() > 3)
     m = win.left.model
     drive = next(r for r in range(m.entry_count()) if m.entry_at(r).kind in ("fixed", "other", "removable"))
+    win.set_sharing_allowed(True)
     t = texts(win.build_context_menu(win.left, drive))
     assert t[:2] == ["Open", "Open in a New Tab"] and len(t) in (3, 4)
     assert t[2] == "Share..." or t[2].startswith("Shared as")             # a drive of this computer can be shared
+    win.set_sharing_allowed(False)
+    assert "Share..." not in texts(win.build_context_menu(win.left, drive))  # unless sharing is switched on
     action =next(r for r in range(m.entry_count()) if m.entry_at(r).kind == "action")
     assert texts(win.build_context_menu(win.left, action)) == ["Add a network share"]
     header = next(r for r in range(m.entry_count()) if m.entry_at(r).kind == "header")

@@ -27,6 +27,7 @@ from .owned_dialog import OwnedDialog
 EVERYONE_TEXT = "Everyone on the network"
 WINDOWS_NOTE = ("Windows asks for administrator rights once when you press {ok}. "
                 "The folder's own file permissions still apply on top of the share's.")
+SWITCHED_OFF = "Making and changing shares is switched off: Settings > Network Sharing."
 LINUX_NOTE = ("The share is made with Samba's usershares, which need no root. Everyone means anyone with a Samba login on this "
               "computer; nobody gets in without a password. The folder's own file permissions still apply.")
 
@@ -267,6 +268,12 @@ class SharingTab(QWidget):
             buttons.addWidget(b)
         buttons.addStretch(1)
         layout.addLayout(buttons)
+        self.off_note = QLabel(SWITCHED_OFF)                # the list is shown either way; only the changes wait for the switch
+        self.off_note.setWordWrap(True)
+        self.off_note.setStyleSheet(f"color:{theme.current()['dim']};")
+        self.off_note.setVisible(not window.sharing_allowed())
+        self.add_button.setEnabled(window.sharing_allowed())
+        layout.addWidget(self.off_note)
         self.address_box = QVBoxLayout()
         self.address_box.setSpacing(2)
         layout.addLayout(self.address_box)
@@ -293,7 +300,7 @@ class SharingTab(QWidget):
         elif shares:
             self.state.setText("This folder is shared as " + ", ".join(s.name for s in shares) + ".")
         else:
-            self.state.setText("This folder is not shared. Add... shares it on the network.")
+            self.state.setText("This folder is not shared." + (" Add... shares it on the network." if self.window_.sharing_allowed() else ""))
         if self.tree.topLevelItemCount():
             self.tree.setCurrentItem(self.tree.topLevelItem(0))
         self._selected()
@@ -305,8 +312,10 @@ class SharingTab(QWidget):
 
     def _selected(self) -> None:
         share = self.current()
-        self.change_button.setEnabled(share is not None)
-        self.stop_button.setEnabled(share is not None)
+        allowed = self.window_.sharing_allowed()
+        self.add_button.setEnabled(allowed)
+        self.change_button.setEnabled(allowed and share is not None)
+        self.stop_button.setEnabled(allowed and share is not None)
         while self.address_box.count():
             item = self.address_box.takeAt(0)
             if item.widget():
@@ -344,6 +353,28 @@ class SharingMixin:
         self._share_addrs_reading = False
         self._share_addr_waiters: list = []
         self.refresh_shares()
+
+    # the switch: making and changing shares is experimental, off until the owner turns it on ----------------------------------
+    def sharing_allowed(self) -> bool:
+        """Settings > Network Sharing > Allow Sharing Folders. Off by default: making, changing and stopping a share changes
+        the system's settings as administrator and can open a disk to the network. Reading what is shared always works."""
+        return str(self.settings.value("sharing/allow_changes", "false")).lower() == "true"
+
+    def set_sharing_allowed(self, on: bool) -> None:
+        self.settings.setValue("sharing/allow_changes", "true" if on else "false")
+        action = getattr(self, "act_allow_sharing", None)
+        if action is not None and action.isChecked() != on:
+            action.blockSignals(True)                    # its toggled signal would call this again
+            action.setChecked(on)
+            action.blockSignals(False)
+        self._say("Folders can be shared on the network (experimental)" if on else "Sharing folders is switched off; shares that exist stay")
+
+    def _sharing_blocked(self) -> bool:
+        """True (after saying why) while making and changing shares is switched off."""
+        if self.sharing_allowed():
+            return False
+        self._say(SWITCHED_OFF)
+        return True
 
     # what is shared -------------------------------------------------------------------------------------------------------
     def refresh_shares(self) -> None:
@@ -433,7 +464,7 @@ class SharingMixin:
             for name in names:
                 for _label, text in addrs.of(name):
                     copy.addAction(text, lambda t=text: self.copy_share_address(t))
-        else:
+        elif self.sharing_allowed():
             menu.addAction("Share This Folder..." if here else "Share...", lambda: self.new_share(path, label=label))
 
     def show_machine_shares(self, host: str, new_tab: bool = False) -> None:
@@ -487,6 +518,8 @@ class SharingMixin:
             "Allow Changes")
 
     def new_share(self, path: str, label: str = "", on_done: Optional[Callable] = None, parent=None) -> None:
+        if self._sharing_blocked():
+            return
         if not can_share(path):
             self._say("Only folders on this computer can be shared")
             return
@@ -501,6 +534,8 @@ class SharingMixin:
         self._share_change("Sharing", lambda start: sharing.create(name, path, grants, start=start), f"Shared as {name}", on_done)
 
     def change_share(self, share: Share, on_done: Optional[Callable] = None, parent=None) -> None:
+        if self._sharing_blocked():
+            return
         dlg = self._share_dialog(share.path, parent, name=share.name, grants=share.grants, editing=share.name)
         if self._ask_share(dlg) != QDialog.DialogCode.Accepted:
             return
@@ -512,6 +547,8 @@ class SharingMixin:
                            f"Share {name} changed", on_done)
 
     def stop_share(self, name: str, on_done: Optional[Callable] = None, parent=None) -> None:
+        if self._sharing_blocked():
+            return
         host = self.share_addresses().host
         if not self.dialogs.confirm("Stop Sharing", f"Stop sharing {name}?\n\nWhoever uses \\\\{host}\\{name} loses access to it. "
                                     "The folder and its files stay as they are.", "Stop Sharing"):
