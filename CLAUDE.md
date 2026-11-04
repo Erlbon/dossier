@@ -30,8 +30,8 @@ The function list follows The Next Tool (Ebdac Software GmbH, discontinued 2007)
 - Slow operations show progress (`redactor_common` `run_with_progress()` / `run_busy()`); labels word-wrap.
 - Secrets only through the system keyring (`redactor_common.core.secret_store`), never in config files.
 - Guard Windows-only code with the platform module; keep the Linux build working.
-- **Version bump at check-in (the user, 2026-10-19):** the build number is `YYYY-MM-DD#NN`, as in the Redactor apps (`dossier/core/version.py`, shown in the status line and Help > About). Any commit that changes real code runs `python bump_version.py` and adds a matching `CHANGELOG.md` section in the same check-in, before pushing, without being asked. Never edit `APP_VERSION` by hand. A test fails when the CHANGELOG has no section for the current build.
-- Edit code with the Edit/Write tools; tests are plain `pytest` (`python -m pytest -q`).
+- **Version bump at check-in (the user, 2026-10-19):** the build number is `YYYY-MM-DD#NN`, as in the Redactor apps (`dossier/core/version.py`, shown in the status line and Help > About). Any commit that changes real code runs `.venv/Scripts/python bump_version.py` and adds a matching `CHANGELOG.md` section in the same check-in, before pushing, without being asked. Never edit `APP_VERSION` by hand. A test fails when the CHANGELOG has no section for the current build.
+- Edit code with the Edit/Write tools; tests are plain `pytest`, run in this repo's own venv: `.venv/Scripts/python -m pytest -q`, as the pre-push hook does. `python ../redactor-build-tools/devenv/venv_sync.py .` makes the venv at the redactor_common pin; never `pip install -r requirements.txt` into the shared Python (one repo's pin then breaks the others, 2026-11-04).
 
 ## Decided (the owner, 2026-10-20)
 - **Undo is small on purpose.** Only renames, same-drive moves and new empty folders can be undone (`core/undo_log.py`). Never undo a copy by deleting what it made; an overwrite or a delete has no undo (older file in the recycle bin, or gone on a network drive). Do not grow it again without asking.
