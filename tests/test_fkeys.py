@@ -4,7 +4,7 @@ import pytest
 
 pytest.importorskip("PyQt6")
 
-from PyQt6.QtCore import QEvent, Qt, QTimer  # noqa: E402
+from PyQt6.QtCore import QEvent, Qt  # noqa: E402
 from PyQt6.QtGui import QKeyEvent  # noqa: E402
 from PyQt6.QtWidgets import QApplication  # noqa: E402
 
@@ -13,6 +13,7 @@ from dossier.gui import fkeys, icon_set  # noqa: E402
 from dossier.gui.fkey_settings import FunctionKeysDialog  # noqa: E402
 from dossier.gui.keys_help import KeysDialog, shortcut_rows  # noqa: E402
 from tests.test_gui_commander import app, pump, world  # noqa: E402,F401
+from tests.helpers import when_modal  # noqa: E402
 
 
 def bound_keys(win) -> dict:
@@ -127,7 +128,7 @@ def test_the_settings_page_through_a_real_exec_saves_what_was_chosen(world):
         assert isinstance(box, FunctionKeysDialog)
         box.combos[(cfg.CTRL, 1)].setCurrentIndex(box.combos[(cfg.CTRL, 1)].findData("refresh"))
         box.accept()
-    QTimer.singleShot(50, choose)
+    when_modal(win, lambda _box: choose())
     win.open_function_keys_settings()
     assert win._fkey_table[cfg.CTRL] == {1: "refresh"} and "Ctrl+F1" in bound_keys(win)
     assert cfg.load(str(win.settings.value("fkeys/config"))) == {cfg.CTRL: {1: "refresh"}}
@@ -163,7 +164,7 @@ def test_f1_opens_the_keys_list_through_the_real_exec(world):
         box = QApplication.activeModalWidget()
         seen.append(type(box).__name__)
         box.reject()
-    QTimer.singleShot(50, close_it)
+    when_modal(win, lambda _box: close_it())
     win.show_keys()
     assert seen == ["KeysDialog"]
 

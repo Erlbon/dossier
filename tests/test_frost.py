@@ -3,7 +3,7 @@ import pytest
 
 pytest.importorskip("PyQt6")
 
-from PyQt6.QtCore import QRect, QTimer  # noqa: E402
+from PyQt6.QtCore import QRect  # noqa: E402
 from PyQt6.QtGui import QColor, QPixmap  # noqa: E402
 from PyQt6.QtWidgets import QApplication  # noqa: E402
 
@@ -11,6 +11,7 @@ from dossier.gui import frost  # noqa: E402
 from dossier.gui.frost_window import FrostDialog  # noqa: E402
 from dossier.gui.main_window import MainWindow  # noqa: E402
 from tests.test_gui_commander import FakeDialogs, app, pump, world  # noqa: E402,F401
+from tests.helpers import when_modal  # noqa: E402
 
 
 def fake_screens(win):
@@ -91,7 +92,7 @@ def test_the_settings_page_through_a_real_exec_turns_it_on(world, monkeypatch):
         box.on.setChecked(True)
         box.slider.setValue(30)
         box.accept()
-    QTimer.singleShot(50, choose)
+    when_modal(win, lambda _box: choose())
     win.open_frost_settings()
     assert frost.active() and win._frost_level == 30
     menus = {a.text().replace("&", ""): a.menu() for a in win.menuBar().actions()}
@@ -111,7 +112,7 @@ def test_apply_shows_the_effect_with_the_dialog_open_and_cancel_puts_it_back(wor
         box.applied.emit(*box.values())
         seen.append((frost.active(), win._frost_level, box.isVisible()))         # the effect is on while the dialog is still there
         box.reject()
-    QTimer.singleShot(50, apply_then_cancel)
+    when_modal(win, lambda _box: apply_then_cancel())
     win.open_frost_settings()
     assert seen == [(True, 35, True)]
     assert not frost.active() and str(win.settings.value("frost/on")) == "false"      # cancelled: as before

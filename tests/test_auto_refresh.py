@@ -148,14 +148,17 @@ def test_a_burst_of_changes_is_one_or_two_refreshes_not_one_for_each(world, monk
     count = []
     real = type(win.left).refresh
     monkeypatch.setattr(type(win.left), "refresh", lambda self: (count.append(1), real(self))[1])
+    started = time.monotonic()
     for i in range(25):
         (left / f"burst{i}.txt").write_text("x")
         QApplication.processEvents()
         time.sleep(0.01)
+    lasted = time.monotonic() - started
     assert wait(lambda: "burst24.txt" in names(win.left))
     time.sleep(0.8)
     QApplication.processEvents()
-    assert 1 <= len(count) <= 3, len(count)
+    # at most one refresh per MIN_GAP while the burst lasts, plus the one after it: a slow machine stretches the burst, not the rule
+    assert 1 <= len(count) <= 2 + int(lasted / 0.5), (len(count), lasted)
 
 
 def test_a_panel_that_moved_on_forgets_the_old_change(world, quick):

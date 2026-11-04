@@ -15,6 +15,7 @@ from dossier.gui.glass_settings import GlassDialog  # noqa: E402
 from dossier.core.viewmodes import pictures_around  # noqa: E402
 from dossier.gui.glass_viewer import GlassViewer, saved_look  # noqa: E402
 from tests.test_gui_commander import app, key, pump, world  # noqa: E402,F401
+from tests.helpers import wait_for, when_modal  # noqa: E402
 
 FULL = Capabilities(True, True)
 
@@ -72,7 +73,7 @@ def test_a_chosen_level_sets_the_layer_and_dim_never_blurs(viewers, tmp_path):
 
 def test_the_picture_is_read_on_a_thread_and_the_arrows_and_keys_step_through_the_folder(viewers, tmp_path):
     window = open_viewer(viewers, make_pictures(tmp_path))
-    QTest.qWait(300)
+    wait_for(lambda: window.view.has_image())                              # read on a thread: waited for, not guessed
     assert window.view.has_image() and window.index == 0 and "a.png" in window.caption.text() and "1 / 3" in window.caption.text()
     QTest.keyClick(window.view, Qt.Key.Key_Right)
     QTest.keyClick(window.view, Qt.Key.Key_Space)
@@ -94,10 +95,10 @@ def test_a_picture_that_cannot_be_decoded_is_said_so_and_does_not_stop_the_viewe
     bad.write_bytes(b"not a picture")
     good = make_pictures(tmp_path, ("good.png",))[0]
     window = open_viewer(viewers, [str(bad), good])
-    QTest.qWait(300)
+    wait_for(lambda: "cannot be decoded" in window.caption.text())
     assert "cannot be decoded" in window.caption.text() and not window.view.has_image()
     window.step(1)
-    QTest.qWait(300)
+    wait_for(lambda: window.view.has_image())
     assert window.view.has_image()
 
 
@@ -116,11 +117,11 @@ def test_the_bar_fades_out_when_the_mouse_rests_and_comes_back_when_it_moves(vie
     window = open_viewer(viewers, make_pictures(tmp_path))
     assert window.bar_visible()
     window._fade_out()
-    QTest.qWait(glass_viewer.FADE_MS + 150)
+    wait_for(lambda: not window.bar_visible() and window.caption.isHidden())
     assert not window.bar_visible() and window.caption.isHidden()
     QTest.mouseMove(window.view.viewport())
     window._poke()
-    QTest.qWait(glass_viewer.FADE_MS + 150)
+    wait_for(lambda: window.bar_visible() and not window.caption.isHidden())
     assert window.bar_visible() and not window.caption.isHidden()
 
 
@@ -237,7 +238,6 @@ def test_the_command_is_in_the_menus_and_can_be_given_a_function_key(world):
 
 
 def test_the_glass_settings_page_through_a_real_exec_is_saved_and_used(world):
-    from PyQt6.QtCore import QTimer
     win, *_ = world
 
     def choose():
@@ -246,10 +246,10 @@ def test_the_glass_settings_page_through_a_real_exec_is_saved_and_used(world):
         box.mode.setCurrentIndex(box.mode.findData(glass.DIM))
         box.slider.setValue(65)
         box.accept()
-    QTimer.singleShot(50, choose)
+    when_modal(win, lambda _box: choose())
     win.open_glass_settings()
     assert saved_look(win.settings) == (glass.DIM, 65)
-    QTimer.singleShot(50, lambda: (QApplication.activeModalWidget().mode.setCurrentIndex(2), QApplication.activeModalWidget().accept()))
+    when_modal(win, lambda box: (box.mode.setCurrentIndex(2), box.accept()))
     win.open_glass_settings()
     assert saved_look(win.settings)[0] == glass.SOLID and win.settings.value("viewer/glass_level") is None
 

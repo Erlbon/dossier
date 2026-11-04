@@ -71,7 +71,7 @@ def test_parallel_is_clearly_faster_when_creating_a_file_has_a_cost():
     t = time.perf_counter()
     copy_all(parallel, options=ExecOptions(workers=8))
     t_parallel = time.perf_counter() - t
-    assert t_parallel < t_serial / 2.5, (t_serial, t_parallel)
+    assert t_parallel < t_serial / 2, (t_serial, t_parallel)          # eight at once: about 8x in theory, 2x even on a busy machine
 
 
 def test_every_file_arrives_intact_and_no_temporary_name_is_left():

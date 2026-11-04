@@ -2,6 +2,16 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-04#05 -- Steadier tests (code review 2026-11-04, T1 to T9)
+
+- **The first look for Tailnet devices** is started by a timer that belongs to the window, so it can never fire after the window is gone. This is the only change to the program itself.
+- **Tests read a panel only once its folder has been listed.** In a test the panel now waits up to 10 seconds for a folder before it goes "pending"; in the program it is 0.15 seconds. On a busy machine a listing took longer than 0.15 seconds now and then, the test read the old rows, and about one full run in four failed. The tests of slow folders keep the real 0.15 seconds (`short_nav_budget`).
+- **An exception in a Qt callback fails the test it happened in.** Before, PyQt ended the whole run without a trace (exit 0xC0000409).
+- **Tests that answer a real dialog** wait for it with a timer owned by the window (`tests/helpers.when_modal`). If the dialog never opens, the timer goes with the window, instead of firing in some later test.
+- **Fixed waits replaced by waiting for what is awaited:** the picture viewer's picture and fade, and the Markdown preview. Clock limits now allow for a slow machine: the burst of auto refreshes, the parallel copy speed, the length of the measured stall, and the slow folder.
+- Every test runs offscreen, also a single file run alone (before, it depended on which test was collected first). `wait_planned` fails at its own timeout instead of returning quietly.
+- The shell-menu test sends Escape only to a menu of its own process, never to a menu you have open in another program.
+
 ## 2026-11-04#04 -- Freeze fixes from the code review of 2026-11-04
 
 Fixes for the freeze findings F1, F2, F4, F5, F6, F8 and F10 in `docs/code-review-2026-11-04.md`.

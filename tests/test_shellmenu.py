@@ -105,13 +105,29 @@ def test_the_whole_show_path_opens_the_real_menu_and_closes_without_a_choice(tmp
     f.write_text("hi")
     done = []
     thread = sm.show_in_thread([str(f)], 50, 50, done.append)
+    import os
+    from ctypes import wintypes
     user32 = ctypes.windll.user32
-    user32.FindWindowW.restype = ctypes.c_void_p
-    user32.FindWindowW.argtypes = [ctypes.c_wchar_p, ctypes.c_wchar_p]
+    user32.FindWindowExW.restype = ctypes.c_void_p
+    user32.FindWindowExW.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_wchar_p, ctypes.c_wchar_p]
+    user32.GetWindowThreadProcessId.argtypes = [ctypes.c_void_p, ctypes.POINTER(wintypes.DWORD)]
     user32.PostMessageW.argtypes = [ctypes.c_void_p, ctypes.c_uint, ctypes.c_size_t, ctypes.c_ssize_t]
+
+    def our_menu():
+        """The pop-up menu (class #32768) of this test process: one the owner has open in another program is never touched."""
+        menu = None
+        while True:
+            menu = user32.FindWindowExW(None, menu, "#32768", None)
+            if not menu:
+                return None
+            pid = wintypes.DWORD()
+            user32.GetWindowThreadProcessId(menu, ctypes.byref(pid))
+            if pid.value == os.getpid():
+                return menu
+
     end = time.time() + 20
     while time.time() < end and not done:
-        menu = user32.FindWindowW("#32768", None)                 # the class of a pop-up menu
+        menu = our_menu()
         if menu:
             user32.PostMessageW(menu, 0x100, 0x1B, 0)             # WM_KEYDOWN, Escape: only into that menu's own thread queue
             time.sleep(0.2)

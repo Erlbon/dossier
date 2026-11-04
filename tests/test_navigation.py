@@ -7,6 +7,7 @@ import pytest
 
 pytest.importorskip("PyQt6")
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+pytestmark = pytest.mark.short_nav_budget            # these are about slow folders: the panel keeps its real 0.15 s
 
 from PyQt6.QtCore import Qt  # noqa: E402
 from PyQt6.QtTest import QTest  # noqa: E402
@@ -74,13 +75,13 @@ def test_a_fast_folder_is_shown_at_once(app, tmp_path):
 
 
 def test_a_slow_folder_leaves_the_window_alive_and_appears_when_ready(app, tmp_path):
-    win = make(app, tmp_path, slow=["slow"], delay=0.8)
+    win = make(app, tmp_path, slow=["slow"], delay=2.0)
     try:
         messages = []
         win.left.message.connect(messages.append)
         started = time.time()
         assert win.left.set_folder(str(tmp_path / "slow")) is True
-        assert time.time() - started < 0.5                                # it did not wait for the answer
+        assert time.time() - started < 1.5                                # it did not wait for the 2 s answer
         assert win.left.path == str(tmp_path / "fast")                    # the old folder is still shown
         assert win.left.loading and win.left.pending_path == str(tmp_path / "slow")
         assert any("Opening" in m and "Esc" in m for m in messages)

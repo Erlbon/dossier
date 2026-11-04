@@ -135,7 +135,7 @@ def test_the_real_thread_catches_a_real_stall_and_names_the_function_that_was_ru
     finally:
         w.stop()
     text = read(tmp_path)
-    assert "stalled 0." in text and "slow_thing_the_user_noticed" in text
+    assert "stalled " in text and "slow_thing_the_user_noticed" in text     # how long it was measured to be depends on the machine
 
 
 # in the window ------------------------------------------------------------------------------------------

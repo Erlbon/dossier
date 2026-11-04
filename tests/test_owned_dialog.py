@@ -24,6 +24,7 @@ from dossier.gui.properties import PropertiesDialog  # noqa: E402
 from dossier.gui.quarantine_ui import QuarantineDialog  # noqa: E402
 from dossier.gui.servers import ConnectionDialog  # noqa: E402
 from tests.test_gui_commander import app, world  # noqa: E402,F401
+from tests.helpers import when_modal  # noqa: E402
 
 
 def settle() -> None:
@@ -130,7 +131,7 @@ def test_the_messages_and_questions_work_through_a_real_exec_and_are_freed(world
             assert isinstance(box, QMessageBox)
             button = next(b for b in box.buttons() if label_part in b.text().replace("&", ""))
             button.click()
-        QTimer.singleShot(50, click)
+        when_modal(win, lambda _box: click())
 
     press("OK")
     assert real.confirm("Title", "Do it?", "OK") is True

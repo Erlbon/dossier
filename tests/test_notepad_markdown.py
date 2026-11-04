@@ -12,6 +12,7 @@ from PyQt6.QtTest import QTest  # noqa: E402
 from dossier.gui.main_window import MainWindow  # noqa: E402
 from tests.test_gui_commander import FakeDialogs  # noqa: E402
 from tests.test_notepad import app, pad  # noqa: E402,F401
+from tests.helpers import wait_for  # noqa: E402
 
 
 def shown(win) -> str:
@@ -19,7 +20,10 @@ def shown(win) -> str:
 
 
 def drawn(win) -> None:
-    QTest.qWait(450)                      # longer than the pause before the preview is drawn again
+    """Wait until the preview has been drawn again (the pause after typing has run out), not a guessed time."""
+    QTest.qWait(50)
+    wait_for(lambda: not win._render_timer.isActive())
+    QTest.qWait(20)
 
 
 def test_a_markdown_file_opens_with_the_preview_beside_the_source_and_another_file_does_not(pad):

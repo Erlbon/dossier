@@ -31,7 +31,10 @@ class TailnetMixin:
         self._tailnet_again = False
         for panel in (self.left, self.right):
             panel.folder_changed.connect(lambda p: self.refresh_tailnet() if p.is_home else None)
-        QTimer.singleShot(0, lambda: self.refresh_tailnet(force=True))
+        first = QTimer(self)                       # owned by the window: it can never fire after the window is gone
+        first.setSingleShot(True)
+        first.timeout.connect(lambda: self.refresh_tailnet(force=True))
+        first.start(0)
 
     def build_tailnet_menu(self, network_menu) -> None:
         self.act_tailnet = QAction("Show Tailnet Devices on the Home Page", self)
