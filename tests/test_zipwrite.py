@@ -266,3 +266,24 @@ def test_an_archive_that_stays_in_use_is_reported_and_left_as_it_was(tmp_path, m
     with pytest.raises(ZipWriteError, match="in use by another program"):
         rewrite(z, remove=["a.txt"], trasher=lambda p: None)
     assert open(z, "rb").read() == before and sorted(os.listdir(tmp_path)) == ["a.zip"]
+
+
+def test_a_name_stored_without_the_utf8_flag_keeps_its_bytes(tmp_path):
+    """Old packers store UTF-8 (or Shift-JIS) names without saying so; zipfile reads them as cp437. Writing that text back as UTF-8
+    garbled the name for every program, for good; the name's bytes are now copied as they were."""
+    raw = "Märchen.jpg".encode("utf-8")
+    placeholder = b"M" + b"X" * (len(raw) - 1 - len(b"rchen.jpg")) + b"rchen.jpg"
+    assert len(placeholder) == len(raw)
+    z = tmp_path / "old.cbz"
+    with zipfile.ZipFile(z, "w") as out:
+        out.writestr(placeholder.decode("ascii"), b"picture")
+        out.writestr("ComicInfo.xml", b"<ComicInfo/>")
+    z.write_bytes(z.read_bytes().replace(placeholder, raw))                     # the old packer's bytes, no flag
+    new = tmp_path / "add.txt"
+    new.write_text("x")
+    rewrite(str(z), add=[("added.txt", str(new))], trasher=lambda p: os.remove(p))
+    data = z.read_bytes()
+    assert data.count(raw) == 2                                                  # the local and the central header, as they were
+    assert "M├ñrchen.jpg".encode("utf-8") not in data
+    with zipfile.ZipFile(z) as back:
+        assert back.read(raw.decode("cp437")) == b"picture" and back.read("added.txt") == b"x"

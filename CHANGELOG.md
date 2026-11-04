@@ -2,6 +2,15 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-04#08 -- Tag writer fixes from the code review of 2026-11-04 (D6, D7, C1 to C4)
+
+- **A value with a control character can no longer break a comic.** A character such as a vertical tab went into ComicInfo.xml as it was. XML cannot hold it, so the comic was replaced by one whose ComicInfo nobody could read, and the check that noticed came after the old comic was already in the recycle bin. Such a value is now refused in the plan; Summary may still hold line breaks and tabs. The new ComicInfo.xml is also checked before the archive is rewritten, so a failure leaves the comic as it was.
+- **Rewriting a zip keeps the names old packers wrote.** Some store UTF-8 or Shift-JIS names without saying so. Writing them back garbled them for good (`Märchen.jpg` became `M├ñrchen.jpg`), in every zip edit: tags, Pack, Move into Zip, epub and docx. The name's bytes are now copied exactly.
+- **Values are taken as they will read back:** without spaces around them, and with plain line breaks. `dossier tag --set "Series= X"` used to write the file and then report that it did not read back.
+- **A superscript digit in Year, Month or Day** is refused as "must be a whole number"; it used to crash the plan.
+- **An error from the tag library fails only that file;** the rest of the batch goes on, and the file is as it was.
+- **An mp3 with ID3 version 2.3 stays 2.3,** as in mp3redactor. Before, it was always saved as 2.4, which some car stereos and older players do not read.
+
 ## 2026-11-04#07 -- Security and Health fixes from the code review of 2026-11-04
 
 Security (S2, S6, S8, S9, S10):

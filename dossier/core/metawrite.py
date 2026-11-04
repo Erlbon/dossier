@@ -22,7 +22,7 @@ from typing import Callable, Iterable, Optional
 
 from . import zipwrite
 from .platform import has_scheme
-from .progress import CancelToken, check
+from .progress import Cancelled, CancelToken, check
 
 AUDIO, COMIC = "audio", "comic"
 AUDIO_EXTENSIONS = (".mp3", ".flac", ".ogg", ".oga", ".opus", ".m4a", ".m4b", ".mp4a")
@@ -47,6 +47,7 @@ COMIC_FIELDS = (("Series", "Series"), ("Number", "Number"), ("Count", "Count"), 
                 ("Publisher", "Publisher"), ("Imprint", "Imprint"), ("Genre", "Genre"), ("Tags", "Tags"), ("LanguageISO", "Language"),
                 ("AgeRating", "Age rating"), ("Manga", "Manga"), ("Web", "Web"))
 INTEGER_FIELDS = ("Count", "Volume", "Year", "Month", "Day")
+MULTILINE_FIELDS = ("Summary", "Notes", "Review", "comment", "lyrics")    # may hold line breaks and tabs
 MANGA_VALUES = ("Unknown", "No", "Yes", "YesAndRightToLeft")
 
 
@@ -116,10 +117,11 @@ def check_value(kind: str, key: str, value: str) -> str:
     """Why ``value`` cannot be stored in ``key``, or an empty string."""
     if len(value) > MAX_VALUE:
         return "too long"
-    if "\x00" in value:
-        return "contains a null character"
+    bad = next((c for c in value if ord(c) < 32 and not (key in MULTILINE_FIELDS and c in "\n\t")), None)
+    if bad is not None:                                  # XML 1.0 cannot hold them: the comic would get a ComicInfo.xml nobody can read
+        return f"cannot contain the control character U+{ord(bad):04X}"
     if kind == COMIC:
-        if key in INTEGER_FIELDS and value and not value.strip().isdigit():
+        if key in INTEGER_FIELDS and value and not (value.isascii() and value.isdigit()):   # "²".isdigit() is True, int("²") fails
             return "must be a whole number"
         if key == "Month" and value and not 1 <= int(value) <= 12:
             return "must be 1 to 12"
@@ -225,7 +227,10 @@ def common_values(paths: Iterable[str]) -> tuple:
 # planning --------------------------------------------------------------------------------------------------------------------------------------
 def plan(paths: Iterable[str], edits: dict, cancel: Optional[CancelToken] = None) -> list:
     """What each file's fields would become. ``edits`` maps a field key to its new text (``""`` takes the field away); a key not in it is not
-    touched. A file whose value is already the new one has no change; a file that cannot be changed carries a ``problem``."""
+    touched. A file whose value is already the new one has no change; a file that cannot be changed carries a ``problem``.
+    Values are taken as they will read back: without spaces around them and with plain line breaks (XML keeps no other kind), so the
+    check after writing never fails on what was only a space (the command line wrote " X", read back "X", and called that a failure)."""
+    edits = {k: str(v).replace(chr(13) + chr(10), chr(10)).replace(chr(13), chr(10)).strip() for k, v in edits.items()}
     items: list = []
     for path in paths:
         check(cancel)
@@ -283,7 +288,7 @@ def _write_audio(path: str, changes: dict, cancel, trasher) -> None:
                     del easy[key]
             except (ValueError, KeyError) as e:
                 raise MetaWriteError(f"{label_of(AUDIO, key)}: {e}") from e
-        easy.save()
+        easy.save(**_id3_version_kept(part))
         again = _audio_values(part)                                # the copy must read back with exactly what was asked for
         for key, value in changes.items():
             if again.get(key, "") != value and not (key in ("tracknumber", "discnumber", "date") and again.get(key, "").startswith(value)):
@@ -297,6 +302,18 @@ def _write_audio(path: str, changes: dict, cancel, trasher) -> None:
         except OSError:
             pass
         raise
+
+
+def _id3_version_kept(path: str) -> dict:
+    """The save arguments that keep an mp3's ID3 version: mutagen writes 2.4 unless told, and some car stereos and older players
+    read only 2.3 (mp3redactor keeps the version too). Other formats, and an mp3 without a tag yet, get the defaults."""
+    if not path.lower().endswith(".mp3" + TEMP_SUFFIX) and not path.lower().endswith(".mp3"):
+        return {}
+    try:
+        from mutagen.id3 import ID3
+        return {"v2_version": 3} if ID3(path).version[:2] == (2, 3) else {}
+    except Exception:   # noqa: BLE001 -- no tag yet, or one mutagen cannot read: the default (2.4)
+        return {}
 
 
 def _carry_tags(src: str, dst: str) -> None:
@@ -329,11 +346,25 @@ def _comic_xml(root: ET.Element, changes: dict) -> bytes:
     return b'<?xml version="1.0" encoding="utf-8"?>' + b"\n" + ET.tostring(root, encoding="utf-8")
 
 
+def _check_comic_xml(xml: bytes, changes: dict) -> None:
+    """The new ComicInfo.xml must parse and say what was asked for; checked before the archive is rewritten, so a failure leaves the
+    comic as it was (the check after writing comes too late: the old file is in the recycle bin by then)."""
+    try:
+        back = ET.fromstring(xml)
+    except ET.ParseError as e:
+        raise MetaWriteError(f"the new ComicInfo.xml would not be valid XML ({e}); the comic was left as it was") from e
+    for key, value in changes.items():
+        node = back.find(key)
+        if ((node.text or "").strip() if node is not None else "") != value:
+            raise MetaWriteError(f"{label_of(COMIC, key)} would not read back as written; the comic was left as it was")
+
+
 def _write_comic(path: str, changes: dict, cancel, trasher) -> None:
     member, root = _comic_root(path)
     if root is None:
         root = ET.Element("ComicInfo")
     xml = _comic_xml(root, changes)
+    _check_comic_xml(xml, changes)                                    # before the swap: a bad XML never replaces the comic
     folder = tempfile.mkdtemp(prefix="dossier-comicinfo-")
     try:
         source = os.path.join(folder, "ComicInfo.xml")
@@ -369,6 +400,10 @@ def apply(items: Iterable[Item], cancel: Optional[CancelToken] = None, progress:
             result.failed.append((item.path, str(e)))
         except OSError as e:
             result.failed.append((item.path, str(getattr(e, "strerror", None) or e)))
+        except Cancelled:
+            raise
+        except Exception as e:   # noqa: BLE001 -- mutagen's own errors, broken XML: this file failed (and is as it was), the rest goes on
+            result.failed.append((item.path, f"{type(e).__name__}: {e}"))
         if progress:
             progress(n, len(todo))
     return result

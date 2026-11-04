@@ -90,6 +90,32 @@ def _method(name: str, level: str, store_compressed: bool) -> tuple:
     return zipfile.ZIP_DEFLATED, LEVELS.get(level, 6)
 
 
+_UTF8_FLAG = 0x800
+
+
+class _RawNameInfo(zipfile.ZipInfo):
+    """A ZipInfo whose name is written as exactly these bytes (``_encodeFilenameFlags`` is the one hook zipfile has for both headers).
+    As cbzredactor's ``zip_names.RawNameInfo``: to be one shared module in redactor_common."""
+
+    def __init__(self, filename: str, date_time: tuple, raw_name: bytes) -> None:
+        super().__init__(filename, date_time)
+        self.raw_name = raw_name
+
+    def _encodeFilenameFlags(self):
+        return self.raw_name, self.flag_bits & ~_UTF8_FLAG
+
+
+def _same_name_info(zi: zipfile.ZipInfo, name: str) -> zipfile.ZipInfo:
+    """The ZipInfo for an entry copied into the new archive under ``name``. An entry that keeps its name and was stored without the
+    UTF-8 flag keeps its name's bytes: zipfile read them as cp437, and writing that text back as UTF-8 turned ``Märchen.jpg`` (stored as
+    UTF-8 or Shift-JIS bytes by an old packer) into ``M├ñrchen.jpg`` for every program, for good."""
+    arcname = name + "/" if zi.is_dir() else name
+    unchanged = arcname == zi.filename
+    if unchanged and not zi.flag_bits & _UTF8_FLAG and not arcname.isascii() and callable(getattr(zipfile.ZipInfo, "_encodeFilenameFlags", None)):
+        return _RawNameInfo(arcname, zi.date_time, zi.orig_filename.encode("cp437"))
+    return zipfile.ZipInfo(arcname, zi.date_time)
+
+
 def _info(arcname: str, mtime: float, mode: int, is_dir: bool) -> zipfile.ZipInfo:
     try:
         stamp = time.localtime(max(mtime, 315532800))             # a zip cannot hold a date before 1980
@@ -247,7 +273,7 @@ def rewrite(archive: str, *, remove: Sequence[str] = (), rename: Optional[dict] 
                 zout.comment = zin.comment
                 for zi, name in plan:
                     check(cancel)
-                    copy = zipfile.ZipInfo(name + "/" if zi.is_dir() else name, zi.date_time)
+                    copy = _same_name_info(zi, name)
                     copy.compress_type = zi.compress_type
                     copy.external_attr, copy.create_system, copy.comment, copy.extra = (zi.external_attr, zi.create_system,
                                                                                       zi.comment, b"")

@@ -258,3 +258,64 @@ def test_an_unchanged_value_means_no_write(tmp_path):
     items = mw.plan([path], {"Series": "Old Series"})
     assert items[0].changes == [] and not items[0].writable
     assert mw.apply(items).done == 0 and os.path.getmtime(path) == before
+
+
+# the 2026-11-04 review ---------------------------------------------------------------------------------------------------------------------
+def test_a_control_character_is_refused_and_never_breaks_a_comic(tmp_path):
+    """A vertical tab went into ComicInfo.xml as it was; XML cannot hold it, the comic was replaced by one nobody could read, and the
+    check that noticed came after the old one was in the bin."""
+    path = make_cbz(tmp_path / "a.cbz")
+    before = open(path, "rb").read()
+    items = mw.plan([path], {"Series": "Bad" + chr(11) + "Name"})
+    assert "control character" in items[0].problem and not items[0].writable
+    assert "control character" not in mw.check_value(mw.COMIC, "Summary", "line one" + chr(10) + "line two")    # a summary may break lines
+    assert open(path, "rb").read() == before
+
+
+def test_a_new_comicinfo_that_would_not_parse_is_caught_before_the_swap(tmp_path, monkeypatch):
+    path = make_cbz(tmp_path / "a.cbz")
+    before = open(path, "rb").read()
+    monkeypatch.setattr(mw, "_comic_xml", lambda root, changes: b"<ComicInfo><Series>broken")
+    items = mw.plan([path], {"Series": "New"})
+    bin_ = Bin()
+    result = mw.apply(items, trasher=bin_)
+    assert result.done == 0 and "not be valid XML" in result.failed[0][1] and bin_.got == [] and open(path, "rb").read() == before
+
+
+def test_values_are_taken_without_spaces_and_a_superscript_is_no_number(tmp_path):
+    path = make_cbz(tmp_path / "a.cbz")
+    items = mw.plan([path], {"Series": "  New Series ", "Month": chr(0xB2)})
+    assert "whole number" in items[0].problem                                     # "²".isdigit() is True; int() used to crash the plan
+    items = mw.plan([path], {"Series": "  New Series "})
+    assert items[0].changes[0].new == "New Series"
+    result = mw.apply(items, trasher=Bin())
+    assert result.done == 1 and comic_root(path).find("Series").text == "New Series"
+
+
+def test_an_error_of_the_tag_library_fails_that_file_only(tmp_path, monkeypatch):
+    first, second = make_mp3(tmp_path / "a.mp3", title="A"), make_mp3(tmp_path / "b.mp3", title="B")
+    items = mw.plan([first, second], {"artist": "Someone"})
+    real = mw._write_audio
+    calls = []
+
+    def flaky(path, *a):
+        calls.append(path)
+        if path == first:
+            raise mutagen.MutagenError("the frame header is damaged")
+        return real(path, *a)
+    monkeypatch.setattr(mw, "_write_audio", flaky)
+    result = mw.apply(items, trasher=Bin())
+    assert calls == [first, second] and result.done == 1 and "damaged" in result.failed[0][1]
+
+
+def test_an_id3_v23_file_stays_v23(tmp_path):
+    path = make_mp3(tmp_path / "old.mp3")
+    tag = ID3()
+    tag.add(mutagen.id3.TIT2(encoding=1, text=["Old"]))
+    tag.save(path, v2_version=3)
+    assert ID3(path).version[:2] == (2, 3)
+    mw.apply(mw.plan([path], {"artist": "Someone"}), trasher=Bin())
+    assert ID3(path).version[:2] == (2, 3) and easy(path)["artist"] == ["Someone"]
+    fresh = make_mp3(tmp_path / "new.mp3", title="New")                            # a 2.4 file stays 2.4
+    mw.apply(mw.plan([fresh], {"artist": "Someone"}), trasher=Bin())
+    assert ID3(fresh).version[:2] == (2, 4)
