@@ -2,6 +2,15 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-04#09 -- Clean-up and docs from the code review of 2026-11-04 (K1, K2, K5, K6, docs)
+
+Nothing changes in what the program does.
+- The core asks `core/platform.py` whether it runs on Windows, Linux or a Mac, as the project rule says. Sixteen modules tested `sys.platform` or `os.name` themselves. Starting a program without a console window is one function, `platform.no_window_flags()`, instead of eight copies.
+- **Removed:** twelve functions nothing called, and the command line's own copy of the folders-first sort. The cover reader's own natural sort is replaced by the one in `core/vfs.py`.
+- **The README now mentions** Google Drive, sharing (experimental), Health checks, tag writing and the glass viewer, and says how a release is tagged now.
+- **CLAUDE.md "State"** says what is built, not "no GUI yet".
+- **Brought up to date:** the spec, the tags and checkers plans, `docs/cli.md` (`dossier mcp`, and `--delete-junk` deletes junk only) and the review of 2026-10-20.
+
 ## 2026-11-04#08 -- Tag writer fixes from the code review of 2026-11-04 (D6, D7, C1 to C4)
 
 - **A value with a control character can no longer break a comic.** A character such as a vertical tab went into ComicInfo.xml as it was. XML cannot hold it, so the comic was replaced by one whose ComicInfo nobody could read, and the check that noticed came after the old comic was already in the recycle bin. Such a value is now refused in the plan; Summary may still hold line breaks and tabs. The new ComicInfo.xml is also checked before the archive is rewritten, so a failure leaves the comic as it was.
