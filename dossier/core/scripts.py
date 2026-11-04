@@ -15,7 +15,7 @@ import os
 import shutil
 from typing import Callable, Optional
 
-from .platform import IS_WINDOWS
+from .platform import IS_WINDOWS, ps_quote
 from .terminals import Launch
 
 WINDOWS_SCRIPTS = (".bat", ".cmd", ".ps1", ".py")
@@ -31,10 +31,6 @@ def is_script(path: str) -> bool:
     return os.path.splitext(path)[1].lower() in extensions()
 
 
-def _ps_quote(text: str) -> str:
-    return "'" + text.replace("'", "''") + "'"
-
-
 def launch_for(path: str, which: Callable = shutil.which) -> Optional[Launch]:
     """How to run the script ``path`` in its own folder, or None when it is not a script."""
     if not is_script(path):
@@ -43,7 +39,7 @@ def launch_for(path: str, which: Callable = shutil.which) -> Optional[Launch]:
     ext = os.path.splitext(path)[1].lower()
     if IS_WINDOWS:
         if ext == ".ps1":
-            return Launch(["powershell.exe", "-NoProfile", "-Command", PS_RUN + _ps_quote(path)], folder)
+            return Launch(["powershell.exe", "-NoProfile", "-Command", PS_RUN + ps_quote(path)], folder)
         # .bat and .cmd run; .py goes to the program Windows has for it. /s with the path in two pairs of quotes: cmd takes off only the
         # outer pair, so a folder called "a & b (1)" stays one path (a Windows path can hold no quote of its own).
         return Launch(f'cmd.exe /d /s /c ""{path}""', folder)

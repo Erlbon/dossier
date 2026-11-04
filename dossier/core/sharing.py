@@ -23,6 +23,8 @@ import threading
 from dataclasses import dataclass, field
 from typing import Callable, Optional
 
+from .platform import ps_quote, windows_program
+
 IS_WINDOWS = sys.platform == "win32"
 TIMEOUT = 30
 EVERYONE = "Everyone"
@@ -436,6 +438,19 @@ def is_drive_root(path: str) -> bool:
     return os.path.dirname(p) == p
 
 
+def is_system_drive(path: str) -> bool:
+    """Whether ``path`` is the drive Windows runs from (C: as a rule), or ``/`` elsewhere."""
+    if not IS_WINDOWS:
+        return os.path.abspath(path) == "/"
+    system = os.environ.get("SystemDrive", "C:")
+    return os.path.splitdrive(os.path.abspath(path))[0].casefold() == system.casefold()
+
+
+def opens_a_drive_to_changes(path: str, grants: list) -> bool:
+    """Whether these grants let Everyone change or delete what is on a whole drive."""
+    return is_drive_root(path) and any(g.account == EVERYONE and g.access in (CHANGE, FULL) and not g.denied for g in grants)
+
+
 def _in_tailnet(ip: str) -> bool:
     parts = ip.split(".")
     if len(parts) != 4 or not all(x.isdigit() for x in parts):
@@ -516,24 +531,27 @@ def read_addresses() -> Addresses:
 
 
 # making, changing, removing ------------------------------------------------------------------------------------------------------
-def ps_quote(text: str) -> str:
-    """A PowerShell single-quoted string (a quote inside is doubled)."""
-    return "'" + str(text).replace("'", "''") + "'"
-
-
 def _account_expr(account: str) -> str:
     if account == EVERYONE:
         return "$everyone"
     return ps_quote(account)
 
 
-def _grant_args(grants: list) -> str:
+def _grant_args(grants: list, keep_denied: bool = False) -> str:
+    """The allow entries as New-SmbShare's arguments; with ``keep_denied`` the deny entries too (``-NoAccess``), so a share made
+    again under a new name never exists for a moment without them."""
     by: dict = {READ: [], CHANGE: [], FULL: []}
+    denied = []
     for g in grants:
         if not g.denied:
             by[g.access].append(_account_expr(g.account))
+        elif keep_denied:
+            denied.append(_account_expr(g.account))
     flags = {READ: "-ReadAccess", CHANGE: "-ChangeAccess", FULL: "-FullAccess"}
-    return " ".join(f"{flags[k]} @({','.join(v)})" for k, v in by.items() if v)
+    args = [f"{flags[k]} @({','.join(v)})" for k, v in by.items() if v]
+    if denied:
+        args.append(f"-NoAccess @({','.join(denied)})")
+    return " ".join(args)
 
 
 PS_HEAD = ("$ErrorActionPreference='Stop'; "
@@ -542,19 +560,20 @@ PS_HEAD = ("$ErrorActionPreference='Stop'; "
 PS_RIGHT = {READ: "Read", CHANGE: "Change", FULL: "Full"}
 
 
-def create_script(name: str, path: str, grants: list, remark: str = "") -> str:
+def create_script(name: str, path: str, grants: list, remark: str = "", keep_denied: bool = False) -> str:
     if not any(not g.denied for g in grants):
         raise ShareError("Say who may use the share.")
     return (PS_HEAD + f"New-SmbShare -Name {ps_quote(name)} -Path {ps_quote(path)} -Description {ps_quote(remark)} "
-            f"{_grant_args(grants)} | Out-Null")
+            f"{_grant_args(grants, keep_denied)} | Out-Null")
 
 
 def change_script(old_name: str, name: str, path: str, grants: list, remark: str = "") -> str:
-    """A new name is a new share (Windows cannot rename one); the same name keeps the share and replaces its allow entries."""
+    """A new name is a new share (Windows cannot rename one), made with the old one's deny entries as well, so nobody who was
+    denied gets in by the rename; the same name keeps the share and replaces its allow entries (its deny entries stay)."""
     if not any(not g.denied for g in grants):
         raise ShareError("Say who may use the share.")
     if name.casefold() != old_name.casefold():
-        return (create_script(name, path, grants, remark) + "; "
+        return (create_script(name, path, grants, remark, keep_denied=True) + "; "
                 f"Remove-SmbShare -Name {ps_quote(old_name)} -Force")
     lines = [PS_HEAD.rstrip(),
              f"Set-SmbShare -Name {ps_quote(name)} -Description {ps_quote(remark)} -Force;",
@@ -573,7 +592,7 @@ def remove_script(name: str) -> str:
 
 def _powershell(script: str) -> list:
     encoded = base64.b64encode(script.encode("utf-16-le")).decode("ascii")
-    return ["powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-EncodedCommand", encoded]
+    return [windows_program("powershell.exe"), "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-EncodedCommand", encoded]
 
 
 def _wrapped(script: str, result_file: str) -> str:
@@ -631,7 +650,9 @@ def _start_elevated(argv: list) -> Optional[int]:
             return None
         raise ShareError(f"Could not ask for administrator rights: {ctypes.FormatError()}")
     try:
-        kernel32.WaitForSingleObject(info.hProcess, TIMEOUT * 1000 * 4)
+        if kernel32.WaitForSingleObject(info.hProcess, TIMEOUT * 1000 * 4) == 0x102:      # WAIT_TIMEOUT: it is still at work
+            raise ShareError(f"Windows has not finished the change after {TIMEOUT * 4 // 60} minutes and may still make it. Look at "
+                             "Properties > Sharing in a moment before trying again.")
         code = w.DWORD()
         kernel32.GetExitCodeProcess(info.hProcess, ctypes.byref(code))
         return code.value
@@ -661,8 +682,8 @@ def create(name: str, path: str, grants: list, remark: str = "", start: Optional
     if IS_WINDOWS:
         run_elevated(create_script(name, path, grants, remark), start)
     else:
-        guest = "y" if any(g.account == EVERYONE for g in grants) else "n"
-        _run_net(["add", name, path, remark, _usershare_acl(grants), f"guest_ok={guest}"], run)
+        # Never guest_ok=y: Samba then lets anyone in without a password, where Windows' "Everyone" means signed-in users only.
+        _run_net(["add", name, path, remark, _usershare_acl(grants), "guest_ok=n"], run)
 
 
 def change(old_name: str, name: str, path: str, grants: list, remark: str = "", start: Optional[Callable] = None,

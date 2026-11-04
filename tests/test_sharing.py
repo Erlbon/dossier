@@ -118,6 +118,46 @@ def test_changing_keeps_the_share_or_makes_a_new_one_when_renamed():
     assert renamed.index("New-SmbShare -Name 'Films'") < renamed.index("Remove-SmbShare -Name 'Media'")
 
 
+CURLY = chr(0x2019)                                                              # a right single quote, as Word types it
+ATTACK = "a" + CURLY + "; Write-Output PWNED; New-SmbShare -Name b -Path " + CURLY + "x"
+
+
+def test_curly_quotes_are_doubled_like_straight_ones():
+    """PowerShell ends a single-quoted string at any of four quote characters; every one is doubled."""
+    for q in ("'", chr(0x2018), chr(0x2019), chr(0x201A), chr(0x201B)):
+        assert sharing.ps_quote("a" + q + "b") == "'a" + q + q + "b'"
+
+
+def test_a_renamed_share_keeps_its_deny_entries():
+    """A rename makes a new share: whoever was denied the old one must not get into the new one."""
+    renamed = sharing.change_script("Media", "Films", "D:" + B, [Grant(EVERYONE, READ), Grant("PC" + B + "bob", READ, denied=True)])
+    new = renamed[renamed.index("New-SmbShare"):renamed.index("Remove-SmbShare")]
+    assert "-NoAccess @('PC" + B + "bob')" in new                                # in the same step that makes the share
+    same = sharing.change_script("Media", "Media", "D:" + B, [Grant(EVERYONE, READ), Grant("PC" + B + "bob", READ, denied=True)])
+    assert "NoAccess" not in same and "bob" not in same                          # kept by not touching it
+
+
+def _commands(script: str) -> list:
+    """The names of the commands PowerShell's own parser finds in ``script`` (nothing is run)."""
+    check = ("$e=$null; $a=[Management.Automation.Language.Parser]::ParseInput($env:DOSSIER_SCRIPT,[ref]$null,[ref]$e); "
+             "if ($e.Count) { exit 1 }; $a.FindAll({ param($n) $n -is [Management.Automation.Language.CommandAst] }, $true) | "
+             "ForEach-Object { $_.GetCommandName() }")
+    done = subprocess.run(["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", check], capture_output=True, text=True,
+                          env={**__import__("os").environ, "DOSSIER_SCRIPT": script}, timeout=60)
+    assert done.returncode == 0, done.stdout + done.stderr
+    return done.stdout.split()
+
+
+@WINDOWS
+def test_a_folder_name_with_a_curly_quote_cannot_add_a_command():
+    """A folder from a download or a stick named like ATTACK must stay one path, not run Write-Output as administrator."""
+    script = sharing._wrapped(sharing.create_script(ATTACK, "D:" + B + ATTACK, [Grant(EVERYONE, READ), Grant(ATTACK, READ)], ATTACK),
+                              "C:" + B + "Temp" + B + "r" + CURLY + ".txt")
+    found = _commands(script)
+    assert "Write-Output" not in found and found.count("New-SmbShare") == 1
+    assert "Write-Output" not in _commands(sharing.change_script(ATTACK, ATTACK + "2", "D:" + B, [Grant(EVERYONE, READ)], ATTACK))
+
+
 @WINDOWS
 @pytest.mark.parametrize("script", [
     sharing.create_script("A'b", "D:" + B + "x", [Grant(EVERYONE, READ), Grant("PC" + B + "u", FULL)], "a note"),
@@ -144,7 +184,7 @@ def test_the_elevated_run_reports_a_refused_prompt_and_powershells_own_error(mon
     with pytest.raises(sharing.Cancelled):
         sharing.run_elevated("Remove-SmbShare -Name 'A' -Force", start=refused)
     script = base64.b64decode(seen[0][-1]).decode("utf-16-le")
-    assert seen[0][0] == "powershell.exe" and "Remove-SmbShare" in script and "Out-File" in script
+    assert seen[0][0].lower().endswith("windowspowershell" + B + "v1.0" + B + "powershell.exe") and "Remove-SmbShare" in script and "Out-File" in script
 
     def failing(argv):
         script = base64.b64decode(argv[-1]).decode("utf-16-le")
@@ -178,7 +218,7 @@ def test_usershares_on_linux_need_no_prompt(monkeypatch):
         calls.append(argv)
         return subprocess.CompletedProcess(argv, 0, "", "")
     sharing.create("media", "/srv/media", [Grant(EVERYONE, READ), Grant("erlend", CHANGE)], "films", run=run)
-    assert calls[-1] == ["net", "usershare", "add", "media", "/srv/media", "films", "Everyone:R,erlend:F", "guest_ok=y"]
+    assert calls[-1] == ["net", "usershare", "add", "media", "/srv/media", "films", "Everyone:R,erlend:F", "guest_ok=n"]   # Everyone, but never without a password
     sharing.change("media", "films", "/srv/media", [Grant("erlend", READ)], run=run)
     assert calls[-2] == ["net", "usershare", "delete", "media"] and calls[-1][-1] == "guest_ok=n"
 

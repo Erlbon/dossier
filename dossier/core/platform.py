@@ -352,6 +352,24 @@ def quote_arg(arg: str) -> str:
     return shlex.quote(arg)
 
 
+PS_SINGLE_QUOTES = "'" + chr(0x2018) + chr(0x2019) + chr(0x201A) + chr(0x201B)
+
+
+def ps_quote(text: str) -> str:
+    """``text`` as a PowerShell single-quoted string. PowerShell ends such a string at any of four quote characters (the straight
+    one and the curly ones), so each is doubled, as PowerShell's own ``EscapeSingleQuotedStringContent`` does: a folder named
+    ``a’; command; ’`` stays one string and never becomes a command."""
+    return "'" + "".join(c + c if c in PS_SINGLE_QUOTES else c for c in str(text)) + "'"
+
+
+def windows_program(name: str) -> str:
+    """The full path of one of Windows' own programs (``powershell.exe``, ``net.exe``), so a file of that name in the current
+    folder is never started instead, least of all with administrator rights."""
+    root = os.environ.get("SystemRoot") or os.environ.get("windir") or "C:" + chr(92) + "Windows"
+    sub = {"powershell.exe": ("System32", "WindowsPowerShell", "v1.0")}.get(name.lower(), ("System32",))
+    return os.path.join(root, *sub, name)
+
+
 def console_encoding() -> str:
     """The encoding a console program's output is written in (the OEM code page on Windows)."""
     if IS_WINDOWS:

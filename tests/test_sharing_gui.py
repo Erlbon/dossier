@@ -180,6 +180,33 @@ def test_a_whole_drive_is_shared_only_after_a_warning(shared, monkeypatch):
     assert seen and state["calls"][0][1] == "System"
 
 
+def test_the_whole_drive_warning_says_who_and_names_the_system_drive(shared, monkeypatch):
+    win, d, left, state = shared
+    answer(monkeypatch, win, lambda dlg: None)
+    d.confirm_answer = False
+    system = os.environ.get("SystemDrive", "C:") + os.sep if sys.platform == "win32" else os.sep
+    win.new_share(system, label="System")
+    text = d.confirms[-1][1]
+    assert "Everyone on the network, read only" in text and "the drive Windows runs from" in text or sys.platform != "win32"
+
+
+def test_everyone_with_change_rights_on_a_whole_drive_is_asked_about_again(shared, monkeypatch):
+    win, d, left, state = shared
+
+    def everyone_may_change(dlg):
+        dlg.values = lambda: ("Drive", [Grant(EVERYONE, sharing.CHANGE)])
+    answer(monkeypatch, win, everyone_may_change)
+    answers = iter([True, False])                                                # yes to the whole drive, no to the changes
+    monkeypatch.setattr(d, "confirm", lambda title, text, ok="OK": (d.confirms.append((title, text)), next(answers))[1])
+    win.new_share(os.path.abspath(os.sep), label="Drive")
+    assert d.confirms[-1][0] == "Everyone May Change the Whole Drive" and "change and delete anything" in d.confirms[-1][1]
+    assert not state["calls"]                                                    # said no: nothing shared
+    asked = len(d.confirms)
+    win.new_share(str(left / "Comics"))                                          # a folder is not asked about at all
+    pump(win, lambda: state["calls"])
+    assert len(d.confirms) == asked
+
+
 def test_the_sharing_tab_lists_the_shares_and_changes_and_stops_them(shared, monkeypatch):
     win, d, left, state = shared
     folder = str(left / "Comics")

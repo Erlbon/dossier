@@ -2,6 +2,17 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-04#02 -- Sharing fixes from the code review of 2026-11-04
+
+Fixes for the sharing findings S1, S3, S4, S5, S7 and S11 in `docs/code-review-2026-11-04.md`.
+
+- **A folder name can no longer add a command to the administrator PowerShell.** PowerShell ends a quoted text at curly quotes (’ ‘ ‚ ‛) as well as at the straight one, and only the straight one was escaped. So a folder from a download or a stick, named with a curly quote and a command after it, would have run that command with administrator rights once you approved the prompt for Share... All four quote characters are now doubled, as PowerShell's own escaping does. The same fix applies to Enter on a `.ps1` script. A test parses the script with PowerShell's own parser and checks that no extra command appears.
+- **Renaming a share keeps its deny entries.** Windows cannot rename a share, so a new one is made and the old one removed. The new one had only the allow entries, so someone denied the old share could use the new one. The new share is now made with the deny entries in the same step.
+- **The administrator PowerShell is started by its full path** (`%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe`), never by name, so a `powershell.exe` lying in the folder Dossier was started from is never run.
+- **A change that takes Windows more than two minutes is no longer reported as failed.** It is reported as not finished yet, with a word to look at Properties > Sharing before trying again.
+- **Sharing a whole drive says who it is shared with:** Everyone on the network, read only, until you change it. For the drive Windows runs from, it says that others could read your user folders and settings. Giving Everyone change or full rights on a whole drive asks once more.
+- **Linux: Everyone no longer means anyone without a password.** Shares were made with Samba's `guest_ok=y` whenever Everyone was chosen, which lets anyone in without signing in. Now it is always `guest_ok=n`: Everyone means anyone with a Samba login, as on Windows, and the dialog says so.
+
 ## 2026-11-04#01 -- Data-loss fixes from the code review of 2026-11-04
 
 Fixes for the data-loss findings D1, D2, D3, D4, D5, D8, D9, D10 and D15 in `docs/code-review-2026-11-04.md`, each with a test that fails on the old code.

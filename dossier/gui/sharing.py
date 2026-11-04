@@ -27,7 +27,18 @@ from .owned_dialog import OwnedDialog
 EVERYONE_TEXT = "Everyone on the network"
 WINDOWS_NOTE = ("Windows asks for administrator rights once when you press {ok}. "
                 "The folder's own file permissions still apply on top of the share's.")
-LINUX_NOTE = "The share is made with Samba's usershares, which need no root. The folder's own file permissions still apply."
+LINUX_NOTE = ("The share is made with Samba's usershares, which need no root. Everyone means anyone with a Samba login on this "
+              "computer; nobody gets in without a password. The folder's own file permissions still apply.")
+
+
+def whole_drive_text(path: str) -> str:
+    """The question before a whole drive is shared: what, and who it starts with."""
+    text = (f"This shares everything on {path}, every folder on the drive. In the next step you choose who may use it; it starts "
+            "as Everyone on the network, read only.")
+    if sharing.is_system_drive(path):
+        text += (f"{chr(10) * 2}{path} is the drive Windows runs from: others could read your user folders, documents and program "
+                 "settings on it.")
+    return text + f"{chr(10) * 2}Share a folder instead if only part of it is meant for others."
 
 
 def can_share(path: str) -> bool:
@@ -464,18 +475,29 @@ class SharingMixin:
             self.share_addresses(on_ready=dlg.set_addresses)
         return dlg
 
+    def _changes_to_a_drive_confirmed(self, path: str, grants: list) -> bool:
+        """A second question when Everyone may change or delete what is on a whole drive."""
+        if not sharing.opens_a_drive_to_changes(path, grants):
+            return True
+        return self.dialogs.confirm(
+            "Everyone May Change the Whole Drive",
+            f"Everyone on the network will be able to change and delete anything on {path}"
+            + (", the drive Windows runs from" if sharing.IS_WINDOWS and sharing.is_system_drive(path) else "")
+            + ".\n\nRead only is usually what is meant. Give change rights to named people instead, or share a folder.",
+            "Allow Changes")
+
     def new_share(self, path: str, label: str = "", on_done: Optional[Callable] = None, parent=None) -> None:
         if not can_share(path):
             self._say("Only folders on this computer can be shared")
             return
-        if sharing.is_drive_root(path) and not self.dialogs.confirm(
-                "Share a Whole Drive", f"This shares everything on {path}, every folder on the drive, with whoever you choose next.\n\n"
-                "Share a folder instead if only part of it is meant for others.", "Share the Drive"):
+        if sharing.is_drive_root(path) and not self.dialogs.confirm("Share a Whole Drive", whole_drive_text(path), "Share the Drive"):
             return
         dlg = self._share_dialog(path, parent, name=sharing.suggest_name(path, label, sharing.KNOWN.all_names()), grants=[])
         if self._ask_share(dlg) != QDialog.DialogCode.Accepted:
             return
         name, grants = dlg.values()
+        if not self._changes_to_a_drive_confirmed(path, grants):
+            return
         self._share_change("Sharing", lambda start: sharing.create(name, path, grants, start=start), f"Shared as {name}", on_done)
 
     def change_share(self, share: Share, on_done: Optional[Callable] = None, parent=None) -> None:
@@ -483,6 +505,8 @@ class SharingMixin:
         if self._ask_share(dlg) != QDialog.DialogCode.Accepted:
             return
         name, grants = dlg.values()
+        if not self._changes_to_a_drive_confirmed(share.path, grants):
+            return
         self._share_change("Changing the share",
                            lambda start: sharing.change(share.name, name, share.path, grants, share.remark, start=start),
                            f"Share {name} changed", on_done)
