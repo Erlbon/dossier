@@ -58,7 +58,7 @@ def museum(tmp_path):
     put(root / "twin" / "same.txt", b"b")
     (root / "hollow").mkdir()
     (root / "junkonly").mkdir()
-    put(root / "junkonly" / "desktop.ini", b"j")
+    put(root / "junkonly" / "Thumbs.db", b"j")
     good = make_zip(root / "good.cbz")
     data = bytearray(good.read_bytes())
     data[data.index(b"hello world")] ^= 0xFF                      # flip a byte of the stored content: the CRC no longer matches
@@ -86,6 +86,26 @@ def test_the_museum_is_found(museum):
     assert expected <= found
     assert any(rule == "not-nfc" for _n, rule in found)
     assert any(rule == "mojibake" for _n, rule in found)
+
+
+def test_desktop_ini_is_never_junk_and_keeps_its_folder(tmp_path):
+    """Windows keeps a shell folder's name and icon in desktop.ini (Music, Videos, Startup): never offer to delete it or the folder."""
+    put(tmp_path / "Music" / "desktop.ini", b"[.ShellClassInfo]")
+    put(tmp_path / "Music" / "song.mp3", b"x")
+    put(tmp_path / "Startup" / "desktop.ini", b"[.ShellClassInfo]")
+    found = rules(health.run_checks(LocalFileSystem(), [str(tmp_path)], max_tier=health.T2))
+    assert not any(name in ("desktop.ini", "Startup") for name, _rule in found)
+
+
+def test_empty_folders_inside_a_repository_are_left_alone(tmp_path):
+    """git needs refs/heads and refs/tags even when they are empty (after git gc); so do other version control folders."""
+    (tmp_path / "proj" / ".git" / "refs" / "heads").mkdir(parents=True)
+    (tmp_path / "proj" / ".svn" / "tmp").mkdir(parents=True)
+    (tmp_path / "proj" / "hollow").mkdir()
+    put(tmp_path / "proj" / "a.txt")
+    found = rules(health.run_checks(LocalFileSystem(), [str(tmp_path)], max_tier=health.T2))
+    assert ("hollow", "empty-folder") in found
+    assert not any(name in ("heads", "refs", ".git", "tmp", ".svn") for name, _rule in found)
 
 
 def test_tiers_gate_the_work(museum):

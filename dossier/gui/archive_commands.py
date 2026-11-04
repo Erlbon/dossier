@@ -81,7 +81,7 @@ class ArchiveCommandsMixin:
     def _folder_for_new_file(self) -> str:
         """Where a new archive or unpacked folder goes by default: the other panel's folder, else this one's."""
         other = self.other
-        if not other.is_home and not has_scheme(other.path):
+        if other.path and not other.loading and not other.is_home and not has_scheme(other.path):
             return other.path
         return self.active.real_folder()
 

@@ -157,3 +157,31 @@ def test_enter_on_a_slow_folder_does_not_freeze_and_a_tab_can_still_be_used(app,
         assert win.left.path == str(tmp_path / "other") and not win.left.loading
     finally:
         win.close()
+
+
+@pytest.mark.parametrize("kind", ["slow", "fail"])
+def test_nothing_new_is_made_while_the_first_folder_has_not_answered(app, tmp_path, kind, monkeypatch):
+    """A panel whose first folder is still opening (or never answered) has no folder: F7 and New File must not make the
+    item in the program's own working folder, as they did."""
+    for d in ("slow", "dead", "other", "cwd"):
+        (tmp_path / d).mkdir()
+    monkeypatch.chdir(tmp_path / "cwd")                                   # where the old code made them
+    fs = SlowFileSystem(slow=["slow"], fail=["dead"], delay=1.5)
+    first = str(tmp_path / ("slow" if kind == "slow" else "dead"))
+    dialogs = FakeDialogs()
+    win = MainWindow(fs=fs, settings_path=str(tmp_path / "s.ini"), start=(first, str(tmp_path / "other")), dialogs=dialogs)
+    win.show()
+    try:
+        win.left.view.setFocus()
+        win.active = win.left
+        if kind == "fail":
+            pump(lambda: fs.answered.is_set() and not win.left.loading)
+        assert win.left.path == "" or win.left.loading
+        dialogs.texts = ["made by the test", "made by the test.txt"]
+        win.new_folder()
+        win.new_file()
+        assert os.listdir(tmp_path / "cwd") == []
+        assert len(dialogs.infos) == 2 and all(("still opening" in t) or ("no folder open" in t) for _title, t in dialogs.infos)
+    finally:
+        pump(lambda: fs.answered.is_set())
+        win.close()

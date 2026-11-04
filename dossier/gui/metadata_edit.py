@@ -7,7 +7,7 @@ from __future__ import annotations
 import os
 
 from ..core import metawrite
-from ..core.drives import is_network_path
+from ..core.drives import no_recycle_bin
 from ..core.ops import default_trash
 from .background import run_in_background
 
@@ -41,7 +41,7 @@ class MetadataEditMixin:
 
     def _write_metadata(self, items: list) -> None:
         first = next((i.path for i in items if i.writable), "")
-        trasher = os.remove if is_network_path(first) else (self.trasher or default_trash)     # a network drive has no recycle bin
+        trasher = os.remove if no_recycle_bin(first) else (self.trasher or default_trash)     # a network drive or a USB stick has no recycle bin
 
         def work(progress, cancel):
             return metawrite.apply(items, cancel, progress, trasher)

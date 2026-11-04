@@ -23,7 +23,7 @@ class Corrupting(MemoryFileSystem):
 
     def open_read(self, path):
         stream = super().open_read(path)
-        if path.startswith("mem://dst/") and self.basename(path) == self.bad_name:
+        if path.startswith("mem://dst/") and self.basename(path).removesuffix(transfer.PART_SUFFIX) == self.bad_name:
             data = bytearray(stream.read())
             stream.close()
             data[len(data) // 2] ^= 0xFF
@@ -70,6 +70,69 @@ def test_without_verify_the_bad_copy_goes_unnoticed():
     fs, plan = world(Corrupting())
     res = execute(plan, fs, options=ExecOptions())
     assert not res.failed
+
+
+def raw(fs, path):
+    with MemoryFileSystem.open_read(fs, path) as f:          # past the corruption: what is really stored
+        return f.read()
+
+
+def test_a_bad_copy_over_an_older_file_leaves_the_older_file_where_it_was():
+    fs, plan = world(Corrupting(), names=("b.bin",))
+    fs.put("mem://dst/b.bin", b"older")
+    plan = plan_copy(fs, ["mem://src/b.bin"], "mem://dst").resolve(ops_module.Resolution.OVERWRITE, fs)
+    binned = []
+    res = execute(plan, fs, trasher=binned.append, options=ExecOptions(verify=True))
+    assert res.failed and "differs" in res.failed[0].error
+    assert raw(fs, "mem://dst/b.bin") == b"older" and binned == []                  # checked before the swap, not after
+    assert sorted(e.name for e in fs.list("mem://dst")) == ["b.bin"]
+
+
+class OtherDriveCorrupting(Corrupting):
+    """A target on another drive (no rename across) that stores one byte wrong."""
+
+    def rename(self, src, dst, *, overwrite=False):
+        if not self.basename(src).endswith(transfer.PART_SUFFIX):
+            raise OSError(18, "cross-device link")
+        return super().rename(src, dst, overwrite=overwrite)
+
+
+def test_a_file_moved_to_another_drive_is_verified_before_its_original_goes():
+    fs = OtherDriveCorrupting()
+    fs.makedirs("mem://dst")
+    fs.put("mem://src/b.bin", b"B" * 3000)
+    plan = ops_module.plan_move(fs, ["mem://src/b.bin"], "mem://dst")
+    res = execute(plan, fs, options=ExecOptions(verify=True))
+    assert res.failed and "differs" in res.failed[0].error
+    assert raw(fs, "mem://src/b.bin") == b"B" * 3000 and fs.list("mem://dst") == []
+
+
+def test_a_file_moved_to_another_drive_is_flushed_before_its_original_goes(monkeypatch):
+    fs = OtherDriveCorrupting(bad_name="none")
+    fs.makedirs("mem://dst")
+    fs.put("mem://src/a.bin", b"A" * 3000)
+    order = []
+    monkeypatch.setattr(transfer, "flush_file", lambda path: order.append(("flush", path)))
+    real_remove = fs.remove
+    monkeypatch.setattr(fs, "remove", lambda path, *a, **k: (order.append(("remove", path)), real_remove(path, *a, **k))[1])
+    op = ops_module.Op(ops_module.Kind.MOVE, "mem://src/a.bin", "mem://dst/a.bin", size=3000)
+    ops_module._run_op(op, fs, [], None, None, lambda p: None, flush=True)
+    assert order[0] == ("flush", "mem://dst/a.bin") and ("remove", "mem://src/a.bin") in order[1:]
+
+
+def test_a_folder_moved_to_another_drive_flushes_every_copy_before_any_original_goes(monkeypatch):
+    fs = MemoryFileSystem()
+    fs.put("mem://src/F/a.bin", b"A")
+    fs.put("mem://dst/F/a.bin", b"A")
+    order = []
+    monkeypatch.setattr(ops_module, "flush_file", lambda path: order.append(("flush", path)))
+    real_remove = fs.remove
+    monkeypatch.setattr(fs, "remove", lambda path, *a, **k: (order.append(("remove", path)), real_remove(path, *a, **k))[1])
+    copy = ops_module.Op(ops_module.Kind.COPY, "mem://src/F/a.bin", "mem://dst/F/a.bin", group=1)
+    finish = ops_module.Op(ops_module.Kind.FINISH_MOVE, "mem://src/F", "mem://dst/F", is_dir=True, group=1)
+    done = type("Done", (), {"status": "done"})()
+    ops_module._finish_move(finish, [(0, copy)], {0: (done,)}, fs, flush=True)
+    assert order[0] == ("flush", "mem://dst/F/a.bin") and ("remove", "mem://src/F/a.bin") in order
 
 
 def test_verify_counts_in_the_progress_and_the_bar_ends_at_the_total():

@@ -383,3 +383,7 @@ All 17 findings were marked fixed. These three are only partly so:
 5. **Tag writer:** D6 and C1 to C4 now; then the shared `redactor_common` module (L).
 6. **Health:** D10, D17 and C5, then the shared hygiene lists (M).
 7. **Clean-up and docs:** K1 to K7, rewrite CLAUDE.md "State", and a one-page user guide.
+
+## Status
+
+Fixed in build 2026-11-04#01 (owner's choice: the data-loss fixes first): D1, D2, D3, D4, D5, D8, D9, D10 and D15, each with a test that fails on the old code. D13 is fixed with D2 (Move into Zip now says when originals are deleted for good). D2 also brings in pywin32 on Windows, which makes the release exe bigger. Everything else is still open.

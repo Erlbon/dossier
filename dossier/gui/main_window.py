@@ -681,6 +681,17 @@ class MainWindow(FrostMixin, GlassViewMixin, KeysMixin, AutoRefreshMixin, Metada
             return True
         return False
 
+    def _no_folder_yet(self, what: str) -> bool:
+        """True (after saying why) while the active panel is still opening a folder, or has none (its first folder never
+        answered): a new item would otherwise land in the previous folder, or in the program's own working folder."""
+        if self.active.loading:
+            self.dialogs.info(what, f"This panel is still opening {self.active.pending_path}. Wait for it, or press Esc, and try again.")
+            return True
+        if not self.active.path:
+            self.dialogs.info(what, "This panel has no folder open yet. Open one first.")
+            return True
+        return False
+
     def _home_action(self, path: str) -> None:
         if path == ADD_NETWORK:
             self.add_network_share()
@@ -1016,6 +1027,8 @@ class MainWindow(FrostMixin, GlassViewMixin, KeysMixin, AutoRefreshMixin, Metada
         if self.active.is_home:
             self.add_network_share()                 # on the Home page F7 adds an entry instead of a folder
             return
+        if self._no_folder_yet("New Folder"):
+            return
         if zip_parts(self.active.path) is not None:
             self._new_folder_in_zip()
             return
@@ -1066,10 +1079,11 @@ class MainWindow(FrostMixin, GlassViewMixin, KeysMixin, AutoRefreshMixin, Metada
         elif any(not op.to_trash for op in plan.ops):
             lost = [op for op in plan.ops if not op.to_trash]
             rest = len(plan.ops) - len(lost)
-            text = (f"{len(lost)} of {len(plan.ops)} item(s) are on a network drive or server, which has no {BIN}: "
+            text = (f"{len(lost)} of {len(plan.ops)} item(s) are on a network drive, server or USB stick, which has no {BIN}: "
                     f"{'they' if len(lost) != 1 else 'it'} will be deleted permanently and cannot be brought back."
                     + (f" The other {rest} go to the {BIN}." if rest else ""))
-            ok = self.dialogs.confirm("Delete from a Network Drive", f"{text}{chr(10) * 2}{names}{more}", "Delete permanently")
+            ok = self.dialogs.confirm("Delete from a Network Drive or USB Stick", f"{text}{chr(10) * 2}{names}{more}",
+                                      "Delete permanently")
         else:
             ok = self.dialogs.confirm("Delete", f"Move {len(plan.ops)} item(s) to the {BIN}?\n\n{names}{more}", "Delete")
         if ok:

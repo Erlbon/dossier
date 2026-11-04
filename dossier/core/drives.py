@@ -87,6 +87,27 @@ def is_remote_quick(path: str) -> bool:
     return is_network_path(path)
 
 
+def on_removable_drive(path: str) -> bool:
+    """Whether ``path`` is on a removable drive on Windows (a USB stick, an SD card), from the drive type alone. Windows keeps no
+    recycle bin there, so a delete and the older file an overwrite replaces are gone for good, as on a network drive; asked to
+    recycle such an item it deletes it without a word. Linux keeps a trash folder on the stick itself, so there it is False."""
+    if not IS_WINDOWS or not path or has_scheme(path):
+        return False
+    import ctypes
+    root = os.path.splitdrive(strip_longpath(path))[0]
+    if not root or root.startswith(chr(92) * 2):
+        return False
+    try:
+        return ctypes.windll.kernel32.GetDriveTypeW(root + chr(92)) == 2                         # DRIVE_REMOVABLE
+    except Exception:                                # a failed look must never stop an operation
+        return False
+
+
+def no_recycle_bin(path: str) -> bool:
+    """Whether a delete or an overwrite at ``path`` is for good: a network drive, a server, or a removable drive on Windows."""
+    return is_network_path(path) or on_removable_drive(path)
+
+
 def disk_usage(path: str) -> Optional[tuple]:
     """``(total, free)`` in bytes, or None. May block on a dead share: call it through ``usage_async``."""
     try:

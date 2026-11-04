@@ -359,7 +359,8 @@ class HealthWindow(OwnedDialog):
         if not plans:
             self.status.setText("Nothing to fix.")
             return
-        if preview or any(p.blocking for p in plans):
+        deletes = any(op.kind.value == "delete" for p in plans for op in p.ops)
+        if preview or deletes or any(p.blocking for p in plans):     # a delete is always shown first: on a network drive it is for good
             dialog = PlanPreview(self, plans)
             self._show_preview(dialog)
             if dialog.result() != QDialog.DialogCode.Accepted or any(p.blocking for p in plans):

@@ -9,7 +9,7 @@ import errno
 import os
 import stat
 import uuid
-from typing import Optional
+from typing import Callable, Optional
 
 from . import fastcopy
 from .platform import has_scheme
@@ -54,10 +54,13 @@ def copy_mode(src: str, dst: str) -> None:
 
 
 def move_item(fs: FileSystem, src: str, dst: str, is_dir: bool, cancel: Optional[CancelToken] = None, *,
-              progress: Optional[ProgressFn] = None, throttle=None, swap=None, tags_lost: Optional[list] = None) -> bool:
+              progress: Optional[ProgressFn] = None, throttle=None, swap=None, tags_lost: Optional[list] = None,
+              check_part: Optional[Callable[[str], None]] = None, flush: bool = False) -> bool:
     """Rename in place; across drives a file is copied, verified by size, then removed. ``swap`` puts the item in
     the place of an existing one without ever being without the old one (see ``Swap``). Returns True when the item
-    was renamed (it can be renamed back), False when it had to be copied to another drive and removed."""
+    was renamed (it can be renamed back), False when it had to be copied to another drive and removed.
+    Across drives, ``check_part`` reads the new data back before it takes the name (see ``copy_file``), and ``flush``
+    pushes the copy to the device before the original is removed, so a pulled stick or a power cut never leaves neither."""
     if swap is not None:
         swap.prepare()
     try:
@@ -71,7 +74,9 @@ def move_item(fs: FileSystem, src: str, dst: str, is_dir: bool, cancel: Optional
             raise OSError("this folder is on another volume than its new place (a mount point or a link): copy it and delete "
                           "the original; nothing was changed") from e
         copy_file(fs, src, fs, dst, cancel=cancel, progress=progress, throttle=throttle, overwrite=swap is not None, swap=swap,
-                  tags_lost=tags_lost)
+                  tags_lost=tags_lost, check_part=check_part)
+        if flush:
+            flush_file(dst)
         if fs.stat(dst).size != fs.stat(src).size:
             fs.remove(dst)
             raise OSError("the copy does not match the original; the original was kept") from e
@@ -149,7 +154,11 @@ def copy_file(
     native: bool = True,
     swap=None,
     tags_lost: Optional[list] = None,
+    check_part: Optional[Callable[[str], None]] = None,
 ) -> None:
+    """Copy one file through a part file beside the target. ``check_part(part)`` runs on the complete part file before it
+    takes the target's name (the read-back of Verify): when it raises, the part is removed and an existing target was
+    never touched."""
     check(cancel)
     if not overwrite:
         try:
@@ -168,6 +177,8 @@ def copy_file(
         if native and throttle is None and total >= fastcopy.FAST_MIN and _plain_local(src_fs, src) and _plain_local(dst_fs, dst):
             if fastcopy.fast_copy(src, part, total, progress, cancel):       # the system's own copy, in the kernel
                 _check_whole(dst_fs.stat(part).size, total, src)
+                if check_part is not None:
+                    check_part(part)
                 _finish(dst_fs, part, dst, info, overwrite, cancel, swap)
                 carry_tags(src_fs, src, dst_fs, dst, tags_lost)
                 return
@@ -188,6 +199,8 @@ def copy_file(
         _check_whole(done, total, src)
         if _plain_local(src_fs, src) and _plain_local(dst_fs, dst):
             copy_mode(src, part)
+        if check_part is not None:
+            check_part(part)
         _finish(dst_fs, part, dst, info, overwrite, cancel, swap)
         carry_tags(src_fs, src, dst_fs, dst, tags_lost)
     except BaseException:

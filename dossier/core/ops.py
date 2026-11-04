@@ -23,7 +23,7 @@ from enum import Enum
 from typing import Callable, Iterable, Optional, Sequence
 
 from . import sharing
-from .drives import drive_of, is_network_path, list_drives
+from .drives import drive_of, is_network_path, list_drives, on_removable_drive
 from .platform import IS_WINDOWS, SERVER_SCHEMES, has_scheme, path_key, strip_longpath
 from .progress import Cancelled, CancelToken, ProgressFn, SpeedLimit, check
 from .transfer import Swap, carry_tags, copy_file, flush_file, move_item as _move_item, verify_copy
@@ -125,7 +125,7 @@ class Plan:
                             ops[j] = replace(ops[j], dst=moved, conflict=still)
                 ops[i] = replace(op, dst=new_dst, conflict="", dst_is_dir=False, dst_mtime=0.0, dst_size=0)
             else:
-                same_item = path_key(op.src) == path_key(op.dst)
+                same_item = op.conflict == _SAME_ITEM or path_key(op.src) == path_key(op.dst)
                 if same_item or op.is_dir or op.dst_is_dir:
                     ops[i] = replace(op, conflict=_NO_OVERWRITE)
                 elif resolution is Resolution.OVERWRITE_IF_NEWER and op.src_mtime <= op.dst_mtime:
@@ -135,9 +135,9 @@ class Plan:
                     ops[i] = replace(op, overwrite=True, conflict="")
         kept = tuple(op for i, op in enumerate(ops) if i not in drop)
         warnings = self.warnings
-        gone = sum(1 for op in kept if op.overwrite and is_network_path(op.dst))
-        note = (f"{gone} older file{'s' if gone != 1 else ''} on a network drive or server will be deleted permanently when "
-                "replaced: a network drive or server has no recycle bin, and this cannot be undone")
+        gone = sum(1 for op in kept if op.overwrite and _no_bin(op.dst))
+        note = (f"{gone} older file{'s' if gone != 1 else ''} on a network drive, server or USB stick will be deleted permanently "
+                "when replaced: a network drive, server or USB stick has no recycle bin, and this cannot be undone")
         if gone and note not in warnings:
             warnings = warnings + (note,)
         return replace(self, ops=kept, skipped=tuple(skipped), warnings=warnings)
@@ -223,6 +223,23 @@ def _unique_name(fs: FileSystem, dst: str, is_dir: bool, taken: set) -> str:
         n += 1
 
 
+def _no_bin(path: str) -> bool:
+    """No recycle bin at ``path`` (a network drive, a server, a USB stick on Windows): a delete or a replaced file there is gone
+    for good, and the plan says so first. (``drives.no_recycle_bin``, by way of this module's names, which tests replace.)"""
+    return is_network_path(path) or on_removable_drive(path)
+
+
+def _same_file(fs: FileSystem, a: str, b: str) -> bool:
+    """Whether two paths on this computer are one file or folder by two names (a folder on a mapped drive letter and the
+    network path behind it, a subst drive, a junction on the way). Servers and archives never count."""
+    if fs.scheme or has_scheme(a) or has_scheme(b):
+        return False
+    try:
+        return os.path.samefile(a, b)
+    except (OSError, ValueError):
+        return False
+
+
 def _placed(fs: FileSystem, src: str, dst: str, taken: set, is_dir: bool) -> dict:
     """Conflict fields for putting ``src`` at ``dst``; ``taken`` holds the targets already planned."""
     key = path_key(dst)
@@ -230,8 +247,8 @@ def _placed(fs: FileSystem, src: str, dst: str, taken: set, is_dir: bool) -> dic
     existing = _stat(fs, dst)
     if key in taken:
         fields["conflict"] = "two items in this batch would get the same name"
-    elif path_key(src) == key:
-        fields["conflict"] = _SAME_ITEM
+    elif path_key(src) == key or (existing is not None and _same_file(fs, src, dst)):
+        fields["conflict"] = _SAME_ITEM       # also one item reached by two names (a mapped drive and its network path)
     elif existing is not None:
         if is_dir and existing.is_dir:
             pass                              # folders merge; their contents are checked one by one
@@ -348,7 +365,7 @@ def same_volume(fs: FileSystem, a: str, b: str) -> bool:
     try:
         if IS_WINDOWS:
             return os.path.splitdrive(os.path.abspath(a))[0].lower() == os.path.splitdrive(os.path.abspath(b))[0].lower()
-        return os.stat(a).st_dev == os.stat(b).st_dev
+        return os.lstat(a).st_dev == os.stat(b).st_dev     # a link is where it is, not where it points
     except OSError:
         return True
 
@@ -404,11 +421,14 @@ def plan_move(fs: FileSystem, sources: Sequence[str], dest_dir: str, *, watch=No
         if e is None:
             warnings.append(f"no longer there, left out: {src}")
             skipped.append(src)
-        elif path_key(src) == path_key(dst):
+        elif path_key(src) == path_key(dst) or _same_file(fs, src, dst):
             warnings.append(f"already in that folder, left out: {src}")
             skipped.append(src)
         elif e.is_dir and _within(fs, dest_dir, src):
             blocking.append(f"cannot move a folder into itself: {src}")
+        elif e.is_link and not same_volume(fs, src, dest_dir):
+            # a copy would take what the link points at, and finishing the move would then empty that place
+            blocking.append(f"a link cannot be moved to another drive (make a new link there instead): {src}")
         elif e.is_dir and not same_volume(fs, src, dest_dir):
             # another drive: copy the whole tree (folders merge, as in a copy), then take away the source files
             # that really were copied. Nothing is removed from the source unless every copy succeeded.
@@ -474,14 +494,14 @@ def plan_delete(fs: FileSystem, sources: Sequence[str], *, to_trash: bool = True
             warnings.append(f"no longer there, left out: {src}")
             skipped.append(src)
         else:
-            on_network = to_trash and is_network_path(src)        # a network drive has no recycle bin
+            on_network = to_trash and _no_bin(src)                # a network drive or a USB stick has no recycle bin
             ops.append(Op(Kind.DELETE, src, is_dir=e.is_dir, size=e.size, src_mtime=e.mtime,
                           to_trash=to_trash and not on_network))
             no_bin += on_network
     if ops and not to_trash:
         warnings.append("these items will be deleted permanently and cannot be brought back")
     elif no_bin:
-        warnings.append(f"{no_bin} item{'s are' if no_bin != 1 else ' is'} on a network drive or server, which has no recycle bin: "
+        warnings.append(f"{no_bin} item{'s are' if no_bin != 1 else ' is'} on a network drive, server or USB stick, which has no recycle bin: "
                         f"{'they' if no_bin != 1 else 'it'} will be deleted permanently and cannot be brought back")
     return Plan("Delete" if not to_trash else "Delete to the recycle bin", tuple(ops), tuple(warnings), tuple(blocking), tuple(skipped))
 
@@ -602,7 +622,7 @@ def is_transient(error: OSError) -> bool:
 def target_kind(plan: Plan) -> str:
     """What the files are copied to: fixed, removable, network, optical (fixed when it cannot be told)."""
     try:
-        dest = next((op.dst for op in plan.ops if op.kind is Kind.COPY), "")
+        dest = next((op.dst for op in plan.ops if op.kind in (Kind.COPY, Kind.MOVE)), "")
         drive = drive_of(dest, list_drives()) if dest else None
         return drive.kind if drive else "fixed"
     except Exception:                          # the drive list must never stop a copy
@@ -673,8 +693,9 @@ def execute(
     opts = options or ExecOptions()
     copies_all = [op for op in plan.ops if op.kind is Kind.COPY]
     local_target = fs.scheme == "" and all(not has_scheme(op.dst) for op in copies_all)
-    want_flush = opts.flush if opts.flush is not None else target_kind(plan) in ("removable", "network")
-    want_flush = bool(want_flush and local_target and copies_all)
+    flush_wanted = opts.flush if opts.flush is not None else target_kind(plan) in ("removable", "network")
+    want_flush = bool(flush_wanted and local_target and copies_all)
+    flush_moves = bool(flush_wanted and fs.scheme == "")    # a file moved to another drive is flushed before its original goes
     verify_extra = sum(max(op.size, 1) for op in copies_all) if opts.verify else 0     # reading back is work too
     flush_share = max(len(copies_all), plan.total_work // 50) if want_flush else 0        # the last 2 percent of the bar
     done = _Progress(progress, plan.total_work + verify_extra + flush_share)
@@ -718,10 +739,10 @@ def execute(
             attempts += 1
             try:
                 if op.kind is Kind.FINISH_MOVE:
-                    _finish_move(op, indexed, outcomes, fs)
+                    _finish_move(op, indexed, outcomes, fs, flush=flush_moves)
                 else:
                     _run_op(op, fs, steps, sub, cancel, safe_trasher, limit, opts.native_copy,
-                            sub_verify if opts.verify else False, tags_lost)
+                            sub_verify if opts.verify else False, tags_lost, flush=flush_moves)
                 outcome = OpResult(op, "done", attempts=attempts)
                 done.finish(i, unit)
                 break
@@ -810,18 +831,28 @@ def _flush_pass(outcomes: dict, done: _Progress, share: int, cancel) -> None:
         done.finish(-1 - n, each)
 
 
-def _finish_move(op: Op, indexed: list, outcomes: dict, fs: FileSystem) -> None:
+def _finish_move(op: Op, indexed: list, outcomes: dict, fs: FileSystem, flush: bool = False) -> None:
     """The last step of a folder moved to another drive. Only when every file of the folder was copied (and has
     the size of its original) are the originals removed, then the folders that are empty by then; otherwise
-    nothing is touched and the user is told. Nothing is journaled: this move has no undo."""
+    nothing is touched and the user is told. ``flush`` pushes every copy to the device first (a stick or a share),
+    so the originals never go while the copies are only in the cache. Nothing is journaled: this move has no undo."""
     members = [(i, o) for i, o in indexed if o.group == op.group and o.kind in (Kind.COPY, Kind.MKDIR)]
     files = [(i, o) for i, o in members if o.kind is Kind.COPY]
     not_done = [o for i, o in files if i not in outcomes or outcomes[i][0].status != "done"]
     if not_done:
         raise OSError(f"{len(not_done)} of {len(files)} files were not copied, so nothing was removed from {op.src}")
     for _i, o in files:
+        if _same_file(fs, o.src, o.dst):
+            raise OSError(f"{fs.basename(o.src)} and its copy are the same file (one place by two names), so nothing was removed from {op.src}")
         if fs.stat(o.dst).size != fs.stat(o.src).size:
             raise OSError(f"the copy of {fs.basename(o.src)} does not match the original, so nothing was removed from {op.src}")
+    if flush:
+        for _i, o in files:
+            try:
+                flush_file(o.dst)
+            except OSError as e:
+                raise OSError(f"the copy of {fs.basename(o.src)} could not be written through to the device ({e.strerror or e}), "
+                              f"so nothing was removed from {op.src}") from e
     stuck = []
     for _i, o in files:
         try:
@@ -839,7 +870,7 @@ def _finish_move(op: Op, indexed: list, outcomes: dict, fs: FileSystem) -> None:
 
 
 def _run_op(op: Op, fs: FileSystem, steps: list, progress, cancel, trasher: Trasher, throttle=None,
-            native: bool = True, verify=False, tags_lost=None) -> None:
+            native: bool = True, verify=False, tags_lost=None, flush: bool = False) -> None:
     if op.kind is Kind.MKDIR:
         existing = _stat(fs, op.dst)
         if existing is None:
@@ -857,23 +888,17 @@ def _run_op(op: Op, fs: FileSystem, steps: list, progress, cancel, trasher: Tras
         return
     # An existing target is replaced by a swap: it moves aside only when the new data is complete, and goes to the
     # bin only when the new file is in place. Whatever fails before that leaves the old file where it was.
-    no_bin = op.overwrite and is_network_path(op.dst)
+    no_bin = op.overwrite and _no_bin(op.dst)
     swap = Swap(fs, op.dst, trasher, permanent=no_bin) if op.overwrite and _stat(fs, op.dst) is not None else None
+    # Verify reads the new data back while it is still the part file: a copy that does not match is removed and an
+    # older file it was to replace stays exactly where it was.
     if op.kind is Kind.COPY:
+        check_part = (lambda part: verify_copy(fs, op.src, fs, part, progress=verify, cancel=cancel)) if verify is not False else None
         copy_file(fs, op.src, fs, op.dst, progress=progress, cancel=cancel, throttle=throttle, native=native,
-                  overwrite=swap is not None, swap=swap, tags_lost=tags_lost)
-        if verify is not False:
-            try:
-                verify_copy(fs, op.src, fs, op.dst, progress=verify, cancel=cancel)
-            except BaseException:
-                try:
-                    fs.remove(op.dst)                 # a copy that does not match the original is not kept
-                except OSError:
-                    pass
-                raise
-
+                  overwrite=swap is not None, swap=swap, tags_lost=tags_lost, check_part=check_part)
     else:                                     # MOVE or RENAME
+        check_part = (lambda part: verify_copy(fs, op.src, fs, part, cancel=cancel)) if verify is not False else None
         renamed = _move_item(fs, op.src, op.dst, op.is_dir, cancel, progress=progress, throttle=throttle, swap=swap,
-                             tags_lost=tags_lost)
+                             tags_lost=tags_lost, check_part=check_part, flush=flush)
         if renamed and swap is None:              # only a plain rename can be put back; a copy and delete cannot
             steps.append(Step("moved", op.src, op.dst))

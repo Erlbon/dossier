@@ -2,6 +2,21 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-04#01 -- Data-loss fixes from the code review of 2026-11-04
+
+Fixes for the data-loss findings D1, D2, D3, D4, D5, D8, D9, D10 and D15 in `docs/code-review-2026-11-04.md`, each with a test that fails on the old code.
+
+- **A link moved to another drive no longer empties what it points at.** Moving a junction or a folder symlink to another drive copied the target's files and then deleted them, leaving the target folder empty. It is now refused ("make a new link there instead"); on the same drive a link is still moved by renaming it. On Linux, a link counts as being on its own drive, not on its target's.
+- **A folder or file reached by two names is never copied onto itself and then deleted.** Example: a folder on a mapped drive letter and the network path behind it, a subst drive, or a junction on the way. Moving such a folder "to another drive" (the same place by another name) and choosing Overwrite used to remove the only copy. Now the item counts as the same item and cannot be overwritten with itself, and the last step of a move never removes a file that is its own copy.
+- **Verify checks the new copy before it replaces anything.** When the read-back failed, the older file had already been sent to the recycle bin (or deleted, on a network drive) and the bad copy was then removed too, leaving nothing. Now the copy is read back while it is still the `.dossier-part` file; a bad one is removed and the older file stays where it was.
+- **A move to another drive keeps the original until the copy is safe.** With Verify on, a moved file is read back before its original goes (before, only copies were verified). On a USB stick or a network drive, each moved file, and every file of a moved folder, is written through to the device before any original is removed. Before, the originals went while the copies could still be in the cache, so a pulled stick or a power cut lost both.
+- **USB sticks have no recycle bin, and the confirmation now says so.** On Windows, deleting on a removable drive, or overwriting there, is permanent, as on a network drive: the plan, the delete confirmation ("Delete from a Network Drive or USB Stick"), zip editing and tag writing all say so and delete knowingly. Before, they said "recycle bin" and Windows deleted the items for good without a word.
+- **The recycle bin uses Windows' modern interface** (pywin32 is now a requirement on Windows). The old one deletes for good, silently, any item it cannot recycle (too big, the bin switched off); the modern one refuses such an item, and the delete reports a failure instead.
+- **Move into Zip says when the originals are deleted for good** (from a network drive or a USB stick), not "go to the recycle bin".
+- **Health no longer offers to delete `desktop.ini`**, or a folder that holds only `desktop.ini`. That file gives Music, Videos, Startup and other shell folders their names and icons. Empty folders inside `.git`, `.svn`, `.hg` and `.bzr` are no longer reported: git needs `refs/heads` even when it is empty.
+- **Health's Fix always shows the plan first when it deletes** (junk, empty folders, dead links), so the warning that a network drive has no recycle bin is seen before anything goes. Rename and quarantine fixes still run straight away.
+- **New Folder, New File, Paste as New File and New Link wait for the panel's folder.** While a panel was still opening its first folder (a remembered folder on a dead share at startup), or when that folder never answered, these made the new item in the program's own working folder. Now they say the panel is still opening, or has no folder yet.
+
 ## 2026-11-03#04 -- Enter runs scripts
 
 - **Enter (or a double-click) on a script runs it**: `.bat`, `.cmd`, `.ps1` and `.py` on Windows (`.sh` and `.py` elsewhere). Before, a script counted as text and opened in the viewer. Ctrl+Enter now shows it in the viewer; F3 views and F4 edits as before.

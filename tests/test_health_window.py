@@ -32,7 +32,7 @@ def build(root):
     (root / "Thumbs.db").write_bytes(b"j")
     (root / "Beach.JPG").write_bytes(bytes([0xFF, 0xD8, 0xFF, 0xE0]) + b"0" * 20)
     (root / "sub").mkdir(exist_ok=True)
-    (root / "sub" / "Desktop.INI").write_bytes(b"j")
+    (root / "sub" / ".DS_Store").write_bytes(b"j")
     (root / "sub" / "keep.txt").write_bytes(b"data")
 
 
@@ -153,10 +153,24 @@ def test_a_rename_fix_runs_through_the_queue_and_the_finding_goes_away(health_wi
     assert "Fixed 1 item" in w.status.text()
 
 
-def test_a_delete_fix_goes_to_the_bin_and_a_quarantine_fix_keeps_the_file(health_window):
+def test_a_delete_fix_is_always_shown_first_and_rejecting_it_deletes_nothing(health_window, monkeypatch):
+    win, d, left, right, tmp, w = health_window
+    pick(w, "junk-file")
+    shown = []
+    monkeypatch.setattr(w, "_show_preview", lambda dialog: (shown.append(dialog.text.toPlainText()), dialog.reject()))
+    w.fix_button.click()                                                         # Fix, not Preview
+    wait(lambda: shown)
+    assert "Thumbs.db" in shown[0]
+    for _ in range(20):
+        QApplication.processEvents()
+    assert (left / "Thumbs.db").exists()
+
+
+def test_a_delete_fix_goes_to_the_bin_and_a_quarantine_fix_keeps_the_file(health_window, monkeypatch):
     win, d, left, right, tmp, w = health_window
     quarantine_ui.write_settings(win.settings, quarantine.Settings(quarantine.FOLDER, str(tmp / "Q")))
     pick(w, "junk-file")
+    monkeypatch.setattr(w, "_show_preview", lambda dialog: dialog.accept())
     w.fix_button.click()
     wait(lambda: not any(f.rule == "junk-file" for f in w.findings))
     assert not (left / "Thumbs.db").exists() and any(n.endswith("Thumbs.db") for n in os.listdir(tmp / "bin"))       # in the bin, not gone for good

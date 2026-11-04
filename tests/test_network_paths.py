@@ -85,6 +85,38 @@ def test_a_plain_permanent_delete_has_its_usual_warning_only(pretend_network):
     assert [op.to_trash for op in plan.ops] == [False] and not any("network" in w for w in plan.warnings)
 
 
+def test_a_usb_stick_has_no_recycle_bin_either(tmp_path, monkeypatch):
+    """Windows keeps no recycle bin on a removable drive: asked to recycle there it deletes for good, silently. So the plan
+    says so first, as for a network drive, and an overwrite there deletes the older file knowingly."""
+    stick = str(tmp_path / "stick")
+    monkeypatch.setattr(ops_module, "on_removable_drive", lambda path: os.path.normcase(path).startswith(os.path.normcase(stick)))
+    write(tmp_path / "stick" / "a.txt", "A")
+    plan = plan_delete(fs, [str(tmp_path / "stick" / "a.txt")], to_trash=True)
+    assert [op.to_trash for op in plan.ops] == [False] and any("USB stick" in w and "no recycle bin" in w for w in plan.warnings)
+    write(tmp_path / "local" / "a.txt", "NEW")
+    over = plan_copy(fs, [str(tmp_path / "local" / "a.txt")], stick).resolve(Resolution.OVERWRITE, fs)
+    assert any("USB stick" in w and "cannot be undone" in w for w in over.warnings)
+
+
+@pytest.mark.skipif(os.name != "nt", reason="drive types are a Windows thing; Linux keeps a trash folder on the stick")
+def test_the_drive_type_tells_a_removable_drive(monkeypatch):
+    import ctypes
+    from dossier.core import drives as drives_module
+    asked = []
+
+    class Kernel:
+        @staticmethod
+        def GetDriveTypeW(root):
+            asked.append(root)
+            return 2 if root.upper().startswith("E:") else 3
+
+    monkeypatch.setattr(ctypes.windll, "kernel32", Kernel)
+    assert drives_module.on_removable_drive("E:" + BACKSLASH + "Photos" + BACKSLASH + "a.jpg")
+    assert not drives_module.on_removable_drive("C:" + BACKSLASH + "x")
+    assert not drives_module.on_removable_drive(BACKSLASH * 2 + "server" + BACKSLASH + "share") and asked == ["E:" + BACKSLASH, "C:" + BACKSLASH]
+    assert not drives_module.on_removable_drive("zip://E:" + BACKSLASH + "a.zip!/x")
+
+
 # overwrite --------------------------------------------------------------------------------------------------
 def test_overwriting_on_a_network_drive_deletes_the_older_file_and_the_plan_warns(pretend_network):
     t = pretend_network

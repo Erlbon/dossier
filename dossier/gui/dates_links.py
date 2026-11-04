@@ -414,7 +414,7 @@ class DatesLinksMixin:
     # links -----------------------------------------------------------------------------------------------------------------------------
     def new_link(self) -> None:
         paths = self._items_for("New link")
-        if paths is None:
+        if paths is None or self._no_folder_yet("New Link"):
             return
         if len(paths) != 1:
             self._say("Put the cursor on the one item to link to (unmark the others)")

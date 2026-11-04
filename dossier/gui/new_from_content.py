@@ -46,6 +46,8 @@ class NewFromContentMixin:
         found = self.clipboard_content()
         if found is None:
             return False
+        if self._no_folder_yet("Paste as New File"):
+            return True
         self._new_file_from_content(found[0], found[1], self.active.path)
         return True
 
@@ -57,7 +59,7 @@ class NewFromContentMixin:
 
     def new_file(self) -> None:
         """Files > New File... (Shift+F4 by default): an empty text file in the folder of the active panel, named by the user."""
-        if self._home_blocked("New File"):
+        if self._home_blocked("New File") or self._no_folder_yet("New File"):
             return
         self._new_file_from_content(newfile.TEXT, "", self.active.path, title="New File", suggested="New file.txt")
 

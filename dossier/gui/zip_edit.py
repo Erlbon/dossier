@@ -11,7 +11,7 @@ import os
 import zipfile
 
 from ..core import zipwrite
-from ..core.drives import is_network_path
+from ..core.drives import no_recycle_bin
 from ..core.ops import check_name, default_trash, plan_delete
 from ..core.platform import has_scheme
 from .background import run_in_background
@@ -42,12 +42,12 @@ class ZipEditMixin:
         return zip_parts((panel or self.active).path) is not None
 
     def _bin_note(self, archive: str) -> str:
-        return ("The old file is deleted for good (a network drive has no recycle bin)." if is_network_path(archive)
+        return ("The old file is deleted for good (a network drive or a USB stick has no recycle bin)." if no_recycle_bin(archive)
                 else "The old file goes to the recycle bin.")
 
     def _rewrite_zip(self, archive: str, title: str, what: str, **edit) -> None:
         """Run one rewrite on a thread: progress with Cancel, then refresh both panels and say what was done."""
-        trasher = os.remove if is_network_path(archive) else (self.trasher or default_trash)
+        trasher = os.remove if no_recycle_bin(archive) else (self.trasher or default_trash)
 
         def work(progress, cancel):
             return zipwrite.rewrite(archive, cancel=cancel, progress=progress, trasher=trasher, **edit)
@@ -96,7 +96,9 @@ class ZipEditMixin:
                     f"The zip is written again as a new file that replaces the old one. {self._bin_note(archive)}")
             if clash:
                 text += f"{chr(10) * 2}{clash:,} entr{'ies' if clash != 1 else 'y'} with the same name will be replaced."
-            if move:
+            if move and any(no_recycle_bin(s) for s in sources):
+                text += f"{chr(10)}The originals are deleted for good once the zip is written (no recycle bin where they are)."
+            elif move:
                 text += f"{chr(10)}The originals go to the {self._bin_name()} once the zip is written."
             if not self.dialogs.confirm(title, text, "Move" if move else "Copy"):
                 return
@@ -108,7 +110,7 @@ class ZipEditMixin:
         return "recycle bin"
 
     def _write_into_zip(self, archive: str, add: list, to_delete: list, title: str) -> None:
-        trasher = os.remove if is_network_path(archive) else (self.trasher or default_trash)
+        trasher = os.remove if no_recycle_bin(archive) else (self.trasher or default_trash)
 
         def work(progress, cancel):
             return zipwrite.rewrite(archive, add=add, cancel=cancel, progress=progress, trasher=trasher)

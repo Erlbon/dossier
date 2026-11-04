@@ -12,7 +12,8 @@ import zipfile
 
 from .health import (ERROR, FILE, FOLDER, INFO, T0, T1, T2, WARNING, Checker, Fix, finding, register)
 
-JUNK_NAMES = {"thumbs.db", ".ds_store", "desktop.ini", "ehthumbs.db", "icon\r"}
+JUNK_NAMES = {"thumbs.db", ".ds_store", "ehthumbs.db", "icon\r"}     # never desktop.ini: it names shell folders (Music, Startup)
+VCS_FOLDERS = {".git", ".svn", ".hg", ".bzr"}                             # their empty folders are needed (git's refs/heads)
 JUNK_SUFFIXES = (".part", ".crdownload", ".dossier-part", ".tmp")
 KEEP_EMPTY = {".gitkeep", ".keep", ".nomedia", ".placeholder", "__init__.py", ".gitignore"}
 RESERVED = {"con", "prn", "aux", "nul", *(f"com{i}" for i in range(1, 10)), *(f"lpt{i}" for i in range(1, 10))}
@@ -141,6 +142,8 @@ def case_twins(ctx, folder, entries):
 
 def empty_folder(ctx, folder, entries):
     if ctx.fs.is_root(folder) or folder in ctx.roots:
+        return
+    if any(part.lower() in VCS_FOLDERS for part in re.split(r"[\\/]", folder)):
         return
     if all((e.name.lower() in JUNK_NAMES) and not e.is_dir for e in entries):
         yield finding(folder, "empty", "empty-folder", INFO, "The folder is empty" if not entries else "The folder holds only junk files",
