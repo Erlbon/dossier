@@ -92,12 +92,25 @@ def test_the_command_line_is_strict_about_host_keys_and_never_holds_a_password(t
     joined = " ".join(cmd)
     assert cmd[0] == "/usr/bin/ssh" and "StrictHostKeyChecking=yes" in joined and "UserKnownHostsFile=/cfg/known_hosts" in joined
     assert "-p 2222" in joined and "BatchMode=yes" in joined and "-i C:/keys/id_ed25519" in joined and "IdentitiesOnly=yes" in joined
-    assert cmd[-3:] == ["-s", "me@files.example.com", "sftp"] and "ServerAliveInterval" in joined
+    assert cmd[-4:] == ["-s", "--", "me@files.example.com", "sftp"] and "ServerAliveInterval" in joined
     with_pw = " ".join(sshlink.ssh_command(c, "/cfg/known_hosts", with_password=True))
     assert "BatchMode" not in with_pw                                                                # a password may be asked for
     monkeypatch.setattr(sshlink, "find_tool", lambda name: "")
     with pytest.raises(sshlink.ConnectError, match="OpenSSH is not installed"):
         sshlink.ssh_command(c, "/cfg/known_hosts")
+
+
+def test_a_user_name_can_never_become_an_ssh_option(monkeypatch):
+    """A user name like -oProxyCommand=calc made ssh run a program at connect: it is refused when saved, and never reaches ssh."""
+    monkeypatch.setattr(sshlink, "find_tool", lambda name: "/usr/bin/ssh")
+    evil = Connection("Files", "files.example.com", "-oProxyCommand=calc", 22)
+    assert "dash" in evil.problem()
+    assert Connection("Files", "-oProxyCommand=calc", "me", 22).problem()       # a host like that is refused too
+    for build in (lambda: sshlink.ssh_command(evil, "/cfg/known_hosts"), lambda: sshlink.session_command(evil, "/cfg/known_hosts")):
+        with pytest.raises(sshlink.ConnectError, match="dash"):
+            build()
+    cmd = sshlink.session_command(Connection("Files", "files.example.com", "me", 22), "/cfg/known_hosts")
+    assert cmd[cmd.index("--") + 1] == "me@files.example.com"                    # and the options end before the target
 
 
 def test_a_known_hosts_path_with_a_space_is_quoted_for_ssh_and_written_with_forward_slashes(monkeypatch):
@@ -161,7 +174,7 @@ def test_the_scp_kind_asks_ssh_for_a_shell_not_for_the_sftp_service(monkeypatch)
     monkeypatch.setattr(sshlink, "find_tool", lambda name: "/usr/bin/ssh")
     c = Connection("Old box", "old.example.com", "root", 22, protocol="scp")
     cmd = sshlink.ssh_command(c, "/cfg/known_hosts", shell=True)
-    assert cmd[-3:] == ["-T", "root@old.example.com", "sh"] and "-s" not in cmd
+    assert cmd[-4:] == ["-T", "--", "root@old.example.com", "sh"] and "-s" not in cmd
     assert c.url("/etc") == "scp://root@old.example.com/etc"
 
 

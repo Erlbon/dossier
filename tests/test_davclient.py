@@ -306,3 +306,10 @@ def test_a_read_only_session_blocks_changes_before_they_start(router, tmp_path):
     assert plan_copy(router, [str(local)], url("/")).blocking
     with pytest.raises(NotWritable):
         router.dav.open_write(url("/x"))
+
+
+def test_an_error_never_names_the_query_of_a_request():
+    """A Subsonic download is /rest/download.view?u=..&t=..&s=..: the token and salt replay the login, and error texts reach dialogs."""
+    for status in (404, 403, 409, 507):
+        e = dc.DavClient._error(dc.Reply(status, {}), "/rest/download.view?u=me&t=abcdef&s=salt&id=7")
+        assert "t=abcdef" not in str(e) and "salt" not in str(e) and e.filename == "/rest/download.view"

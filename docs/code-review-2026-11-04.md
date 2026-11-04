@@ -392,6 +392,8 @@ Fixed in builds 2026-11-04#02 and #03 (owner's choice: sharing next): S1, S3, S4
 
 Fixed in build 2026-11-04#04 (owner's choice: freezes next): F1, F2, F4, F5, F6, F8 and F10, with tests that fail on the old code. D12 is partly fixed with F1: the "permanent" note now comes first among the warnings (paste and drag-and-drop still have no confirmation). T5 is fixed. Still open among the freezes: F3 (server disconnect), F7 (opening files: F3, F4, Enter on a picture), F9 (drag out of servers) and F11.
 
+Fixed in build 2026-11-04#07 (owner's choice: Health and security leftovers): S2, S6, S8, S9, S10 (a delete of marks the assistant set says so), C5, D17 and most of C6 (empty markers; links to a missing drive or share). Still open there: folder names are not checked by the name rules, `sidecar_orphans` noise, secrets through `keyring` directly instead of `secret_store`, and the elevated script's result file in `%TEMP%` (S11).
+
 Fixed in build 2026-11-04#06 (owner's choice: the remaining freezes): F3 and most of F7 (F3, F4 and Enter prepare on a thread), and the drag-over decoding of F11. Still open: the viewer reading its first page and Markdown on the window's thread, notepad save, F9 (a drag out of a server copies the file at the drop: it needs staging before the drag starts, or a virtual-file drop), and the rest of F11 (network auto-refresh watches, share login, opening a file on a share with its Windows program).
 
 Fixed in build 2026-11-04#05 (owner's choice: flaky tests next): T1 to T9. With them, two full runs in a row passed (1882 tests each).

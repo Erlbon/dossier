@@ -73,6 +73,23 @@ def test_a_link_that_leads_out_of_a_folder_is_followed_to_where_it_goes(home):
         Scope([str(allowed)]).resolve(str(link / "file.txt"))
 
 
+def test_a_network_path_is_refused_by_its_name_before_anything_is_opened(home, monkeypatch):
+    """Resolving \\\\host\\share logs in to that host with the owner's Windows sign-in (an NTLM hash goes to it), refused or not; a path
+    outside every listed folder is now refused by its text, and nothing is opened for it."""
+    from dossier.assistant import scope as scope_module
+    tmp, allowed = home
+    s = Scope([str(allowed)])
+    opened = []
+    real = scope_module.os.path.realpath
+    monkeypatch.setattr(scope_module.os.path, "realpath", lambda p, *a, **k: (opened.append(p), real(p, *a, **k))[1])
+    two = chr(92) * 2
+    for outside in (two + "attacker.example@80" + chr(92) + "x", "//attacker.example/share/x", str(tmp / "elsewhere")):
+        with pytest.raises(Denied, match="outside"):
+            s.resolve(outside)
+    assert opened == []
+    assert s.resolve(str(allowed / "inside.txt")) and opened                    # inside, it is still resolved (links are followed)
+
+
 @pytest.mark.skipif(os.name != "nt", reason="drive letters are not case sensitive on Windows")
 def test_upper_and_lower_case_are_the_same_folder_on_windows(home):
     tmp, allowed = home

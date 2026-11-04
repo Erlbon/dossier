@@ -44,12 +44,19 @@ class LoginError(AuthError):
 
 
 class _ReusingTLS(ftplib.FTP_TLS):
-    """``FTP_TLS`` whose data connections resume the TLS session of the control connection (servers such as vsftpd demand it)."""
+    """``FTP_TLS`` whose data connections resume the TLS session of the control connection (servers such as vsftpd demand it).
+    With a pinned certificate (``pinned``, where the context checks no chain) each data connection is held to the pin as well: one
+    that does not resume the session makes a full handshake, and would otherwise accept any certificate."""
+
+    pinned = ""
 
     def ntransfercmd(self, cmd, rest=None):
         conn, size = ftplib.FTP.ntransfercmd(self, cmd, rest)
         if self._prot_p:
             conn = self.context.wrap_socket(conn, server_hostname=self.host, session=self.sock.session)
+            if self.pinned and fingerprint_of(conn.getpeercert(binary_form=True) or b"") != self.pinned:
+                conn.close()
+                raise CertificateError("the server's certificate is not the one you approved", "", changed=True)
         return conn, size
 
 
@@ -167,6 +174,8 @@ class FtpClient:
     def _new_session(self) -> ftplib.FTP:
         """A logged-in connection (encrypted when asked), in binary mode. Raises ``CertificateError``, ``LoginError`` or ``ConnectionError``."""
         ftp: ftplib.FTP = _ReusingTLS(context=self._context(), timeout=self.timeout) if self.secure else ftplib.FTP(timeout=self.timeout)
+        if self.secure:
+            ftp.pinned = self.pinned
         try:
             ftp.connect(self.host, self.port)
             if self.secure:

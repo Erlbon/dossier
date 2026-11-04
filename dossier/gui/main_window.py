@@ -1116,12 +1116,22 @@ class MainWindow(FrostMixin, GlassViewMixin, KeysMixin, AutoRefreshMixin, Metada
         self._plan_in_background("Preparing the delete", lambda watch: plan_delete(self.fs, sources, to_trash=not permanent),
                                  lambda plan: self._confirm_delete(plan, sources, permanent))
 
+    def _marked_by_assistant(self, sources: list) -> bool:
+        """Whether ``sources`` are marks an assistant set and the owner has not touched since (the marks the assistant left are kept by
+        ``_assistant_selection``; any change to the selection after that makes them the owner's)."""
+        left = getattr(self, "_assistant_marks", None)
+        if not left or frozenset(self.selection.paths()) != left:
+            return False
+        return any(path_key(s) in {path_key(p) for p in left} for s in sources)
+
     def _confirm_delete(self, plan: Plan, sources: list, permanent: bool) -> None:
         if plan.blocking or not plan.ops:
             self._settle(plan)
             return
         names = "\n".join(self.fs.basename(op.src) for op in plan.ops[:6])
         more = "" if len(plan.ops) <= 6 else f"\nand {len(plan.ops) - 6} more"
+        if self._marked_by_assistant(sources):
+            more += f"{chr(10) * 2}An assistant marked these, not you: look at the list before you go on."
         if permanent:
             ok = self.dialogs.confirm("Delete Permanently", f"Delete {len(plan.ops)} item(s) permanently? "
                                       f"This cannot be undone.\n\n{names}{more}", "Delete permanently")

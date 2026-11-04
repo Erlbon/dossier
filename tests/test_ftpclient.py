@@ -326,3 +326,37 @@ def test_replacing_a_file_and_moving_to_and_from_the_server(router, tmp_path):
     router.mkdir(url("/sub"))
     assert not execute(plan_move(router, [url("/m.txt")], url("/sub")), router, trasher=lambda p: None).failed
     assert (root / "sub" / "m.txt").read_bytes() == b"m"
+
+
+def test_a_data_connection_of_a_pinned_server_must_show_the_pinned_certificate(monkeypatch):
+    """With a pinned certificate the chain of trust is not checked; a data connection that made a full handshake of its own was
+    taken on trust. Now it is held to the pin, as the control connection is."""
+    import ssl
+
+    class FakeTLS:
+        def __init__(self, der):
+            self.der, self.closed = der, False
+
+        def getpeercert(self, binary_form=False):
+            return self.der
+
+        def close(self):
+            self.closed = True
+
+    made = []
+
+    class Context:
+        def wrap_socket(self, conn, **kw):
+            made.append(FakeTLS(conn))
+            return made[-1]
+
+    ftp = fc._ReusingTLS(context=ssl.create_default_context())
+    ftp.context, ftp._prot_p, ftp.sock = Context(), True, type("S", (), {"session": None})()
+    ftp.pinned = dc.fingerprint_of(b"the approved certificate")
+    monkeypatch.setattr(fc.ftplib.FTP, "ntransfercmd", lambda self, cmd, rest=None: (b"someone else's certificate", None))
+    with pytest.raises(dc.CertificateError):
+        ftp.ntransfercmd("RETR x")
+    assert made[-1].closed
+    monkeypatch.setattr(fc.ftplib.FTP, "ntransfercmd", lambda self, cmd, rest=None: (b"the approved certificate", None))
+    conn, _size = ftp.ntransfercmd("RETR x")
+    assert not conn.closed

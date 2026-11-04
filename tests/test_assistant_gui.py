@@ -215,3 +215,23 @@ def test_an_assistant_commits_a_plan_and_the_owner_confirms_in_the_window(world)
     thread.join(2)
     assert outcome["result"]["status"] == "done" and (right / "archive" / "report.txt").read_bytes() == b"quarterly" and not (left / "report.txt").exists()
     assert "archive the report" in d.confirms[-1][1]
+
+
+def test_deleting_marks_an_assistant_set_says_so_in_the_question(world):
+    """The selection may be changed by an assistant without the file-changes switch; a delete of exactly those marks says who chose
+    them, and once the owner changes the marks it no longer does."""
+    from tests.helpers import settle as settle_window
+    win, d, left, right, tmp = world
+    a, b = put(left / "a.txt"), put(left / "b.txt")
+    enable(win, tmp)
+    ask(win, "selection", {"op": "set", "paths": [a]})
+    win.left.refresh()
+    pump(win, lambda: win.left.model.row_of("a.txt") >= 0)
+    d.confirm_answer = False
+    win.delete()
+    settle_window(win)
+    assert "An assistant marked these" in d.confirms[-1][1]
+    win.selection.add([b])                                                       # the owner marks one more: the marks are theirs now
+    win.delete()
+    settle_window(win)
+    assert "An assistant marked these" not in d.confirms[-1][1]

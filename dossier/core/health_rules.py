@@ -9,13 +9,16 @@ import os
 import re
 import unicodedata
 import zipfile
+import zlib
 
 from .health import (ERROR, FILE, FOLDER, INFO, T0, T1, T2, WARNING, Checker, Fix, finding, register)
 
 JUNK_NAMES = {"thumbs.db", ".ds_store", "ehthumbs.db", "icon\r"}     # never desktop.ini: it names shell folders (Music, Startup)
 VCS_FOLDERS = {".git", ".svn", ".hg", ".bzr"}                             # their empty folders are needed (git's refs/heads)
 JUNK_SUFFIXES = (".part", ".crdownload", ".dossier-part", ".tmp")
-KEEP_EMPTY = {".gitkeep", ".keep", ".nomedia", ".placeholder", "__init__.py", ".gitignore"}
+KEEP_EMPTY = {".gitkeep", ".keep", ".nomedia", ".placeholder", "__init__.py", ".gitignore", "py.typed", ".nojekyll", "_success",
+              ".npmignore", ".dockerignore"}                     # empty on purpose: markers that tools look for
+KEEP_EMPTY_SUFFIXES = (".lock",)
 RESERVED = {"con", "prn", "aux", "nul", *(f"com{i}" for i in range(1, 10)), *(f"lpt{i}" for i in range(1, 10))}
 ILLEGAL = set('<>:"|?*') | {chr(i) for i in range(32)}
 MOJIBAKE = re.compile("Ã[\u0080-¿]|â€|Â[ -¿]")
@@ -36,7 +39,8 @@ def _splitext(name: str) -> tuple:
 
 # tier 0, one file ------------------------------------------------------------------------------------------------------------
 def zero_byte(ctx, entry):
-    if entry.size == 0 and entry.name.lower() not in KEEP_EMPTY and not entry.is_link:
+    low = entry.name.lower()
+    if entry.size == 0 and low not in KEEP_EMPTY and not low.endswith(KEEP_EMPTY_SUFFIXES) and not entry.is_link:
         yield finding(entry.path, "zero_byte", "empty-file", WARNING, "The file is empty (0 bytes)",
                       fix=Fix("quarantine", "Move to the quarantine folder"))
 
@@ -84,9 +88,30 @@ def name_problems(ctx, entry):
         yield finding(entry.path, cid, "long-path", WARNING, f"The path is {len(entry.path)} characters long; some programs stop at {MAX_PATH}")
 
 
+def _target_place_missing(path: str) -> bool:
+    """Whether a link points to a drive or a network share that is not there now (unplugged, not mapped, a NAS that is off): such a
+    link is fine again when it comes back, so it must not be offered for deletion. Judged from the stored target, no network call."""
+    try:
+        target = os.readlink(path)
+    except (OSError, ValueError):
+        return False
+    b = chr(92)
+    if target.startswith((b * 2 + "?" + b, b + "??" + b)):             # the long form Windows stores, with or without the UNC part
+        target = target[4:]
+    if target.startswith("UNC" + os.sep):
+        return True
+    if target.startswith(os.sep * 2):
+        return True                                          # a network share: never looked at here (a dead host takes 20 s)
+    drive = os.path.splitdrive(target)[0]
+    return bool(drive) and not os.path.exists(drive + os.sep)
+
+
 def broken_link(ctx, entry):
     if entry.is_link and not ctx.fs.scheme and not os.path.exists(entry.path):
-        yield finding(entry.path, "links", "dead-link", WARNING, "A link that points to nothing", fix=Fix("delete", "Delete the link"))
+        if _target_place_missing(entry.path):
+            yield finding(entry.path, "links", "dead-link", INFO, "A link to a drive or network share that is not there now")
+        else:
+            yield finding(entry.path, "links", "dead-link", WARNING, "A link that points to nothing", fix=Fix("delete", "Delete the link"))
 
 
 # tier 1, a few bytes ------------------------------------------------------------------------------------------------------------
@@ -117,6 +142,11 @@ def zip_integrity(ctx, entry):
                 bad = z.testzip()
     except zipfile.BadZipFile as e:
         yield finding(entry.path, "zip", "bad-zip", ERROR, "The archive cannot be read", evidence=str(e), fix=Fix("quarantine", "Move to the quarantine folder"))
+        return
+    except (NotImplementedError, RuntimeError, zlib.error) as e:
+        # a method this Python cannot unpack (Deflate64, which Windows makes for big files) or a password: not damage, so no fix
+        yield finding(entry.path, "zip", "zip-not-checked", INFO, "The archive could not be checked (a compression method or a "
+                      "password this program does not handle)", evidence=str(e))
         return
     if bad:
         yield finding(entry.path, "zip", "bad-crc", ERROR, "An entry is damaged (checksum mismatch)", evidence=bad,

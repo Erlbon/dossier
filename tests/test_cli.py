@@ -297,8 +297,9 @@ def test_check_reports_and_fixes(tmp_path, capsys, bin_dir):
     assert code == 0 and doc["dry_run"] and (data / "Beach.JPG").exists()
     code, doc, _err = run_json(capsys, "check", str(data), "--fix")
     assert "Beach.jpg" in os.listdir(data)
+    (data / "hollow").mkdir()                                                    # an empty folder is a "delete" fix too, but not junk
     code, doc, _err = run_json(capsys, "check", str(data), "--fix", "--delete-junk")
-    assert not (data / "Thumbs.db").exists() and data.is_dir()
+    assert not (data / "Thumbs.db").exists() and data.is_dir() and (data / "hollow").is_dir()
 
 
 def test_check_lists_its_checkers_and_refuses_an_unknown_one(tmp_path, capsys):

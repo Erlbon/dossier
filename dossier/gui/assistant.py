@@ -221,6 +221,7 @@ class AssistantMixin:
                 return bridge.answer(rid, "failed", "unknown selection operation")
         except Denied as e:
             return bridge.answer(rid, "failed", str(e))
+        self._assistant_marks = frozenset(self.selection.paths())    # a delete of exactly these says the assistant chose them
         bridge.answer(rid, "done", "the selection was changed", size=len(self.selection.paths()))
         self._say(f"An assistant changed the selection ({op}: {len(chosen)} item{'s' if len(chosen) != 1 else ''})")
 

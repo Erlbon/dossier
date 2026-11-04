@@ -213,3 +213,33 @@ def test_a_plan_does_not_mix_quarantine_with_renames(tmp_path):
     fs = LocalFileSystem()
     with pytest.raises(ValueError):
         health.fix_plan(fs, health.run_checks(fs, [str(tmp_path)]).findings)
+
+
+def test_a_zip_that_cannot_be_checked_is_said_so_and_the_run_goes_on(tmp_path, monkeypatch):
+    """Deflate64 (Windows makes it for big files) and passwords made --deep stop the whole run; now it is a note without a fix."""
+    good = make_zip(tmp_path / "big.zip")
+    make_zip(tmp_path / "other.zip")
+    monkeypatch.setattr(zipfile.ZipFile, "testzip", lambda self: (_ for _ in ()).throw(NotImplementedError("compression type 9 (deflate64)")))
+    report = health.run_checks(LocalFileSystem(), [str(tmp_path)], max_tier=health.T2)
+    notes = [f for f in report.findings if f.rule == "zip-not-checked"]
+    assert len(notes) == 2 and all(f.fix is None and f.severity == health.INFO for f in notes) and good.exists()
+
+
+def test_markers_that_are_empty_on_purpose_are_not_reported(tmp_path):
+    for name in ("py.typed", ".nojekyll", "_SUCCESS", "poetry.lock", "empty.dat"):
+        put(tmp_path / name, b"")
+    found = rules(health.run_checks(LocalFileSystem(), [str(tmp_path)]))
+    assert found == {("empty.dat", "empty-file")}
+
+
+def test_a_link_to_a_drive_or_share_that_is_not_there_is_never_offered_for_deletion(monkeypatch):
+    from dossier.core import health_rules
+    b = chr(92)
+    for target, missing in ((b * 2 + "nas" + b + "media", True), (b * 2 + "?" + b + "UNC" + b + "nas" + b + "media", True),
+                            (b + "??" + b + "Q:" + b + "gone", None), ("relative" + b + "path", False)):
+        monkeypatch.setattr(health_rules.os, "readlink", lambda p, t=target: t)
+        monkeypatch.setattr(health_rules.os.path, "exists", lambda p: False)
+        if os.name == "nt" and missing is None:
+            assert health_rules._target_place_missing("link")                     # Q: is not there
+        elif missing is not None:
+            assert health_rules._target_place_missing("link") is missing

@@ -204,6 +204,13 @@ def short_path(path: str) -> str:
         return path
 
 
+def _target(c: Connection) -> str:
+    """``user@host`` for ssh. A name starting with a dash would be read as an option by ssh (and by ssh-keyscan): refused outright."""
+    if c.user.startswith("-") or c.host.startswith("-"):
+        raise ConnectError("a user or host name cannot start with a dash")
+    return f"{c.user}@{c.host}" if c.user else c.host
+
+
 def ssh_command(c: Connection, known_hosts: str, subsystem: str = "sftp", *, with_password: bool = False, shell: bool = False) -> list:
     """The ``ssh`` command line that runs ``subsystem`` of the server (``-s``): strict host-key checking against Dossier's file only."""
     exe = find_tool("ssh")
@@ -217,8 +224,9 @@ def ssh_command(c: Connection, known_hosts: str, subsystem: str = "sftp", *, wit
         cmd += ["-o", "BatchMode=yes"]
     if c.key_file:
         cmd += ["-i", c.key_file, "-o", "IdentitiesOnly=yes"]
-    target = f"{c.user}@{c.host}" if c.user else c.host
-    cmd += ["-T", target, "sh"] if shell else ["-s", target, subsystem]       # a shell to send commands to, or the server's SFTP service
+    target = _target(c)
+    # "--" ends ssh's options: whatever the saved names hold, they are never read as one (-oProxyCommand=... runs a program)
+    cmd += ["-T", "--", target, "sh"] if shell else ["-s", "--", target, subsystem]       # a shell to send commands to, or the SFTP service
     return cmd
 
 
@@ -239,7 +247,7 @@ def session_command(c: Connection, known_hosts: str, remote_dir: str = "") -> li
            "-p", str(c.port)]
     if c.key_file:
         cmd += ["-i", c.key_file, "-o", "IdentitiesOnly=yes"]
-    cmd += ["-t", f"{c.user}@{c.host}" if c.user else c.host]
+    cmd += ["-t", "--", _target(c)]
     if remote_dir:
         cmd.append("cd " + shlex.quote(remote_dir) + ' && exec "${SHELL:-/bin/sh}" -l')       # the server's own shell for this user, as a login shell
     return cmd

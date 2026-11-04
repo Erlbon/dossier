@@ -2,6 +2,21 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-04#07 -- Security and Health fixes from the code review of 2026-11-04
+
+Security (S2, S6, S8, S9, S10):
+- **The assistant can no longer make Windows log in to a host it names.** Resolving a path such as `\\host\share`, even one that is then refused, logged in to that host with your Windows sign-in, which sends an NTLM hash there. A path outside your listed folders is now refused by its name, before anything is opened.
+- **A saved server's user name can no longer run a program through ssh.** A user name like `-oProxyCommand=...` was read by ssh as one of its options. A user or host name starting with a dash is refused when it is saved and when it is used, and every ssh command line now ends its options before the server's name.
+- **The Subsonic login no longer shows in error messages.** A failed download named the whole request, token and salt included, and those can be replayed to log in.
+- **FTPS with an approved certificate checks it on every connection.** A file transfer that made a fresh TLS handshake accepted any certificate.
+- **Deleting marks that an assistant set says so in the question** ("An assistant marked these, not you"), until you change the marks yourself. An assistant may change the selection without the file-changes switch, so a later F8 could delete what it chose.
+
+Health (C5, C6, D17):
+- **`dossier check --deep` no longer stops at a zip it cannot unpack.** That covers Deflate64 (Windows makes it for big files) and zips with a password. Such a zip is now a note, "could not be checked", with no fix offered.
+- **`--fix --delete-junk` deletes junk files only.** Before, it also deleted empty folders and dead links.
+- **A link to a drive or share that is not there now** (an unplugged disk, a NAS that is off) is a note, not a dead link offered for deletion.
+- **Empty marker files are not reported:** `py.typed`, `.nojekyll`, `_SUCCESS`, `*.lock`, `.npmignore` and `.dockerignore`.
+
 ## 2026-11-04#06 -- More freeze fixes from the code review of 2026-11-04 (F3, F7, part of F11)
 
 - **Disconnecting from a server that stopped answering no longer freezes the window.** This covers Home > Disconnect, removing a server and closing the window. A request stuck on a dead server held its connection for up to a minute, and disconnecting waited for it. Now the connection is forgotten at once and closed on a thread of its own. When the window closes, the ssh processes are ended straight away. An SFTP or SCP connection is also closed in a better order: ssh gets three seconds after its input ends, then it is stopped.

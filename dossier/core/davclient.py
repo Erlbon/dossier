@@ -303,6 +303,8 @@ class DavClient:
 
     @staticmethod
     def _error(reply: Reply, path: str) -> OSError:
+        # never the query part: for Subsonic it holds the login (u=, t=, s=), and this text is shown in dialogs and kept in reports
+        path = path.split("?", 1)[0]
         s = reply.status
         if s in (404, 410):
             return error_for(NO_SUCH_FILE, "no such file", path)

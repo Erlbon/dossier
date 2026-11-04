@@ -83,7 +83,7 @@ class Connection:
         """Why this connection cannot be saved, or an empty string."""
         if not self.name.strip():
             return "give the connection a name"
-        if not self.host.strip() or any(c in self.host for c in " /\\@"):
+        if not self.host.strip() or any(c in self.host for c in " /\\@") or self.host.startswith("-"):
             return "the host is a name or an address, such as files.example.com"
         if not 1 <= int(self.port) <= 65535:
             return "the port is a number from 1 to 65535"
@@ -93,6 +93,8 @@ class Connection:
             return "paste the client ID of your Google app (see the note above)"
         if any(c in self.user for c in " /\\@:"):
             return "the user name cannot hold spaces, slashes, colons or @"
+        if self.user.startswith("-"):
+            return "the user name cannot start with a dash (ssh would read it as one of its options)"
         if self.preset == NEXTCLOUD and not self.user.strip():
             return "Nextcloud needs your user name: it is part of the address of your files"
         return ""

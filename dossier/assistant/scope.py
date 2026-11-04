@@ -13,10 +13,20 @@ def _key(path: str) -> str:
     return os.path.normcase(os.path.realpath(path))
 
 
+def _text_key(path: str) -> str:
+    """The path as text only (``abspath`` and ``normpath`` never touch the disk or the network)."""
+    return os.path.normcase(os.path.normpath(os.path.abspath(path)))
+
+
+def _under(key: str, root: str) -> bool:
+    return key == root or key.startswith(root.rstrip(os.sep) + os.sep)
+
+
 class Scope:
     def __init__(self, roots: list) -> None:
         self.roots = [os.path.normpath(r) for r in roots if r]
         self._keys = [_key(r) for r in self.roots]
+        self._texts = [_text_key(r) for r in self.roots] + self._keys     # where a listed folder is, by name and for real
 
     def resolve(self, path) -> str:
         """The real path for ``path``, or ``Denied``. Relative paths are refused (an assistant has no current folder)."""
@@ -30,10 +40,14 @@ class Scope:
             raise Denied(f"use a full path (starting with a drive letter or a slash): {path}")
         if not self._keys:
             raise Denied("the owner has not listed any folder the assistant may use (Settings > Assistant Access in Dossier)")
+        # First by its name alone: resolving a path opens it, and for a network path (two backslashes, a host, a share) that is a network login that hands the owner's
+        # Windows sign-in (an NTLM hash) to whatever host the assistant named, even though the path is refused afterwards.
+        if not any(_under(_text_key(path), root) for root in self._texts):
+            raise Denied(f"outside the folders the owner allows: {path}")
         real = os.path.realpath(path)
         key = os.path.normcase(real)
         for root in self._keys:
-            if key == root or key.startswith(root.rstrip(os.sep) + os.sep):
+            if _under(key, root):
                 return real
         raise Denied(f"outside the folders the owner allows: {path}")
 

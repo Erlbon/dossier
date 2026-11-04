@@ -469,7 +469,8 @@ def cmd_check(args, out, fs) -> int:
         if args.quarantine and args.delete_junk:
             raise CliError("--quarantine and --delete-junk are two different fixes: run them one after the other")
         kind = "quarantine" if args.quarantine else "delete" if args.delete_junk else "rename"
-        fixable = [f for f in report.findings if f.fix and f.fix.kind == kind]
+        # --delete-junk deletes junk files only (the Health window offers the other deletes, empty folders and dead links, one by one)
+        fixable = [f for f in report.findings if f.fix and f.fix.kind == kind and (kind != "delete" or f.rule == "junk-file")]
         isolation = quarantine.Settings(quarantine.FOLDER, args.quarantine_folder).cleaned() if args.quarantine_folder else quarantine.Settings()
         plan = health.fix_plan(fs, fixable, isolation)
         if plan is None:
