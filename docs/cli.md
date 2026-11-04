@@ -98,7 +98,7 @@ break on Windows (trailing space or dot, reserved or illegal characters, accents
 over 259 characters), names that differ only in case, dead links, dates in the future, a `.cbz` that is really a rar, subtitle files without a video,
 and empty folders. `--deep` also reads every zip-based file (zip, cbz, epub, docx and others) completely and tests its checksums. `--list` names the
 checkers; `--only` runs some of them. Each finding has a severity (error, warning, note). `--fix` applies the renames, or with `--delete-junk` moves
-the junk and empty folders to the recycle bin, or with `--quarantine` moves empty files and damaged zips into the quarantine folder (on each drive
+the junk files (only those: empty folders and dead links are offered one by one in the Health window) to the recycle bin, or with `--quarantine` moves empty files and damaged zips into the quarantine folder (on each drive
 `<drive>:/Temp/Quarantine`, or the one folder `--quarantine-folder` names; a file keeps its place in the folder tree there, so it can be put back);
 `--dry-run` shows the steps. The exit code is 1 when there are errors or warnings.
 
@@ -110,6 +110,12 @@ different content) and `type-differs` (a file against a folder). `--tolerance` i
 (default 2 seconds); a difference of exactly one hour (summer time on FAT drives) is ignored unless `--exact-hour`. `--same` lists the files that
 are alike too. `--sync` makes the folders alike, in a direction: `update_right`, `update_left`, `both`, `mirror_right`, `mirror_left`
 (the mirror modes also delete what is only on the other side, to the recycle bin). Combine with `--dry-run` to see the plan first.
+
+### mcp
+
+`dossier mcp` runs the MCP server for an AI assistant on standard input and output; the assistant's program starts it, and there is no network
+listener. It is off until you switch it on, and read-only unless you allow changes to files: Settings > Assistant Access. A change the
+assistant proposes runs only after you press Run in the window. The tools and the setup are in [assistant.md](assistant.md).
 
 ### view (the picture viewer, not a command-line command)
 

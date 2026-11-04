@@ -343,16 +343,13 @@ def is_elevated() -> bool:
     return hasattr(os, "geteuid") and os.geteuid() == 0
 
 
-def quote_arg(arg: str) -> str:
-    """One argument, quoted for the shell the command line uses (cmd on Windows, sh elsewhere)."""
-    if IS_WINDOWS:
-        import subprocess
-        return subprocess.list2cmdline([arg])
-    import shlex
-    return shlex.quote(arg)
+def no_window_flags() -> int:
+    """``creationflags`` for a console program started in the background: no black window flashes up on Windows (0 elsewhere)."""
+    import subprocess
+    return getattr(subprocess, "CREATE_NO_WINDOW", 0) if IS_WINDOWS else 0
 
 
-PS_SINGLE_QUOTES = "'" + chr(0x2018) + chr(0x2019) + chr(0x201A) + chr(0x201B)
+PS_SINGLE_QUOTES ="'" + chr(0x2018) + chr(0x2019) + chr(0x201A) + chr(0x201B)
 
 
 def ps_quote(text: str) -> str:
@@ -381,9 +378,3 @@ def console_encoding() -> str:
 def home_dir() -> str:
     return os.path.expanduser("~")
 
-
-def is_hidden(name: str, attributes: int | None = None) -> bool:
-    """Hidden by the dot on Linux; on Windows by the hidden attribute (O9)."""
-    if IS_WINDOWS and attributes is not None:
-        return bool(attributes & 0x2)  # FILE_ATTRIBUTE_HIDDEN
-    return name.startswith(".")

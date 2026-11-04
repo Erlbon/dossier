@@ -12,7 +12,7 @@ import uuid
 from typing import Callable, Optional
 
 from . import fastcopy
-from .platform import has_scheme
+from .platform import IS_WINDOWS, has_scheme
 from .progress import CancelToken, ProgressFn, check
 from .vfs import FileSystem, NotWritable
 
@@ -45,7 +45,7 @@ def side_name(fs: FileSystem, dst: str, suffix: str, taken=None) -> str:
 
 def copy_mode(src: str, dst: str) -> None:
     """Keep the permission bits (the exec bit above all) of a file copied by hand, as the system's own copy does."""
-    if os.name != "posix":
+    if IS_WINDOWS:
         return
     try:
         os.chmod(dst, stat.S_IMODE(os.stat(src).st_mode))

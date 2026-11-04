@@ -506,9 +506,6 @@ class NotepadWindow(FrostSurface, QMainWindow):
             self.editor.setFocus()
 
     # files ---------------------------------------------------------------------------------------------------------------
-    def current_text(self) -> str:
-        return self.editor.text()
-
     def save(self, force: bool = False) -> bool:
         """Write the file. Returns True when it was saved."""
         text = self.editor.text()

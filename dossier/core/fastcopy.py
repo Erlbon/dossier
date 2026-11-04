@@ -13,10 +13,9 @@ from __future__ import annotations
 
 import errno
 import os
-import sys
 from typing import Optional
 
-from .platform import IS_WINDOWS, longpath
+from .platform import IS_LINUX, IS_WINDOWS, longpath
 from .progress import Cancelled, CancelToken, ProgressFn, check
 
 FAST_MIN = 8 * 1024 * 1024            # smaller files are better served by the worker pool of ``execute``
@@ -33,7 +32,7 @@ def fast_copy(src: str, dst: str, total: int, progress: Optional[ProgressFn], ca
     and nothing was written; raises ``Cancelled`` or ``OSError`` otherwise (``dst`` may then be partial)."""
     if IS_WINDOWS:
         return _copy_file_ex(src, dst, total, progress, cancel)
-    if hasattr(os, "copy_file_range") and sys.platform.startswith("linux"):
+    if hasattr(os, "copy_file_range") and IS_LINUX:
         return _copy_range(src, dst, total, progress, cancel)
     return False
 

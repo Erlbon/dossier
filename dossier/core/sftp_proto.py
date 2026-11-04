@@ -109,10 +109,6 @@ class Reader:
     def __init__(self, data: bytes) -> None:
         self.data, self.pos = data, 0
 
-    def u8(self) -> int:
-        self.pos += 1
-        return self.data[self.pos - 1]
-
     def u32(self) -> int:
         self.pos += 4
         return struct.unpack(">I", self.data[self.pos - 4:self.pos])[0]

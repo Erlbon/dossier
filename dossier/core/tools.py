@@ -13,9 +13,10 @@ from __future__ import annotations
 import json
 import os
 import subprocess
-import sys
 from dataclasses import dataclass, field
 from typing import Callable, Optional
+
+from .platform import IS_WINDOWS
 
 MAX_DEPTH = 4
 MAX_ITEMS = 500
@@ -185,7 +186,7 @@ def launch(tool: Tool, files: list, folder: str, other: str, starter: Optional[C
     if starter is not None:
         starter(tool.command, argv, cwd)
         return argv
-    if sys.platform == "win32":
+    if IS_WINDOWS:
         os.startfile(tool.command, arguments=subprocess.list2cmdline(argv), cwd=cwd)          # noqa: S606 -- the user's own tool
     else:
         subprocess.Popen([tool.command, *argv], cwd=cwd, start_new_session=True, stdin=subprocess.DEVNULL)

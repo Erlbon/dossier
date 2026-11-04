@@ -11,10 +11,12 @@ The Windows program is `dossier.exe`, one file, on the [releases page](https://g
 - **Two panels, tabs, one selection.** Mark files in either panel; commands work on the marks of the panel you start them from. F3 view, F4 edit, F5 copy, F6 move, F7 new folder, F8 delete; drag and drop; the clipboard.
 - **Safe changes.** Every copy, move, rename and delete is planned, shown, then done; renames and same-drive moves can be undone; a name that is taken is asked about; copies can be read back and compared.
 - **A Home page** with your drives (with lights that say whether they answer), places, pinned folders, network shares and servers.
-- **Servers as folders:** SFTP, SCP, WebDAV, FTP and FTPS, and read-only OPDS book catalogues and Subsonic music servers. Devices of your Tailscale network are listed on the Home page.
+- **Servers as folders:** SFTP, SCP, WebDAV, FTP and FTPS, Google Drive, and read-only OPDS book catalogues and Subsonic music servers. Devices of your Tailscale network are listed on the Home page, with their shared folders. Network drives can be mounted on a drive letter.
+- **Sharing folders on the network** (Windows, through one administrator prompt): experimental and off until you switch it on in Settings > Network Sharing.
 - **Archives as folders:** zip, 7z and the rest through 7-Zip; change a zip in place; pack, unpack, convert.
 - **Search, duplicates, compare and synchronize, batch rename, checksums, saved selections.**
-- **A viewer** for text (any size, any encoding, column selection), pictures (with EXIF), hex and Markdown; **an editor** for text; **columns and Properties** that read the tags inside music, comic and video files, and tags on files.
+- **A viewer** for text (any size, any encoding, column selection), pictures (with EXIF, in a full-window glass viewer), hex and Markdown; **an editor** for text; **columns and Properties** that read the tags inside music, comic and video files and write those of mp3, flac, ogg, opus, m4a and cbz files (`dossier tag`), and tags of your own on files.
+- **Health checks** (Tools > Check Folder Health, `dossier check`): junk, names Windows or other systems cannot hold, empty files and folders, wrong extensions, damaged zips; fixes are plans like any other, and damaged files can go to a quarantine folder instead of the bin.
 - **Folder notes** (`README.md`, `about.md`, ...) shown under the listing, and folder layouts that remember how each folder is shown.
 - **A command line** in the same program (`dossier ls`, `find`, `copy`, `dups`, `compare`... with `--dry-run` and `--json`), see [docs/cli.md](docs/cli.md), and a local **MCP server** (`dossier mcp`) that lets an AI assistant look at your files and propose changes you approve, see [docs/assistant.md](docs/assistant.md). Both are off or read-only until you say otherwise.
 - **Looks yours:** light, dark or the system's scheme, two icon sets (or your own), fonts, bold on or off, and every bar (programs, function keys, command line) can be dragged to where you want it.
@@ -30,7 +32,7 @@ python -m dossier
 
 `python -m dossier --check` only checks that everything is installed and says what is missing. 7z archives also need `python -m pip install py7zr` (or 7-Zip on the path); RAR and the other formats need 7-Zip. Windows 10 or 11, or Debian/Ubuntu, with Python 3.10 or newer. If you install with `pip install .` the same packages come with it, and `dossier` starts the program. Updating: `git pull` and the pip line again, since the shared Redactor package is pinned to a tag that moves. The Windows exe updates itself: Help > Check for Updates (or switch on Help > Check for Updates Once a Day) downloads the new `dossier.exe`, checks it against the checksum GitHub lists, and puts it in place.
 
-To build the exe yourself: `build_exe.bat` (or `python -m PyInstaller dossier.spec`). A release is made by pushing a tag `v` + `RELEASE` from `dossier/core/version.py`; the workflow tests, builds and publishes it.
+To build the exe yourself: `build_exe.bat` (or `python -m PyInstaller dossier.spec`). A release is made by pushing the build's tag (`version.release_tag()`, such as `v2026-11-02-01`; `RELEASE` in `dossier/core/version.py` names the release and its notes); the workflow tests, builds and publishes it.
 
 ## More
 

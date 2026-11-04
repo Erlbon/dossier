@@ -11,9 +11,10 @@ import re
 import shutil
 import string
 import subprocess
-import sys
 from dataclasses import dataclass
 from typing import Callable, Optional
+
+from .platform import IS_WINDOWS, no_window_flags
 
 SMB = "smb"
 NFS = "nfs"
@@ -36,7 +37,7 @@ class MountResult:
 def nfs_client_installed() -> Optional[bool]:
     """Whether the system can mount NFS: on Windows ``mount.exe`` exists in System32 only when Client for NFS is installed
     (no administrator rights needed to look). On Linux, whether ``mount.nfs`` is there. None when it cannot be told."""
-    if sys.platform == "win32":
+    if IS_WINDOWS:
         root = os.environ.get("SystemRoot") or os.environ.get("windir") or ""
         return bool(root) and os.path.isfile(os.path.join(root, "System32", "mount.exe"))
     return shutil.which("mount.nfs") is not None
@@ -69,7 +70,7 @@ def clean_address(protocol: str, text: str) -> str:
 
 def build_command(protocol: str, address: str, letter: str = "") -> list:
     """The argument list that mounts ``address`` (already cleaned) on ``letter`` ("" = let the system pick, SMB only)."""
-    if sys.platform != "win32":
+    if not IS_WINDOWS:
         raise OSError("Mounting from Dossier is only built for Windows; mount the share with your system's tools and it "
                       "will appear here")
     if protocol == NFS:
@@ -79,7 +80,7 @@ def build_command(protocol: str, address: str, letter: str = "") -> list:
 
 def run_command(argv: list, timeout: int = TIMEOUT, runner: Optional[Callable] = None) -> MountResult:
     """Run the mount command and return what it said. Never raises: a missing program or a timeout is a failed result."""
-    flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    flags = no_window_flags()
     try:
         done = (runner or subprocess.run)(argv, capture_output=True, text=True, timeout=timeout, creationflags=flags,
                                           stdin=subprocess.DEVNULL)

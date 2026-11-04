@@ -5,15 +5,14 @@ import glob
 import os
 import re
 from datetime import datetime
-from typing import Iterable, Optional
+from typing import Iterable
 
 from redactor_common.cli import CliError
 
 from ..core.columns import when
 from ..core.home import HomeFileSystem, HomeProvider, RouterFileSystem
 from ..core.ops import describe_op
-from ..core.sizefmt import human_size
-from ..core.vfs import LocalFileSystem, natural_key
+from ..core.vfs import LocalFileSystem, natural_key, sort_entries as vfs_sort_entries
 
 UNITS = {"": 1, "b": 1, "k": 1024, "kb": 1024, "m": 1024 ** 2, "mb": 1024 ** 2, "g": 1024 ** 3, "gb": 1024 ** 3, "t": 1024 ** 4, "tb": 1024 ** 4}
 
@@ -43,10 +42,6 @@ def parse_date(text: str) -> float:
 
 def date_text(ts: float) -> str:
     return when(ts)
-
-
-def size_text(n: int, exact: bool = False) -> str:
-    return f"{n:,} bytes" if exact else human_size(n)
 
 
 def path_arguments(arguments: Iterable[str]) -> tuple:
@@ -91,12 +86,8 @@ def entry_row(entry, fs) -> dict:
             "modified": entry.mtime, "link": entry.is_link}
 
 
-def sort_entries(entries: list) -> list:
-    return sorted(entries, key=lambda e: (not e.is_dir, natural_key(e.name)))
+sort_entries = vfs_sort_entries                        # folders first, natural names: the one order, in the core
 
 
 op_line = describe_op                                  # the one-line description of a planned step lives in the core
 
-
-def first_line(text: Optional[str]) -> str:
-    return (text or "").strip().splitlines()[0] if (text or "").strip() else ""

@@ -17,14 +17,14 @@ from __future__ import annotations
 
 import ctypes
 import os
-import sys
 import threading
 import time
 from ctypes import wintypes
 from dataclasses import dataclass
 from typing import Callable
 
-IS_WINDOWS = sys.platform == "win32"
+from .platform import IS_WINDOWS
+
 OUR_VERBS = ("cut", "copy", "paste", "delete", "rename")
 MAX_ITEMS = 500
 FIRST_ID, LAST_ID = 1, 0x7FFF

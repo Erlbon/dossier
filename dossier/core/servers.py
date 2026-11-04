@@ -123,23 +123,6 @@ def nextcloud_start(prefix_or_address_path: str, user: str) -> str:
     return nextcloud_prefix(prefix_or_address_path) + "/remote.php/dav/files/" + quote(user.strip(), safe="")
 
 
-def parse_authority(authority: str) -> tuple:
-    """``(user, host, port)`` of ``user@host:port`` (an IPv6 host is in brackets)."""
-    user, at, rest = authority.rpartition("@")
-    if not at:
-        user, rest = "", authority
-    if rest.startswith("["):
-        host, _b, tail = rest[1:].partition("]")
-        port = tail[1:] if tail.startswith(":") else ""
-    else:
-        host, _c, port = rest.partition(":")
-    try:
-        number = int(port) if port else DEFAULT_PORT
-    except ValueError:
-        number = DEFAULT_PORT
-    return user, host, number
-
-
 def from_url(text: str) -> Optional[dict]:
     """The parts of an address such as ``https://cloud.example.com:8443/remote.php/dav/files/me/`` or ``ftps://user@host/pub`` that a
     connection holds (``protocol``, ``host``, ``port``, ``secure``, ``user``, ``base``), or None when it is not an ``http``, ``https``,

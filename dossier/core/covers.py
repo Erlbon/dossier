@@ -9,11 +9,13 @@ from __future__ import annotations
 
 import os
 import posixpath
-import re
 import subprocess
 import xml.etree.ElementTree as ET
 import zipfile
 from typing import Optional
+
+from .platform import no_window_flags
+from .vfs import natural_key
 
 IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".jpe", ".png", ".gif", ".bmp", ".webp", ".tif", ".tiff", ".ico", ".avif", ".svg")
 ARCHIVE_PAGES = (".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".tif", ".tiff", ".avif")
@@ -23,13 +25,6 @@ FOLDER_COVERS = ("cover", "folder", "front", "poster", "album", "albumart", "thu
 MAX_IMAGE_BYTES = 40 * 1024 * 1024
 MAX_PAGE_BYTES = 30 * 1024 * 1024
 VIDEO_TIMEOUT = 12
-
-_NUMBER = re.compile(r"(\d+)")
-
-
-def natural(name: str) -> list:
-    return [int(p) if p.isdigit() else p.lower() for p in _NUMBER.split(name)]
-
 
 def kind_of(name: str, is_dir: bool) -> str:
     """What gives this item its picture: ``image``, ``comic``, ``epub``, ``audio``, ``video``, ``folder`` or an empty string."""
@@ -54,7 +49,7 @@ def comic_page(path: str) -> Optional[bytes]:
     try:
         with zipfile.ZipFile(path) as z:
             pages = sorted((i for i in z.infolist() if not i.is_dir() and i.filename.lower().endswith(ARCHIVE_PAGES)
-                            and not posixpath.basename(i.filename).startswith(".")), key=lambda i: natural(i.filename))
+                            and not posixpath.basename(i.filename).startswith(".")), key=lambda i: natural_key(i.filename))
             for info in pages[:1]:
                 if info.file_size <= MAX_PAGE_BYTES:
                     return z.read(info)
@@ -143,7 +138,7 @@ def video_frame(path: str, ffmpeg: str, px: int) -> Optional[bytes]:
         return None
     for start in ("00:00:08", "00:00:01", "0"):
         try:
-            flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+            flags = no_window_flags()
             done = subprocess.run([ffmpeg, "-v", "error", "-ss", start, "-i", path, "-frames:v", "1", "-vf",
                                    f"scale={px}:{px}:force_original_aspect_ratio=decrease", "-f", "image2pipe", "-vcodec", "png", "-"],
                                   capture_output=True, timeout=VIDEO_TIMEOUT, stdin=subprocess.DEVNULL, creationflags=flags)

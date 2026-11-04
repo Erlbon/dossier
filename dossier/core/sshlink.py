@@ -29,6 +29,7 @@ from .askpass import VARIABLE
 from .servers import Connection
 from .sftp_proto import SftpClient
 from .shellclient import ShellClient
+from .platform import IS_WINDOWS, no_window_flags
 
 WINDOWS_OPENSSH = os.path.join(os.environ.get("SystemRoot", r"C:\Windows"), "System32", "OpenSSH")
 CONNECT_TIMEOUT = 20
@@ -46,7 +47,7 @@ class ConnectError(Exception):
 
 def find_tool(name: str) -> str:
     """The path of an OpenSSH program (``ssh``, ``ssh-keyscan``, ``scp``), or an empty string when it is not installed."""
-    if sys.platform == "win32":                           # Windows' own OpenSSH first: it works with the ssh-agent service and plain paths
+    if IS_WINDOWS:                           # Windows' own OpenSSH first: it works with the ssh-agent service and plain paths
         candidate = os.path.join(WINDOWS_OPENSSH, name + ".exe")
         if os.path.isfile(candidate):
             return candidate
@@ -54,7 +55,7 @@ def find_tool(name: str) -> str:
 
 
 def no_window() -> int:
-    return getattr(subprocess, "CREATE_NO_WINDOW", 0) if sys.platform == "win32" else 0
+    return no_window_flags()
 
 
 # host keys ---------------------------------------------------------------------------------------------------------------------------
@@ -170,7 +171,7 @@ def askpass_shim(folder: str) -> str:
     """A small script in ``folder`` that ssh can run as ``SSH_ASKPASS`` (it needs one program name, not a command line)."""
     os.makedirs(folder, exist_ok=True)
     command = askpass_command()
-    if sys.platform == "win32":
+    if IS_WINDOWS:
         path = os.path.join(folder, "askpass.cmd")
         body = "@echo off\r\n" + " ".join(f'"{c}"' for c in command) + " %*\r\n"
     else:
@@ -179,7 +180,7 @@ def askpass_shim(folder: str) -> str:
     if not os.path.isfile(path) or open(path, encoding="utf-8").read() != body:
         with open(path, "w", encoding="utf-8", newline="") as f:
             f.write(body)
-        if sys.platform != "win32":
+        if not IS_WINDOWS:
             os.chmod(path, 0o700)
     return path
 
@@ -193,7 +194,7 @@ def option_path(path: str) -> str:
 
 def short_path(path: str) -> str:
     """On Windows the 8.3 form of a path with a space in it (ssh starts its password helper from a plain command line); else as is."""
-    if sys.platform != "win32" or not any(ch.isspace() for ch in path):
+    if not IS_WINDOWS or not any(ch.isspace() for ch in path):
         return path
     try:
         import ctypes
@@ -293,10 +294,6 @@ class Link:
 
     def __init__(self, process: subprocess.Popen, client: SftpClient, stderr: "list") -> None:
         self.process, self.client, self._stderr = process, client, stderr
-
-    def error_text(self) -> str:
-        return friendly("".join(self._stderr))
-
 
 def _drain(stream, sink: list) -> None:
     try:

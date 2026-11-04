@@ -17,15 +17,13 @@ import json
 import os
 import socket
 import subprocess
-import sys
 import tempfile
 import threading
 from dataclasses import dataclass, field
 from typing import Callable, Optional
 
-from .platform import ps_quote, windows_program
+from .platform import IS_WINDOWS, no_window_flags, ps_quote, windows_program
 
-IS_WINDOWS = sys.platform == "win32"
 TIMEOUT = 30
 EVERYONE = "Everyone"
 EVERYONE_SID = "S-1-1-0"
@@ -295,7 +293,7 @@ def read_grants(name: str, run: Callable = subprocess.run) -> list:
               "ConvertTo-Json -Compress")
     try:
         done = run(_powershell(script), capture_output=True, text=True, timeout=TIMEOUT, stdin=subprocess.DEVNULL,
-                   creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0), encoding="utf-8", errors="replace")
+                   creationflags=no_window_flags(), encoding="utf-8", errors="replace")
     except (OSError, subprocess.SubprocessError) as e:
         raise ShareError(f"Could not read who may use {name}: {e}") from e
     if done.returncode != 0:
@@ -469,7 +467,7 @@ def local_ipv4s(host: str = "", resolve: Callable = socket.getaddrinfo, run: Cal
     if IS_WINDOWS:
         try:
             done = run(_powershell(LAN_SCRIPT), capture_output=True, text=True, timeout=TIMEOUT, stdin=subprocess.DEVNULL,
-                       creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+                       creationflags=no_window_flags())
             if done.returncode == 0:
                 found = [ip.strip() for ip in done.stdout.split() if ip.strip()]
                 return [ip for i, ip in enumerate(found) if ip not in found[:i] and not ip.startswith(("127.", "169.254."))

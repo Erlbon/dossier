@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import errno
 import posixpath
-import stat as stat_module
 import threading
 from dataclasses import dataclass
 from typing import Optional
@@ -256,6 +255,3 @@ class SftpFileSystem(FileSystem):
         session, remote = self._need_write(path)
         session.client.set_mtime(session.remote(remote), mtime)
 
-
-def mode_text(perm: int) -> str:
-    return stat_module.filemode(perm)[1:] if perm else ""

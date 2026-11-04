@@ -11,9 +11,10 @@ import json
 import os
 import shutil
 import subprocess
-import sys
 from dataclasses import dataclass
 from typing import Callable, Optional
+
+from .platform import IS_WINDOWS, IS_MACOS, no_window_flags
 
 TIMEOUT = 5.0
 
@@ -49,11 +50,11 @@ def find_tailscale() -> str:
     if found:
         return found
     candidates = []
-    if sys.platform == "win32":
+    if IS_WINDOWS:
         for var in ("ProgramFiles", "ProgramFiles(x86)"):
             if os.environ.get(var):
                 candidates.append(os.path.join(os.environ[var], "Tailscale", "tailscale.exe"))
-    elif sys.platform == "darwin":
+    elif IS_MACOS:
         candidates.append("/Applications/Tailscale.app/Contents/MacOS/Tailscale")
     return next((c for c in candidates if os.path.isfile(c)), "")
 
@@ -92,7 +93,7 @@ def read_devices(exe: str = "", run: Callable = subprocess.run) -> Optional[list
     exe = exe or find_tailscale()
     if not exe:
         return None
-    flags = getattr(subprocess, "CREATE_NO_WINDOW", 0) if sys.platform == "win32" else 0
+    flags = no_window_flags()
     try:
         done = run([exe, "status", "--json"], capture_output=True, text=True, timeout=TIMEOUT, creationflags=flags, stdin=subprocess.DEVNULL)
     except (OSError, subprocess.SubprocessError):

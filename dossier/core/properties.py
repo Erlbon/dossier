@@ -9,13 +9,12 @@ from __future__ import annotations
 import os
 import shutil
 import stat as stat_module
-import sys
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Optional
 
 from .foldersize import folder_sizes, tree_size
-from .platform import has_scheme
+from .platform import IS_WINDOWS, has_scheme
 from .progress import CancelToken
 from .sizefmt import human_size
 
@@ -125,7 +124,7 @@ def one_item(fs, path: str, cancel: Optional[CancelToken] = None) -> Gathered:
         f.append(Fact("Size", _size_line(entry.size)))
     if st is not None:
         f.append(Fact("Modified", _when(st.st_mtime)))
-        f.append(Fact("Created" if sys.platform == "win32" else "Status changed", _when(st.st_ctime)))
+        f.append(Fact("Created" if IS_WINDOWS else "Status changed", _when(st.st_ctime)))
         f.append(Fact("Last opened", _when(st.st_atime)))
         f.append(Fact("Attributes", _attributes(st)))
         if stat_module.S_ISLNK(st.st_mode):

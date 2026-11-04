@@ -13,9 +13,10 @@ from __future__ import annotations
 import json
 import os
 import stat
-import sys
 from dataclasses import dataclass, field
 from typing import Optional
+
+from .platform import IS_WINDOWS
 
 STREAM = "dossier"
 XATTR = "user.dossier"
@@ -175,7 +176,7 @@ class XattrBackend:
 
 
 def default_backend():
-    if sys.platform == "win32":
+    if IS_WINDOWS:
         return StreamBackend()
     return XattrBackend() if hasattr(os, "getxattr") else None
 

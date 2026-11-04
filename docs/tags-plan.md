@@ -4,7 +4,7 @@ Decided with the owner, 2026-10-20: **no database.** Tags live on the file itsel
 extended attributes). The idea is a small piece of WinFS (items with properties you can query), done as a layer on ordinary
 files, not as a replacement file system.
 
-Status: PLAN ONLY. Nothing is built.
+Status (2026-11-04): built in builds 2026-10-20#12 to #16: `core/filetags.py` (the `:dossier` stream on NTFS, `user.dossier` and `xdg.tags` attributes on Linux), the Tags tab in Properties, the Tags, Rating and Label columns, `dossier find --tag`, and copies that keep their tags. The sections below are the plan as it was written.
 
 ## Where the data lives
 

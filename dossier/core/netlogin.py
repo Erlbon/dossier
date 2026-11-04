@@ -7,8 +7,9 @@ listed again.
 from __future__ import annotations
 
 import ctypes
-import sys
 from typing import Callable, Optional
+
+from .platform import IS_WINDOWS
 
 # Windows error numbers that mean "the share wants a (different) login".
 ACCESS_DENIED = 5
@@ -43,7 +44,7 @@ def share_of(path: str) -> str:
 
 def needs_login(error: BaseException, path: str) -> bool:
     """True when listing ``path`` failed because the server wants a login, so asking for one can help."""
-    if sys.platform != "win32" or not share_of(path):
+    if not IS_WINDOWS or not share_of(path):
         return False
     return getattr(error, "winerror", None) in NEEDS_LOGIN
 
@@ -59,7 +60,7 @@ def ask_login(path: str, hwnd: int = 0, connect: Optional[Callable] = None) -> b
 
 
 def _connect(share: str, hwnd: int) -> int:
-    if sys.platform != "win32":
+    if not IS_WINDOWS:
         return 1
     from ctypes import wintypes
 

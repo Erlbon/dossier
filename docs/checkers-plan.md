@@ -2,6 +2,8 @@
 
 Date: 2026-10-19. Goal from the owner: load up on file checkers of many kinds so the files in the file system stay as healthy as possible. This plan covers the framework, the catalogue, the build waves and the decisions still open. It sits next to the 0.1 plan in `review-and-plan.md`: **checkers are not in 0.1** (decided scope), but the Qt-free framework can be built in parallel because it needs no GUI.
 
+Status (2026-11-04): wave 0 (`core/health.py`, `dossier check`), wave 4 (the Health window) and part of wave 1 are built: ten checkers in `core/health_rules.py`. Not built: the bit-rot baseline, hash-list verification, the museum fixture, and waves 2, 3 and 5 to 9. Library clean-up (section E) went to the Ⅎolder Redactor; the generic hygiene rules are to be shared with it through one module (code review 2026-11-04, section 7).
+
 ## 1. Principles
 
 1. **Findings, not fixes.** A checker only reports. It never changes a file.

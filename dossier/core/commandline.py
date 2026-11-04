@@ -14,7 +14,7 @@ import threading
 from dataclasses import dataclass
 from typing import Callable, Optional
 
-from .platform import IS_WINDOWS, console_encoding
+from .platform import IS_WINDOWS, console_encoding, no_window_flags
 from .terminals import Launch, Profile, Which, quote_for, run_launch
 
 
@@ -84,7 +84,7 @@ def run_command(profile: Profile, command: str, cwd: str, *, wait: float = 1.5, 
     argv = launch.argv
     if isinstance(argv, str) and not IS_WINDOWS:
         argv = shlex.split(argv)
-    flags = subprocess.CREATE_NO_WINDOW if IS_WINDOWS else 0
+    flags = no_window_flags()
     try:
         proc = popen(argv, cwd=cwd, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                      creationflags=flags)

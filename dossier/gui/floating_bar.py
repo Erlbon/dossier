@@ -132,14 +132,6 @@ class FloatingBar(QObject):
         for widget in (self.bar, self.caption):
             widget.hide()
 
-    def set_stepping(self, on: bool) -> None:
-        """Previous and next only make sense with more than one picture."""
-        for key in ("prev", "next"):
-            if key in self.buttons:
-                self.buttons[key].setVisible(on)
-        self.bar.adjustSize()
-        self.place()
-
     def set_caption(self, text: str) -> None:
         self.caption.setText(text)
         self.caption.adjustSize()

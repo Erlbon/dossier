@@ -7,8 +7,9 @@ never shifts what someone hid. Name and Type are always visible.
 from __future__ import annotations
 
 import os
-import sys
 from datetime import datetime
+
+from .platform import IS_WINDOWS
 
 BASIC_KEYS = ("name", "size", "modified", "type", "created", "accessed", "attributes", "location", "tags", "rating", "label")
 # Columns read from inside the files (tags of audio, ComicInfo of comics, tracks of video). They are off everywhere until the owner
@@ -34,10 +35,6 @@ DEFAULT_WIDTHS = {"name": 260, "size": 80, "modified": 130, "type": 90, "created
                   "m_track": 60, "m_year": 60, "m_genre": 110, "m_length": 70, "m_bitrate": 80, "m_series": 160, "m_number": 60,
                   "m_writer": 130, "m_publisher": 130, "m_pages": 60, "m_resolution": 90, "m_codec": 120, "m_languages": 110, "shared": 140}
 RIGHT_ALIGNED = frozenset({"size", "m_track", "m_year", "m_length", "m_bitrate", "m_number", "m_pages"})
-
-
-def is_meta(key: str) -> bool:
-    return key in META_KEYS
 
 
 def newly_hidden(known) -> frozenset:
@@ -73,7 +70,7 @@ def attributes_text(attrs: int) -> str:
     Elsewhere ``attrs`` holds the file mode and shows as ``rwxr-xr-x``."""
     if not attrs:
         return ""
-    if sys.platform == "win32":
+    if IS_WINDOWS:
         return "".join(letter for flag, letter in WINDOWS_ATTRIBUTES if attrs & flag)
     import stat
     return stat.filemode(attrs)[1:]

@@ -1,6 +1,6 @@
 # Dossier: feature specification
 
-Status as of 2026-10-19. Written in our own words; see the clean-room rule below. This file is the source of truth for scope; a decision that changes it is made here, with a date.
+Status as of 2026-10-19, with later status notes where they are dated (what is built since is listed build by build in `CHANGELOG.md`; the reviews in `docs/` say what is still open). Written in our own words; see the clean-room rule below. This file is the source of truth for scope; a decision that changes it is made here, with a date.
 
 ## 1. Purpose and principles
 
@@ -81,7 +81,7 @@ Anything that holds files can be entered like a folder. One interface (list, rea
 | A3 | Pack and unpack dialogs; ZIP split and merge; self-extracting archive creation is not planned | TNT |
 | A4 | Guards: entry-count and compression-ratio limits against zip bombs, no path escape on extract, names decoded with a fallback code page | New |
 
-Status (2026-10-19): ZIP opens as a read-only folder (`core/zipfs.py`, paths `zip://<archive>!/inside`): Enter on a zip, `..` leaves it, copy out and F3 work, F4, move, rename, delete and new items are refused with a reason. Guards done: entry-count cap, no path escape, UTF-8 then DOS code page names, encrypted entries reported. Not done: compression-ratio limit, writing into archives.
+Status (2026-10-19): ZIP opens as a read-only folder (`core/zipfs.py`, paths `zip://<archive>!/inside`): Enter on a zip, `..` leaves it, copy out and F3 work, F4, move, rename, delete and new items are refused with a reason. Guards done: entry-count cap, no path escape, UTF-8 then DOS code page names, encrypted entries reported. Not done: compression-ratio limit. (Since 2026-10-20 zips and zip-based files can be written: copy, move, delete, rename and new folders inside them, Pack and Convert to Zip, through `core/zipwrite.py`.)
 
 Status (2026-10-19, A2): `core/archives.py` has three readers behind one interface: zip (standard library), 7z through `py7zr` (optional extra `archives`), and everything else through an installed 7-Zip (`7z`, `7zz`, `7za`): RAR, CAB, ISO, TAR, GZ, BZ2, XZ, ARJ, LZH, CPIO and 7z as a fallback. Without a reader the file opens in the system's program and the status line says what would open it as a folder. Tested with real 7z and tar files, wildcard and non-ASCII names, encrypted members and headers (no password prompt can hang it), damaged archives; a real RAR file was opened by the owner on 2026-10-19 and worked (through 7-Zip); UnRAR on its own is not built. A tar.gz opens as the tar inside it, one more Enter for the contents.
 | A5 | SQLite database as a virtual folder: tables and views are items, rows open in the table viewer | New |
@@ -226,8 +226,8 @@ Two rules follow from O11 and O12. Sorting, rename-by-pattern, conflict handling
 
 **Open questions**
 
-- [ ] Should remote sources stay read-only until phase 2 is stable?
-- [ ] Which metadata formats come first: EPUB, CBZ, MP3, video?
+- [x] Should remote sources stay read-only until phase 2 is stable? Settled: every server has a read-only switch, on by default (`core/servers.py`).
+- [x] Which metadata formats come first: EPUB, CBZ, MP3, video? Settled: mp3, then cbz, then mp4/mkv (`docs/metadata-plan.md`); mp3 and cbz are written, video is read.
 - [ ] Contact the original publisher about permission or a source release, or stay fully clean-room?
 - [ ] Push access to `redactor_common` so the shared modules (zip handling, natural sort, front matter, CSV viewer) can be promoted there.
 
@@ -243,9 +243,9 @@ Two rules follow from O11 and O12. Sorting, rename-by-pattern, conflict handling
 8. WebDAV, then OPDS and Subsonic.
 9. MCP server over the finished core.
 
-## 16. Health checkers (planned, not in 0.1)
+## 16. Health checkers
 
-A family of read-only checkers reports problems in files and folders (hygiene, integrity, media, library structure, duplicates, bit rot); fixes are ordinary plans with undo. Scope, contract, catalogue and build waves are in `docs/checkers-plan.md`. Decisions H1-H6 there are open.
+A family of read-only checkers reports problems in files and folders (hygiene, integrity, media, library structure, duplicates, bit rot); fixes are ordinary plans with undo. Scope, contract, catalogue and build waves are in `docs/checkers-plan.md`. Built (2026-11-04): the framework, `dossier check` and the Health window with ten checkers; the later waves are not.
 
 ## 17. Design notes from the owner's screenshot of the original (2026-10-19)
 

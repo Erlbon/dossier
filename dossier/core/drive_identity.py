@@ -8,16 +8,16 @@ called on a worker thread. ``DriveMemory`` compares what a root holds now with w
 from __future__ import annotations
 
 import ctypes
-import sys
 import threading
 from typing import Callable, Optional
 
 from .lights import CHANGED, OK
+from .platform import IS_WINDOWS
 
 
 def identity_of(root: str) -> str:
     """``GUID|SERIAL`` of the volume mounted at ``root``, or an empty string when unknown (not Windows, not ready, denied)."""
-    if sys.platform != "win32":
+    if not IS_WINDOWS:
         return ""
     try:
         k32 = ctypes.windll.kernel32

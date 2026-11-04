@@ -21,6 +21,8 @@ import zipfile
 from dataclasses import dataclass
 from typing import BinaryIO, Optional
 
+from .platform import IS_WINDOWS, no_window_flags
+
 SEVEN_ZIP_MAGIC = b"7z\xbc\xaf\x27\x1c"
 RAR_MAGICS = (b"Rar!\x1a\x07\x00", b"Rar!\x1a\x07\x01\x00")
 EXTERNAL_EXTENSIONS = (".rar", ".cab", ".iso", ".tar", ".gz", ".tgz", ".bz2", ".tbz2", ".xz", ".txz", ".arj", ".lzh",
@@ -198,8 +200,8 @@ def find_seven_zip() -> Optional[str]:
 def _quiet() -> dict:
     """Run a tool without a console window and without waiting for a keyboard answer (a password prompt)."""
     kwargs: dict = {"stdin": subprocess.DEVNULL}
-    if os.name == "nt":
-        kwargs["creationflags"] = 0x08000000                 # CREATE_NO_WINDOW
+    if IS_WINDOWS:
+        kwargs["creationflags"] = no_window_flags()
     return kwargs
 
 
