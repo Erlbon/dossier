@@ -418,7 +418,7 @@ class ServersMixin:
             return
         changed = dlg.connection()
         if (changed.authority(), changed.protocol) != (conn.authority(), conn.protocol) and self.server_connected(conn):
-            self.server_fs(conn).drop(conn.authority())
+            self.server_fs(conn).drop(conn.authority(), wait=False)
         if not changed.save_password:
             servers.forget_password(conn)
         self._keep_client_secret(changed, dlg)
@@ -692,7 +692,7 @@ class ServersMixin:
         for panel in (self.left, self.right):                   # a panel standing in the server goes back to the Home page
             if panel.path.startswith(root + "/") or panel.path == root:
                 panel.set_folder("home://")
-        self.server_fs(conn).drop(authority)
+        self.server_fs(conn).drop(authority, wait=False)          # closed on a thread: a dead server cannot hold the window
         self._links.pop((conn.protocol, authority), None)
         self._say(f"Disconnected from {conn.name}")
         for panel in (self.left, self.right):
@@ -708,7 +708,14 @@ class ServersMixin:
         self.disconnect_server(conn)
 
     def disconnect_all_servers(self) -> None:
+        """When the window closes: the ssh processes are ended at once (that also wakes any request waiting on them), and every
+        connection is closed on a thread, so a server that stopped answering never keeps the window on the screen."""
+        for link in list(self._links.values()):
+            try:
+                link.process.kill()
+            except (OSError, AttributeError):
+                pass
         for fs in (self.fs.sftp, self.fs.scp, self.fs.dav, self.fs.ftp, self.fs.opds, self.fs.subsonic, self.fs.gdrive):
             for authority in list(fs.sessions):
-                fs.drop(authority)
+                fs.drop(authority, wait=False)
         self._links.clear()

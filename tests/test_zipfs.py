@@ -5,6 +5,7 @@ import zipfile
 
 import pytest
 from tests.helpers import wait_planned
+from tests.helpers import settle  # noqa: E402
 
 from dossier.core import zipfs
 from dossier.core.home import HomeFileSystem, HomeProvider, RouterFileSystem
@@ -206,18 +207,22 @@ def test_enter_opens_a_zip_like_a_folder_and_dotdot_leaves_it(tmp_path):
         win.left.refresh()
         win.left.table.setCurrentIndex(win.left.model.index(win.left.model.row_of("a.zip"), 0))
         key(win, Qt.Key.Key_Return)
+        settle(win)
         pump(win, lambda: win.left.path.startswith("zip://"))
         assert panel_names(win.left) == ["..", "docs", "top.txt"]
         win.left.table.setCurrentIndex(win.left.model.index(0, 0))
         key(win, Qt.Key.Key_Return)                           # the cursor is on ".."
+        settle(win)
         pump(win, lambda: not win.left.path.startswith("zip://"))
         assert win.left.path == str(left)
         assert win.left.current_name() == "a.zip"
         # in again, then into a folder of the archive
         key(win, Qt.Key.Key_Return)
+        settle(win)
         pump(win, lambda: win.left.path.startswith("zip://"))
         win.left.table.setCurrentIndex(win.left.model.index(win.left.model.row_of("docs"), 0))
         key(win, Qt.Key.Key_Return)
+        settle(win)
         pump(win, lambda: win.left.path.endswith("docs"))
         assert panel_names(win.left) == ["..", "one.txt"]
         # a zip can be changed now (see test_zip_edit.py): delete asks first, and a "no" changes nothing; opening a member for
@@ -230,6 +235,7 @@ def test_enter_opens_a_zip_like_a_folder_and_dotdot_leaves_it(tmp_path):
         dialogs.confirm_answer = True
         dialogs.infos.clear()
         win.edit_file()
+        settle(win)
         assert dialogs.infos
         # copying out works from the window
         win.copy()                                            # the left panel is active, the target is the right one

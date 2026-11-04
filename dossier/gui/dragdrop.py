@@ -101,6 +101,16 @@ def content_of(data: QMimeData) -> Optional[tuple]:
     return None
 
 
+def carries_content(data: QMimeData) -> bool:
+    """Whether ``content_of`` may find a picture or text in ``data``, judged by its formats alone: asked on every mouse move of a drag,
+    so a big picture is not decoded each time (``content_of`` decodes it once, at the drop)."""
+    if data is None or data.hasFormat(MIME):
+        return False
+    if data.hasUrls():
+        return content_of(data) is not None                    # only urls: cheap
+    return data.hasImage() or (data.hasText() and bool(data.text().strip()))
+
+
 def can_drop(paths: list, dest: str, sep: str = os.sep) -> bool:
     """Whether dropping ``paths`` into the folder ``dest`` makes sense. Judged from the names alone (no disk): not onto an item
     itself, not into a folder inside what is dragged."""

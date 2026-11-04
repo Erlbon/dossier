@@ -86,3 +86,30 @@ def test_enter_on_an_archive_reads_it_on_a_thread(world, monkeypatch):
     win.left.open_current()
     pump(win, lambda: win.left.path.startswith("zip://") and win.left.model.row_of("inside.txt") >= 0)
     assert where == [False]
+
+
+def test_f3_f4_and_enter_read_the_file_on_a_thread(world, monkeypatch):
+    """F3 looked at every marked item and listed a picture's whole folder, F4 read the file, and Enter read its first bytes: all on
+    the window's thread, which a slow share froze."""
+    from dossier.core import viewmodes
+    from dossier.gui import open_files as open_files_module
+    from tests.helpers import settle
+    win, d, left, right, tmp = world
+    (left / "a.txt").write_text("A")
+    put_cursor(win, "a.txt")
+    where = []
+    monkeypatch.setattr(viewmodes, "mode_for", recorder(where, viewmodes.mode_for))
+    win.view_file()
+    settle(win)
+    assert where[0] is False and len(win.viewers) == 1           # (the viewer window then reads its own first page: still to do)
+    where.clear()
+    monkeypatch.setattr(main_module, "load_document", recorder(where, main_module.load_document))
+    win.edit_file()
+    settle(win)
+    assert where == [False] and len(win.editors) == 1
+    monkeypatch.setattr(open_files_module.viewmodes, "opens_in_viewer", recorder(where, lambda *a, **k: True))
+    win._open_file(str(left / "a.txt"))
+    settle(win)
+    assert where[:2] == [False, False]
+    for w in list(win.editors) + list(win.viewers):
+        w.close()

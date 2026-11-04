@@ -27,6 +27,15 @@ def wait_planned(win, timeout: float = 10.0) -> None:
         raise AssertionError(f"a plan was still being worked out after {timeout} s")
 
 
+def settle(win, timeout: float = 10.0) -> None:
+    """Wait until the window's background work for a command is done (opening a file, working out a plan): the window reads the
+    disk on threads and acts when the answer comes, so a test looks only after that."""
+    if hasattr(win, "_size_jobs"):                  # a viewer window has no background work of its own
+        wait_for(lambda: not win._size_jobs and not win._plans, timeout)
+    from PyQt6.QtWidgets import QApplication
+    QApplication.processEvents()
+
+
 def wait_for(condition, timeout: float = 10.0) -> None:
     """Handle events until ``condition()`` is true: a wait for what a thread delivers, never a guess of how long it takes."""
     import time

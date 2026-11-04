@@ -390,13 +390,27 @@ class MainWindow(FrostMixin, GlassViewMixin, KeysMixin, AutoRefreshMixin, Metada
         """F3: view the marked files (or the one under the cursor), stepping through them in one window."""
         if self._home_blocked("View"):
             return
-        ordered = []
-        for p in (paths if paths else self.active.targets()):
-            try:
-                if not self.fs.stat(p).is_dir:
-                    ordered.append(p)
-            except OSError as e:
-                self.dialogs.info("View", f"Cannot read {self.fs.basename(p)}: {e.strerror or e}")
+        targets = list(paths if paths else self.active.targets())
+
+        def prepare(progress, cancel):                          # every look at the disk is here, on a thread
+            ordered, problems = [], []
+            for p in targets:
+                try:
+                    if not self.fs.stat(p).is_dir:
+                        ordered.append(p)
+                except OSError as e:
+                    problems.append(f"Cannot read {self.fs.basename(p)}: {e.strerror or e}")
+            around = None
+            if len(ordered) == 1 and not has_scheme(ordered[0]) and viewmodes.mode_for(ordered[0]) == "image":
+                # a picture: its folder's pictures follow (a big folder on a share takes a while to list)
+                around = viewmodes.pictures_around(ordered[0], lambda folder: [e.name for e in self.fs.list(folder) if not e.is_dir])
+            return ordered, problems, around
+        run_in_background(self, self.cmd_runner, "Opening", prepare, on_result=lambda found: self._view_prepared(*found),
+                          tracked=self._size_jobs, indeterminate=True, failed_title="View")
+
+    def _view_prepared(self, ordered: list, problems: list, around) -> None:
+        if problems:
+            self.dialogs.info("View", chr(10).join(problems[:10]))
         if not ordered:
             self.dialogs.info("View", "Select a file to view.")
             return
@@ -404,9 +418,8 @@ class MainWindow(FrostMixin, GlassViewMixin, KeysMixin, AutoRefreshMixin, Metada
 
         def open_viewer(unpacked: dict) -> None:
             shown, first = [unpacked.get(p, p) for p in ordered], 0
-            if len(shown) == 1 and not archived and viewmodes.mode_for(shown[0]) == "image":     # a picture: its folder's pictures follow
-                shown, first = viewmodes.pictures_around(
-                    shown[0], lambda folder: [e.name for e in self.fs.list(folder) if not e.is_dir])
+            if around is not None:
+                shown, first = around
             win = TextViewerWindow(shown, first, dispatch=self.dispatcher)
             win.set_wheel_map(self.wheel_map())
             self.viewers.append(win)
@@ -423,43 +436,60 @@ class MainWindow(FrostMixin, GlassViewMixin, KeysMixin, AutoRefreshMixin, Metada
         """F4: open one file in the notepad. A file that is already open is brought forward, not opened twice."""
         if path is None and self._home_blocked("Edit"):
             return
-        if path is None:
-            targets = [p for p in self.active.targets()]
-            files = []
-            for p in targets:
-                try:
-                    if not self.fs.stat(p).is_dir:
-                        files.append(p)
-                except OSError:
-                    pass
-            if len(files) != 1:
-                self.dialogs.info("Edit", "Select one file to edit.")
-                return
-            path = files[0]
-        if has_scheme(path):
-            self.dialogs.info("Edit", "Items inside an archive are read-only. Copy the file out to edit it.")
+        if path is not None and self._bring_editor_forward(path, show_replace):
             return
+        targets = list(self.active.targets()) if path is None else []
+        open_now = [w.doc.path for w in self.editors]
+
+        def prepare(progress, cancel):                          # which file, and reading it: on a thread
+            chosen = path
+            if chosen is None:
+                files = []
+                for p in targets:
+                    try:
+                        if not self.fs.stat(p).is_dir:
+                            files.append(p)
+                    except OSError:
+                        pass
+                if len(files) != 1:
+                    return None, None, "Select one file to edit."
+                chosen = files[0]
+            if has_scheme(chosen):
+                return chosen, None, "Items inside an archive are read-only. Copy the file out to edit it."
+            if any(os.path.normcase(o) == os.path.normcase(chosen) for o in open_now):
+                return chosen, None, ""                         # open already: brought forward, not read again
+            try:
+                return chosen, load_document(chosen), ""
+            except FileTooLarge as e:
+                return chosen, None, f"{e}. Use View (F3) to read it, or an external editor to change it."
+            except BinaryFile:
+                return chosen, None, "This looks like a binary file, not text. Use View (F3)."
+            except (OSError, EncodingProblem) as e:
+                return chosen, None, f"The file could not be opened: {getattr(e, 'strerror', None) or e}"
+        run_in_background(self, self.cmd_runner, "Opening", prepare,
+                          on_result=lambda found: self._edit_prepared(*found, show_replace=show_replace),
+                          tracked=self._size_jobs, indeterminate=True, failed_title="Edit")
+
+    def _bring_editor_forward(self, path: str, show_replace: bool) -> bool:
         for w in self.editors:
             if os.path.normcase(w.doc.path) == os.path.normcase(path):
                 w.raise_()
                 w.activateWindow()
                 if show_replace:
                     w.bar.show_replace()
-                return
+                return True
+        return False
+
+    def _edit_prepared(self, path, doc, problem: str, show_replace: bool = False) -> None:
+        if problem:
+            self.dialogs.info("Edit", problem)
+            return
+        if path is None or self._bring_editor_forward(path, show_replace) or doc is None:
+            return
         try:
             from .notepad import NotepadWindow
-            doc = load_document(path)
         except ImportError:
             self.dialogs.info("Edit", "The editor needs the PyQt6-QScintilla package: pip install PyQt6-QScintilla")
-            return
-        except FileTooLarge as e:
-            self.dialogs.info("Edit", f"{e}. Use View (F3) to read it, or an external editor to change it.")
-            return
-        except BinaryFile:
-            self.dialogs.info("Edit", "This looks like a binary file, not text. Use View (F3).")
-            return
-        except (OSError, EncodingProblem) as e:
-            self.dialogs.info("Edit", f"The file could not be opened: {getattr(e, 'strerror', None) or e}")
             return
         remembered = str(self.settings.value("editor/markdown_preview", "")).lower()
         win = NotepadWindow(doc, self.dialogs, show_replace=show_replace, preview={"true": True, "false": False}.get(remembered),

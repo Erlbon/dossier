@@ -48,6 +48,7 @@ def test_a_powershell_script_is_started_as_explorers_run_with_powershell():
 # the window ----------------------------------------------------------------------------------------------------------------------
 pytest.importorskip("PyQt6")
 from tests.test_gui_commander import app, pump, world  # noqa: E402,F401
+from tests.helpers import settle  # noqa: E402
 
 
 @pytest.fixture
@@ -56,6 +57,8 @@ def scripted(world):
     started, viewed = [], []
     win.launch_terminal = lambda launch: started.append(launch)
     win.view_file = lambda paths: viewed.append(list(paths))
+    win.system_opened = []
+    win._open_with_system = lambda p: win.system_opened.append(p)                # never really started by a test
     name = "go.bat" if sys.platform == "win32" else "go.sh"
     (left / name).write_text("echo hi\n")
     (left / "notes.txt").write_text("hi")
@@ -69,15 +72,21 @@ def test_enter_runs_a_script_and_ctrl_enter_shows_it(scripted):
     assert win.run_scripts()                                                      # on unless switched off
     assert win._open_file(path) and len(started) == 1 and started[0].cwd == str(scripts.os.path.dirname(path))
     assert win._open_file(path, alternate=True) and viewed == [[path]]
-    assert win._open_file(path.replace("go.", "notes.").rsplit(".", 1)[0] + ".txt") and len(viewed) == 2     # text: the viewer, as before
+    assert win._open_file(path.replace("go.", "notes.").rsplit(".", 1)[0] + ".txt")
+    settle(win)                                                                   # its first bytes are read on a thread
+    assert len(viewed) == 2                                                       # text: the viewer, as before
 
 
 def test_switched_off_enter_shows_a_script_and_ctrl_enter_runs_it_through_windows(scripted):
     win, d, path, started, viewed = scripted
     win.set_run_scripts(False)
     assert not win.run_scripts()
-    assert win._open_file(path) and viewed == [[path]] and not started
-    assert win._open_file(path, alternate=True) is False                          # the panel hands it to the Windows program
+    assert win._open_file(path)
+    settle(win)
+    assert viewed == [[path]] and not started
+    assert win._open_file(path, alternate=True)
+    settle(win)
+    assert win.system_opened == [path] and len(viewed) == 1                       # handed to the Windows program
     win.set_run_scripts(True)
     assert win.run_scripts()
 

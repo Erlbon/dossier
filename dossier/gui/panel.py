@@ -264,8 +264,8 @@ class _FileView:
 
     def _content_row(self, event) -> Optional[int]:
         """The row under a drop of a picture or text (no files in it) when it could become a new file here, else None."""
-        from .dragdrop import content_of
-        if self.content_check is None or content_of(event.mimeData()) is None:
+        from .dragdrop import carries_content
+        if self.content_check is None or not carries_content(event.mimeData()):
             return None
         row = self.indexAt(event.position().toPoint()).row()
         return row if self.content_check(row) else None

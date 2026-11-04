@@ -17,6 +17,7 @@ from dossier.gui.editor import from_line_index, line_starts, to_line_index, u16l
 from dossier.gui.main_window import MainWindow  # noqa: E402
 from dossier.gui.notepad import NotepadWindow  # noqa: E402
 from tests.test_gui_commander import FakeDialogs  # noqa: E402
+from tests.helpers import settle  # noqa: E402
 
 
 @pytest.fixture(scope="module")
@@ -304,8 +305,10 @@ def test_f4_opens_the_file_under_the_cursor_once(commander):
     win, dialogs, tmp = commander
     win.left.table.setCurrentIndex(win.left.model.index(win.left.model.row_of("a.txt"), 0))
     QTest.keyClick(win.left.table, Qt.Key.Key_F4)
+    settle(win)
     assert len(win.editors) == 1 and win.editors[0].editor.text() == "alpha\n"
     win.edit_file()
+    settle(win)
     assert len(win.editors) == 1                              # the same file is brought forward, not opened twice
 
 
@@ -313,12 +316,15 @@ def test_f4_refuses_folders_binaries_and_several_files_with_a_reason(commander):
     win, dialogs, tmp = commander
     win.left.table.setCurrentIndex(win.left.model.index(win.left.model.row_of("sub"), 0))
     win.edit_file()
+    settle(win)
     assert "one file" in dialogs.infos[-1][1]
     win.left.table.setCurrentIndex(win.left.model.index(win.left.model.row_of("bin.dat"), 0))
     win.edit_file()
+    settle(win)
     assert "binary" in dialogs.infos[-1][1] and not win.editors
     win.selection.add([str(tmp / "left" / "a.txt"), str(tmp / "left" / "b.txt")])
     win.edit_file()
+    settle(win)
     assert "one file" in dialogs.infos[-1][1]
 
 
@@ -330,6 +336,7 @@ def test_a_file_over_the_limit_points_to_the_viewer(commander, monkeypatch):
                         lambda path: te.load_document(path, max_bytes=2))
     win.left.table.setCurrentIndex(win.left.model.index(win.left.model.row_of("a.txt"), 0))
     win.edit_file()
+    settle(win)
     assert "View (F3)" in dialogs.infos[-1][1] and not win.editors
 
 
@@ -337,11 +344,12 @@ def test_ctrl_h_in_the_viewer_hands_the_file_to_the_notepad_with_the_replace_bar
     win, dialogs, tmp = commander
     win.left.table.setCurrentIndex(win.left.model.index(win.left.model.row_of("a.txt"), 0))
     win.view_file()
+    settle(win)
     viewer = win.viewers[0]
     viewer.activateWindow()
     activate_window(viewer)
     QTest.keyClick(viewer.view, Qt.Key.Key_H, Qt.KeyboardModifier.ControlModifier)
-    QApplication.processEvents()
+    settle(win)                                                                  # the file is read on a thread
     assert len(win.editors) == 1 and win.editors[0].bar.replace_row.isVisible()
 
 
@@ -349,6 +357,7 @@ def test_saving_in_the_notepad_refreshes_the_file_manager_and_closing_it_closes_
     win, dialogs, tmp = commander
     win.left.table.setCurrentIndex(win.left.model.index(win.left.model.row_of("a.txt"), 0))
     win.edit_file()
+    settle(win)
     pad = win.editors[0]
     pad.editor.insertAt("x" * 5000, 0, 0)
     assert pad.save()

@@ -12,11 +12,19 @@ from __future__ import annotations
 import errno
 import posixpath
 import stat as stat_module
+import threading
 from dataclasses import dataclass
 from typing import Optional
 
 from .sftp_proto import SftpClient, SftpReadFile, SftpWriteFile
 from .vfs import Entry, FileSystem, NotWritable
+
+
+def _close_quietly(client) -> None:
+    try:
+        client.close()
+    except Exception:                    # a client of a dead server may fail in any way while it closes; nobody waits for the answer
+        pass
 
 SCHEME = "sftp"
 ROOT = "sftp://"
@@ -96,10 +104,17 @@ class SftpFileSystem(FileSystem):
         if old is not None and old is not session:
             old.client.close()
 
-    def drop(self, authority: str) -> None:
+    def drop(self, authority: str, wait: bool = True) -> None:
+        """Forget the connection to ``authority`` and close it. A request stuck on a dead server holds the client until its timeout
+        (up to a minute), and closing waits for it: with ``wait=False`` the closing happens on a thread of its own, so a window that
+        disconnects never waits; the connection is gone from ``sessions`` at once either way."""
         session = self.sessions.pop(authority, None)
-        if session is not None:
+        if session is None:
+            return
+        if wait:
             session.client.close()
+        else:
+            threading.Thread(target=_close_quietly, args=(session.client,), daemon=True, name="dossier-disconnect").start()
 
     def connected(self, authority: str) -> bool:
         s = self.sessions.get(authority)

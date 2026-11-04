@@ -227,6 +227,7 @@ from PyQt6.QtCore import Qt  # noqa: E402
 
 from tests.helpers import wait_planned  # noqa: E402
 from tests.test_gui_commander import app, key, pump, world  # noqa: E402,F401
+from tests.helpers import settle  # noqa: E402
 
 
 def test_enter_on_a_word_document_opens_it_with_the_system_and_ctrl_pagedown_looks_inside(world, monkeypatch):
@@ -238,6 +239,7 @@ def test_enter_on_a_word_document_opens_it_with_the_system_and_ctrl_pagedown_loo
     win.left.refresh()
     win.left.table.setCurrentIndex(win.left.model.index(win.left.model.row_of("report.docx"), 0))
     key(win, Qt.Key.Key_Return)
+    settle(win)
     assert len(opened) == 1 and not win.left.path.startswith("zip://")         # handed to Word, not shown as a folder
     key(win, Qt.Key.Key_PageDown, Qt.KeyboardModifier.ControlModifier)
     pump(win, lambda: win.left.path.startswith("zip://"))

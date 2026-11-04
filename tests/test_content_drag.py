@@ -249,3 +249,18 @@ def test_the_names_of_a_link_file():
     assert newfile.suggested_name(newfile.LINK, url="https://www.example.org/a/b") == "www.example.org.url"
     assert newfile.suggested_name(newfile.LINK, url="nonsense") == "link.url"
     assert newfile.clean_name("site", newfile.LINK) == "site.url"
+
+
+def test_a_dragged_picture_is_not_decoded_on_every_mouse_move(monkeypatch):
+    """Asking whether a drag carries a picture looks at its formats; the picture itself is decoded once, at the drop."""
+    from PyQt6.QtCore import QMimeData
+    from PyQt6.QtGui import QImage
+    from dossier.gui import dragdrop
+    data = QMimeData()
+    data.setImageData(QImage(8, 8, QImage.Format.Format_RGB32))
+    decoded = []
+    monkeypatch.setattr(dragdrop, "content_of", lambda d: decoded.append(1))
+    assert dragdrop.carries_content(data) and decoded == []
+    text = QMimeData()
+    text.setText("  ")
+    assert not dragdrop.carries_content(text)

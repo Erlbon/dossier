@@ -17,6 +17,7 @@ from dossier.gui.line_view import col_of_vcol, vcol_of  # noqa: E402
 from dossier.gui.viewer import TextViewerWindow  # noqa: E402
 from dossier.gui.qt_bridge import QtDispatcher  # noqa: E402
 from tests.test_gui_commander import FakeDialogs, key  # noqa: E402,F401
+from tests.helpers import settle as settle_window  # noqa: E402  (this file has its own settle for viewers)
 from dossier.gui.main_window import MainWindow  # noqa: E402
 
 
@@ -276,6 +277,7 @@ def test_f3_opens_the_file_under_the_cursor(commander):
     win, _d = commander
     win.left.table.setCurrentIndex(win.left.model.index(2, 0))      # a.txt (row 0 is .., row 1 is sub)
     QTest.keyClick(win.left.table, Qt.Key.Key_F3)
+    settle_window(win)
     QApplication.processEvents()
     assert len(win.viewers) == 1
     viewer = win.viewers[0]
@@ -287,6 +289,7 @@ def test_f3_on_marked_files_steps_through_them(commander):
     win, _d = commander
     win.selection.add([str(os.path.join(win.left.path, n)) for n in ("a.txt", "b.txt")])
     win.view_file()
+    settle_window(win)
     viewer = win.viewers[0]
     settle(viewer)
     assert len(viewer.paths) == 2 and viewer.file_buttons_visible
@@ -296,6 +299,7 @@ def test_f3_on_a_folder_asks_for_a_file(commander):
     win, dialogs = commander
     win.left.table.setCurrentIndex(win.left.model.index(1, 0))      # sub
     win.view_file()
+    settle_window(win)
     assert win.viewers == [] and dialogs.infos and "file" in dialogs.infos[-1][1]
 
 
@@ -303,6 +307,7 @@ def test_closing_the_commander_closes_its_viewers(commander):
     win, _d = commander
     win.left.table.setCurrentIndex(win.left.model.index(2, 0))
     win.view_file()
+    settle_window(win)
     viewer = win.viewers[0]
     win.close()
     QApplication.processEvents()

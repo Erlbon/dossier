@@ -12,6 +12,7 @@ from PyQt6.QtGui import QAction, QActionGroup
 
 from ..core import scripts, viewmodes
 from ..core.platform import has_scheme
+from .background import run_in_background
 
 
 class OpenFilesMixin:
@@ -79,7 +80,16 @@ class OpenFilesMixin:
             else:
                 self.run_script(path)
             return True
-        if not viewmodes.opens_in_viewer(path, self.open_choice(), alternate, local=not has_scheme(path)):
+        choice = self.open_choice()
+        if choice == "viewer" and not has_scheme(path):
+            # the file's first bytes decide (a binary one goes to the system program): read on a thread, then opened from here
+            def decide(progress, cancel):
+                return viewmodes.opens_in_viewer(path, choice, alternate, local=True)
+            run_in_background(self, self.cmd_runner, "Opening", decide,
+                              on_result=lambda in_viewer: self.view_file([path]) if in_viewer else self._open_with_system(path),
+                              tracked=self._size_jobs, indeterminate=True, failed_title="Open")
+            return True
+        if not viewmodes.opens_in_viewer(path, choice, alternate, local=not has_scheme(path)):
             return False
         self.view_file([path])
         return True

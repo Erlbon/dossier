@@ -15,6 +15,7 @@ from dossier.gui.viewer import TextViewerWindow  # noqa: E402
 from tests.test_gui_commander import pump, world  # noqa: E402,F401
 from tests.test_viewer import app, settle  # noqa: E402,F401
 from tests.test_viewmodes import sample_block, tiff  # noqa: E402
+from tests.helpers import settle  # noqa: E402
 
 
 def wait(until, timeout=5.0):
@@ -312,6 +313,7 @@ def test_f3_on_one_picture_steps_through_the_pictures_of_its_folder(world, tmp_p
     pump(win, lambda: win.left.model.entry_count() >= 5)
     win.left.table.setCurrentIndex(win.left.model.index(win.left.model.row_of("img2.png"), 0))
     win.view_file()
+    settle(win)
     viewer = win.viewers[0]
     assert [p.rsplit("\\", 1)[-1].rsplit("/", 1)[-1] for p in viewer.paths] == ["img1.png", "img2.png", "img10.png"]
     assert viewer.index == 1 and viewer.mode == "image"
@@ -433,6 +435,7 @@ def test_the_wheel_dialog_keeps_the_choices_and_open_viewers_follow(world, tmp_p
     pump(win, lambda: win.left.model.row_of("a.png") >= 0)
     win.left.table.setCurrentIndex(win.left.model.index(win.left.model.row_of("a.png"), 0))
     win.view_file()
+    settle(win)
     wait(lambda: win.viewers and win.viewers[0].image_page.view.has_image())
     assert win.wheel_map() == {"plain": "scroll_step", "ctrl": "zoom", "shift": "scroll"}
     assert win.viewers[0].image_page.view.wheel_map == win.wheel_map()

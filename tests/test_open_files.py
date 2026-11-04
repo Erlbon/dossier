@@ -10,6 +10,7 @@ pytest.importorskip("PyQt6")
 from PyQt6.QtCore import Qt  # noqa: E402
 
 from tests.test_gui_commander import app, key, pump, world  # noqa: E402,F401
+from tests.helpers import settle  # noqa: E402
 
 
 def test_the_rule_for_each_setting_and_for_ctrl_enter(tmp_path):
@@ -45,9 +46,11 @@ def test_enter_shows_a_text_file_in_the_viewer_and_sends_a_binary_file_to_window
     (left / "prog.bin").write_bytes(bytes(range(256)) * 4)
     cursor_on(win, "note.txt")
     key(win, Qt.Key.Key_Return)
+    settle(win)
     assert len(win.viewers) == 1 and opened == []
     cursor_on(win, "prog.bin")
     key(win, Qt.Key.Key_Return)
+    settle(win)
     assert len(win.viewers) == 1 and opened == [str(left / "prog.bin")]
 
 
@@ -58,9 +61,11 @@ def test_ctrl_enter_does_the_other_thing_and_marks_stay_as_they_were(world, open
     cursor_on(win, "note.txt")
     win.selection.add([str(left / "other.txt")])
     key(win, Qt.Key.Key_Return, Qt.KeyboardModifier.ControlModifier)
+    settle(win)
     assert opened == [str(left / "note.txt")] and not win.viewers
     assert win.selection.paths() == [str(left / "other.txt")]
     key(win, Qt.Key.Key_Return)                                # Enter views the file under the cursor, not the marked one
+    settle(win)
     assert len(win.viewers) == 1
 
 
@@ -72,8 +77,10 @@ def test_the_setting_is_kept_and_changes_what_enter_does(world, opened):
     win.set_open_choice("system")
     assert win.settings.value("open/files") == "system" and win.open_actions["system"].isChecked()
     key(win, Qt.Key.Key_Return)
+    settle(win)
     assert opened == [str(left / "note.txt")] and not win.viewers
     key(win, Qt.Key.Key_Return, Qt.KeyboardModifier.ControlModifier)
+    settle(win)
     assert len(win.viewers) == 1
     win.settings.setValue("open/files", "nonsense")
     assert win.open_choice() == "viewer"

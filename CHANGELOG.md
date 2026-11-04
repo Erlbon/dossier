@@ -2,6 +2,17 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-04#06 -- More freeze fixes from the code review of 2026-11-04 (F3, F7, part of F11)
+
+- **Disconnecting from a server that stopped answering no longer freezes the window.** This covers Home > Disconnect, removing a server and closing the window. A request stuck on a dead server held its connection for up to a minute, and disconnecting waited for it. Now the connection is forgotten at once and closed on a thread of its own. When the window closes, the ssh processes are ended straight away. An SFTP or SCP connection is also closed in a better order: ssh gets three seconds after its input ends, then it is stopped.
+- **F3, F4 and Enter read the file on a thread**, then open it:
+  - F3: whether each marked item is a file, and, for a picture, the list of the pictures in its folder (which on a big share folder took seconds);
+  - F4: the file itself, up to 10 MB;
+  - Enter: the first bytes, which decide between the viewer and the Windows program;
+  - opening a file from a server or an archive: its size.
+- **Dragging a picture over a panel** no longer decodes it on every mouse move; it is decoded once, at the drop.
+- **Still on the window's thread:** the viewer reading its first page and a Markdown file; saving in the notepad; a drag from a server or an archive out to Explorer, which copies the file (up to 64 MB) when Explorer asks for it at the drop.
+
 ## 2026-11-04#05 -- Steadier tests (code review 2026-11-04, T1 to T9)
 
 - **The first look for Tailnet devices** is started by a timer that belongs to the window, so it can never fire after the window is gone. This is the only change to the program itself.

@@ -19,14 +19,27 @@ class UnpackMixin:
 
     def _unpack_then(self, paths: list, then) -> None:
         """Unpack items of an archive to a temporary folder on a thread (with a box, Cancel and a question first when
-        it is big), then call ``then(list of the unpacked paths)`` on the window's thread."""
-        sizes = []
-        for p in paths:
-            try:
-                sizes.append(self.fs.stat(p).size)
-            except OSError as e:
-                self.dialogs.info("Open", f"Cannot read {self.fs.basename(p)}: {e.strerror or e}")
+        it is big), then call ``then(list of the unpacked paths)`` on the window's thread. The sizes are read on a thread too (an item
+        on a server is a network call)."""
+        def measure(progress, cancel):
+            sizes = []
+            for p in paths:
+                try:
+                    sizes.append(self.fs.stat(p).size)
+                except OSError as e:
+                    return None, f"Cannot read {self.fs.basename(p)}: {e.strerror or e}"
+            return sizes, ""
+
+        def measured(found) -> None:
+            sizes, problem = found
+            if problem:
+                self.dialogs.info("Open", problem)
                 return
+            self._unpack_sized(paths, sizes, then)
+        run_in_background(self, self.cmd_runner, "Opening", measure, on_result=measured, tracked=self._size_jobs, indeterminate=True,
+                          failed_title="Open from an Archive")
+
+    def _unpack_sized(self, paths: list, sizes: list, then) -> None:
         total = sum(sizes)
         if total > EXTRACT_CONFIRM and not self.dialogs.confirm(
                 "Open from an Archive", f"{human_size(total)} will be unpacked to a temporary folder to open it. Go on?", "Unpack"):

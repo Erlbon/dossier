@@ -139,6 +139,25 @@ def test_a_dead_connection_is_not_connected_and_can_be_replaced(remote):
     assert AUTH not in remote.sessions
 
 
+def test_a_disconnect_that_does_not_wait_returns_while_a_dead_server_holds_the_client(remote):
+    """Closing a client waits for the request it is stuck in (a minute on a dead server); the window disconnects without waiting."""
+    import threading
+    import time
+    release, closed = threading.Event(), threading.Event()
+    real_close = remote.session.client.close
+
+    def stuck_close():
+        release.wait(10)
+        real_close()
+        closed.set()
+    remote.session.client.close = stuck_close
+    started = time.monotonic()
+    remote.drop(AUTH, wait=False)
+    assert time.monotonic() - started < 1 and AUTH not in remote.sessions and not closed.is_set()
+    release.set()
+    assert closed.wait(10)                                                     # it is still closed, on its own thread
+
+
 # the ordinary plans, through the router ---------------------------------------------------------------------------------------------
 @pytest.fixture
 def router(remote):

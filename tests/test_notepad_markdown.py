@@ -13,6 +13,7 @@ from dossier.gui.main_window import MainWindow  # noqa: E402
 from tests.test_gui_commander import FakeDialogs  # noqa: E402
 from tests.test_notepad import app, pad  # noqa: E402,F401
 from tests.helpers import wait_for  # noqa: E402
+from tests.helpers import settle  # noqa: E402
 
 
 def shown(win) -> str:
@@ -105,6 +106,7 @@ def test_the_choice_is_remembered_for_markdown_files_only(app, tmp_path, monkeyp
     win = MainWindow(settings_path=str(tmp_path / "s.ini"), start=(str(left), str(left)), dialogs=FakeDialogs())
     try:
         win.edit_file(str(left / "a.md"))
+        settle(win)
         md = win.editors[-1]
         assert md.act_preview.isChecked()                                # no choice yet: on for Markdown
         md.act_preview.trigger()                                         # off
@@ -112,8 +114,10 @@ def test_the_choice_is_remembered_for_markdown_files_only(app, tmp_path, monkeyp
         md.mark_clean()
         md.close()
         win.edit_file(str(left / "a.md"))
+        settle(win)
         assert not win.editors[-1].act_preview.isChecked()               # remembered
         win.edit_file(str(left / "b.txt"))
+        settle(win)
         txt = win.editors[-1]
         assert not txt.act_preview.isChecked()                           # never for another kind of file...
         txt.act_preview.trigger()

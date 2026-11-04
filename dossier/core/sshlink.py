@@ -316,15 +316,24 @@ def connect(c: Connection, password: str, known_hosts: str, askpass_folder: str,
     watchdog.start()
 
     def stop() -> None:
-        for stream in (process.stdin, process.stdout):
-            try:
-                stream.close()
-            except OSError:
-                pass
+        # stdin first (ssh ends the session on it), then ssh is given 3 s and killed. Only then stdout: closing it while another thread is
+        # still reading it waits for that read, which on a dead server lasts until ssh gives up (about a minute).
+        try:
+            process.stdin.close()
+        except OSError:
+            pass
         try:
             process.wait(timeout=3)
         except subprocess.TimeoutExpired:
             process.kill()
+            try:
+                process.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                pass
+        try:
+            process.stdout.close()
+        except OSError:
+            pass
 
     try:
         client = (ShellClient if shell else SftpClient)(process.stdout, process.stdin, stop)
