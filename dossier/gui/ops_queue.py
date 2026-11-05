@@ -63,6 +63,10 @@ class OperationQueueMixin:
         def on_item(op, number: int, count: int) -> None:       # a worker thread: only stores the text
             current["text"] = f"{self.fs.basename(op.src or op.dst)}  ({number} of {count})"
 
+        def on_wait(op, attempt: int, of: int, seconds: float, error: str) -> None:     # a worker thread, as above
+            current["text"] = (f"The network is away ({error}). Trying {self.fs.basename(op.src or op.dst)} again in {seconds:.0f} s "
+                               f"({attempt} of {of})")
+
         def progress(done: int, total: int) -> None:
             if "box" not in shown:
                 shown["box"] = self.dialogs.make_progress(plan.title, lambda: holder["job"].cancel() if "job" in holder else None)
@@ -94,7 +98,7 @@ class OperationQueueMixin:
                 on_done(job)
 
         job = run_plan_job(self.runner, plan, self.fs, selection=self.selection, undo_log=self.undo_log,
-                           on_progress=progress, on_done=finished, options=self._exec_options(on_item),
+                           on_progress=progress, on_done=finished, options=self._exec_options(on_item, on_wait),
                            **({} if self.trasher is None else {"trasher": self.trasher}))
         holder["job"] = job
         if self.paused:
@@ -171,11 +175,13 @@ class OperationQueueMixin:
         self.queue_label.setText((" " + chr(0xB7) + " ").join(parts))
         self.queue_label.setVisible(bool(parts))
 
-    def _exec_options(self, on_item=None) -> ExecOptions:
+    def _exec_options(self, on_item=None, on_wait=None) -> ExecOptions:
         """The run options from Settings > Copy and Move (gui/copy_settings.py)."""
         s = self.copy_settings()
         options = ExecOptions(limit_bps=int(s["limit_mb"] * 1024 * 1024) or None, on_item=on_item, verify=s["verify"],
                               retries=s["retries"], retry_delay=s["retry_delay"], workers=s["workers"] or None,
+                              network_retries=s["network_retries"], network_wait=s["network_wait"], on_wait=on_wait,
+                              folder_times=s["folder_times"],
                               native_copy=s["native"], flush={"auto": None, "always": True, "never": False}[s["flush"]])
         if s["ask_on_error"]:
             skip_all = []

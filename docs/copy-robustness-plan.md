@@ -1,7 +1,10 @@
 # Copy robustness: closing the gap with robocopy
 
 Written 2026-11-05 after comparing the copy engine (`core/transfer.py`, `core/ops.py` `execute`) with robocopy for a 50 GB, 15,000-file
-transfer from one PC to a home server over the LAN. This is a plan; nothing in it is built yet.
+transfer from one PC to a home server over the LAN.
+
+**Status (build 2026-11-05#01):** steps 1 to 3 are built, except reconnecting a dropped SFTP session inside step 1 (a dropped server
+session still fails its files; SMB network drives are covered). Steps 4 to 6 are open.
 
 ## Where the engine stands
 
