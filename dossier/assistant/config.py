@@ -36,6 +36,8 @@ class AssistantConfig:
     max_read_kb: int = 256                        # the most of a file's text one call returns
     servers: list = field(default_factory=list)   # the saved connections (no secrets) of the server roots, as the window has them
     ssh_folder: str = ""                          # the window's SSH folder: its known_hosts holds the host keys the owner approved
+    act_unattended: bool = False                  # carry out its own plans without the owner's Run (only with allow_file_changes; guard rails
+                                                  # in assistant/planning.py: no overwrite, no permanent delete, inside the roots)
 
     def cleaned(self) -> "AssistantConfig":
         roots = []
@@ -48,7 +50,8 @@ class AssistantConfig:
         servers = [s for s in (self.servers or []) if isinstance(s, dict)][:MAX_ROOTS]
         return AssistantConfig(bool(self.enabled), roots[:MAX_ROOTS], bool(self.allow_file_changes), bool(self.log_calls),
                                max(MIN_READ_KB, min(MAX_READ_KB, int(self.max_read_kb or 256))), servers,
-                               self.ssh_folder if isinstance(self.ssh_folder, str) and self.ssh_folder and os.path.isabs(self.ssh_folder) else "")
+                               self.ssh_folder if isinstance(self.ssh_folder, str) and self.ssh_folder and os.path.isabs(self.ssh_folder) else "",
+                               bool(self.act_unattended and self.allow_file_changes))
 
 
 def load(path: str = "") -> AssistantConfig:
@@ -60,7 +63,7 @@ def load(path: str = "") -> AssistantConfig:
             return AssistantConfig()
         return AssistantConfig(bool(data.get("enabled")), list(data.get("roots") or []), bool(data.get("allow_file_changes")),
                                bool(data.get("log_calls", True)), int(data.get("max_read_kb", 256)), list(data.get("servers") or []),
-                               str(data.get("ssh_folder") or "")).cleaned()
+                               str(data.get("ssh_folder") or ""), bool(data.get("act_unattended"))).cleaned()
     except (OSError, ValueError, TypeError):
         return AssistantConfig()
 

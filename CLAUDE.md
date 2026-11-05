@@ -52,6 +52,13 @@ Each menu answers one question; a new command goes in the menu whose question it
 - **Help**: shortcuts, documentation, updates, About.
 The right-click menu takes the label and the key hint of a menu-bar command from its action (`MenusMixin.bar_command`); give it its own text only when the clicked thing makes a better label ("Properties of This Folder"). `tests/test_menu_rules.py` holds the rules (headings, at most 16 entries a menu, no one-entry submenu, separators only between groups, no grey sentences, every shortcut in a menu, right-click = menu bar). The Redactor family lint (`redactor_common` `lint_menu_bar`) is not used: Dossier keeps Ctrl+S (Quick Filter), Ctrl+Shift+A (Unmark All), Ctrl+Shift+E and Ctrl+Shift+O.
 
+## Decided (the owner, 2026-11-05, after the comparison review in `docs/comparison-review-2026-11-05.md`)
+- **The yardstick is usability, not Total Commander:** can an ordinary user do the job without learning a system. FreeCommander XE and Just Manager are the owner's daily references; TC is "technically strong, but the usability is low".
+- **No plugin system, ever** (neither Dossier's own nor TC's): plugins are "complicated and often outdated". A format or a source of files worth having is built in (`core/vfs.py`), with tests, in the normal menus. Spec A7 is dropped; V9 keeps only mapping a type to a program.
+- **Core before new areas:** no new feature area (protocols, checkers, viewers, kinds of tags) until the functionality review's Yes cards are built and a release has had a week of real use. Fixes and decided cards (including the assistant cards 33 and 34) go on as normal.
+- **No translation** (spec C10 not planned).
+- **The README leads with what is unique** (a plan before every change, servers and the tailnet as folders, folder notes, the assistant that only proposes), then "everything built in, no plugins". Done at the next release, not before.
+
 ## Lanes between sessions
 - A **local** session (the user's PC) owns everything that must be seen running: the GUI, the exe build, anything touching real folders, the Windows behaviour.
 - A **cloud** session may own the Qt-free core and its tests, specs and CI files.

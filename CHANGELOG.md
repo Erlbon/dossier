@@ -2,6 +2,16 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-05#11 -- The assistant can carry out its own plans when you allow it (review card 33); decisions of the comparison review
+
+- **Settings > Assistant Access > Let it carry out its own plans without asking** (card 33, off by default, only with file changes allowed): `commit_plan` then runs the plan in the assistant's server itself, so a job started from a phone works with the Dossier window closed. The guard rails are in the core (`assistant/planning.py`): the plan is made again at that moment and every path checked against the listed folders again; a file in the way is never overwritten (that step is left out and reported); a delete that cannot go to a recycle bin (a server, network drive, USB stick, or asked as permanent) still goes to the window for your Run; a read-only server stays read-only.
+- **Done by the assistant while you were away:** the next time the window runs it lists what the assistant did on its own (from `done-unattended.jsonl` beside the call log), once.
+- The window and the server make an assistant's plans with the same code now (`assistant/planning.build_plans`).
+- Spec X3 and `docs/assistant.md` say so. Tested with the owner's job: a folder copied to an SFTP folder with no window, then checked with a manifest (every file there, the same checksum).
+- **Recorded from the comparison review** (`docs/comparison-review-2026-11-05.md`): no plugin system ever (spec A7 dropped, V9 keeps mapping a type to a program), no translation (C10 not planned), core before new areas, and the README to lead with what is unique at the next release. CLAUDE.md "Decided (2026-11-05)".
+- The F5 / F6 code moved out of the main window into `gui/transfer.py` (the window stays under its size limit).
+- New test `tests/test_assistant_unattended.py`.
+
 ## 2026-11-05#10 -- F4 on files on servers and inside zips (review card 25)
 
 - **F4 on a file on a server, or inside a zip, edits a private copy and writes it back on every save** (card 25). The copy is in Dossier's temporary folder; a save uploads it to the server, or puts it into the zip with one rewrite (the old zip to the recycle bin, as for every zip change). The editor program of Settings > Opening Files works too: its saves are noticed and written back.

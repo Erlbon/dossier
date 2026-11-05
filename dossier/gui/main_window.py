@@ -16,7 +16,7 @@ from PyQt6.QtGui import QAction, QActionGroup, QKeySequence
 from PyQt6.QtWidgets import (QApplication, QHBoxLayout, QLabel, QMainWindow, QMenu, QPushButton, QSplitter,
                              QToolButton, QVBoxLayout, QWidget)
 
-from ..core.ops import (Plan, Resolution, check_name, conflict_rows, plan_copy, plan_delete, plan_move, plan_rename)
+from ..core.ops import (Plan, check_name, conflict_rows, plan_copy, plan_delete, plan_move, plan_rename)
 from ..core.home import ADD_NETWORK, HomeFileSystem, HomeProvider, RouterFileSystem, removable_from_home
 from ..core.commandline import Placeholders, expand, run_command
 from ..core import patterns, search, stage, viewmodes
@@ -55,6 +55,7 @@ from .tools_bar import ToolsBarMixin
 from .view_modes import ViewModesMixin
 from .drop_handler import DragDropMixin
 from .remote_edit import RemoteEditMixin
+from .transfer import TransferMixin
 from .zip_edit import ZipEditMixin, zip_parts
 from .assistant import AssistantMixin
 from .open_files import OpenFilesMixin
@@ -94,13 +95,12 @@ from .viewer import TextViewerWindow
 BIN = "recycle bin" if IS_WINDOWS else "trash"
 EXTRACT_CONFIRM = 200 * 1024 * 1024     # a file unpacked from an archive: ask first above this size
 STAT_LIMIT = 200      # at most this many sizes are read from the disk for one status line
-SUMMARY_ITEMS = 12    # the confirmation lists this many items, then says how many more
 SIZE_LIMIT = 1000    # the status line sizes at most this many marked items
 CLOSE_WAIT = 5.0     # seconds a closing window waits for a cancelled copy to stop
 EXTERNAL = "external"  # what F4's reading step hands over when the chosen editor program is to open the file
 
 
-class MainWindow(RemoteEditMixin, FrostMixin, GlassViewMixin, KeysMixin, AutoRefreshMixin, MetadataEditMixin, HealthMixin, QuarantineMixin, NewFromContentMixin, TabSetsMixin, CommandCompletionMixin, DatesLinksMixin, ViewModesMixin, ToolsBarMixin, ContextMenuMixin, DragDropMixin, LookMixin, ZipEditMixin, ArchiveCommandsMixin, CopySettingsMixin, AssistantMixin, OpenFilesMixin, MenusMixin, WheelMixin, ToolsBarPlaceMixin, TailnetMixin, CompareFoldersMixin, ServersMixin, DuplicatesMixin, FolderLayoutsMixin, QueueResumeMixin, ColumnsMixin, PropertiesMixin, SharingMixin, MountMixin, ChecksumMixin, MarksAndNotesMixin, SearchCommandMixin, BatchRenameMixin, OperationQueueMixin, StallLogMixin, GoingPlacesMixin, FolderSizesMixin, UnpackMixin, QMainWindow):
+class MainWindow(TransferMixin, RemoteEditMixin, FrostMixin, GlassViewMixin, KeysMixin, AutoRefreshMixin, MetadataEditMixin, HealthMixin, QuarantineMixin, NewFromContentMixin, TabSetsMixin, CommandCompletionMixin, DatesLinksMixin, ViewModesMixin, ToolsBarMixin, ContextMenuMixin, DragDropMixin, LookMixin, ZipEditMixin, ArchiveCommandsMixin, CopySettingsMixin, AssistantMixin, OpenFilesMixin, MenusMixin, WheelMixin, ToolsBarPlaceMixin, TailnetMixin, CompareFoldersMixin, ServersMixin, DuplicatesMixin, FolderLayoutsMixin, QueueResumeMixin, ColumnsMixin, PropertiesMixin, SharingMixin, MountMixin, ChecksumMixin, MarksAndNotesMixin, SearchCommandMixin, BatchRenameMixin, OperationQueueMixin, StallLogMixin, GoingPlacesMixin, FolderSizesMixin, UnpackMixin, QMainWindow):
     def __init__(self, fs: Optional[FileSystem] = None, *, settings_path: Optional[str] = None, start=(None, None),
                  dialogs=None, trasher=None, terminal_launcher=None, which=None) -> None:
         super().__init__()
@@ -943,40 +943,6 @@ class MainWindow(RemoteEditMixin, FrostMixin, GlassViewMixin, KeysMixin, AutoRef
         self._size_thread.start()
 
     # commands -------------------------------------------------------------------------------
-    def _summary(self, plan: Plan, dest: str = "", sources=None, origin: str = "") -> str:
-        """The text of the confirmation: how much, from where to where, and the items themselves (those of the
-        panel the command was started from), folders with what is in them."""
-        n_files = len([op for op in plan.ops if op.kind.value in ("copy", "move") and not op.is_dir])
-        size = sum(op.size for op in plan.ops if op.kind.value in ("copy", "move") and not op.is_dir)
-        top = list(sources) if sources else []
-        count = len(top) if top else len([op for op in plan.ops if op.kind.value != "mkdir"])
-        text = f"{plan.title} {count} item{'s' if count != 1 else ''}"
-        if size:
-            text += f" ({human_size(size)}" + (f", {n_files} files" if n_files != count else "") + ")"
-        if origin:
-            text += f"{chr(10)}from {origin}"
-        if dest:
-            text += f"{chr(10)}to {dest}"
-        if top:
-            sep = self.fs.sep
-            lines = []
-            for src in top[:SUMMARY_ITEMS]:
-                below = [op for op in plan.ops if op.src == src or op.src.startswith(src.rstrip(sep) + sep)]
-                files = [op for op in below if not op.is_dir and op.kind.value in ("copy", "move")]
-                name = self.fs.basename(src)
-                if any(op.src != src for op in below):                      # a folder with files in it
-                    lines.append(f"  {name}{sep}   {len(files)} files, {human_size(sum(op.size for op in files))}")
-                elif len(files) == 1 and files[0].src == src:
-                    lines.append(f"  {name}   {human_size(files[0].size)}")
-                else:
-                    lines.append(f"  {name}")
-            if len(top) > SUMMARY_ITEMS:
-                lines.append(f"  ... and {len(top) - SUMMARY_ITEMS} more")
-            text += chr(10) * 2 + chr(10).join(lines)
-        if plan.warnings:
-            text += chr(10) * 2 + chr(10).join(plan.warnings[:8])
-        return text
-
     def _settle(self, plan: Plan) -> Optional[Plan]:
         """Show blocking problems, ask about conflicts. Returns a plan ready to run, or None."""
         if plan.blocking:
@@ -998,99 +964,6 @@ class MainWindow(RemoteEditMixin, FrostMixin, GlassViewMixin, KeysMixin, AutoRef
             if not plan.ops:
                 return None
         return plan
-
-    def _transfer(self, move: bool) -> None:
-        if self._home_blocked("Move" if move else "Copy"):
-            return
-        sources = self.active.targets()
-        if not sources:
-            return                                   # a busy window queues the operation
-        if self.other.loading:                       # its path is still the old folder: the files would land there
-            self.dialogs.info("Copy" if not move else "Move", f"The other panel is still opening "
-                              f"{self.other.pending_path}. Wait for it, or press Esc in that panel, and try again.")
-            return
-        dest, origin = self.other.path, self.active.real_folder()
-        if zip_parts(dest) is not None:                  # into an open zip: one rewrite of the archive, not a copy per file
-            self._into_zip(sources, dest, move)
-            return
-
-        def build(watch):
-            return (plan_move if move else plan_copy)(self.fs, sources, dest, watch=watch)
-
-        self._plan_in_background(f"Preparing the {'move' if move else 'copy'}", build,
-                                 lambda plan: self._confirm_and_run(plan, sources, dest, origin, move))
-
-    def _confirm_and_run(self, plan: Plan, sources: list, dest: str, origin: str, move: bool = False) -> None:
-        """The plan is ready: the F5 / F6 box (where to, verify, options), a new plan when the answer changed where or what, the
-        conflicts, then the run."""
-        answer = self.dialogs.ask_transfer(plan.title, self._summary(plan, dest, sources, origin), plan.title, dest,
-                                           self.act_verify.isChecked(), move, local=not has_scheme(dest))
-        if answer is None:
-            return
-        self.act_verify.setChecked(answer.verify)    # the choice is remembered for the next time (and shown in Settings)
-        if answer.dest == dest and not (answer.only or answer.flatten):
-            self._settle_and_run(plan, answer, sources, dest, origin, move)
-            return
-        typed = answer.dest
-
-        def build(watch):
-            folder, new_name, make, problem = self._transfer_target(typed, dest, sources)
-            if problem:
-                return Plan("Move" if move else "Copy", blocking=(problem,)), folder
-            if zip_parts(folder) is not None:
-                return Plan("Move" if move else "Copy", blocking=("to copy into an archive, open it in the other panel first",)), folder
-            if move:
-                return plan_move(self.fs, sources, folder, watch=watch, make_dest=make, new_name=new_name), folder
-            return plan_copy(self.fs, sources, folder, watch=watch, make_dest=make, new_name=new_name, only=answer.only,
-                             flatten=answer.flatten), folder
-
-        self._plan_in_background(f"Preparing the {'move' if move else 'copy'}", build,
-                                 lambda found: self._settle_and_run(found[0], answer, sources, found[1], origin, move))
-
-    def _transfer_target(self, typed: str, default_dest: str, sources: list) -> tuple:
-        """What a typed destination means: ``(folder, new name for the one item, make the folder, problem)``. A path that is not absolute is
-        below the other panel's folder; an existing folder (or a path ending in a separator) is the folder to copy into, made when
-        missing; for one item, any other path is its new name in the folder above. Looks at the disk: on a thread."""
-        fs = self.fs
-        text = typed.strip()
-        if not text:
-            return default_dest, "", False, "say where to"
-        into = text.endswith(("/", "\\"))
-        if not has_scheme(text) and not os.path.isabs(text) and not (len(text) > 1 and text[1] == ":"):
-            text = fs.join(default_dest, text)                   # backup -> backup inside the other panel's folder
-        if into:
-            text = text.rstrip("/\\") or text
-            return text, "", stat_or_none(fs, text) is None, ""
-        found = stat_or_none(fs, text)
-        if found is not None and found.is_dir:
-            return text, "", False, ""
-        if len(sources) != 1:
-            if found is not None:
-                return text, "", False, f"{text} is a file: several items go into a folder"
-            return text, "", True, ""                            # several items: the folder is made
-        above = fs.dirname(text)
-        parent = stat_or_none(fs, above)
-        if parent is not None and not parent.is_dir:
-            return above, "", False, f"{above} is a file"
-        return above, fs.basename(text), parent is None, ""
-
-    def _settle_and_run(self, plan: Plan, answer, sources: list, folder: str, origin: str, move: bool) -> None:
-        if not move and path_key(folder) == path_key(origin):      # a copy into its own folder is a duplicate beside it
-            same = [i for i, op in enumerate(plan.ops) if op.conflict and path_key(op.src) == path_key(op.dst)]
-            if same:
-                plan = plan.resolve(Resolution.KEEP_BOTH, self.fs, only=same)
-        if answer.newer:
-            plan = plan.resolve(Resolution.OVERWRITE_IF_NEWER, self.fs)       # an older file is replaced, a newer one stays
-        plan = self._settle(plan)
-        if plan is None:
-            return
-        self._run(plan, unmark=sources, remember=self.intent_for(plan, sources, folder))
-
-    def copy(self) -> None:
-        self._transfer(move=False)
-
-    def move(self) -> None:
-        self._transfer(move=True)
 
     # the system clipboard: Ctrl+C / Ctrl+X / Ctrl+V, also with Explorer and other file managers ----------
     def _to_clipboard(self, cut: bool) -> None:

@@ -40,6 +40,12 @@ def log_file() -> str:
     return os.path.join(data_dir(), "calls.log")
 
 
+def away_file() -> str:
+    """What the assistant carried out on its own (Settings > Assistant Access > without asking): one JSON line per change, which the
+    window shows the owner as "done while you were away"."""
+    return os.path.join(data_dir(), "done-unattended.jsonl")
+
+
 def reports_dir() -> str:
     """Manifests and comparison reports the assistant's tools write. They go here, never into the owner's folders, so writing one is not
     a change to files and needs no permission."""

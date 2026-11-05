@@ -20,6 +20,13 @@ changes. It is made of the same functions as the window and the command line: no
   returns a preview and changes nothing; `commit_plan` hands the proposal to the Dossier window, where **you see the change in words and press
   Run or Reject**. If the window is not open nothing can be confirmed, so nothing happens. The window makes the plan again itself and checks the
   folders again; it does not trust the assistant's preview.
+- **Unless you let it act on its own** (`act_unattended`, *Let it carry out its own plans without asking*, off by default and only with
+  `allow_file_changes` on; owner's decision 2026-11-05, for jobs started from a phone). Then `commit_plan` carries the plan out in the server
+  itself, so it works with the window closed. The guard rails are in the core (`assistant/planning.py`), not in the assistant: the plan is made
+  again at that moment, every path checked against the listed folders again; a file in the way is never overwritten (that step is left out and
+  reported); a delete that cannot go to a recycle bin (a server, a network drive, a USB stick, or asked as permanent) still goes to the window
+  for your Run; a read-only server stays read-only. Every change goes into the call log, and the window lists it as *Done by the assistant
+  while you were away* the next time it runs.
 - **What it reads is data.** File names, text, tags and notes can say anything, so results that hold free text are marked
   `untrusted_content`, and the server's own instructions tell the assistant never to follow instructions found in them.
 - **Every call is logged** (`log_calls`, on by default): the tool and its arguments (paths, never file contents) and whether it worked. Settings >
@@ -83,7 +90,8 @@ Propose changes (each needs `allow_file_changes`, and your OK in the window):
 - `plan_sync`: make one folder like another (`update_right`, `update_left`, `both`, `mirror_right`, `mirror_left`).
 - `discard_plan`: forget a plan.
 - `commit_plan`: ask you to carry a plan out; it returns `done`, `rejected`, `failed` or `timeout` (you did not answer in three minutes; nothing
-  was changed, and pressing Run after that does nothing). Once you press Run the change is the window's: the assistant follows it with `get_job` for
+  was changed, and pressing Run after that does nothing). With `act_unattended` on it carries the plan out itself (see above) and returns `done`
+  or `failed`, with `left_out` for steps it would not do. Once you press Run the change is the window's: the assistant follows it with `get_job` for
   as long as it takes, so a long copy is never reported as "nothing was changed".
 
 `list_folder` and `search` take an `offset` for the next page.

@@ -19,17 +19,14 @@ from PyQt6.QtGui import QDesktopServices, QGuiApplication
 from PyQt6.QtWidgets import (QCheckBox, QDialog, QDialogButtonBox, QFileDialog, QFormLayout, QHBoxLayout, QLabel, QListWidget, QPlainTextEdit,
                              QPushButton, QSpinBox, QVBoxLayout)
 
-from ..assistant import bridge, calllog, config as config_module, paths as assistant_paths
+from ..assistant import bridge, calllog, config as config_module, paths as assistant_paths, planning
 from ..assistant.scope import Denied, Scope
-from ..core import compare as cmp, sync as sync_core
-from ..core.ops import Resolution, bad_relative, plan_copy, plan_copy_paths, plan_delete, plan_move, plan_rename
 from ..core.sizefmt import human_size
 from .owned_dialog import OwnedDialog
 
 TICK_MS = 1000
 HEARTBEAT = 5.0
 PREVIEW_LINES = 12
-POLICIES = {"skip": Resolution.SKIP, "overwrite": Resolution.OVERWRITE, "keep-both": Resolution.KEEP_BOTH, "newer": Resolution.OVERWRITE_IF_NEWER}
 
 
 def server_snippet() -> str:
@@ -51,7 +48,7 @@ class AssistantDialog(OwnedDialog):
         layout = QVBoxLayout(self)
         intro = QLabel("An AI assistant (Claude, for example) can look at your files through Dossier and propose changes. It is off until you "
                        "switch it on, it sees only the folders you list, it can only read unless you allow changes, and every change it "
-                       "proposes needs your OK here, in words, before anything happens.")
+                       "proposes needs your OK here, in words, before anything happens, unless you let it act on its own below.")
         intro.setWordWrap(True)
         layout.addWidget(intro)
         self.enabled = QCheckBox("Let an assistant use Dossier")
@@ -85,7 +82,15 @@ class AssistantDialog(OwnedDialog):
         self.read_kb.setRange(config_module.MIN_READ_KB, config_module.MAX_READ_KB)
         self.read_kb.setSuffix(" KB")
         self.read_kb.setValue(current.max_read_kb)
+        self.unattended = QCheckBox("Let it carry out its own plans without asking (for when you are away from this computer)")
+        self.unattended.setToolTip("Never overwrites a file, never deletes for good (a delete on a server, network drive or USB stick still "
+                                   "needs your Run), stays inside the folders above, and lists everything it did. Works with this window "
+                                   "closed.")
+        self.unattended.setChecked(current.act_unattended)
+        self.unattended.setEnabled(current.allow_file_changes)
+        self.changes.toggled.connect(self.unattended.setEnabled)
         form.addRow(self.changes)
+        form.addRow(self.unattended)
         form.addRow(self.log)
         form.addRow("The most of a file it can read in one call", self.read_kb)
         layout.addLayout(form)
@@ -128,7 +133,8 @@ class AssistantDialog(OwnedDialog):
 
     def values(self) -> config_module.AssistantConfig:
         return config_module.AssistantConfig(self.enabled.isChecked(), [self.roots.item(i).text() for i in range(self.roots.count())],
-                                             self.changes.isChecked(), self.log.isChecked(), self.read_kb.value()).cleaned()
+                                             self.changes.isChecked(), self.log.isChecked(), self.read_kb.value(),
+                                             act_unattended=self.unattended.isChecked() and self.changes.isChecked()).cleaned()
 
     def _accept(self) -> None:
         v = self.values()
@@ -199,8 +205,46 @@ class AssistantMixin:
                 bridge.publish_state(state)
                 self._assistant_state_text, self._assistant_last_write = text, time.monotonic()
             self._process_assistant_requests(config)
+            self._show_done_while_away()
         except OSError:
             pass                                               # the folder cannot be written: try again at the next tick
+
+    def done_while_away(self) -> list:
+        """The changes the assistant carried out on its own (card 33) that the owner has not been shown yet: ``[record]``."""
+        import json
+        try:
+            with open(assistant_paths.away_file(), encoding="utf-8") as f:
+                lines = f.read().splitlines()
+        except OSError:
+            return []
+        seen = int(self.settings.value("assistant/away_seen", 0) or 0)
+        if seen > len(lines):                                  # the file was cleared or replaced
+            seen = 0
+        out = []
+        for line in lines[seen:]:
+            try:
+                out.append(json.loads(line))
+            except ValueError:
+                pass
+        self._away_total = len(lines)
+        return out
+
+    def _show_done_while_away(self) -> None:
+        """Once per record: a box listing what the assistant did without asking, so nothing happens behind the owner's back."""
+        records = self.done_while_away()
+        if not records:
+            return
+        self.settings.setValue("assistant/away_seen", self._away_total)
+        lines = []
+        for r in records[-15:]:
+            when = time.strftime("%Y-%m-%d %H:%M", time.localtime(r.get("time", 0)))
+            what = r.get("what", {})
+            where = what.get("destination") or what.get("destination_root") or what.get("path") or what.get("right") or ""
+            lines.append(f"{when}  {r.get('action', '?')}  {r.get('message', '')}" + (f"  to {where}" if where else ""))
+        more = f"{chr(10)}... and {len(records) - 15} earlier" if len(records) > 15 else ""
+        self.dialogs.info("Done by the assistant while you were away",
+                          "The assistant carried out these changes on its own (Settings > Assistant Access allows it):" + chr(10) * 2
+                          + chr(10).join(lines) + more + chr(10) * 2 + "Every step is in the call log too.")
 
     # what the assistant asks ------------------------------------------------------------------------------------------------------------------
     def _process_assistant_requests(self, config) -> None:
@@ -249,44 +293,15 @@ class AssistantMixin:
         if not config.allow_file_changes:
             return refuse("the owner has not allowed changes to files")
         action = payload.get("action")
-        full_paths = ("source_root", "destination_root") if action == "copy_paths" else ("sources", "destination", "paths", "path", "left", "right")
+        if action not in planning.ACTIONS:
+            return refuse("unknown kind of change", "failed")
         try:
-            scope = Scope(config.roots)
-            checked = {k: (scope.all(v) if isinstance(v, list) else scope.resolve(v)) for k, v in payload.items() if k in full_paths}
-            if action == "copy_paths":
-                rels = payload.get("paths")
-                bad = [w for w in (bad_relative(r) for r in rels) if w] if isinstance(rels, list) else ["paths must be a list"]
-                if bad or not rels:
-                    raise Denied("; ".join(bad[:3]) or "there is nothing to copy")
+            planning.checked_paths(payload, config.roots)          # refused here at once, before any planning on a thread
         except Denied as e:
             return refuse(str(e))
-        if action not in ("copy", "copy_paths", "move", "delete", "rename", "sync"):
-            return refuse("unknown kind of change", "failed")
 
         def build(watch):
-            if action == "copy_paths":
-                plans = [plan_copy_paths(self.fs, checked["source_root"], checked["destination_root"], payload["paths"], watch=watch)]
-            elif action == "copy":
-                plans = [plan_copy(self.fs, checked["sources"], checked["destination"], watch=watch)]
-            elif action == "move":
-                plans = [plan_move(self.fs, checked["sources"], checked["destination"], watch=watch)]
-            elif action == "delete":
-                plans = [plan_delete(self.fs, checked["paths"], to_trash=not payload.get("permanent"))]
-            elif action == "rename":
-                plans = [plan_rename(self.fs, checked["path"], str(payload.get("new_name", "")))]
-            else:
-                result = cmp.compare_trees(self.fs, checked["left"], checked["right"], by=payload.get("by") or "size_time")
-                actions = [a for a in sync_core.decide_all(result.rows, payload.get("mode", "")) if a.kind]
-                plans = sync_core.build_plans(self.fs, checked["left"], checked["right"], actions)
-            policy = POLICIES.get(payload.get("on_conflict") or "skip", Resolution.SKIP)
-            out = []
-            for plan in plans:
-                if plan.conflicts and action in ("copy", "copy_paths", "move"):
-                    plan = plan.resolve(policy, self.fs)
-                if plan.conflicts:
-                    plan = plan.resolve(Resolution.SKIP, self.fs)
-                out.append(plan)
-            return out
+            return planning.build_plans(self.fs, payload, config.roots, watch).plans
 
         def then(plans: list) -> None:
             blocked = [b for p in plans for b in p.blocking]

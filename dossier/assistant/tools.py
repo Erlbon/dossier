@@ -21,13 +21,13 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Callable, Optional
 
-from ..core import compare as cmp, duplicates as dup, manifest as mf, notes as notes_core, sync as sync_core
+from ..core import compare as cmp, duplicates as dup, manifest as mf, notes as notes_core, ops as ops_core, sync as sync_core
 from ..core.ops import Resolution, check_name, plan_copy, plan_delete, plan_move, plan_rename
 from ..core.progress import Cancelled, CancelToken
 from ..core.search import BadCriteria, Criteria, search
 from ..core.textview import detect_encoding
 from ..core.version import APP_NAME, APP_VERSION
-from . import bridge, paths as assistant_paths
+from . import bridge, paths as assistant_paths, planning
 from .config import AssistantConfig
 from .jobs import CANCELLED, DONE, RUNNING, WAIT_DEFAULT, WAIT_MAX, Jobs
 from .remote import RemoteError, Remotes, server_paths
@@ -765,6 +765,13 @@ def commit_plan(ctx: Context, args: dict) -> dict:
     request = ctx.plans.get(pid)
     if request is None:
         raise ToolError("there is no such plan (it may have been committed or discarded already): make a new one")
+    if ctx.config.act_unattended:                              # the owner allowed it to act on its own (card 33): no Run
+        try:
+            return _commit_unattended(ctx, pid, request, args)
+        except planning.Refused as e:
+            if not bridge.read_state()["window_running"]:
+                raise ToolError(f"{e}; the Dossier window is not running, so ask the owner to open it")
+            # this one still needs the owner's Run: asked in the window below, as without the setting
     if not bridge.read_state()["window_running"]:
         raise ToolError("the Dossier window is not running, so the owner cannot confirm anything: ask them to open it")
     rid = bridge.post_request("plan", request)
@@ -793,6 +800,60 @@ def commit_plan(ctx: Context, args: dict) -> dict:
     wait = int(min(_int(args.get("wait_seconds"), WAIT_DEFAULT, 0, WAIT_MAX, "wait_seconds"), int(ctx.confirm_seconds) + 2))
     out = _as_job(ctx, "commit_plan", {**args, "wait_seconds": wait}, work)
     return {k: v for k, v in out.items() if k != "job_id"} if out.get("status") in ("done", "rejected", "failed", "timeout") else out
+
+
+def _commit_unattended(ctx: Context, pid: str, request: dict, args: dict) -> dict:
+    """Carry out a plan here, without the window (card 33). The plan is made again now through the same core, with the guard rails of
+    ``planning.build_plans(unattended=True)``: inside the listed folders, no overwrite, no delete for good. Raises ``planning.Refused``
+    before anything is done when the plan needs the owner's Run."""
+    try:
+        prepared = planning.build_plans(ctx.fs, request, ctx.config.roots, unattended=True)
+    except Denied as e:
+        raise ToolError(str(e))
+    blocked = [b for p in prepared.plans for b in p.blocking]
+    if blocked:
+        raise ToolError("; ".join(blocked[:3]))
+    ctx.plans.pop(pid, None)
+
+    def work(job) -> dict:
+        done, failed, total = 0, [], sum(len(p.ops) for p in prepared.plans)
+        for plan in prepared.plans:
+            if not plan.ops:
+                continue
+            job.report(stage="carrying out the plan (the owner allowed it to run without asking)", steps=total, done=done)
+            result = ops_core.execute(plan, ctx.fs, cancel=job.token, progress=lambda d, t: job.report(stage="copying", bytes_done=d, of=t),
+                                      options=ops_core.ExecOptions())
+            done += len(result.done)
+            failed += [f"{r.op.dst or r.op.src}: {r.error}" for r in result.failed]
+            if result.cancelled:
+                break
+        out = {"status": "failed" if failed else "done", "done": done, "failed": len(failed),
+               "message": f"{done} step{'s' if done != 1 else ''} done without asking" + (f", {len(failed)} failed" if failed else "")
+                          + (f"; {len(prepared.left_out)} left out (a file was in the way)" if prepared.left_out else "")}
+        if failed:
+            out["failures"] = failed[:20]
+        if prepared.left_out:
+            out["left_out"] = [f"{path}: {why}" for path, why in prepared.left_out[:20]]
+        _note_unattended(request, out)
+        return out
+
+    out = _as_job(ctx, "commit_plan", args, work)
+    return {k: v for k, v in out.items() if k != "job_id"} if out.get("status") in ("done", "failed") else out
+
+
+def _note_unattended(request: dict, outcome: dict) -> None:
+    """One line for the window's "done while you were away" list."""
+    import json
+    record = {"time": time.time(), "action": request.get("action"), "reason": str(request.get("reason") or "")[:300],
+              "what": {k: request[k] for k in ("sources", "destination", "source_root", "destination_root", "paths", "path", "new_name",
+                                               "left", "right", "mode") if k in request},
+              **{k: outcome[k] for k in ("status", "done", "failed", "message") if k in outcome}}
+    try:
+        os.makedirs(os.path.dirname(assistant_paths.away_file()), exist_ok=True)
+        with open(assistant_paths.away_file(), "a", encoding="utf-8", newline=chr(10)) as f:
+            f.write(json.dumps(record, ensure_ascii=False) + chr(10))
+    except OSError:
+        pass                                                   # the call log has it too
 
 
 # the call --------------------------------------------------------------------------------------------------------------------------------------

@@ -86,7 +86,7 @@ Status (2026-10-19): ZIP opens as a read-only folder (`core/zipfs.py`, paths `zi
 Status (2026-10-19, A2): `core/archives.py` has three readers behind one interface: zip (standard library), 7z through `py7zr` (optional extra `archives`), and everything else through an installed 7-Zip (`7z`, `7zz`, `7za`): RAR, CAB, ISO, TAR, GZ, BZ2, XZ, ARJ, LZH, CPIO and 7z as a fallback. Without a reader the file opens in the system's program and the status line says what would open it as a folder. Tested with real 7z and tar files, wildcard and non-ASCII names, encrypted members and headers (no password prompt can hang it), damaged archives; a real RAR file was opened by the owner on 2026-10-19 and worked (through 7-Zip); UnRAR on its own is not built. A tar.gz opens as the tar inside it, one more Enter for the contents.
 | A5 | SQLite database as a virtual folder: tables and views are items, rows open in the table viewer | New |
 | A6 | Remote sources (section 10) mount into the same tree | New |
-| A7 | Plug-in interface for new virtual file systems, documented and versioned | TNT |
+| A7 | ~~Plug-in interface for new virtual file systems~~ **Dropped (owner, 2026-11-05): no plugin system, ever.** A source worth having is built in behind `core/vfs.py` | TNT |
 
 ## 6. Viewers and editors
 
@@ -103,7 +103,7 @@ F3 opens a viewer in a window of its own or in a preview pane. The viewer is cho
 | V6 | SQLite | Read-only by default: tables as folders, schema view, SQL console. Writing needs an explicit switch and makes a backup first | New |
 | V7 | Image | Preview pane only: fit, zoom, rotate, EXIF panel, next/previous in folder; full viewing opens the system's image program | New |
 | V8 | Media | Cover, tags and duration shown in the info pane; playback is left to the system player | New |
-| V9 | Viewer registry | Viewers and editors are plug-ins keyed by type; the user can map any type to an external program | TNT |
+| V9 | Viewer registry | The user can map a type to an external program (the F4 editor program and Open With are built, 2026-11-05). No plug-ins (dropped 2026-11-05, see A7) | TNT |
 
 ## 7. Search and patterns
 
@@ -170,7 +170,7 @@ Credentials go to the system keyring, never to a config file. Connections are bo
 | C7 | System-wide hotkeys (bring Dossier forward, open a new window here) | TNT |
 | C8 | Profiles: separate settings sets that can be switched or exported; plain files, no registry | TNT |
 | C9 | Themes: light, dark, sepia and a high-contrast set, plus following the system; Markdown and viewers use the same tokens | New |
-| C10 | Interface languages through translation files; English and Norwegian first | New |
+| C10 | ~~Interface languages through translation files~~ **Not planned (owner, 2026-11-05):** the audience works in English, and every text in two versions slows every change | New |
 | C11 | Confirmation switches per operation type | TNT |
 
 ## 12. MCP server
@@ -181,7 +181,7 @@ A local server lets an AI assistant browse and work with the same state the user
 | --- | --- |
 | X1 | Read tools: list folder, stat, read text (size-capped), read metadata, read notes, search, list windows, get selection |
 | X2 | Selection tools: set, add, clear the shared selection, so the user and the assistant can hand work to each other |
-| X3 | Write tools only through plans: `plan_*` returns a preview, `commit_plan` runs it after the user confirms in the GUI |
+| X3 | Write tools only through plans: `plan_*` returns a preview, `commit_plan` runs it after the user confirms in the GUI. **Changed 2026-11-05 (owner, card 33):** an opt-in setting lets `commit_plan` run the plan itself, without the GUI, inside the guard rails of `assistant/planning.py` (no overwrite, no permanent delete, inside the listed folders, listed for the owner afterwards) |
 | X4 | Read-only by default; each write class (files, metadata, notes) is a separate switch |
 | X5 | Every call is logged, and the folder scope is limited to the roots the user lists |
 | X6 | Same core functions as the GUI; no behaviour exists only in the server |
