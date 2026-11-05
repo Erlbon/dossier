@@ -2,6 +2,13 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-05#05 -- A Windows installer
+
+- **`dossier-setup.exe`** (Inno Setup 6, `installer/dossier.iss`) installs Dossier for the current user in `%LOCALAPPDATA%\Programs\Dossier`, with no administrator rights, a Start menu entry, an optional desktop shortcut, optional `dossier` on PATH for the command line, and an uninstaller. It installs per user only, because Help > Check for Updates swaps `dossier.exe` in place and could not do that under Program Files. Settings stay in AppData, so uninstalling keeps them.
+- **Silent install:** `dossier-setup.exe /VERYSILENT /SUPPRESSMSGBOXES` (add `/TASKS="desktopicon,addtopath"` for the extras); silent uninstall with `unins000.exe /VERYSILENT`.
+- **Releases** publish the installer beside `dossier.exe`. The updater still downloads only `dossier.exe`, so an installed copy and a bare copy update the same way. Local build: `build_exe.bat`, then `build_installer.bat`.
+- New test `tests/test_installer.py`: per user, the AppId kept, the installer never named like the update asset, both files published.
+
 ## 2026-11-05#04 -- The assistant: copy what is missing to the same places, SFTP and SCP folders as allowed folders, pages, and a tool list that follows the switch
 
 - **`plan_copy_paths`** (`core/ops.plan_copy_paths`): copies files named by their paths below one folder to the same places below another, making only the folders that are missing, for what a comparison found on one side only, scattered over many folders. The paths come from the call or from a report (`from_report`, with `statuses`). The window checks every path again (no `..`, no drive, nothing absolute) and asks first, as for every change.

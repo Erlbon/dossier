@@ -38,8 +38,8 @@ jobs:
           cache: pip
 
       # The .spec builds with upx=True; without UPX on PATH PyInstaller silently skips compression and the exe comes out larger.
-      - name: Install UPX
-        run: choco install upx -y --no-progress
+      - name: Install UPX and Inno Setup
+        run: choco install upx innosetup -y --no-progress
 
       - name: Install dependencies
         run: python -m pip install -r requirements.txt "pyinstaller>=6.6"
@@ -90,11 +90,22 @@ jobs:
           print(check.stdout, check.stderr)
           assert check.returncode == 0, "the exe is missing a package"
 
+      # The installer (per user, no administrator rights) beside the bare exe. Help > Check for Updates downloads dossier.exe, never
+      # the installer, and swaps it in whichever folder the program runs from.
+      - name: Build the installer
+        shell: python
+        run: |
+          import subprocess, sys
+          sys.path.insert(0, ".")
+          from dossier.core.version import APP_VERSION, RELEASE
+          iscc = r"C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          subprocess.run([iscc, "/Q", f"/DAppRelease={RELEASE}", f"/DAppBuild={APP_VERSION}", r"installer\dossier.iss"], check=True)
+
       - name: Publish GitHub Release
         shell: bash
         run: |
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" dist/dossier.exe --clobber
+            gh release upload "$TAG" dist/dossier.exe dist/dossier-setup.exe --clobber
           else
-            gh release create "$TAG" dist/dossier.exe --title "$RELEASE_TITLE" --notes-file "$RELEASE_NOTES"
+            gh release create "$TAG" dist/dossier.exe dist/dossier-setup.exe --title "$RELEASE_TITLE" --notes-file "$RELEASE_NOTES"
           fi
