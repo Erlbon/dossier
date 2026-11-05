@@ -2,6 +2,10 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-05#20 -- Release 0.7
+
+- `RELEASE = "0.7"`, notes in `docs/releases/v0.7.md`: finish the job (skip what is there and the same), reconnect for SFTP, SCP and FTP, Export Log, Folder Tree, the Share column, and the code review fixes. The first update of an installed copy through its installer.
+
 ## 2026-11-05#19 -- Code review fixes before the release
 
 - Reconnect (SFTP, SCP, FTP): a saved login the server refuses is tried once, not once per file, so a server that bans after a few
