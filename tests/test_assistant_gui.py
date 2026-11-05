@@ -178,6 +178,41 @@ def test_delete_move_rename_and_sync_each_ask_first_and_then_do_it(world):
     assert len(d.confirms) == 4
 
 
+def test_copying_paths_to_the_same_places_asks_first_makes_the_folders_and_refuses_paths_that_climb_out(world):
+    win, d, left, right, tmp = world
+    enable(win, tmp, changes=True)
+    put(left / "Vrakkart" / "NO" / "1910.doc", b"wreck")
+    put(left / "Vrakkart" / "left-alone.jpg", b"not asked for")
+    rid, _ = ask(win, "plan", {"action": "copy_paths", "source_root": str(left), "destination_root": str(right), "paths": ["Vrakkart/NO/1910.doc"],
+                               "expected": {"steps": 9, "bytes": 0}}, wait=False)
+    assert settle(win, rid)["status"] == "done" and (right / "Vrakkart" / "NO" / "1910.doc").read_bytes() == b"wreck"
+    assert not (right / "Vrakkart" / "left-alone.jpg").exists() and "was shown 9 steps" in d.confirms[-1][1]
+    rid, answer = ask(win, "plan", {"action": "copy_paths", "source_root": str(left), "destination_root": str(right), "paths": ["../escape.txt"]})
+    assert answer["status"] == "rejected" and "not a path below" in answer["message"]
+
+
+def test_a_request_the_server_gave_up_on_is_not_run_when_the_owner_presses_run_late(world):
+    win, d, left, right, tmp = world
+    enable(win, tmp, changes=True)
+    src = put(left / "late.txt")
+    rid = bridge.post_request("plan", {"action": "copy", "sources": [src], "destination": str(right)})
+    real = d.confirm
+
+    def late_yes(*a, **k):
+        bridge.withdraw_request(rid)                                                   # the server stopped waiting while the question was open
+        return real(*a, **k)
+    d.confirm = late_yes
+    win.assistant_tick()
+    import time
+    from PyQt6.QtWidgets import QApplication
+    end = time.time() + 5
+    while rid in win._assistant_busy and time.time() < end:
+        QApplication.processEvents()
+        time.sleep(0.01)
+    assert not (right / "late.txt").exists() and bridge.running(rid) is None
+    assert rid not in win._assistant_busy and "late.txt" in d.confirms[-1][1]                  # asked, said yes, and still nothing ran
+
+
 def test_a_request_is_not_taken_twice_while_the_owner_is_still_deciding(world):
     win, d, left, right, tmp = world
     put(left / "a.txt")

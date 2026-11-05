@@ -15,20 +15,23 @@ from __future__ import annotations
 
 import os
 import threading
+import time
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Callable, Optional
 
-from ..core import compare as cmp, duplicates as dup, notes as notes_core, sync as sync_core
+from ..core import compare as cmp, duplicates as dup, manifest as mf, notes as notes_core, sync as sync_core
 from ..core.ops import Resolution, check_name, plan_copy, plan_delete, plan_move, plan_rename
-from ..core.progress import CancelToken
+from ..core.progress import Cancelled, CancelToken
 from ..core.search import BadCriteria, Criteria, search
 from ..core.textview import detect_encoding
 from ..core.version import APP_NAME, APP_VERSION
-from . import bridge
+from . import bridge, paths as assistant_paths
 from .config import AssistantConfig
-from .scope import Denied, Scope
+from .jobs import CANCELLED, DONE, RUNNING, WAIT_DEFAULT, WAIT_MAX, Jobs
+from .remote import RemoteError, Remotes, server_paths
+from .scope import Denied, Scope, _text_key, _under
 
 LIST_LIMIT = 500
 LIST_MAX = 5000
@@ -52,6 +55,8 @@ class Context:
     fs: object
     plans: dict = field(default_factory=dict)
     confirm_seconds: float = CONFIRM_SECONDS
+    jobs: Jobs = field(default_factory=Jobs)
+    remotes: Remotes = field(default_factory=Remotes)
 
     @property
     def scope(self) -> Scope:
@@ -71,7 +76,7 @@ class Tool:
         return {"type": "object", "properties": self.properties, "required": list(self.required), "additionalProperties": False}
 
     def listing(self) -> dict:
-        read_only = self.kind in ("read", "plan")
+        read_only = self.kind in ("read", "plan")              # "report" writes into Dossier's own folder, never into the owner's
         return {"name": self.name, "description": self.description, "inputSchema": self.schema(),
                 "annotations": {"readOnlyHint": read_only, "destructiveHint": self.kind == "commit", "idempotentHint": self.kind == "read",
                                 "openWorldHint": False}}
@@ -142,14 +147,96 @@ def _paths(ctx: Context, value, key: str) -> list:
 
 def _folder(ctx: Context, value, key: str) -> str:
     path = ctx.scope.resolve(value if isinstance(value, str) else "")
+    if "://" in path:
+        from ..core.vfs import stat_or_none
+        e = stat_or_none(ctx.fs, path)
+        if e is None or not e.is_dir:
+            raise ToolError(f"{key} is not a folder that exists: {value}")
+        return path
     if not os.path.isdir(path):
         raise ToolError(f"{key} is not a folder that exists: {value}")
+    return path
+
+
+def _local(path: str, what: str) -> str:
+    if "://" in path:
+        raise ToolError(f"{what} works on this computer's files only, not on a server's (use stat, list_folder, search or a manifest there)")
     return path
 
 
 def _entry(e) -> dict:
     return {"name": e.name, "type": "folder" if e.is_dir else "file", "size": 0 if e.is_dir else e.size, "modified": when(e.mtime),
             "link": e.is_link}
+
+
+# jobs, pages and reports ---------------------------------------------------------------------------------------------------------------------
+_WAIT = {"wait_seconds": N(f"how long to wait for the answer (default {WAIT_DEFAULT}, up to {WAIT_MAX}); if it is not ready by then you get a "
+                           "job_id for get_job")}
+_PAGE = {"offset": N("skip this many result rows (default 0)"), "limit": N(f"at most this many rows (default {ROWS_MAX}, up to {ROWS_MAX})"),
+         "status": L("only rows with one of these statuses")}
+
+
+def _page(result: dict, args: dict) -> dict:
+    """``result`` with its ``results`` list cut to the page asked for (``offset``, ``limit``, ``status``); the full list stays in the job."""
+    rows = result.get("results")
+    if not isinstance(rows, list):
+        return result
+    wanted = args.get("status")
+    if wanted is not None and (not isinstance(wanted, list) or not all(isinstance(s, str) for s in wanted)):
+        raise ToolError("status must be a list of statuses")
+    if wanted:
+        rows = [r for r in rows if r.get("status") in wanted]
+    offset = _int(args.get("offset"), 0, 0, 1 << 40, "offset")
+    limit = _int(args.get("limit"), ROWS_MAX, 1, ROWS_MAX, "limit")
+    shown = rows[offset:offset + limit]
+    return {**{k: v for k, v in result.items() if k != "results"}, "matching": len(rows), "offset": offset, "shown": len(shown),
+            "more": offset + len(shown) < len(rows), "results": shown}
+
+
+def _as_job(ctx: Context, name: str, args: dict, work: Callable) -> dict:
+    """Run ``work(job)`` as a job and wait up to ``wait_seconds`` for it: the result (one page of it), or how far it got and its job_id."""
+    wait = _int(args.get("wait_seconds"), WAIT_DEFAULT, 0, WAIT_MAX, "wait_seconds")
+    job = ctx.jobs.start(name, work)
+    job.wait(wait)
+    return _job_answer(job, args)
+
+
+def _job_answer(job, args: dict) -> dict:
+    if job.status == DONE:
+        return {**_page(job.result or {}, args), "job_id": job.id}
+    if job.status == RUNNING:
+        return {**job.describe(), "next": "Not finished yet. Call get_job with this job_id (it can wait for you), or cancel_job to stop it."}
+    if job.status == CANCELLED:
+        return job.describe()
+    raise ToolError(job.error or "the job failed")
+
+
+def _report(prefix: str, folder: str, text: str) -> str:
+    """Write a manifest or report into Dossier's own reports folder (never the owner's folders); returns its full path."""
+    folder_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in (os.path.basename(folder.rstrip("\\/")) or "root"))[:60]
+    out_dir = assistant_paths.reports_dir()
+    os.makedirs(out_dir, exist_ok=True)
+    path = os.path.join(out_dir, f"{prefix}-{folder_name}-{datetime.now().strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex[:4]}.csv")
+    with open(path, "w", encoding="utf-8-sig", newline="") as f:
+        f.write(text)
+    return path
+
+
+def _manifest_file(ctx: Context, value) -> str:
+    """A manifest the assistant names: inside the owner's folders, or one of the reports Dossier wrote itself."""
+    if isinstance(value, str) and value.strip() and os.path.isabs(value):
+        own = _text_key(assistant_paths.reports_dir())
+        if _under(_text_key(value), own):
+            real = os.path.realpath(value)
+            if not _under(os.path.normcase(real), os.path.normcase(os.path.realpath(assistant_paths.reports_dir()))):
+                raise Denied(f"outside the folders the owner allows: {value}")
+            if not os.path.isfile(real):
+                raise ToolError(f"there is no such report: {value}")
+            return real
+    path = ctx.scope.resolve(value)
+    if not os.path.isfile(path):
+        raise ToolError(f"it is not a file that exists: {value}")
+    return path
 
 
 # read tools --------------------------------------------------------------------------------------------------------------------------------
@@ -159,20 +246,26 @@ def list_roots(ctx: Context, args: dict) -> dict:
 
 
 @tool("list_folder", "List the files and folders of a folder (folders first, in natural order).",
-      {"path": S("the full path of the folder"), "limit": N(f"at most this many entries (default {LIST_LIMIT}, up to {LIST_MAX})")}, ("path",))
+      {"path": S("the full path of the folder"), "limit": N(f"at most this many entries (default {LIST_LIMIT}, up to {LIST_MAX})"),
+       "offset": N("skip this many entries first, for the next page (default 0)")}, ("path",))
 def list_folder(ctx: Context, args: dict) -> dict:
     path = _folder(ctx, args.get("path"), "path")
     limit = _int(args.get("limit"), LIST_LIMIT, 1, LIST_MAX, "limit")
+    offset = _int(args.get("offset"), 0, 0, 1 << 40, "offset")
     from ..cli.helpers import sort_entries
     entries = sort_entries(ctx.fs.list(path))
-    return {"path": path, "count": len(entries), "truncated": len(entries) > limit, "untrusted_content": True,
-            "entries": [_entry(e) for e in entries[:limit]]}
+    page = entries[offset:offset + limit]
+    return {"path": path, "count": len(entries), "offset": offset, "truncated": offset + len(page) < len(entries), "untrusted_content": True,
+            "entries": [_entry(e) for e in page]}
 
 
 @tool("stat", "Size, times and tags of one file or folder.", {"path": S("the full path")}, ("path",))
 def stat_tool(ctx: Context, args: dict) -> dict:
     from ..core import filetags
     path = ctx.scope.resolve(args.get("path"))
+    if "://" in path:
+        e = ctx.fs.stat(path)
+        return {"path": path, **_entry(e), "untrusted_content": True}
     if not os.path.lexists(path):
         raise ToolError(f"it does not exist: {args.get('path')}")
     e = ctx.fs.stat(path)
@@ -189,7 +282,7 @@ def stat_tool(ctx: Context, args: dict) -> dict:
                                     "max_bytes": N("the most to read (default 64 KB; the owner sets an upper limit)")}, ("path",))
 def read_text(ctx: Context, args: dict) -> dict:
     from ..core import viewmodes
-    path = ctx.scope.resolve(args.get("path"))
+    path = _local(ctx.scope.resolve(args.get("path")), "read_text")
     if not os.path.isfile(path):
         raise ToolError(f"it is not a file that exists: {args.get('path')}")
     offset = _int(args.get("offset"), 0, 0, 1 << 62, "offset")
@@ -217,7 +310,7 @@ def read_text(ctx: Context, args: dict) -> dict:
 def read_metadata(ctx: Context, args: dict) -> dict:
     from ..core import properties, viewmodes
     from ..core.exif import read_exif
-    path = ctx.scope.resolve(args.get("path"))
+    path = _local(ctx.scope.resolve(args.get("path")), "read_metadata")
     if not os.path.isfile(path):
         raise ToolError(f"it is not a file that exists: {args.get('path')}")
     kind = properties.kind_of(path)
@@ -247,12 +340,15 @@ def read_notes(ctx: Context, args: dict) -> dict:
        "min_size": N("at least this many bytes"), "max_size": N("at most this many bytes"),
        "newer_than": S("changed on or after this day (YYYY-MM-DD)"), "older_than": S("changed on or before this day (YYYY-MM-DD)"),
        "tags": L("the file carries all of these tags"), "limit": N(f"at most this many (default {SEARCH_LIMIT}, up to {SEARCH_MAX})"),
+       "offset": N("skip this many results first, for the next page (default 0; the search runs again, so ask for pages in order)"),
        "max_seconds": N(f"stop after this long (default {SECONDS_DEFAULT}, up to {SECONDS_MAX})")}, ("folder",))
 def search_tool(ctx: Context, args: dict) -> dict:
     from ..cli.helpers import parse_date
     from redactor_common.cli import CliError
     root = _folder(ctx, args.get("folder"), "folder")
-    limit = _int(args.get("limit"), SEARCH_LIMIT, 1, SEARCH_MAX, "limit")
+    page = _int(args.get("limit"), SEARCH_LIMIT, 1, SEARCH_MAX, "limit")
+    offset = _int(args.get("offset"), 0, 0, SEARCH_MAX * 20, "offset")
+    limit = offset + page
     try:
         criteria = Criteria(root=root, name=args.get("name") or "", kinds=args.get("kind") or "files", min_size=args.get("min_size"),
                             max_size=args.get("max_size"), newer_than=parse_date(args["newer_than"]) if args.get("newer_than") else None,
@@ -271,9 +367,10 @@ def search_tool(ctx: Context, args: dict) -> dict:
         raise ToolError(str(e))
     finally:
         stop()
-    return {"folder": root, "count": len(found.entries), "truncated": found.truncated, "scanned": found.scanned, "untrusted_content": True,
+    shown = found.entries[offset:]
+    return {"folder": root, "count": len(shown), "offset": offset, "truncated": found.truncated, "scanned": found.scanned, "untrusted_content": True,
             "results": [{"path": e.path, "type": "folder" if e.is_dir else "file", "size": 0 if e.is_dir else e.size, "modified": when(e.mtime)}
-                        for e in found.entries]}
+                        for e in shown]}
 
 
 @tool("find_duplicates", "Find files with exactly the same content in one or more folders (size, then the ends, then the whole file).",
@@ -300,18 +397,131 @@ def find_duplicates(ctx: Context, args: dict) -> dict:
             "results": [{"size": g.size, "wasted_bytes": g.wasted, "files": [e.path for e in g.files]} for g in groups]}
 
 
-@tool("compare_folders", "Compare two folders: what is only on one side, newer on one side, or different.",
+_CMP_WORDS = {cmp.ONLY_LEFT: "only_left", cmp.ONLY_RIGHT: "only_right", cmp.LEFT_NEWER: "left_newer", cmp.RIGHT_NEWER: "right_newer",
+              cmp.DIFFERENT: "different", cmp.TYPE: "type_differs"}
+
+
+@tool("compare_folders", "Compare two folders: what is only on one side, newer on one side, or different. A long comparison becomes a job "
+      "(see get_job); a long answer comes in pages (offset, limit, status), and report writes every row to a CSV file.",
       {"left": S("full path"), "right": S("full path"), "by": S("size_time (default), size or content", enum=[k for k, _t in cmp.BY]),
-       "recursive": B("look in the subfolders (default true)")}, ("left", "right"))
+       "recursive": B("look in the subfolders (default true)"),
+       "tolerance_seconds": N("times this close count as the same (default 2, for FAT and network drives)"),
+       "ignore_hour": B("a difference of exactly one hour counts as the same time, which is what summer time does to copied files "
+                        "(default true)"),
+       "report": B("also write every row to a CSV file in Dossier's reports folder and return its path (default false)"),
+       **_PAGE, **_WAIT}, ("left", "right"))
 def compare_folders(ctx: Context, args: dict) -> dict:
     left, right = _folder(ctx, args.get("left"), "left"), _folder(ctx, args.get("right"), "right")
-    result = cmp.compare_trees(ctx.fs, left, right, recursive=args.get("recursive", True) is not False, by=args.get("by") or "size_time")
-    words = {cmp.ONLY_LEFT: "only_left", cmp.ONLY_RIGHT: "only_right", cmp.LEFT_NEWER: "left_newer", cmp.RIGHT_NEWER: "right_newer",
-             cmp.DIFFERENT: "different", cmp.TYPE: "type_differs"}
-    rows = result.rows[:ROWS_MAX]
-    return {"differences": len(result.rows), "same": result.same, "shown": len(rows), "untrusted_content": True,
-            "results": [{"path": r.rel, "status": words.get(r.status, r.status), "left_size": r.left.size if r.left else None,
-                         "right_size": r.right.size if r.right else None} for r in rows]}
+    by = args.get("by") or "size_time"
+    if by not in dict(cmp.BY):
+        raise ToolError("by is size_time, size or content")
+    tolerance = _int(args.get("tolerance_seconds"), 2, 0, 86400, "tolerance_seconds")
+    _page({"results": []}, args)                                         # a bad page argument is refused before the work starts
+
+    def work(job) -> dict:
+        def progress(stage, done, total):
+            job.report(stage=stage, items=done)
+        result = cmp.compare_trees(ctx.fs, left, right, recursive=args.get("recursive", True) is not False, by=by, tolerance=float(tolerance),
+                                   ignore_hour=args.get("ignore_hour", True) is not False, cancel=job.token, progress=progress)
+        rows = [{"path": r.rel, "status": _CMP_WORDS.get(r.status, r.status), "left_size": r.left.size if r.left else None,
+                 "right_size": r.right.size if r.right else None} for r in result.rows]
+        counts = {}
+        for r in rows:
+            counts[r["status"]] = counts.get(r["status"], 0) + 1
+        out = {"left": left, "right": right, "differences": len(rows), "same": result.same, "unreadable_folders": result.unreadable,
+               "by_status": counts, "untrusted_content": True, "results": rows}
+        if args.get("report"):
+            import csv
+            import io
+            text = io.StringIO(newline="")
+            w = csv.writer(text, quoting=csv.QUOTE_ALL, lineterminator="\n")
+            w.writerow(("RelPath", "Status", "LeftLength", "RightLength"))
+            for r in rows:
+                w.writerow((r["path"], r["status"], "" if r["left_size"] is None else r["left_size"], "" if r["right_size"] is None else r["right_size"]))
+            out["report"] = _report("compare", left, text.getvalue())
+        return out
+    return _as_job(ctx, "compare_folders", args, work)
+
+
+@tool("write_manifest", "Make a manifest of a folder: every file below it with its size, time and SHA-256 checksum, as a CSV file in Dossier's "
+      "reports folder. Reads every file once, so a big folder becomes a job (see get_job). Compare it later with compare_with_manifest, also "
+      "on another computer.", {"folder": S("the full path of the folder"), **_WAIT}, ("folder",), kind="report")
+def write_manifest(ctx: Context, args: dict) -> dict:
+    folder = _folder(ctx, args.get("folder"), "folder")
+
+    def work(job) -> dict:
+        def progress(p):
+            job.report(files=p.files, total_files=p.total_files, bytes=p.bytes, total_bytes=p.total_bytes)
+        items = mf.build(ctx.fs, folder, job.token, progress)
+        path = _report("manifest", folder, mf.to_csv(items))
+        errors = [i.rel for i in items if i.error]
+        return {"folder": folder, "manifest": path, "files": len(items), "bytes": sum(i.size for i in items), "unreadable": len(errors),
+                "unreadable_files": errors[:50], "untrusted_content": True}
+    return _as_job(ctx, "write_manifest", args, work)
+
+
+@tool("compare_with_manifest", "Compare a manifest (from write_manifest, or a CSV with the columns RelPath, Length, LastWriteUtc, SHA256) with a "
+      "folder, or with a second manifest, by path and checksum. Says what is only on one side, what differs, and which one-sided files have their "
+      "content elsewhere on the other side (renamed or moved). Times are not compared: only the checksum says two files are the same.",
+      {"manifest": S("full path of the manifest (side A)"), "folder": S("full path of a folder to compare with (side B; it is read and hashed)"),
+       "other_manifest": S("full path of a second manifest (side B), instead of a folder"),
+       "report": B("also write every row to a CSV file in Dossier's reports folder (default false)"), **_PAGE, **_WAIT}, ("manifest",), kind="report")
+def compare_with_manifest(ctx: Context, args: dict) -> dict:
+    a_path = _manifest_file(ctx, args.get("manifest"))
+    if bool(args.get("folder")) == bool(args.get("other_manifest")):
+        raise ToolError("name either folder or other_manifest (side B)")
+    folder = _folder(ctx, args.get("folder"), "folder") if args.get("folder") else ""
+    b_path = _manifest_file(ctx, args.get("other_manifest")) if not folder else ""
+    _page({"results": []}, args)
+    try:
+        a_items = mf.read(a_path)
+        b_items = mf.read(b_path) if b_path else None
+    except mf.BadManifest as e:
+        raise ToolError(str(e))
+
+    def work(job) -> dict:
+        b = b_items
+        if b is None:
+            def progress(p):
+                job.report(stage="hashing the folder", files=p.files, total_files=p.total_files, bytes=p.bytes, total_bytes=p.total_bytes)
+            b = mf.build(ctx.fs, folder, job.token, progress)
+        d = mf.diff(a_items, b, case_sensitive=ctx.fs.case_sensitive)
+        rows = [{"path": r.rel, "status": r.status, "size": r.size, **({"other_size": r.other_size} if r.other_size is not None else {}),
+                 **({"content_elsewhere": r.elsewhere} if r.elsewhere else {})} for r in d.rows]
+        out = {"a": a_path, "b": folder or b_path, "summary": d.summary(), "untrusted_content": True, "results": rows}
+        if args.get("report"):
+            out["report"] = _report("manifest-diff", folder or os.path.splitext(b_path)[0], mf.diff_csv(d))
+        return out
+    return _as_job(ctx, "compare_with_manifest", args, work)
+
+
+# jobs ----------------------------------------------------------------------------------------------------------------------------------------
+@tool("get_job", "How a job is getting on, and its result when it is done (in pages, like the tool that started it). It can wait a while for the "
+      "job to finish.", {"job_id": S("the job_id a tool returned"), **_PAGE, "wait_seconds": N(f"wait up to this long for it to finish (default 0, "
+                                                                                              f"up to {WAIT_MAX})")}, ("job_id",))
+def get_job(ctx: Context, args: dict) -> dict:
+    job = ctx.jobs.get(str(args.get("job_id")))
+    if job is None:
+        raise ToolError("there is no such job (jobs are forgotten when the server closes, and old finished ones are dropped)")
+    job.wait(_int(args.get("wait_seconds"), 0, 0, WAIT_MAX, "wait_seconds"))
+    return _job_answer(job, args)
+
+
+@tool("cancel_job", "Stop a job that is still running. Stopping a commit_plan job only stops waiting: a change the owner already started in the "
+      "Dossier window goes on there.", {"job_id": S("the job_id")}, ("job_id",))
+def cancel_job(ctx: Context, args: dict) -> dict:
+    job = ctx.jobs.get(str(args.get("job_id")))
+    if job is None:
+        raise ToolError("there is no such job")
+    if job.status == RUNNING:
+        job.token.cancel()
+        job.wait(5)
+    return job.describe()
+
+
+@tool("list_jobs", "The jobs this server knows: running ones and the last finished ones.", {})
+def list_jobs(ctx: Context, args: dict) -> dict:
+    return {"jobs": [j.describe() for j in ctx.jobs.all()]}
 
 
 @tool("list_windows", "What the Dossier window shows now: the folder of each panel, its tabs and the item under the cursor. Empty when the window "
@@ -391,7 +601,7 @@ def _preview(plan, extra: Optional[dict] = None) -> dict:
 
 def _keep_plan(ctx: Context, request: dict, preview: dict) -> dict:
     pid = uuid.uuid4().hex[:10]
-    ctx.plans[pid] = request
+    ctx.plans[pid] = {**request, "expected": {"steps": preview.get("steps", 0), "bytes": preview.get("bytes", 0)}}   # the window compares
     while len(ctx.plans) > 50:
         ctx.plans.pop(next(iter(ctx.plans)))
     return {"plan_id": pid, **preview, "next": "Call commit_plan with this plan_id. Nothing has been changed yet; the owner must agree in the Dossier window."}
@@ -424,7 +634,64 @@ def plan_copy_tool(ctx: Context, args: dict) -> dict:
     return _keep_plan(ctx, {"action": "copy", "sources": sources, "destination": dest, "on_conflict": policy, "reason": _reason(args)}, _preview(plan))
 
 
-@tool("plan_move", "Prepare moving files and folders into a folder. Nothing moves until commit_plan and the owner's OK.",
+REPORT_PATHS_MAX = 200_000
+
+
+def _report_paths(ctx: Context, report: str, statuses) -> list:
+    """The RelPath column of a report or manifest Dossier wrote (or a CSV inside the owner's folders), cut to ``statuses`` if named."""
+    import csv
+    path = _manifest_file(ctx, report)
+    if statuses is not None and (not isinstance(statuses, list) or not all(isinstance(s, str) for s in statuses)):
+        raise ToolError("statuses must be a list of statuses")
+    with open(path, encoding="utf-8-sig", newline="") as f:
+        rows = csv.reader(f)
+        head = next(rows, [])
+        if "RelPath" not in head:
+            raise ToolError("that file has no RelPath column: use a report from compare_with_manifest or compare_folders, or a manifest")
+        at, st = head.index("RelPath"), head.index("Status") if "Status" in head else -1
+        if statuses and st < 0:
+            raise ToolError("that file has no Status column, so statuses cannot be chosen from it")
+        out = [r[at].replace("\\", "/") for r in rows if len(r) > at and (not statuses or (len(r) > st and r[st] in statuses))]
+    if len(out) > REPORT_PATHS_MAX:
+        raise ToolError(f"more than {REPORT_PATHS_MAX:,} paths: copy in parts")
+    return out
+
+
+@tool("plan_copy_paths", "Prepare copying files from one folder to the same places below another, making the folders that are missing: for "
+      "what a comparison found only on one side, scattered over many folders. Name the files below source_root in paths, or take them from a "
+      "report (compare_with_manifest or compare_folders with report=true) with the statuses you want. Nothing is copied until commit_plan "
+      "and the owner's OK.",
+      {"source_root": S("full path of the folder the paths are below"), "destination_root": S("full path of the folder to copy them below; it must exist"),
+       "paths": L("paths below source_root, with / (for example Vrakkart/NO/1910.doc)"),
+       "from_report": S("full path of a report or manifest; its RelPath column is used instead of paths"),
+       "statuses": L("with from_report: only rows with these statuses (for example only_a)"), **_CONFLICT, **_COMMON},
+      ("source_root", "destination_root"), kind="plan")
+def plan_copy_paths_tool(ctx: Context, args: dict) -> dict:
+    from ..core.ops import bad_relative, plan_copy_paths
+    _need_changes(ctx)
+    src, dest = _folder(ctx, args.get("source_root"), "source_root"), _folder(ctx, args.get("destination_root"), "destination_root")
+    if bool(args.get("paths")) == bool(args.get("from_report")):
+        raise ToolError("name either paths or from_report")
+    if args.get("paths"):
+        rels = args["paths"]
+        if not isinstance(rels, list) or not all(isinstance(r, str) for r in rels):
+            raise ToolError("paths must be a list of paths below source_root")
+    else:
+        rels = _report_paths(ctx, args["from_report"], args.get("statuses"))
+    bad = [why for why in (bad_relative(r) for r in rels) if why]
+    if bad:
+        raise ToolError("; ".join(bad[:5]))
+    if not rels:
+        raise ToolError("there is nothing to copy (no paths, or no row with those statuses)")
+    policy = args.get("on_conflict") or "skip"
+    if policy not in POLICIES:
+        raise ToolError("on_conflict is skip, overwrite, keep-both or newer")
+    plan = _resolved(plan_copy_paths(ctx.fs, src, dest, rels), ctx, policy)
+    return _keep_plan(ctx, {"action": "copy_paths", "source_root": src, "destination_root": dest, "paths": [r.replace("\\", "/") for r in rels],
+                            "on_conflict": policy, "reason": _reason(args)}, _preview(plan))
+
+
+@tool("plan_move","Prepare moving files and folders into a folder. Nothing moves until commit_plan and the owner's OK.",
       {"sources": L("full paths of what to move"), "destination": S("full path of the destination folder, which must exist"), **_CONFLICT, **_COMMON},
       ("sources", "destination"), kind="plan")
 def plan_move_tool(ctx: Context, args: dict) -> dict:
@@ -488,22 +755,42 @@ def discard_plan(ctx: Context, args: dict) -> dict:
 
 
 @tool("commit_plan", "Ask the owner to carry out a prepared plan. The request goes to the Dossier window, where the owner sees what it would do and "
-      "agrees or rejects; this call waits for the answer. Returns done, rejected, failed or timeout.",
-      {"plan_id": S("the plan_id from a plan_* tool")}, ("plan_id",), kind="commit")
+      "agrees or rejects. Returns done, rejected, failed or timeout; while the owner thinks, or while a big change runs after they agreed, it "
+      "returns a job_id for get_job.", {"plan_id": S("the plan_id from a plan_* tool"), **_WAIT}, ("plan_id",), kind="commit")
 def commit_plan(ctx: Context, args: dict) -> dict:
     _need_changes(ctx)
-    request = ctx.plans.get(str(args.get("plan_id")))
+    pid = str(args.get("plan_id"))
+    request = ctx.plans.get(pid)
     if request is None:
         raise ToolError("there is no such plan (it may have been committed or discarded already): make a new one")
     if not bridge.read_state()["window_running"]:
         raise ToolError("the Dossier window is not running, so the owner cannot confirm anything: ask them to open it")
     rid = bridge.post_request("plan", request)
-    answer = bridge.wait_response(rid, ctx.confirm_seconds)
-    if answer is None:
-        bridge.withdraw_request(rid)
-        return {"status": "timeout", "message": "the owner did not answer in time; nothing was changed"}
-    ctx.plans.pop(str(args.get("plan_id")), None)
-    return {k: v for k, v in answer.items() if k != "id"}
+    ctx.plans.pop(pid, None)                                   # one request per plan: a second commit of it is refused, not asked twice
+
+    def work(job) -> dict:
+        deadline = time.monotonic() + ctx.confirm_seconds
+        job.report(stage="waiting for the owner to agree or reject in the Dossier window")
+        while True:
+            answer = bridge.wait_response(rid, 0.5)
+            if answer is not None:
+                return {k: v for k, v in answer.items() if k != "id"}
+            started = bridge.running(rid)
+            if started is not None:                            # the owner agreed: the change runs, for as long as it takes
+                job.report(stage="the owner agreed; the change is being carried out in the Dossier window",
+                           **{k: v for k, v in started.items() if k not in ("id",)})
+            elif job.token.cancelled or time.monotonic() >= deadline:
+                if bridge.withdraw_request(rid):               # still unclaimed, so the window will not run it now (see bridge.claim)
+                    if job.token.cancelled:
+                        raise Cancelled()
+                    return {"status": "timeout", "message": "the owner did not answer in time; nothing was changed"}
+                if time.monotonic() >= deadline + 10:          # claimed or answered this very moment, the next rounds read which;
+                    return {"status": "timeout", "message": "the request disappeared without an answer; check in the Dossier window"}
+            if job.token.cancelled and started is not None:
+                return {"status": "running", "message": "stopped waiting; the owner already agreed and the change goes on in the Dossier window"}
+    wait = int(min(_int(args.get("wait_seconds"), WAIT_DEFAULT, 0, WAIT_MAX, "wait_seconds"), int(ctx.confirm_seconds) + 2))
+    out = _as_job(ctx, "commit_plan", {**args, "wait_seconds": wait}, work)
+    return {k: v for k, v in out.items() if k != "job_id"} if out.get("status") in ("done", "rejected", "failed", "timeout") else out
 
 
 # the call --------------------------------------------------------------------------------------------------------------------------------------
@@ -525,9 +812,15 @@ def call(ctx: Context, name: str, args: dict) -> dict:
     if t.kind in ("plan", "commit") and name != "discard_plan":
         _need_changes(ctx)
     try:
+        for path in server_paths(args):                    # a listed server folder is connected before the tool looks at it
+            if name in ("read_text", "read_metadata"):
+                _local(path, name)
+            ctx.remotes.ensure(ctx.fs, ctx.config, ctx.scope.resolve(path))
         return t.handler(ctx, args)
     except (Denied, ToolError):
         raise
+    except RemoteError as e:
+        raise ToolError(str(e))
     except FileNotFoundError as e:
         raise ToolError(f"it does not exist: {getattr(e, 'filename', None) or e}")
     except PermissionError as e:

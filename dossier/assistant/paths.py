@@ -38,3 +38,9 @@ def responses_dir() -> str:
 
 def log_file() -> str:
     return os.path.join(data_dir(), "calls.log")
+
+
+def reports_dir() -> str:
+    """Manifests and comparison reports the assistant's tools write. They go here, never into the owner's folders, so writing one is not
+    a change to files and needs no permission."""
+    return os.path.join(data_dir(), "reports")

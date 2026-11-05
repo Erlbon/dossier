@@ -22,7 +22,7 @@ from PyQt6.QtWidgets import (QCheckBox, QDialog, QDialogButtonBox, QFileDialog, 
 from ..assistant import bridge, calllog, config as config_module, paths as assistant_paths
 from ..assistant.scope import Denied, Scope
 from ..core import compare as cmp, sync as sync_core
-from ..core.ops import Resolution, plan_copy, plan_delete, plan_move, plan_rename
+from ..core.ops import Resolution, bad_relative, plan_copy, plan_copy_paths, plan_delete, plan_move, plan_rename
 from ..core.sizefmt import human_size
 from .owned_dialog import OwnedDialog
 
@@ -43,8 +43,9 @@ def server_snippet() -> str:
 
 
 class AssistantDialog(OwnedDialog):
-    def __init__(self, parent, current: config_module.AssistantConfig) -> None:
+    def __init__(self, parent, current: config_module.AssistantConfig, panel_folders: Optional[list] = None) -> None:
         super().__init__(parent)
+        self.panel_folders = [p for p in (panel_folders or []) if p and (config_module.server_root(p) or os.path.isabs(p) and "://" not in p)]
         self.setWindowTitle("Assistant Access")
         self.setMinimumWidth(620)
         layout = QVBoxLayout(self)
@@ -63,13 +64,17 @@ class AssistantDialog(OwnedDialog):
         layout.addWidget(self.roots)
         row = QHBoxLayout()
         add = QPushButton("Add a Folder...")
+        self.add_panels = QPushButton("Add the Panels' Folders")
+        self.add_panels.setToolTip("The folders the two panels show, also a folder on an SFTP or SCP server you are connected to")
+        self.add_panels.setEnabled(bool(self.panel_folders))
         remove = QPushButton("Remove")
-        for b in (add, remove):
+        for b in (add, self.add_panels, remove):
             b.setAutoDefault(False)
             row.addWidget(b)
         row.addStretch(1)
         layout.addLayout(row)
         add.clicked.connect(self._add)
+        self.add_panels.clicked.connect(lambda: [self.add_root(config_module.server_root(p) or os.path.normpath(p)) for p in self.panel_folders])
         remove.clicked.connect(lambda: [self.roots.takeItem(self.roots.row(i)) for i in self.roots.selectedItems()])
         form = QFormLayout()
         self.changes = QCheckBox("Let it propose changes to files (copy, move, rename, delete). Each one still needs your OK.")
@@ -151,11 +156,22 @@ class AssistantMixin:
     def _ask_assistant_settings(self, dlg) -> bool:           # a seam for tests
         return dlg.exec() == QDialog.DialogCode.Accepted
 
+    def assistant_servers(self, roots: list) -> list:
+        """The saved connections (no secrets) of the server folders among ``roots``, for the assistant's server to connect with."""
+        import json
+        from ..core import servers as servers_core
+        wanted = {r.split("://", 1)[0] + "://" + r.split("://", 1)[1].split("/", 1)[0] for r in roots if config_module.server_root(r)}
+        chosen = [c for c in self.connections() if f"{c.protocol}://{c.authority()}" in wanted]
+        return json.loads(servers_core.to_json(chosen)) if chosen else []
+
     def open_assistant_settings(self) -> None:
-        dlg = AssistantDialog(self, self.assistant_config())
+        dlg = AssistantDialog(self, self.assistant_config(), [self.left.path, self.right.path])
         if not self._ask_assistant_settings(dlg):
             return
-        config_module.save(dlg.values())
+        values = dlg.values()
+        values.servers = self.assistant_servers(values.roots)
+        values.ssh_folder = self.ssh_folder() if values.servers else ""
+        config_module.save(values)
         if not dlg.values().enabled:
             bridge.clear_state()
         self._assistant_state_text = ""
@@ -233,17 +249,24 @@ class AssistantMixin:
         if not config.allow_file_changes:
             return refuse("the owner has not allowed changes to files")
         action = payload.get("action")
+        full_paths = ("source_root", "destination_root") if action == "copy_paths" else ("sources", "destination", "paths", "path", "left", "right")
         try:
             scope = Scope(config.roots)
-            checked = {k: (scope.all(v) if isinstance(v, list) else scope.resolve(v)) for k, v in payload.items()
-                       if k in ("sources", "destination", "paths", "path", "left", "right")}
+            checked = {k: (scope.all(v) if isinstance(v, list) else scope.resolve(v)) for k, v in payload.items() if k in full_paths}
+            if action == "copy_paths":
+                rels = payload.get("paths")
+                bad = [w for w in (bad_relative(r) for r in rels) if w] if isinstance(rels, list) else ["paths must be a list"]
+                if bad or not rels:
+                    raise Denied("; ".join(bad[:3]) or "there is nothing to copy")
         except Denied as e:
             return refuse(str(e))
-        if action not in ("copy", "move", "delete", "rename", "sync"):
+        if action not in ("copy", "copy_paths", "move", "delete", "rename", "sync"):
             return refuse("unknown kind of change", "failed")
 
         def build(watch):
-            if action == "copy":
+            if action == "copy_paths":
+                plans = [plan_copy_paths(self.fs, checked["source_root"], checked["destination_root"], payload["paths"], watch=watch)]
+            elif action == "copy":
                 plans = [plan_copy(self.fs, checked["sources"], checked["destination"], watch=watch)]
             elif action == "move":
                 plans = [plan_move(self.fs, checked["sources"], checked["destination"], watch=watch)]
@@ -258,7 +281,7 @@ class AssistantMixin:
             policy = POLICIES.get(payload.get("on_conflict") or "skip", Resolution.SKIP)
             out = []
             for plan in plans:
-                if plan.conflicts and action in ("copy", "move"):
+                if plan.conflicts and action in ("copy", "copy_paths", "move"):
                     plan = plan.resolve(policy, self.fs)
                 if plan.conflicts:
                     plan = plan.resolve(Resolution.SKIP, self.fs)
@@ -272,6 +295,14 @@ class AssistantMixin:
                 return refuse("; ".join(blocked) or "there is nothing to do any more", "failed")
             if not self.dialogs.confirm("An assistant asks to change files", self._assistant_summary(action, payload, plans), "Run"):
                 return refuse("the owner rejected it")
+            try:
+                claimed = bridge.claim(rid, steps=steps)             # from here the server waits for as long as the change takes
+            except OSError:
+                claimed = False
+            if not claimed:                                         # the assistant gave up waiting while the question was open: it was told
+                self._assistant_busy.discard(rid)                   # "nothing was changed", so nothing is
+                self._say("The assistant stopped waiting before you answered, so nothing was changed")
+                return
             self._assistant_run(rid, plans)
 
         self._plan_in_background("Preparing what the assistant asked for", build, then)
@@ -280,10 +311,20 @@ class AssistantMixin:
         nl = chr(10)
         steps = [op for p in plans for op in p.ops]
         total = sum(op.size for op in steps if op.kind.value in ("copy", "move") and not op.is_dir)
-        words = {"copy": "copy", "move": "move", "delete": "delete", "rename": "rename", "sync": "synchronise two folders:"}[action]
+        words = {"copy": "copy", "copy_paths": "copy files to the same places in another folder:", "move": "move", "delete": "delete",
+                 "rename": "rename", "sync": "synchronise two folders:"}[action]
         head = f"An assistant asks to {words} {len(steps):,} step{'s' if len(steps) != 1 else ''} ({human_size(total)})."
         reason = " ".join(str(payload.get("reason") or "").split())[:300]
-        lines = [head] + ([f'It says: "{reason}"  (what it says is not checked)'] if reason else []) + [""]
+        lines = [head] + ([f'It says: "{reason}"  (what it says is not checked)'] if reason else [])
+        expected = payload.get("expected") if isinstance(payload.get("expected"), dict) else {}
+        try:
+            e_steps, e_bytes = int(expected.get("steps", -1)), int(expected.get("bytes", 0))
+        except (TypeError, ValueError):
+            e_steps, e_bytes = -1, 0
+        if action != "sync" and e_steps >= 0 and (e_steps != len(steps) or e_bytes != total):     # sync previews count actions, not steps
+            lines.append(f"Note: the assistant was shown {e_steps:,} step{'s' if e_steps != 1 else ''} ({human_size(e_bytes)}); the folders have "
+                         "changed since, so this is what would happen now.")
+        lines.append("")
         for op in steps[:PREVIEW_LINES]:
             lines.append(f"{op.kind.value}  {op.src}" + (f"  ->  {op.dst}" if op.dst else ""))
         if len(steps) > PREVIEW_LINES:
