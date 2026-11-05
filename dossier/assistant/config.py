@@ -9,23 +9,46 @@ from . import paths
 
 MAX_ROOTS = 50
 MIN_READ_KB, MAX_READ_KB = 4, 1024
+SERVER_SCHEMES = ("sftp", "scp")                  # server folders an assistant may be given (over SSH, with a host key the owner approved)
+
+
+def server_root(text: str) -> str:
+    """``text`` as a server folder root (``sftp://user@host:22/F:/Maritime``, normalised), or "" when it is not one."""
+    from posixpath import normpath
+    if not isinstance(text, str) or "://" not in text:
+        return ""
+    scheme, rest = text.split("://", 1)
+    if scheme not in SERVER_SCHEMES or not rest or rest.startswith("/"):
+        return ""
+    authority, _, remote = rest.partition("/")
+    if not authority or any(c in authority for c in " \\") or ".." in remote.split("/"):
+        return ""
+    remote = normpath("/" + remote) if remote else "/"
+    return f"{scheme}://{authority}{remote}"
 
 
 @dataclass
 class AssistantConfig:
     enabled: bool = False                         # the master switch: nothing works while it is off
-    roots: list = field(default_factory=list)     # the only folders an assistant may look into (and below)
+    roots: list = field(default_factory=list)     # the only folders an assistant may look into (and below); local, or sftp:// and scp://
     allow_file_changes: bool = False              # may it propose copying, moving, renaming, deleting (each still needs the owner's OK)
     log_calls: bool = True                        # keep a log of every call (X5)
     max_read_kb: int = 256                        # the most of a file's text one call returns
+    servers: list = field(default_factory=list)   # the saved connections (no secrets) of the server roots, as the window has them
+    ssh_folder: str = ""                          # the window's SSH folder: its known_hosts holds the host keys the owner approved
 
     def cleaned(self) -> "AssistantConfig":
         roots = []
         for r in self.roots:
-            if isinstance(r, str) and r.strip() and os.path.isabs(r) and r not in roots:
-                roots.append(os.path.normpath(r))
+            if not isinstance(r, str) or not r.strip():
+                continue
+            r = server_root(r) or (os.path.normpath(r) if os.path.isabs(r) and "://" not in r else "")
+            if r and r not in roots:
+                roots.append(r)
+        servers = [s for s in (self.servers or []) if isinstance(s, dict)][:MAX_ROOTS]
         return AssistantConfig(bool(self.enabled), roots[:MAX_ROOTS], bool(self.allow_file_changes), bool(self.log_calls),
-                               max(MIN_READ_KB, min(MAX_READ_KB, int(self.max_read_kb or 256))))
+                               max(MIN_READ_KB, min(MAX_READ_KB, int(self.max_read_kb or 256))), servers,
+                               self.ssh_folder if isinstance(self.ssh_folder, str) and self.ssh_folder and os.path.isabs(self.ssh_folder) else "")
 
 
 def load(path: str = "") -> AssistantConfig:
@@ -36,7 +59,8 @@ def load(path: str = "") -> AssistantConfig:
         if not isinstance(data, dict):
             return AssistantConfig()
         return AssistantConfig(bool(data.get("enabled")), list(data.get("roots") or []), bool(data.get("allow_file_changes")),
-                               bool(data.get("log_calls", True)), int(data.get("max_read_kb", 256))).cleaned()
+                               bool(data.get("log_calls", True)), int(data.get("max_read_kb", 256)), list(data.get("servers") or []),
+                               str(data.get("ssh_folder") or "")).cleaned()
     except (OSError, ValueError, TypeError):
         return AssistantConfig()
 

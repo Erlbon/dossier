@@ -2,6 +2,14 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-05#02 -- The assistant: copy what is missing to the same places, SFTP and SCP folders as allowed folders, pages, and a tool list that follows the switch
+
+- **`plan_copy_paths`** (`core/ops.plan_copy_paths`): copies files named by their paths below one folder to the same places below another, making only the folders that are missing, for what a comparison found on one side only, scattered over many folders. The paths come from the call or from a report (`from_report`, with `statuses`). The window checks every path again (no `..`, no drive, nothing absolute) and asks first, as for every change.
+- **Server folders as allowed folders:** Settings > Assistant Access has *Add the Panels' Folders*, which also adds a folder a panel shows on an SFTP or SCP server. Saving gives the assistant's server that saved connection (no secrets) and the window's SSH folder. The server connects by itself and never asks: the host key must already be approved in the window, and the login is a key file, an SSH agent or a password kept in the system's password store. The read-only switch of the connection is kept. Server paths are checked by their text (`..` refused); `read_text` and `read_metadata` stay on this computer's files.
+- **Pages:** `list_folder` and `search` take an `offset`.
+- **The tool list follows the changes switch:** with file changes off, the `plan_*` tools and `commit_plan` are not offered at all; when the switch changes, the server tells the assistant's program (`notifications/tools/list_changed`).
+- **The window says when its plan differs from the preview:** the request carries the steps and bytes the assistant was shown, and the question says so when the folders changed in between.
+
 ## 2026-11-05#01 -- The assistant: manifests, comparisons in pages, long calls as jobs, and a long approved copy no longer reported as "nothing was changed"
 
 - **Manifests** (`core/manifest.py`, tools `write_manifest` and `compare_with_manifest`): every file below a folder with its size, time and SHA-256, as a CSV in Dossier's own `reports` folder (never in the owner's folders, so no permission to change files is needed). Compared with a folder or a second manifest by path and checksum: only on one side, different, and one-sided files whose content is on the other side under another name (renamed or moved). Times are not trusted. A CSV with the columns RelPath, Length, LastWriteUtc and SHA256 made another way (backslashes and `ERROR:` rows included) is read too. For copies on two computers with no network between them.

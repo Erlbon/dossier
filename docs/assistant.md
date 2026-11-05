@@ -7,7 +7,15 @@ changes. It is made of the same functions as the window and the command line: no
 
 - **Off until you switch it on:** Settings > Assistant Access (the `enabled` setting). While it is off every call is refused.
 - **Only the folders you list.** Every path an assistant names is resolved first (`..` and links included) and must lie inside one of the
-  folders you listed. Archives and servers are not available to it.
+  folders you listed. Archives are not available to it.
+- **Server folders only on SFTP and SCP servers you saved and approved.** *Add the Panels' Folders* also adds a server folder a panel shows
+  (`sftp://user@host/F:/Maritime`). When you save, the window gives the assistant's server that connection without any secret, and its own
+  `ssh_folder`, whose `known_hosts` holds the host keys you approved. The server then connects by itself, but never asks anything: the host
+  key must already be approved, and the login is a key file, an SSH agent or a password you chose to keep in the system's password store. A
+  read-only connection stays read-only. `read_text` and `read_metadata` work on this computer's files only.
+- **Plan tools only while changes are allowed.** With `allow_file_changes` off, the `plan_*` tools and `commit_plan` are left out of the list
+  of tools, and the assistant's program is told when the list changes. When you press Run, the window plans again and says so if the result
+  differs from what the assistant was shown.
 - **Read-only unless you allow changes.** `allow_file_changes` is a separate switch. Even then an assistant only *proposes*: a `plan_*` tool
   returns a preview and changes nothing; `commit_plan` hands the proposal to the Dossier window, where **you see the change in words and press
   Run or Reject**. If the window is not open nothing can be confirmed, so nothing happens. The window makes the plan again itself and checks the
@@ -68,6 +76,8 @@ Work together on the selection (you see the marks at once):
 Propose changes (each needs `allow_file_changes`, and your OK in the window):
 
 - `plan_copy`, `plan_move`: files and folders into a folder. A name that is taken is skipped unless `on_conflict` says otherwise.
+- `plan_copy_paths`: files to the same places below another folder, making the folders that are missing: what a comparison found on one side
+  only, scattered over many folders. The paths come from the call or from a report (`from_report`, with the `statuses` wanted).
 - `plan_delete`: to the recycle bin, or for good with `permanent`.
 - `plan_rename`: a new name for one item.
 - `plan_sync`: make one folder like another (`update_right`, `update_left`, `both`, `mirror_right`, `mirror_left`).
@@ -76,4 +86,6 @@ Propose changes (each needs `allow_file_changes`, and your OK in the window):
   was changed, and pressing Run after that does nothing). Once you press Run the change is the window's: the assistant follows it with `get_job` for
   as long as it takes, so a long copy is never reported as "nothing was changed".
 
-Not available to an assistant: writing tags, writing notes, running programs, reaching servers.
+`list_folder` and `search` take an `offset` for the next page.
+
+Not available to an assistant: writing tags, writing notes, running programs, reaching servers you did not list.

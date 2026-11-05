@@ -368,6 +368,66 @@ def plan_copy(fs: FileSystem, sources: Sequence[str], dest_dir: str, *, flatten:
     return Plan("Copy", tuple(ops), tuple(warnings), tuple(blocking), tuple(skipped))
 
 
+def bad_relative(rel: str) -> str:
+    """Why ``rel`` cannot be a path below a folder ("" when it can): it must be relative, with no ``..``, no drive and no empty part."""
+    if not isinstance(rel, str) or not rel.strip():
+        return "an empty path"
+    parts = rel.replace(chr(92), "/").split("/")
+    if rel.startswith(("/", chr(92))) or ":" in parts[0] or any(p in ("", ".", "..") for p in parts):
+        return f"not a path below the folder: {rel}"
+    return ""
+
+
+def plan_copy_paths(fs: FileSystem, source_root: str, dest_root: str, rels: Sequence[str], *, watch=None) -> Plan:
+    """Copy the files at ``rels`` (paths below ``source_root``, with ``/``) to the same places below ``dest_root``, making the folders
+    that are missing. For copying what a comparison found missing on the other side, scattered over many folders, without copying
+    the rest of those folders. A name that is taken is a conflict, as in ``plan_copy``."""
+    ops: list = []
+    warnings: list = []
+    blocking: list = []
+    skipped: list = []
+    taken: set = set()
+    made: set = set()
+    _check_destination(fs, dest_root, blocking)
+    if blocking:
+        return Plan("Copy", (), (), tuple(blocking), ())
+    for rel in rels:
+        why = bad_relative(rel)
+        if why:
+            blocking.append(why)
+            continue
+        if watch is not None and len(ops) % 200 == 0:
+            watch(len(ops))
+        parts = rel.replace(chr(92), "/").split("/")
+        src = fs.join(source_root, *parts)
+        e = _stat(fs, src)
+        if e is None:
+            warnings.append(f"no longer there, left out: {src}")
+            skipped.append(src)
+            continue
+        if e.is_link:
+            warnings.append(f"link skipped (links are not followed): {src}")
+            skipped.append(src)
+            continue
+        for depth in range(1, len(parts)):                    # the folders on the way, top first, made once
+            key = "/".join(parts[:depth])
+            if key in made:
+                continue
+            made.add(key)
+            dst_dir = fs.join(dest_root, *parts[:depth])
+            there = _stat(fs, dst_dir)
+            if there is not None and there.is_dir:
+                continue
+            ops.append(Op(Kind.MKDIR, fs.join(source_root, *parts[:depth]), dst_dir, is_dir=True,
+                          **_placed(fs, fs.join(source_root, *parts[:depth]), dst_dir, taken, True)))
+        dst = fs.join(dest_root, *parts)
+        if e.is_dir:
+            _tree_ops(fs, src, dst, taken, ops, warnings, watch)
+        else:
+            ops.append(Op(Kind.COPY, src, dst, size=e.size, src_mtime=e.mtime, **_placed(fs, src, dst, taken, False)))
+    return Plan("Copy", tuple(ops), tuple(warnings), tuple(blocking[:20]), tuple(skipped))
+
+
 def same_volume(fs: FileSystem, a: str, b: str) -> bool:
     """Whether a rename from ``a`` to ``b`` stays on one drive. A virtual file system counts as one volume (it decides whether it
     can rename), but not the same one as another file system or another server: that is a copy and a delete. A failed look counts

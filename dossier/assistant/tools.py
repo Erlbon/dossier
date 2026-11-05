@@ -30,6 +30,7 @@ from ..core.version import APP_NAME, APP_VERSION
 from . import bridge, paths as assistant_paths
 from .config import AssistantConfig
 from .jobs import CANCELLED, DONE, RUNNING, WAIT_DEFAULT, WAIT_MAX, Jobs
+from .remote import RemoteError, Remotes, server_paths
 from .scope import Denied, Scope, _text_key, _under
 
 LIST_LIMIT = 500
@@ -55,6 +56,7 @@ class Context:
     plans: dict = field(default_factory=dict)
     confirm_seconds: float = CONFIRM_SECONDS
     jobs: Jobs = field(default_factory=Jobs)
+    remotes: Remotes = field(default_factory=Remotes)
 
     @property
     def scope(self) -> Scope:
@@ -145,8 +147,20 @@ def _paths(ctx: Context, value, key: str) -> list:
 
 def _folder(ctx: Context, value, key: str) -> str:
     path = ctx.scope.resolve(value if isinstance(value, str) else "")
+    if "://" in path:
+        from ..core.vfs import stat_or_none
+        e = stat_or_none(ctx.fs, path)
+        if e is None or not e.is_dir:
+            raise ToolError(f"{key} is not a folder that exists: {value}")
+        return path
     if not os.path.isdir(path):
         raise ToolError(f"{key} is not a folder that exists: {value}")
+    return path
+
+
+def _local(path: str, what: str) -> str:
+    if "://" in path:
+        raise ToolError(f"{what} works on this computer's files only, not on a server's (use stat, list_folder, search or a manifest there)")
     return path
 
 
@@ -232,20 +246,26 @@ def list_roots(ctx: Context, args: dict) -> dict:
 
 
 @tool("list_folder", "List the files and folders of a folder (folders first, in natural order).",
-      {"path": S("the full path of the folder"), "limit": N(f"at most this many entries (default {LIST_LIMIT}, up to {LIST_MAX})")}, ("path",))
+      {"path": S("the full path of the folder"), "limit": N(f"at most this many entries (default {LIST_LIMIT}, up to {LIST_MAX})"),
+       "offset": N("skip this many entries first, for the next page (default 0)")}, ("path",))
 def list_folder(ctx: Context, args: dict) -> dict:
     path = _folder(ctx, args.get("path"), "path")
     limit = _int(args.get("limit"), LIST_LIMIT, 1, LIST_MAX, "limit")
+    offset = _int(args.get("offset"), 0, 0, 1 << 40, "offset")
     from ..cli.helpers import sort_entries
     entries = sort_entries(ctx.fs.list(path))
-    return {"path": path, "count": len(entries), "truncated": len(entries) > limit, "untrusted_content": True,
-            "entries": [_entry(e) for e in entries[:limit]]}
+    page = entries[offset:offset + limit]
+    return {"path": path, "count": len(entries), "offset": offset, "truncated": offset + len(page) < len(entries), "untrusted_content": True,
+            "entries": [_entry(e) for e in page]}
 
 
 @tool("stat", "Size, times and tags of one file or folder.", {"path": S("the full path")}, ("path",))
 def stat_tool(ctx: Context, args: dict) -> dict:
     from ..core import filetags
     path = ctx.scope.resolve(args.get("path"))
+    if "://" in path:
+        e = ctx.fs.stat(path)
+        return {"path": path, **_entry(e), "untrusted_content": True}
     if not os.path.lexists(path):
         raise ToolError(f"it does not exist: {args.get('path')}")
     e = ctx.fs.stat(path)
@@ -262,7 +282,7 @@ def stat_tool(ctx: Context, args: dict) -> dict:
                                     "max_bytes": N("the most to read (default 64 KB; the owner sets an upper limit)")}, ("path",))
 def read_text(ctx: Context, args: dict) -> dict:
     from ..core import viewmodes
-    path = ctx.scope.resolve(args.get("path"))
+    path = _local(ctx.scope.resolve(args.get("path")), "read_text")
     if not os.path.isfile(path):
         raise ToolError(f"it is not a file that exists: {args.get('path')}")
     offset = _int(args.get("offset"), 0, 0, 1 << 62, "offset")
@@ -290,7 +310,7 @@ def read_text(ctx: Context, args: dict) -> dict:
 def read_metadata(ctx: Context, args: dict) -> dict:
     from ..core import properties, viewmodes
     from ..core.exif import read_exif
-    path = ctx.scope.resolve(args.get("path"))
+    path = _local(ctx.scope.resolve(args.get("path")), "read_metadata")
     if not os.path.isfile(path):
         raise ToolError(f"it is not a file that exists: {args.get('path')}")
     kind = properties.kind_of(path)
@@ -320,12 +340,15 @@ def read_notes(ctx: Context, args: dict) -> dict:
        "min_size": N("at least this many bytes"), "max_size": N("at most this many bytes"),
        "newer_than": S("changed on or after this day (YYYY-MM-DD)"), "older_than": S("changed on or before this day (YYYY-MM-DD)"),
        "tags": L("the file carries all of these tags"), "limit": N(f"at most this many (default {SEARCH_LIMIT}, up to {SEARCH_MAX})"),
+       "offset": N("skip this many results first, for the next page (default 0; the search runs again, so ask for pages in order)"),
        "max_seconds": N(f"stop after this long (default {SECONDS_DEFAULT}, up to {SECONDS_MAX})")}, ("folder",))
 def search_tool(ctx: Context, args: dict) -> dict:
     from ..cli.helpers import parse_date
     from redactor_common.cli import CliError
     root = _folder(ctx, args.get("folder"), "folder")
-    limit = _int(args.get("limit"), SEARCH_LIMIT, 1, SEARCH_MAX, "limit")
+    page = _int(args.get("limit"), SEARCH_LIMIT, 1, SEARCH_MAX, "limit")
+    offset = _int(args.get("offset"), 0, 0, SEARCH_MAX * 20, "offset")
+    limit = offset + page
     try:
         criteria = Criteria(root=root, name=args.get("name") or "", kinds=args.get("kind") or "files", min_size=args.get("min_size"),
                             max_size=args.get("max_size"), newer_than=parse_date(args["newer_than"]) if args.get("newer_than") else None,
@@ -344,9 +367,10 @@ def search_tool(ctx: Context, args: dict) -> dict:
         raise ToolError(str(e))
     finally:
         stop()
-    return {"folder": root, "count": len(found.entries), "truncated": found.truncated, "scanned": found.scanned, "untrusted_content": True,
+    shown = found.entries[offset:]
+    return {"folder": root, "count": len(shown), "offset": offset, "truncated": found.truncated, "scanned": found.scanned, "untrusted_content": True,
             "results": [{"path": e.path, "type": "folder" if e.is_dir else "file", "size": 0 if e.is_dir else e.size, "modified": when(e.mtime)}
-                        for e in found.entries]}
+                        for e in shown]}
 
 
 @tool("find_duplicates", "Find files with exactly the same content in one or more folders (size, then the ends, then the whole file).",
@@ -577,7 +601,7 @@ def _preview(plan, extra: Optional[dict] = None) -> dict:
 
 def _keep_plan(ctx: Context, request: dict, preview: dict) -> dict:
     pid = uuid.uuid4().hex[:10]
-    ctx.plans[pid] = request
+    ctx.plans[pid] = {**request, "expected": {"steps": preview.get("steps", 0), "bytes": preview.get("bytes", 0)}}   # the window compares
     while len(ctx.plans) > 50:
         ctx.plans.pop(next(iter(ctx.plans)))
     return {"plan_id": pid, **preview, "next": "Call commit_plan with this plan_id. Nothing has been changed yet; the owner must agree in the Dossier window."}
@@ -610,7 +634,64 @@ def plan_copy_tool(ctx: Context, args: dict) -> dict:
     return _keep_plan(ctx, {"action": "copy", "sources": sources, "destination": dest, "on_conflict": policy, "reason": _reason(args)}, _preview(plan))
 
 
-@tool("plan_move", "Prepare moving files and folders into a folder. Nothing moves until commit_plan and the owner's OK.",
+REPORT_PATHS_MAX = 200_000
+
+
+def _report_paths(ctx: Context, report: str, statuses) -> list:
+    """The RelPath column of a report or manifest Dossier wrote (or a CSV inside the owner's folders), cut to ``statuses`` if named."""
+    import csv
+    path = _manifest_file(ctx, report)
+    if statuses is not None and (not isinstance(statuses, list) or not all(isinstance(s, str) for s in statuses)):
+        raise ToolError("statuses must be a list of statuses")
+    with open(path, encoding="utf-8-sig", newline="") as f:
+        rows = csv.reader(f)
+        head = next(rows, [])
+        if "RelPath" not in head:
+            raise ToolError("that file has no RelPath column: use a report from compare_with_manifest or compare_folders, or a manifest")
+        at, st = head.index("RelPath"), head.index("Status") if "Status" in head else -1
+        if statuses and st < 0:
+            raise ToolError("that file has no Status column, so statuses cannot be chosen from it")
+        out = [r[at].replace("\\", "/") for r in rows if len(r) > at and (not statuses or (len(r) > st and r[st] in statuses))]
+    if len(out) > REPORT_PATHS_MAX:
+        raise ToolError(f"more than {REPORT_PATHS_MAX:,} paths: copy in parts")
+    return out
+
+
+@tool("plan_copy_paths", "Prepare copying files from one folder to the same places below another, making the folders that are missing: for "
+      "what a comparison found only on one side, scattered over many folders. Name the files below source_root in paths, or take them from a "
+      "report (compare_with_manifest or compare_folders with report=true) with the statuses you want. Nothing is copied until commit_plan "
+      "and the owner's OK.",
+      {"source_root": S("full path of the folder the paths are below"), "destination_root": S("full path of the folder to copy them below; it must exist"),
+       "paths": L("paths below source_root, with / (for example Vrakkart/NO/1910.doc)"),
+       "from_report": S("full path of a report or manifest; its RelPath column is used instead of paths"),
+       "statuses": L("with from_report: only rows with these statuses (for example only_a)"), **_CONFLICT, **_COMMON},
+      ("source_root", "destination_root"), kind="plan")
+def plan_copy_paths_tool(ctx: Context, args: dict) -> dict:
+    from ..core.ops import bad_relative, plan_copy_paths
+    _need_changes(ctx)
+    src, dest = _folder(ctx, args.get("source_root"), "source_root"), _folder(ctx, args.get("destination_root"), "destination_root")
+    if bool(args.get("paths")) == bool(args.get("from_report")):
+        raise ToolError("name either paths or from_report")
+    if args.get("paths"):
+        rels = args["paths"]
+        if not isinstance(rels, list) or not all(isinstance(r, str) for r in rels):
+            raise ToolError("paths must be a list of paths below source_root")
+    else:
+        rels = _report_paths(ctx, args["from_report"], args.get("statuses"))
+    bad = [why for why in (bad_relative(r) for r in rels) if why]
+    if bad:
+        raise ToolError("; ".join(bad[:5]))
+    if not rels:
+        raise ToolError("there is nothing to copy (no paths, or no row with those statuses)")
+    policy = args.get("on_conflict") or "skip"
+    if policy not in POLICIES:
+        raise ToolError("on_conflict is skip, overwrite, keep-both or newer")
+    plan = _resolved(plan_copy_paths(ctx.fs, src, dest, rels), ctx, policy)
+    return _keep_plan(ctx, {"action": "copy_paths", "source_root": src, "destination_root": dest, "paths": [r.replace("\\", "/") for r in rels],
+                            "on_conflict": policy, "reason": _reason(args)}, _preview(plan))
+
+
+@tool("plan_move","Prepare moving files and folders into a folder. Nothing moves until commit_plan and the owner's OK.",
       {"sources": L("full paths of what to move"), "destination": S("full path of the destination folder, which must exist"), **_CONFLICT, **_COMMON},
       ("sources", "destination"), kind="plan")
 def plan_move_tool(ctx: Context, args: dict) -> dict:
@@ -731,9 +812,15 @@ def call(ctx: Context, name: str, args: dict) -> dict:
     if t.kind in ("plan", "commit") and name != "discard_plan":
         _need_changes(ctx)
     try:
+        for path in server_paths(args):                    # a listed server folder is connected before the tool looks at it
+            if name in ("read_text", "read_metadata"):
+                _local(path, name)
+            ctx.remotes.ensure(ctx.fs, ctx.config, ctx.scope.resolve(path))
         return t.handler(ctx, args)
     except (Denied, ToolError):
         raise
+    except RemoteError as e:
+        raise ToolError(str(e))
     except FileNotFoundError as e:
         raise ToolError(f"it does not exist: {getattr(e, 'filename', None) or e}")
     except PermissionError as e:

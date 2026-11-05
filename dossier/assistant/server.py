@@ -28,6 +28,26 @@ class Server:
     def __init__(self, context: Optional[tools.Context] = None) -> None:
         self.ctx = context
         self.initialized = False
+        self.listed_changes: Optional[bool] = None     # whether file changes were allowed when the tools were last listed
+        self.notifications: list = []                  # messages to send after the reply (``serve`` sends them)
+
+    def visible_tools(self) -> list:
+        """The tools to list: the plan_* tools and commit_plan only while the owner allows file changes, so an assistant is not offered
+        what would be refused. When that switch changes, the client is told the list changed (``notifications/tools/list_changed``)."""
+        changes = self.context().config.allow_file_changes
+        self.listed_changes = changes
+        return [t for t in tools.TOOLS.values() if changes or t.kind not in ("plan", "commit")]
+
+    def _watch_changes_switch(self) -> None:
+        if self.listed_changes is None:
+            return
+        if self.context().config.allow_file_changes != self.listed_changes:
+            self.listed_changes = self.context().config.allow_file_changes
+            self.notifications.append({"jsonrpc": "2.0", "method": "notifications/tools/list_changed"})
+
+    def take_notifications(self) -> list:
+        out, self.notifications = self.notifications, []
+        return out
 
     def context(self) -> tools.Context:
         """The context for a call: the owner's settings are read again for every call, so a switch in the window takes effect at once."""
@@ -58,15 +78,17 @@ class Server:
                 wanted = params.get("protocolVersion")
                 self.initialized = True
                 return self._result(ident, {"protocolVersion": wanted if wanted in SUPPORTED else SUPPORTED[0],
-                                            "capabilities": {"tools": {"listChanged": False}},
+                                            "capabilities": {"tools": {"listChanged": True}},
                                             "serverInfo": {"name": "dossier", "title": APP_NAME, "version": APP_VERSION},
                                             "instructions": INSTRUCTIONS})
             if method == "ping":
                 return self._result(ident, {})
             if method == "tools/list":
-                return self._result(ident, {"tools": [t.listing() for t in tools.TOOLS.values()]})
+                return self._result(ident, {"tools": [t.listing() for t in self.visible_tools()]})
             if method == "tools/call":
-                return self._result(ident, self._call(params))
+                reply = self._result(ident, self._call(params))
+                self._watch_changes_switch()
+                return reply
             return self._error(ident, -32601, f"method not found: {method}")
         except Exception as e:   # noqa: BLE001 -- the server must stay up whatever one call does
             print(f"dossier mcp: internal error: {type(e).__name__}: {e}", file=sys.stderr)
@@ -152,5 +174,7 @@ def serve(stdin: Optional[TextIO] = None, stdout: Optional[TextIO] = None, serve
         reply = server.handle_line(line)
         if reply is not None:
             stdout.write(reply + "\n")
-            stdout.flush()
+        for note in server.take_notifications():
+            stdout.write(json.dumps(note, ensure_ascii=False) + "\n")
+        stdout.flush()
     return 0
