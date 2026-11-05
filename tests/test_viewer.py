@@ -328,7 +328,8 @@ def test_menus_view_has_modes_and_notes_while_settings_has_the_choices(commander
                              "Copy This Folder's Path"]
     assert texts("Mark") == ["Mark All", "Unmark All", "Invert Marks", "Mark by Pattern...", "Unmark by Pattern...", "Mark by Tag...",
                              "Unmark by Tag...", "Saved Marks"]
-    assert texts("View") == ["Details", "Thumbnails", "Thumbnail Size", "Sort By", "Columns...", "Folder Layout", "All Files Below This Folder",
+    assert texts("View") == ["Details", "Thumbnails", "Thumbnail Size", "Sort By", "Columns...", "Folder Layout", "Show Hidden and System Files",
+                             "All Files Below This Folder",
                              "Quick Filter", "Folder Sizes", "Refresh", "Folder Notes", "Tools Bar", "Bar Positions", "Full Screen"]
     assert texts("Go") == ["Back", "Forward", "Folder History...", "Hotlist...", "Home Page", "Root of the Drive", "Edit the Path",
                            "Pin Folder to Home Page",

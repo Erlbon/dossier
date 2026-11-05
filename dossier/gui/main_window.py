@@ -29,7 +29,7 @@ from ..core.textedit import BinaryFile, EncodingProblem, FileTooLarge, load_docu
 from ..core.terminals import (UnsafeArgument, builtin_profiles, default_launcher, default_profile, detect,
                               session_launch)
 from ..core.undo_log import Step, UndoAction, UndoLog
-from ..core.vfs import FileSystem, LocalFileSystem
+from ..core.vfs import FileSystem, LocalFileSystem, stat_or_none
 from ..core.worker import Job, JobRunner, JobState
 from .appicon import app_icon
 from .background import run_in_background
@@ -217,6 +217,7 @@ class MainWindow(FrostMixin, GlassViewMixin, KeysMixin, AutoRefreshMixin, Metada
             panel.sizes_requested.connect(lambda p=panel: self.calculate_folder_sizes(p))
             panel.flatten_requested.connect(lambda p=panel: self.show_all_files_below(p))
             panel.context_requested.connect(lambda pos, row, p=panel: self.show_context_menu(p, pos, row))
+            panel.tab_menu_requested.connect(lambda index, pos, p=panel: self.show_tab_menu(p, index, pos))
             panel.files_dropped.connect(lambda paths, dest, mods, source: self._files_dropped(paths, dest, mods, source))
             panel.content_dropped.connect(self._new_file_from_content)
             panel.column_menu_requested.connect(lambda pos, p=panel: self.show_column_menu(p, pos))
@@ -382,6 +383,13 @@ class MainWindow(FrostMixin, GlassViewMixin, KeysMixin, AutoRefreshMixin, Metada
             self._on_theme_changed()          # clears the cache and repaints every icon
             if set_id in self.icon_set_actions:
                 self.icon_set_actions[set_id].setChecked(True)
+
+    def set_show_hidden(self, on: bool) -> None:
+        """View > Show Hidden and System Files (Ctrl+H): both panels; the panel's count says how many are left out."""
+        for panel in (self.left, self.right):
+            panel.model.set_show_hidden(on)
+        self.settings.setValue("view/show_hidden", "true" if on else "false")
+        self._say("Hidden and system files are shown" if on else "Hidden and system files are left out")
 
     def set_notes_visible(self, on: bool) -> None:
         for panel in (self.left, self.right):
@@ -1092,30 +1100,45 @@ class MainWindow(FrostMixin, GlassViewMixin, KeysMixin, AutoRefreshMixin, Metada
             self.dialogs.info("New Folder", "This folder is read-only here (an archive, a search result or a list of "
                                             "all files cannot be added to).")
             return
-        name = self.dialogs.ask_text("New Folder", "Folder name:")
-        if not name:
+        answer = self.dialogs.ask_text("New Folder", "Folder name (a\\b\\c makes folders inside each other):")
+        if not answer:
             return
-        why = check_name(name)
+        parts = [p for p in answer.replace("\\", "/").split("/") if p.strip()]       # a\b\c: one folder in the other
+        why = check_name(parts[0]) if parts else "the name is empty"
+        for part in parts[1:]:
+            why = why or check_name(part)
         if why:
             self.dialogs.info("New Folder", why[0].upper() + why[1:] + ".")
             return
         panel, folder = self.active, self.active.path
-        path = self.fs.join(folder, name)
+        name = parts[0]
+        paths = []
+        for part in parts:
+            paths.append(self.fs.join(paths[-1] if paths else folder, part))
 
-        def work(progress, cancel) -> str:                       # on a server or a slow share this is a round trip: on a thread
-            try:
-                self.fs.mkdir(path)
-            except FileExistsError:
-                return f"An item named {name} already exists here."
-            except OSError as e:
-                return f"Could not create the folder: {e.strerror or e}"
-            return ""
+        def work(progress, cancel):                              # on a server or a slow share these are round trips: on a thread
+            made_now = []
+            for path in paths:
+                st = stat_or_none(self.fs, path)
+                if st is not None:
+                    if not st.is_dir:
+                        return made_now, f"{path} is a file, not a folder."
+                    continue                                     # a\b where a is there already: only b is made
+                try:
+                    self.fs.mkdir(path)
+                except OSError as e:
+                    return made_now, f"Could not create the folder {path}: {e.strerror or e}"
+                made_now.append(path)
+            return made_now, "" if made_now else f"An item named {answer.strip()} already exists here."
 
-        def made(problem: str) -> None:
+        def made(result) -> None:
+            made_now, problem = result
+            if made_now:                                         # undo removes the folders it made, innermost first
+                self.undo_log.push(UndoAction("New folder", [Step("created_dir", p) for p in made_now]))
             if problem:
                 self.dialogs.info("New Folder", problem)
-                return
-            self.undo_log.push(UndoAction("New folder", [Step("created_dir", path)]))
+                if not made_now:
+                    return
             if panel.path == folder:
                 panel.set_folder(folder, select=name)
             for other in (self.left, self.right):

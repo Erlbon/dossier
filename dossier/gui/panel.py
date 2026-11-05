@@ -497,9 +497,12 @@ class TabState:
     scroll: int = 0
     history: list = field(default_factory=list)     # the folders this tab has shown, oldest first
     hpos: int = -1                                  # where in the history the tab stands (back and forward move it)
+    locked: bool = False                            # a locked tab keeps its folder: opening another one opens a new tab
 
 
 HISTORY_MAX = 100                           # folders a tab remembers
+CLOSED_MAX = 20                             # closed tabs Reopen Closed Tab can bring back (this session)
+LOCK_MARK = chr(0x1F512) + " "              # in front of a locked tab's name
 FRAME = 2                                   # width of the active panel's gold frame, in logical pixels
 
 
@@ -674,6 +677,7 @@ class Panel(QFrame):
     flatten_requested = pyqtSignal()      # the button for "all files below this folder" was pressed
     home_action = pyqtSignal(str)         # an action entry of the Home page was opened (its path says which)
     server_requested = pyqtSignal(str, bool)   # a server of the Home page was opened: (its address, in a new tab)
+    tab_menu_requested = pyqtSignal(int, object)   # a right-click on a tab: (its index, global position)
     connect_needed = pyqtSignal(str)      # a folder of a server that is not connected was asked for (its address)
     login_needed = pyqtSignal(str)        # a network share refused us (user name or password): the window asks for a login
     _login_retry_path = ""                # the folder being tried again after a login: a second refusal is only reported
@@ -699,6 +703,7 @@ class Panel(QFrame):
         self._tabs: dict = {}          # tab id -> TabState
         self._close_buttons: dict = {}  # tab id -> its small close button
         self._tab_seq = 0
+        self.closed_tabs: list = []    # (path, item under the cursor) of tabs closed this session, newest last
         self._current_tab_id: Optional[int] = None
         self.tabs = PanelTabBar()
         self.tabs.setDocumentMode(True)
@@ -733,6 +738,11 @@ class Panel(QFrame):
         self.counts.setObjectName("counts")
         self.counts.setContentsMargins(0, 0, 10, 0)
         self.model.modelReset.connect(self._update_counts)       # a new listing, a filter
+        self._counts_timer = QTimer(self)                         # after the bar's layout has settled
+        self._counts_timer.setSingleShot(True)
+        self._counts_timer.setInterval(0)
+        self._counts_timer.timeout.connect(self._fit_counts)
+        self.address_bar.resized.connect(self._counts_timer.start)
         self.model.layoutChanged.connect(self._update_counts)    # a sort, folder sizes added up
         bar = QHBoxLayout()
         bar.setContentsMargins(4, 2, 4, 2)
@@ -885,6 +895,9 @@ class Panel(QFrame):
         self.tabs.currentChanged.connect(self._tab_switched)
         self.tabs.currentChanged.connect(lambda _i: self.outline.update())
         self.tabs.middle_clicked.connect(self.close_tab)
+        self.tabs.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.tabs.customContextMenuRequested.connect(
+            lambda pos: self.tab_menu_requested.emit(self.tabs.tabAt(pos), self.tabs.mapToGlobal(pos)))
         self.tabs.new_requested.connect(lambda: self.new_tab())
         self.new_tab_button.clicked.connect(lambda: self.new_tab())
         self._add_tab_entry("")                  # the first tab; set_folder gives it its folder
@@ -1476,10 +1489,10 @@ class Panel(QFrame):
             except RuntimeError:                      # the button went away with its tab
                 self._close_buttons.pop(tid, None)
 
-    def _tab_label(self, path: str) -> str:
+    def _tab_label(self, path: str, locked: bool = False) -> str:
         if is_home(path):
-            return "Home"
-        return self.fs.basename(path.rstrip("\\/")) or path or "..."
+            return (LOCK_MARK if locked else "") + "Home"
+        return (LOCK_MARK if locked else "") + (self.fs.basename(path.rstrip("\\/")) or path or "...")
 
     def _index_of_tab(self, tid: Optional[int]) -> int:
         return next((i for i in range(self.tabs.count()) if self.tabs.tabData(i) == tid), -1)
@@ -1487,9 +1500,9 @@ class Panel(QFrame):
     def _label_current_tab(self, path: str) -> None:
         i = self._index_of_tab(self._current_tab_id)
         if i >= 0:
-            self.tabs.setTabText(i, self._tab_label(path))
-            self.tabs.setTabToolTip(i, path)
             self._tabs[self._current_tab_id].path = path
+            self.tabs.setTabText(i, self._tab_label(path, self._tabs[self._current_tab_id].locked))
+            self.tabs.setTabToolTip(i, path)
 
     def _save_tab_state(self) -> None:
         st = self._tabs.get(self._current_tab_id)
@@ -1540,14 +1553,62 @@ class Panel(QFrame):
         self.table.verticalScrollBar().setValue(st.scroll)
         self._style_close_buttons()
 
-    def close_tab(self, index: int) -> None:
+    def close_tab(self, index: int, remember: bool = True) -> None:
         if self.tabs.count() <= 1 or index < 0 or index >= self.tabs.count():
             return                                   # the last tab stays: a panel always shows a folder
         tid = self.tabs.tabData(index)
+        if tid == self._current_tab_id:
+            self._save_tab_state()
+        st = self._tabs.get(tid)
+        if remember and st is not None and st.path:
+            self.closed_tabs = (self.closed_tabs + [(st.path, st.current)])[-CLOSED_MAX:]
         self._tabs.pop(tid, None)
         self._close_buttons.pop(tid, None)
         self.tabs.removeTab(index)                   # when it was the current tab, the neighbour is shown
         self._style_close_buttons()
+
+    def reopen_closed_tab(self) -> bool:
+        """Go > Tabs > Reopen Closed Tab: the tab closed last comes back beside the current one, on the item it stood on."""
+        if not self.closed_tabs:
+            return False
+        path, current = self.closed_tabs.pop()
+        self._save_tab_state()
+        index = self._add_tab_entry(path, after=self.tabs.currentIndex())
+        self._tabs[self.tabs.tabData(index)].current = current
+        self.tabs.setCurrentIndex(index)
+        return True
+
+    def tab_path(self, index: int) -> str:
+        if self.tabs.tabData(index) == self._current_tab_id:
+            self._save_tab_state()
+        st = self._tabs.get(self.tabs.tabData(index))
+        return st.path if st is not None else ""
+
+    def is_tab_locked(self, index: int) -> bool:
+        st = self._tabs.get(self.tabs.tabData(index))
+        return bool(st and st.locked)
+
+    def set_tab_locked(self, index: int, locked: bool) -> None:
+        st = self._tabs.get(self.tabs.tabData(index))
+        if st is not None:
+            st.locked = locked
+            self.tabs.setTabText(index, self._tab_label(self.tab_path(index), locked))
+
+    def duplicate_tab(self, index: int) -> None:
+        self._save_tab_state()
+        self.tabs.setCurrentIndex(self._add_tab_entry(self.tab_path(index), after=index))
+
+    def close_other_tabs(self, index: int, only_right: bool = False) -> None:
+        """Close Other Tabs (or Close Tabs to the Right); they can be reopened one by one."""
+        keep = self.tabs.tabData(index)
+        self.tabs.setCurrentIndex(index)
+        for i in reversed(range(self.tabs.count())):
+            if self.tabs.tabData(i) != keep and (i > index or not only_right):
+                self.close_tab(i)
+
+    def _locked_here(self) -> bool:
+        st = self._tabs.get(self._current_tab_id)
+        return bool(st and st.locked)
 
     def next_tab(self, step: int = 1) -> None:
         if self.tabs.count() > 1:
@@ -1583,7 +1644,7 @@ class Panel(QFrame):
         tabs and fall back to their nearest parent when shown."""
         paths = [p for p in paths if p] or [self.path]
         while self.tabs.count() > 1:
-            self.close_tab(self.tabs.count() - 1)
+            self.close_tab(self.tabs.count() - 1, remember=False)
         first = self._tabs[self._current_tab_id]
         first.path = paths[0]
         for p in paths[1:]:
@@ -1649,7 +1710,9 @@ class Panel(QFrame):
         entry = self.model.entry_at(row)
         if entry is None:
             return
-        if self.model.is_up_row(row):
+        if self._locked_here() and (entry.is_dir or self.model.is_up_row(row)) and entry.kind not in ("header", "action", "tailnet", "server"):
+            self.new_tab(entry.path)                 # a locked tab keeps its folder: the other one opens beside it
+        elif self.model.is_up_row(row):
             self.go_up()
         elif entry.kind == "header":
             return
@@ -1748,7 +1811,20 @@ class Panel(QFrame):
         self.view.setFocus()
 
     def _update_counts(self) -> None:
-        self.counts.setText(self.model.summary())
+        """The folder count beside the free space, shown only while the address bar has room to spare: the folder names come
+        first. It is also the free space's tooltip, so it can always be read."""
+        text = self.model.summary()
+        self.counts.setText(text)
+        self.free.setToolTip(text)
+        self._fit_counts()
+
+    def _fit_counts(self) -> None:
+        text = self.counts.text()
+        need = self.counts.fontMetrics().horizontalAdvance(text) + 14
+        spare = self.address_bar.width() - self.address_bar.wanted_width() + (0 if self.counts.isHidden() else self.counts.width())
+        show = bool(text) and spare >= need
+        if show == self.counts.isHidden():
+            self.counts.setVisible(show)
 
     def _update_free(self, path: str) -> None:
         """Free space comes from a background thread: a dead network share must not freeze the window."""

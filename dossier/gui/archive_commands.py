@@ -10,7 +10,7 @@ import os
 from PyQt6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFormLayout, QLabel, QLineEdit, QVBoxLayout)
 
 from ..core import archives, zipwrite
-from ..core.ops import plan_copy
+from ..core.ops import Plan, plan_copy
 from ..core.platform import has_scheme
 from ..core.zipfs import archive_root
 from .owned_dialog import OwnedDialog
@@ -125,8 +125,11 @@ class ArchiveCommandsMixin:
         """Alt+F9: unpack the archive under the cursor into a folder named like the archive, beside the archive (the folder it stands
         in, not the other panel's: the folder can be changed in the question)."""
         targets = self._local_targets()
-        if len(targets) != 1:
-            self._say("Put the cursor on one archive to unpack it")
+        if len(targets) > 1:
+            self._unpack_many(targets)
+            return
+        if not targets:
+            self._say("Put the cursor on an archive, or mark several, to unpack")
             return
         archive = targets[0]
         stem = os.path.splitext(self.fs.basename(archive))[0]
@@ -155,22 +158,85 @@ class ArchiveCommandsMixin:
 
         self._plan_in_background("Reading the archive", build, then)
 
+    def _unpack_many(self, targets: list) -> None:
+        """Alt+F9 with several archives marked: each into a folder of its own name beside it (no extra level when the archive holds
+        just that folder already), or all into the folder of this panel. One plan, so conflicts are asked about once."""
+        where = self.dialogs.ask_unpack_many(len(targets), self.active.real_folder())
+        if where is None:
+            return
+        here = self.active.real_folder()
+
+        def build(watch):
+            ops, warnings, blocking, skipped, not_archives = [], [], [], [], []
+            for archive in targets:
+                if os.path.isdir(archive) or archives.backend_for(archive) is None:
+                    not_archives.append(self.fs.basename(archive))
+                    continue
+                listed = self.fs.list(archive_root(archive))
+                members = [e.path for e in listed]
+                if not members:
+                    continue
+                if where == "here":
+                    dest = here
+                else:
+                    stem = os.path.splitext(self.fs.basename(archive))[0]
+                    beside = self.fs.parent(archive) or here
+                    one_folder = len(listed) == 1 and listed[0].is_dir and listed[0].name.casefold() == stem.casefold()
+                    dest = beside if one_folder else self.fs.join(beside, stem)        # never x/x/
+                    if not one_folder:
+                        if os.path.isfile(dest):
+                            raise FileExistsError(f"{dest} is a file")
+                        os.makedirs(dest, exist_ok=True)
+                plan = plan_copy(self.fs, members, dest, watch=watch)
+                ops += plan.ops
+                warnings += plan.warnings
+                blocking += plan.blocking
+                skipped += plan.skipped
+            if not ops and not blocking:
+                raise archives.ArchiveError("none of the marked items is an archive Dossier can read" if not_archives
+                                            else "the archives are empty")
+            if not_archives:
+                warnings.append(f"not archives, left out: {', '.join(not_archives[:5])}" + (" ..." if len(not_archives) > 5 else ""))
+            return Plan(f"Unpack {len(targets)} archives", tuple(ops), tuple(warnings), tuple(blocking), tuple(skipped))
+
+        def then(plan) -> None:
+            plan = self._settle(plan)
+            if plan is not None:
+                self._run(plan)
+
+        self._plan_in_background("Reading the archives", build, then)
+
     # convert -------------------------------------------------------------------------------------------------------------
     def convert_archive_to_zip(self) -> None:
-        """Write a zip with the contents of the 7z, RAR, tar or other archive under the cursor, beside it."""
+        """Write a zip with the contents of each 7z, RAR, tar or other archive marked (or the one under the cursor), beside it. Zips and
+        items that are not archives are left out and named at the end."""
         targets = self._local_targets()
-        if len(targets) != 1:
-            self._say("Put the cursor on one archive to convert it")
+        if not targets:
+            self._say("Put the cursor on an archive, or mark several, to convert them")
             return
-        archive = targets[0]
 
         def work(progress, cancel):
-            return zipwrite.convert_to_zip(archive, cancel=cancel, progress=progress)
+            done, left_out = [], []
+            for i, archive in enumerate(targets):
+                try:
+                    done.append(zipwrite.convert_to_zip(archive, cancel=cancel,
+                                                        progress=(lambda d, t, i=i: progress(i, len(targets))) if len(targets) > 1 else progress))
+                except (zipwrite.ZipWriteError, archives.ArchiveError) as e:
+                    if len(targets) == 1:
+                        raise
+                    left_out.append(f"{os.path.basename(archive)}: {e}")
+            return done, left_out
 
         def finished(result) -> None:
+            done, left_out = result
             for panel in (self.left, self.right):
                 panel.refresh()
-            self._say(f"Converted to {os.path.basename(result.path)} ({result.files:,} files); the original is still there")
+            if len(done) == 1 and not left_out:
+                self._say(f"Converted to {os.path.basename(done[0].path)} ({done[0].files:,} files); the original is still there")
+                return
+            self._say(f"Converted {len(done)} archive{'s' if len(done) != 1 else ''} to zip; the originals are still there")
+            if left_out:
+                self.dialogs.info("Convert to Zip", "Left out:" + chr(10) + chr(10).join(left_out[:15]))
 
         run_in_background(self, self.cmd_runner, "Converting to zip", work, on_result=finished, tracked=self._size_jobs,
                           failed_title="Convert to Zip")

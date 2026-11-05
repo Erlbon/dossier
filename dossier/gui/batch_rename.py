@@ -15,9 +15,10 @@ from typing import Optional
 from PyQt6.QtWidgets import QDialog
 
 from ..core.ops import plan_rename_many
+from .background import run_in_background
 
-# What a file can offer a pattern. Everything here is a fact about the file itself; the metadata of a file's content
-# (title, artist, ...) belongs to the metadata work and will add its own placeholders.
+# What a file can offer a pattern: facts about the file itself, then the tags Dossier already reads (TAG_PLACEHOLDERS), which are
+# empty for a file that has no such tag.
 PLACEHOLDERS = [
     ("name", "File name (without extension)"),
     ("folder", "Name of the folder it is in"),
@@ -29,6 +30,18 @@ PLACEHOLDERS = [
     ("minute", "Minute modified"),
     ("second", "Second modified"),
 ]
+TAG_PLACEHOLDERS = [
+    ("artist", "Artist (music tags)"),
+    ("album", "Album (music tags)"),
+    ("title", "Title (music, comic or video tags)"),
+    ("track", "Track number (music tags)"),
+    ("tagyear", "Year in the tags"),
+    ("series", "Series (comic tags)"),
+    ("number", "Issue number (comic tags)"),
+    ("taken", "Date a photo was taken (EXIF), 2019-05-17"),
+]
+PLACEHOLDERS += TAG_PLACEHOLDERS
+PHOTO_EXTENSIONS = (".jpg", ".jpeg", ".tif", ".tiff", ".png", ".webp", ".heic")
 ALWAYS_PAD = {"month": 2, "day": 2, "hour": 2, "minute": 2, "second": 2}
 HISTORY_KEY = "rename/pattern_history"
 
@@ -48,6 +61,33 @@ def file_values(entry, path: str, index: int) -> dict:
         "minute": str(when.tm_min) if when else "",
         "second": str(when.tm_sec) if when else "",
     }
+
+
+def has_tags(path: str) -> bool:
+    """Whether a file can carry tags these placeholders read (music, comic, video, photo)."""
+    from ..core.properties import kind_of
+    return bool(kind_of(path)) or path.lower().endswith(PHOTO_EXTENSIONS)
+
+
+def tag_values(path: str) -> dict:
+    """The tag placeholders of one file (all empty when it has none). Opens the file: called on a thread."""
+    from ..core.exif import read_exif
+    from ..core.filetimes import parse_exif_date
+    from ..core.metacolumns import read_values
+    from ..core.properties import kind_of
+    out = {key: "" for key, _label in TAG_PLACEHOLDERS}
+    kind = kind_of(path)
+    if kind:
+        v = read_values(path, {kind})
+        out.update(artist=v.get("m_artist", ""), album=v.get("m_album", ""), title=v.get("m_title", ""),
+                   track=v.get("m_track", ""), tagyear=v.get("m_year", ""), series=v.get("m_series", ""),
+                   number=v.get("m_number", ""))
+    elif path.lower().endswith(PHOTO_EXTENSIONS):
+        exif = read_exif(path)
+        when = parse_exif_date(exif.get("Date taken") or exif.get("Date digitized"))
+        if when is not None:
+            out["taken"] = time.strftime("%Y-%m-%d", time.localtime(when))
+    return {k: v.replace("/", "-").replace(chr(92), "-") for k, v in out.items()}       # a tag never makes a folder
 
 
 def split_name(entry) -> tuple:
@@ -103,9 +143,26 @@ class BatchRenameMixin:
         entries = self._entries_to_rename(files_only=True)
         if entries is None:
             return
+        tagged = [e.path for e in entries if has_tags(e.path) and not e.path.startswith(("zip:", "sftp:", "scp:", "webdav:", "ftp:"))]
+        if not tagged:
+            self._rename_by_pattern_with(entries, {})
+            return
+
+        def work(progress, cancel):                              # the tags are read before the dialog opens, so its preview has them
+            out = {}
+            for i, path in enumerate(tagged):
+                cancel.check()
+                progress(i, len(tagged))
+                out[path] = tag_values(path)
+            return out
+        run_in_background(self, self.cmd_runner, "Reading the tags", work, on_result=lambda tags: self._rename_by_pattern_with(entries, tags),
+                          tracked=self._size_jobs, failed_title="Batch Rename")
+
+    def _rename_by_pattern_with(self, entries: list, tags: dict) -> None:
         from redactor_common.core.pattern_history import dedupe_and_trim, decode_history, encode_history
         from redactor_common.gui.rename_pattern_dialog import RenamePatternDialog
-        values = {e.path: file_values(e, e.path, i) for i, e in enumerate(entries)}
+        empty = {key: "" for key, _label in TAG_PLACEHOLDERS}
+        values = {e.path: {**file_values(e, e.path, i), **tags.get(e.path, empty)} for i, e in enumerate(entries)}
         history = decode_history(str(self.settings.value(HISTORY_KEY, "") or ""))
         pad = str(self.settings.value("rename/pad_counter", "false")).lower() == "true"
         width = int(self.settings.value("rename/pad_width", 2) or 2)

@@ -20,6 +20,7 @@ from ..core import covers, sharing
 from ..core.drives import is_remote_quick
 from ..core.filetypes import DRIVE_ICONS, icon_name
 from ..core.home import HOME_URL, TYPE_NAMES, USER_FOLDER_NOTE
+from ..core.search import attribute_letters
 from ..core.selection import SelectionStore
 from ..core.vfs import Entry, FileSystem, natural_key
 from . import icon_set, look, theme
@@ -133,6 +134,7 @@ class FolderModel(QAbstractTableModel):
         self._rows: list = []
         self._source_rows: list = []             # the whole listing; _rows is what the quick filter lets through
         self._filter = ""
+        self.show_hidden = True          # View > Show Hidden and System Files
         self._tree_sizes: dict = {}
         self.drop_row = -1                       # the row a drag is hovering over (a folder that would take the drop)
         self.icon_px = 0                         # 0: the details table; otherwise the thumbnail view, with pictures this big
@@ -286,9 +288,23 @@ class FolderModel(QAbstractTableModel):
         self._resort()
         self.endResetModel()
 
+    def set_show_hidden(self, on: bool) -> None:
+        """Show or leave out hidden and system items (dot names on Linux and macOS). Marks stay."""
+        if on == self.show_hidden:
+            return
+        self.beginResetModel()
+        self.show_hidden = on
+        self._rows = self._filtered(self._source_rows)
+        self._resort()
+        self.endResetModel()
+
     def _filtered(self, entries: list) -> list:
+        if self.is_home:
+            return entries
+        if not self.show_hidden:
+            entries = [e for e in entries if not set(attribute_letters(e)) & {"H", "S"}]
         text = self._filter.strip()
-        if not text or self.is_home:
+        if not text:
             return entries
         return [e for e in entries if name_fits(e.name, text)]
 

@@ -2,9 +2,9 @@
 from dossier.core import fkey_config as cfg
 
 
-def test_the_plain_and_shift_rows_have_all_twelve_keys_and_ctrl_is_blank():
+def test_the_plain_and_shift_rows_have_all_twelve_keys_and_ctrl_sorts():
     assert sorted(cfg.DEFAULTS[cfg.PLAIN]) == list(range(1, 13)) and sorted(cfg.DEFAULTS[cfg.SHIFT]) == list(range(1, 13))
-    assert cfg.DEFAULTS[cfg.CTRL] == {}
+    assert cfg.DEFAULTS[cfg.CTRL] == {3: "sort_by_name", 4: "sort_by_type", 5: "sort_by_date", 6: "sort_by_size"}   # as in TC and Far
     assert cfg.DEFAULTS[cfg.PLAIN][8] == "delete" and cfg.DEFAULTS[cfg.SHIFT][8] == "delete_permanently"
 
 
@@ -37,6 +37,7 @@ def test_unreadable_saved_text_is_ignored():
 
 def test_the_bar_shows_a_row_only_when_it_has_keys():
     table = cfg.resolve()
+    table[cfg.CTRL] = {}
     assert cfg.layer_for(table, False, False) == cfg.PLAIN
     assert cfg.layer_for(table, True, False) == cfg.SHIFT
     assert cfg.layer_for(table, False, True) == cfg.PLAIN               # Ctrl row empty: holding Ctrl for Ctrl+C keeps the bar as it is

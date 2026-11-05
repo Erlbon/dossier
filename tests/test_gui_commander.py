@@ -72,6 +72,12 @@ class FakeDialogs:
     def ask_text(self, title, label, default=""):
         return self.texts.pop(0) if self.texts else None
 
+    def ask_unpack_many(self, count, here):
+        return getattr(self, "unpack_answer", "each")
+
+    def show_diff(self, title, header, rows):
+        self.diffs = getattr(self, "diffs", []) + [(header, rows)]
+
     def ask_mark(self, title, pattern):
         """``mark_answer`` (pattern, Criteria) when a test set one, else the next text as a name pattern alone."""
         from dossier.core.search import Criteria
@@ -259,7 +265,7 @@ def test_f7_creates_a_folder_and_f2_renames(world):
 
 def test_bad_folder_name_is_refused(world):
     win, dialogs, left, _r, _t = world
-    dialogs.texts = ["a/b"]
+    dialogs.texts = ["a|b" if os.name == "nt" else "a/.."]          # a/b is two folders now (review card 9); | and .. are refused
     key(win, Qt.Key.Key_F7)
     pump(win, lambda: dialogs.infos)
     assert dialogs.infos and os.listdir(left) == []

@@ -166,12 +166,16 @@ class ZipEditMixin:
 
     def _new_folder_in_zip(self) -> None:
         archive, inside = zip_parts(self.active.path)
-        name = self.dialogs.ask_text("New Folder", "Folder name:")
-        if not name:
+        answer = self.dialogs.ask_text("New Folder", "Folder name (a\\b\\c makes folders inside each other):")
+        if not answer:
             return
-        why = check_name(name)
+        parts = [p for p in answer.replace("\\", "/").split("/") if p.strip()]       # a\b\c: one folder in the other, as on disk
+        why = "" if parts else "the name is empty"
+        for part in parts:
+            why = why or check_name(part)
         if why:
             self.dialogs.info("New Folder", why[0].upper() + why[1:] + ".")
             return
+        name = "/".join(parts)
         self._rewrite_zip(archive, "New Folder in Zip", f"Made the folder {name}",
                           add=[((inside + "/" if inside else "") + name, None)])

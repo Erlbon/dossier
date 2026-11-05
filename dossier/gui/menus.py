@@ -15,6 +15,8 @@ from PyQt6.QtCore import QUrl
 from PyQt6.QtGui import QAction, QActionGroup, QDesktopServices, QKeySequence
 from PyQt6.QtWidgets import QMenu
 
+from redactor_common.gui.command_palette import add_command_palette
+
 from ..core import fkey_config
 from ..core.platform import FILE_MANAGER_NAME
 from ..core.version import APP_NAME, APP_REPO_URL
@@ -168,6 +170,16 @@ class MenusMixin:
         self.add_layout_actions(view_menu)
         view_menu.aboutToShow.connect(self.sync_mode_actions)            # Thumbnail Size is greyed while the panel shows Details
         view_menu.addSeparator()
+        self.act_show_hidden = QAction("Show Hidden and System Files", self)
+        self.act_show_hidden.setCheckable(True)
+        self.act_show_hidden.setShortcut("Ctrl+H")
+        self.addAction(self.act_show_hidden)
+        shown = str(self.settings.value("view/show_hidden", "true")).lower() != "false"
+        self.act_show_hidden.setChecked(shown)
+        self.act_show_hidden.toggled.connect(self.set_show_hidden)
+        for panel in (self.left, self.right):
+            panel.model.set_show_hidden(shown)
+        view_menu.addAction(self.act_show_hidden)
         for a in (self._action("All Files Below This Folder", "Ctrl+Shift+B", self.show_all_files_below),
                   self._action("Quick Filter", "Ctrl+S", lambda: self.active.start_filter()),
                   self._action("Folder Sizes", "Alt+Shift+Return", self.calculate_folder_sizes),
@@ -212,6 +224,7 @@ class MenusMixin:
                                  ("Previous Tab", "Ctrl+Shift+Tab", lambda: self.active.next_tab(-1)),
                                  ("Open Folder in New Tab", "Ctrl+Return", lambda: self.active.open_current(True))):
             tabs_menu.addAction(self._action(text, keys, slot))
+        tabs_menu.addAction(self._action("Reopen Closed Tab", None, self.reopen_closed_tab))
         tabs_menu.addSeparator()
         tabs_menu.addAction(self._action("Save Tab Set As...", None, self.save_tab_set))
         self._tab_open_menu, self._tab_add_menu, self._tab_forget_menu = (tabs_menu.addMenu("Open Tab Set"), tabs_menu.addMenu("Add Tab Set"),
@@ -369,6 +382,9 @@ class MenusMixin:
     def _build_help_menu(self) -> None:
         help_menu = self.menuBar().addMenu("&Help")
         help_menu.addAction(self._action("Keyboard Shortcuts...", None, self.show_keys))
+        self.act_palette = add_command_palette(self)            # Ctrl+K: type a few letters of any command (redactor_common)
+        self.act_palette.setText("Command Palette...")
+        help_menu.addAction(self.act_palette)
         help_menu.addSeparator()
         help_menu.addAction(self._action("Documentation (Online)", None, lambda: self.open_web_page(APP_REPO_URL)))
         help_menu.addAction(self._action("What's New (Online)", None, lambda: self.open_web_page(APP_REPO_URL + "/blob/main/CHANGELOG.md")))

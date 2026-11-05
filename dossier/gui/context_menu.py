@@ -73,6 +73,49 @@ class ContextMenuMixin:
         if menu.actions():
             self._popup_menu(menu, global_pos)
 
+    # a tab's menu ------------------------------------------------------------------------------------------------------------
+    def build_tab_menu(self, panel, index: int) -> QMenu:
+        """Right-click on a tab: duplicate, close others, show in the other panel, lock; and reopen what was closed."""
+        menu = QMenu(self)
+        if index >= 0:
+            many = panel.tabs.count() > 1
+            menu.addAction("Duplicate Tab").triggered.connect(lambda: panel.duplicate_tab(index))
+            menu.addAction("Open in the Other Panel").triggered.connect(lambda: self._tab_to_other(panel, index))
+            lock = menu.addAction("Lock Tab")
+            lock.setCheckable(True)
+            lock.setChecked(panel.is_tab_locked(index))
+            lock.setToolTip("A locked tab keeps its folder: a folder opened in it opens in a new tab")
+            lock.toggled.connect(lambda on: panel.set_tab_locked(index, on))
+            menu.addSeparator()
+            close = menu.addAction("Close Tab")
+            close.setEnabled(many)
+            close.triggered.connect(lambda: panel.close_tab(index))
+            others = menu.addAction("Close Other Tabs")
+            others.setEnabled(many)
+            others.triggered.connect(lambda: panel.close_other_tabs(index))
+            right = menu.addAction("Close Tabs to the Right")
+            right.setEnabled(index < panel.tabs.count() - 1)
+            right.triggered.connect(lambda: panel.close_other_tabs(index, only_right=True))
+            menu.addSeparator()
+        reopen = menu.addAction("Reopen Closed Tab")
+        reopen.setEnabled(bool(panel.closed_tabs))
+        reopen.triggered.connect(panel.reopen_closed_tab)
+        menu.setToolTipsVisible(True)
+        return menu
+
+    def show_tab_menu(self, panel, index: int, global_pos) -> None:
+        self._set_active(panel)
+        self._popup_menu(self.build_tab_menu(panel, index), global_pos)
+
+    def _tab_to_other(self, panel, index: int) -> None:
+        other = self.right if panel is self.left else self.left
+        other.set_folder(panel.tab_path(index))
+
+    def reopen_closed_tab(self) -> None:
+        """Go > Tabs > Reopen Closed Tab."""
+        if not self.active.reopen_closed_tab():
+            self._say("No closed tab to reopen in this panel")
+
     def _popup_menu(self, menu: QMenu, global_pos) -> None:      # a seam for tests
         menu.exec(global_pos)
 

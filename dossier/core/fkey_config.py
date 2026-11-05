@@ -24,7 +24,7 @@ DEFAULTS: Table = {
     SHIFT: {1: "check_folder_health", 2: "change_dates", 3: "new_link", 4: "new_file", 5: "compare_files", 6: "compare_folders",
             7: "move_to_quarantine", 8: "delete_permanently", 9: "show_checksums", 10: "find_duplicate_files",
             11: "calculate_folder_sizes", 12: "open_admin_terminal"},
-    CTRL: {},
+    CTRL: {3: "sort_by_name", 4: "sort_by_type", 5: "sort_by_date", 6: "sort_by_size"},     # as in Total Commander and Far
 }
 
 _ASSIGNABLE = re.compile(r"^(Shift\+|Ctrl\+)?F([1-9]|1[0-2])$")

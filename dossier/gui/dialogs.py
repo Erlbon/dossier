@@ -182,8 +182,28 @@ class Dialogs:
         dlg.setTextValue(default)
         edit = dlg.findChild(QLineEdit)
         if edit is not None:
-            QTimer.singleShot(0, dlg, lambda: edit.setSelection(0, stem_length(default, is_dir)))
+            select = QTimer(dlg)                                 # once the box is shown (showing it selects the whole text)
+            select.setSingleShot(True)
+            select.timeout.connect(lambda: edit.setSelection(0, stem_length(default, is_dir)))
+            select.start(0)
         return dlg.textValue() if dlg.exec() == QDialog.DialogCode.Accepted else None
+
+    def show_diff(self, title: str, header: str, rows: list) -> None:
+        """Two text files side by side, in a window of its own (not modal: the commander stays usable)."""
+        from .text_diff import TextDiffWindow
+        win = TextDiffWindow(self.parent, title, header, rows)
+        win.show()
+
+    def ask_unpack_many(self, count: int, here: str) -> Optional[str]:
+        """Several archives to unpack: ``each`` into a folder of its own name beside it, ``here`` all into ``here``, or None."""
+        box = QMessageBox(QMessageBox.Icon.Question, "Unpack", f"Unpack {count} archives:", parent=self.parent)
+        each = box.addButton("Each into a Folder of Its Own Name", QMessageBox.ButtonRole.AcceptRole)
+        into = box.addButton(f"All into {here}", QMessageBox.ButtonRole.ActionRole)
+        box.addButton(QMessageBox.StandardButton.Cancel)
+        box.setDefaultButton(each)
+        box.exec()
+        box.deleteLater()
+        return "each" if box.clickedButton() is each else "here" if box.clickedButton() is into else None
 
     def ask_mark(self, title: str, pattern: str) -> Optional[tuple]:
         """Mark by Pattern: ``(pattern, criteria)`` (size, date, attributes), or None when cancelled."""

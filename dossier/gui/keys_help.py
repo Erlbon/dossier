@@ -1,7 +1,7 @@
 """F1: the list of every keyboard shortcut, read from the menus themselves (so it is never out of date), and F11: full screen."""
 from __future__ import annotations
 
-from PyQt6.QtCore import QEvent, QObject, Qt
+from PyQt6.QtCore import QEvent, QObject, Qt, QTimer
 from PyQt6.QtGui import QAction
 from PyQt6.QtWidgets import (QAbstractItemView, QDialog, QDialogButtonBox, QHeaderView, QLineEdit, QMenu, QTableWidget,
                              QTableWidgetItem, QVBoxLayout)
@@ -95,8 +95,22 @@ class KeysMixin:
         from PyQt6.QtWidgets import QApplication
         QApplication.instance().installEventFilter(LayerWatcher(self))
 
+    CTRL_ROW_DELAY_MS = 400
+
     def show_modifier_row(self, shift: bool, ctrl: bool) -> None:
+        """Show the row of the held keys. The Ctrl row waits until Ctrl has been held alone a moment (``CTRL_ROW_DELAY_MS``), so a
+        quick Ctrl+C or Ctrl+V never makes the bar flicker; Shift's row shows at once."""
         layer = fkey_config.layer_for(self._fkey_table, shift, ctrl)
+        timer = self.__dict__.get("_ctrl_row_timer")
+        if timer is not None:
+            timer.stop()
+        if layer == fkey_config.CTRL and self._fkey_layer != fkey_config.CTRL:
+            if timer is None:
+                timer = self._ctrl_row_timer = QTimer(self)
+                timer.setSingleShot(True)
+                timer.timeout.connect(lambda: self.set_fkey_layer(fkey_config.CTRL))
+            timer.start(self.CTRL_ROW_DELAY_MS)
+            return
         if layer != self._fkey_layer:
             self.set_fkey_layer(layer)
 

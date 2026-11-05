@@ -74,8 +74,22 @@ def test_the_panel_says_what_it_holds(world):
     (left / "b.log").write_bytes(b"y" * 1024)
     listed(win, win.left, 4)
     assert win.left.counts.text().startswith("1 folder, 2 files, 3")
+    assert win.left.free.toolTip() == win.left.counts.text()          # readable even when the bar has no room for it
     win.left.model.set_filter("*.txt")
     assert win.left.counts.text().endswith("(1 of 3 shown)")
+
+
+def test_the_count_gives_way_to_the_folder_names(world):
+    win, _d, left, *_ = world
+    deep = left / "a fairly long folder name" / "another long folder name" / "and a third one"
+    deep.mkdir(parents=True)
+    win.resize(700, 500)
+    win.left.set_folder(str(deep))
+    pump(win, lambda: win.left.path == str(deep))
+    for _ in range(5):
+        QApplication.processEvents()
+    assert win.left.counts.isHidden() or "..." not in [label for label, _p in win.left.address_bar.parts()]
+    assert not (not win.left.counts.isHidden() and win.left.address_bar.width() < win.left.address_bar.wanted_width())
 
 
 # 17 ----------------------------------------------------------------------------------------------------------------------------
@@ -151,3 +165,21 @@ def test_copy_names_and_this_folders_path(world):
     assert sorted(QApplication.clipboard().text().splitlines()) == ["a.txt", "b.txt"]
     win.copy_folder_path()
     assert QApplication.clipboard().text() == str(left)
+
+
+def test_the_real_rename_box_selects_the_stem(world, monkeypatch):
+    from PyQt6.QtWidgets import QDialog, QInputDialog, QLineEdit
+    from dossier.gui.dialogs import Dialogs
+    win, *_ = world
+    seen = []
+
+    def fake_exec(dlg):
+        dlg.show()
+        for _ in range(5):
+            QApplication.processEvents()
+        seen.append(dlg.findChild(QLineEdit).selectedText())
+        dlg.hide()
+        return QDialog.DialogCode.Accepted
+    monkeypatch.setattr(QInputDialog, "exec", fake_exec)
+    assert Dialogs(win).ask_name("Rename", "New name:", "report.pdf") == "report.pdf"
+    assert seen == ["report"]

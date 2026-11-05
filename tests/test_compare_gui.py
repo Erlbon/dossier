@@ -171,8 +171,8 @@ def test_the_result_dialog_filters_rows_and_greys_out_rows_without_an_action(wor
 
 def test_two_files_are_compared_byte_by_byte_and_the_first_difference_is_said(world):
     win, d, left, right, tmp = world
-    put(left / "f.bin", b"0123456789")
-    put(right / "g.bin", b"0123X56789")
+    put(left / "f.bin", bytes([0]) + b"123456789")          # binary (a NUL): two text files are shown side by side instead
+    put(right / "g.bin", bytes([0]) + b"123X56789")
     ready(win)
     win.left.table.setCurrentIndex(win.left.model.index(win.left.model.row_of("f.bin"), 0))
     win.right.table.setCurrentIndex(win.right.model.index(win.right.model.row_of("g.bin"), 0))
@@ -180,7 +180,7 @@ def test_two_files_are_compared_byte_by_byte_and_the_first_difference_is_said(wo
     win.compare_files()
     pump(win, lambda: d.infos)
     assert "differ" in d.infos[-1][1] and "byte 4" in d.infos[-1][1] and "0x4" in d.infos[-1][1]
-    put(right / "g.bin", b"0123456789")
+    put(right / "g.bin", bytes([0]) + b"123456789")
     ready(win, win.right)
     win.right.table.setCurrentIndex(win.right.model.index(win.right.model.row_of("g.bin"), 0))
     win.compare_files()

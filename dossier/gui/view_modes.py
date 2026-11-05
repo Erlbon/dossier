@@ -97,10 +97,14 @@ class ViewModesMixin:
         arrange_group = QActionGroup(self)
         arrange_group.setExclusive(True)
         self.arrange_actions = {}
+        commands = {"name": self.sort_by_name, "type": self.sort_by_type, "modified": self.sort_by_date, "size": self.sort_by_size}
         for label, key in ARRANGE:
-            act = QAction(label, self)
+            if key in commands:                  # a command of the function-key table (Ctrl+F3..F6): again = the other way round
+                act = self._action(label, None, commands[key])
+            else:
+                act = QAction(label, self)
+                act.triggered.connect(lambda _c=False, k=key: self.arrange_by(k))
             act.setCheckable(True)
-            act.triggered.connect(lambda _c=False, k=key: self.arrange_by(k))
             arrange_group.addAction(act)
             arrange.addAction(act)
             self.arrange_actions[key] = act
@@ -147,6 +151,25 @@ class ViewModesMixin:
             self.settings.setValue(f"view/size_{name}", panel.icon_px)
         if panel is self.active:
             self.sync_mode_actions()
+
+    def _sort_toggle(self, key: str) -> None:
+        """Sort by ``key``; when the list is sorted by it already, the other way round (Ctrl+F3..F6, as in Total Commander)."""
+        header = self.active.table.horizontalHeader()
+        again = header.sortIndicatorSection() == index_of(key)
+        descending = again and header.sortIndicatorOrder() == Qt.SortOrder.AscendingOrder
+        self.arrange_by(key, descending)
+
+    def sort_by_name(self) -> None:
+        self._sort_toggle("name")
+
+    def sort_by_type(self) -> None:
+        self._sort_toggle("type")
+
+    def sort_by_date(self) -> None:
+        self._sort_toggle("modified")
+
+    def sort_by_size(self) -> None:
+        self._sort_toggle("size")
 
     def arrange_by(self, key=None, descending=None) -> None:
         """Sort the list of the active panel (the thumbnail view has no header to click)."""

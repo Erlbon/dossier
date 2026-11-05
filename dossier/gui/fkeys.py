@@ -69,6 +69,10 @@ COMMANDS: dict = {
     "undo": Command("Undo", "corner-left-up"),
     "edit_folder_note": Command("Folder note", "file-text"),
     "toggle_pause": Command("Pause queue", "player-play"),
+    "sort_by_name": Command("By name", "file-text"),
+    "sort_by_type": Command("By type", "file-unknown"),
+    "sort_by_date": Command("By date", "book-2"),
+    "sort_by_size": Command("By size", "database"),
 }
 
 

@@ -2,6 +2,18 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-05#08 -- Many archives at once, tags in batch rename, text diff, nested folders, hidden files, tabs, sort keys, Ctrl+K (review cards 4, 5, 7, 9, 11, 13, 14, 16)
+
+- **Unpack and Convert work on all marked archives** (card 4). Alt+F9 with several marked asks once: each into a folder of its own name beside it (no `x\x` when the archive already holds that one folder), or all into this panel's folder; one plan, so conflicts are asked about once. Convert Archive to Zip converts each, and names the ones it left out (zips, other files).
+- **Batch rename can use tags** (card 5): `%artist%`, `%album%`, `%title%`, `%track%`, `%tagyear%`, `%series%`, `%number%` and `%taken%` (a photo's EXIF date). They are read on a thread before the dialog opens, only when music, comic, video or photo files are marked; a file without the tag leaves it empty, and a `/` in a tag never makes a folder.
+- **Compare Two Files shows text side by side** (card 7): two text files that differ (up to 4 MB) open in a window with the changed lines tinted and a Next Difference button. Binary files keep the byte answer.
+- **F7 makes nested folders** (card 9): `a\b\c` makes the missing ones, one Ctrl+Z takes them away again (innermost first). The same inside a zip.
+- **View > Show Hidden and System Files** (card 11, Ctrl+H): on by default; off leaves them out of both panels (dot names on Linux), and the panel's count says how many are not shown.
+- **Tabs** (card 13): right-click a tab for Duplicate Tab, Open in the Other Panel, Lock Tab (a folder opened in a locked tab opens in a new tab; the tab shows a lock), Close Tab, Close Other Tabs, Close Tabs to the Right and Reopen Closed Tab. Go > Tabs > Reopen Closed Tab brings back the last closed tab of the panel, on the item it stood on (the last 20, this session).
+- **Ctrl+F3 to Ctrl+F6 sort** by name, type, date and size (card 14), as in Total Commander and Far; again reverses. They are in the function-key table and can be changed in Settings > Function Keys. **The bar shows the Ctrl row only when Ctrl is held alone for 0.4 s**, so a quick Ctrl+C or Ctrl+V never makes it flicker (it used to stay put because the Ctrl row was empty).
+- **Command palette** (card 16): Help > Command Palette... (Ctrl+K), the redactor_common one: type a few letters of any command and press Enter.
+- New test `tests/test_review_medium.py`.
+
 ## 2026-11-05#07 -- An editor of your choice, Open With, marking by size and date, Search skips folders (review cards 2, 3, 6, 15)
 
 - **F4 can open another editor** (card 2): Settings > Opening Files > Edit (F4) in Another Program... picks a program (VS Code, Notepad++); F4 then starts it with the file, as a tools-bar tool is started. Edit (F4) in Dossier's Notepad goes back. A file too large for the notepad now says where to choose a program.

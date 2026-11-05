@@ -13,7 +13,7 @@ from PyQt6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, QD
                              QPushButton, QTreeWidget, QTreeWidgetItem, QVBoxLayout)
 
 from ..core import compare as cmp
-from ..core import sync
+from ..core import sync, textdiff
 from ..core.sizefmt import human_size
 from .owned_dialog import OwnedDialog
 from .background import run_in_background
@@ -283,7 +283,8 @@ class CompareFoldersMixin:
 
     # two files -------------------------------------------------------------------------------------------------------------------------
     def compare_files(self) -> None:
-        """Commands > Compare the Two Current Files: the file under the cursor in each panel, byte by byte."""
+        """Tools > Compare > Two Files Under the Cursors: the file under the cursor in each panel. Two text files that differ are
+        shown side by side; other files, byte by byte."""
         a, b = self.active.current_entry(), self.other.current_entry()
         if a is None or b is None or a.is_dir or b.is_dir or a.kind or b.kind:
             self._say("Put the cursor on a file in each panel to compare the two files")
@@ -291,11 +292,19 @@ class CompareFoldersMixin:
 
         def work(progress, cancel):
             progress(0, 0)
-            return cmp.first_difference(self.fs, a.path, b.path, cancel)
+            pos = cmp.first_difference(self.fs, a.path, b.path, cancel)
+            if pos < 0:
+                return pos, None
+            left, right = textdiff.read_lines(self.fs, a.path, a.size), textdiff.read_lines(self.fs, b.path, b.size)
+            return pos, (textdiff.side_by_side(left, right) if left is not None and right is not None else None)
 
-        def done(pos: int) -> None:
+        def done(result) -> None:
+            pos, rows = result
             when = lambda e: datetime.fromtimestamp(e.mtime).strftime("%Y-%m-%d %H:%M:%S") if e.mtime else ""        # noqa: E731
             facts = (f"{a.path}{chr(10)}  {a.size:,} bytes, {when(a)}{chr(10)}{b.path}{chr(10)}  {b.size:,} bytes, {when(b)}")
+            if rows is not None:
+                self.dialogs.show_diff("Compare Files", f"Left: {a.path}{chr(10)}Right: {b.path}{chr(10)}{textdiff.summary(rows)}", rows)
+                return
             if pos < 0:
                 self.dialogs.info("Compare Files", f"The two files are identical.{chr(10)}{chr(10)}{facts}")
             else:

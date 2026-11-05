@@ -38,11 +38,19 @@ def test_every_command_a_key_can_run_has_a_menu_action_and_a_method_and_an_icon(
         assert set(cfg.DEFAULTS[layer].values()) <= set(fkeys.COMMANDS)
 
 
+def wait_ms(ms):
+    import time
+    end = time.time() + ms / 1000
+    while time.time() < end:
+        QApplication.processEvents()
+        time.sleep(0.01)
+
+
 def test_every_key_of_the_table_is_bound_once_to_the_action_of_its_command(world):
     win, *_ = world
     expected = {cfg.key_text(layer, n): command for layer, row in win._fkey_table.items() for n, command in row.items()}
     bound = bound_keys(win)
-    assert set(bound) == set(expected) and len(expected) == 24
+    assert set(bound) == set(expected) and len(expected) == 28
     for key, command in expected.items():
         assert bound[key] is win._command_actions[command][0], key
 
@@ -54,8 +62,15 @@ def test_the_bar_shows_the_plain_row_and_the_shift_row_while_shift_is_held(world
     win.show_modifier_row(True, False)
     assert [b.property("full_text") for b in win._fkey_buttons][:4] == ["F1 Health", "F2 Dates", "F3 Link", "F4 New file"]
     assert win._fkey_buttons[7].property("full_text") == "F8 Erase" and all(b.isEnabled() for b in win._fkey_buttons)
-    win.show_modifier_row(False, True)                                    # the Ctrl row is empty: the bar stays as the plain row
+    win.show_modifier_row(False, False)
+    win.show_modifier_row(False, True)                                    # Ctrl held: the bar waits, so Ctrl+C never makes it flicker
     assert win._fkey_buttons[0].property("full_text") == "F1 Keys"
+    win.show_modifier_row(False, False)                                   # let go in time: nothing changed
+    wait_ms(win.CTRL_ROW_DELAY_MS + 200)
+    assert win._fkey_layer == cfg.PLAIN
+    win.show_modifier_row(False, True)                                    # held alone: the Ctrl row (the sort keys) shows
+    wait_ms(win.CTRL_ROW_DELAY_MS + 200)
+    assert win._fkey_buttons[2].property("full_text") == "F3 By name"
     win.show_modifier_row(False, False)
     assert win._fkey_layer == cfg.PLAIN
 
@@ -97,11 +112,12 @@ def test_changing_the_keys_rebinds_the_keyboard_redraws_the_bar_and_is_saved(wor
     assert "Alt+Return" in [s.toString() for s in win._command_actions["show_properties"][0].shortcuts()]       # its fixed key stays
     assert win._fkey_buttons[1].property("full_text") == "F2 Refresh" and win._fkey_buttons[8].property("full_text") == ""
     win.show_modifier_row(False, True)
+    wait_ms(win.CTRL_ROW_DELAY_MS + 200)
     assert win._fkey_buttons[4].property("full_text") == "F5 Pack"        # a Ctrl row with a key is shown while Ctrl is held
     saved = cfg.load(str(win.settings.value("fkeys/config")))
     assert saved == {cfg.CTRL: {5: "pack_to_zip"}, cfg.PLAIN: {2: "refresh", 9: ""}}
     win.set_fkey_table(cfg.resolve())                                     # back to the built-in table: nothing is saved
-    assert win.settings.value("fkeys/config") == "{}" and "Ctrl+F5" not in bound_keys(win)
+    assert win.settings.value("fkeys/config") == "{}" and bound_keys(win)["Ctrl+F5"] is win._command_actions["sort_by_date"][0]
 
 
 def test_the_settings_page_shows_the_table_and_hands_back_the_choice(world):
@@ -112,9 +128,9 @@ def test_the_settings_page_shows_the_table_and_hands_back_the_choice(world):
     dlg.combos[(cfg.CTRL, 3)].setCurrentIndex(dlg.combos[(cfg.CTRL, 3)].findData("refresh"))
     dlg.combos[(cfg.PLAIN, 1)].setCurrentIndex(0)                         # "(none)"
     chosen = dlg.table()
-    assert chosen[cfg.CTRL] == {3: "refresh"} and 1 not in chosen[cfg.PLAIN]
+    assert chosen[cfg.CTRL][3] == "refresh" and 1 not in chosen[cfg.PLAIN]
     dlg._restore([cfg.PLAIN])
-    assert dlg.table()[cfg.PLAIN][1] == "show_keys" and dlg.table()[cfg.CTRL] == {3: "refresh"}
+    assert dlg.table()[cfg.PLAIN][1] == "show_keys" and dlg.table()[cfg.CTRL][3] == "refresh"
     dlg._restore(list(cfg.LAYERS))
     assert dlg.table() == win._fkey_table
     dlg.deleteLater()
@@ -130,7 +146,7 @@ def test_the_settings_page_through_a_real_exec_saves_what_was_chosen(world):
         box.accept()
     when_modal(win, lambda _box: choose())
     win.open_function_keys_settings()
-    assert win._fkey_table[cfg.CTRL] == {1: "refresh"} and "Ctrl+F1" in bound_keys(win)
+    assert win._fkey_table[cfg.CTRL][1] == "refresh" and "Ctrl+F1" in bound_keys(win)
     assert cfg.load(str(win.settings.value("fkeys/config"))) == {cfg.CTRL: {1: "refresh"}}
 
 

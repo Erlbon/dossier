@@ -73,6 +73,7 @@ class AddressBar(QWidget):
     navigate = pyqtSignal(str)             # a part was clicked: go to this folder
     navigate_new_tab = pyqtSignal(str)     # a part was middle-clicked
     escaped = pyqtSignal()                 # Esc ended the editing
+    resized = pyqtSignal()                 # its width changed (the panel's folder count shows only when the parts fit)
 
     def __init__(self, fs, parent=None) -> None:
         super().__init__(parent)
@@ -180,6 +181,14 @@ class AddressBar(QWidget):
         super().resizeEvent(event)
         if self._parts:
             self._rebuild()
+        self.resized.emit()
+
+    def wanted_width(self) -> int:
+        """The width the bar needs to show every part without "..."."""
+        bold = self.font()
+        bold.setBold(look.bold_bars)
+        metrics = QFontMetrics(bold)
+        return sum(metrics.horizontalAdvance(label) + 24 for label, _p in self._parts) + 40
 
     # editing -------------------------------------------------------------------------------------------------
     def start_edit(self, text: str = "") -> None:
