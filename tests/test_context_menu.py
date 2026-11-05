@@ -238,7 +238,7 @@ def test_the_windows_menu_is_the_last_entry_of_item_and_empty_space_menus(world)
     win, d, left, *_ = world
     filled(win, left)
     t = texts(win.build_context_menu(win.left, row_of(win, "a.txt")))
-    assert t[-1] == WIN_ENTRY and t[-2] == "Properties"
+    assert t[-1] == WIN_ENTRY and t[-3:-1] == ["Properties", "Show in Explorer"]
     assert texts(win.build_context_menu(win.left, -1))[-1] == WIN_ENTRY
 
 

@@ -231,6 +231,10 @@ class FolderModel(QAbstractTableModel):
         self._rows = [dc_replace(e, size=sizes[e.path]) if e.is_dir and e.path in sizes else e for e in self._rows]
         self.sort(self._sort_col, self._sort_order)               # the cursor stays on its item, whatever the order
 
+    def has_tree_size(self, path: str) -> bool:
+        """Whether the folder ``path`` of this listing has been added up already."""
+        return path in self._tree_sizes
+
     def set_entries(self, path: str, entries: list) -> None:
         """Show an already made listing of ``path`` (the panel lists on a worker thread and hands it over)."""
         parent = self.fs.parent(path)
@@ -258,6 +262,19 @@ class FolderModel(QAbstractTableModel):
     def counts(self) -> tuple:
         """(shown, all) items of the listing, not counting the up row."""
         return len(self._rows), len(self._source_rows)
+
+    def summary(self) -> str:
+        """What the listing holds, for the panel bar: "3 folders, 12 files, 45 MB" (folder sizes count once they are added up),
+        and "12 of 40 shown" while a filter or a hidden-files switch leaves some out. Empty on the Home page."""
+        if self.is_home:
+            return ""
+        folders = sum(1 for e in self._rows if e.is_dir)
+        files = len(self._rows) - folders
+        size = sum(max(e.size, 0) for e in self._rows if not e.is_dir or e.path in self._tree_sizes)
+        text = f"{folders:,} folder{'s' if folders != 1 else ''}, {files:,} file{'s' if files != 1 else ''}, {human_size(size)}"
+        if len(self._rows) != len(self._source_rows):
+            text += f" ({len(self._rows):,} of {len(self._source_rows):,} shown)"
+        return text
 
     def set_filter(self, text: str) -> None:
         """Show only the items whose name fits ``text``: a part of the name, or a pattern with * and ?. Marks stay."""

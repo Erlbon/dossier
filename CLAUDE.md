@@ -50,7 +50,7 @@ Each menu answers one question; a new command goes in the menu whose question it
 - **Network**: servers, shares, network drives, sharing.
 - **Settings**: how Dossier looks (Appearance) and behaves. Explanations are tooltips, never greyed lines.
 - **Help**: shortcuts, documentation, updates, About.
-The right-click menu takes the label and the key hint of a menu-bar command from its action (`MenusMixin.bar_command`); give it its own text only when the clicked thing makes a better label ("Properties of This Folder"). `tests/test_menu_rules.py` holds the rules (headings, at most 15 entries a menu, no one-entry submenu, separators only between groups, no grey sentences, every shortcut in a menu, right-click = menu bar). The Redactor family lint (`redactor_common` `lint_menu_bar`) is not used: Dossier keeps Ctrl+S (Quick Filter), Ctrl+Shift+A (Unmark All), Ctrl+Shift+E and Ctrl+Shift+O.
+The right-click menu takes the label and the key hint of a menu-bar command from its action (`MenusMixin.bar_command`); give it its own text only when the clicked thing makes a better label ("Properties of This Folder"). `tests/test_menu_rules.py` holds the rules (headings, at most 16 entries a menu, no one-entry submenu, separators only between groups, no grey sentences, every shortcut in a menu, right-click = menu bar). The Redactor family lint (`redactor_common` `lint_menu_bar`) is not used: Dossier keeps Ctrl+S (Quick Filter), Ctrl+Shift+A (Unmark All), Ctrl+Shift+E and Ctrl+Shift+O.
 
 ## Lanes between sessions
 - A **local** session (the user's PC) owns everything that must be seen running: the GUI, the exe build, anything touching real folders, the Windows behaviour.

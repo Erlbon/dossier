@@ -58,12 +58,15 @@ class NewFromContentMixin:
             self._say("The clipboard holds no picture or text to make a file of")
 
     def new_file(self) -> None:
-        """File > New File... (Shift+F4 by default): an empty text file in the folder of the active panel, named by the user."""
+        """File > New File... (Shift+F4 by default): an empty text file in the folder of the active panel, named by the user, opened
+        in the editor."""
         if self._home_blocked("New File") or self._no_folder_yet("New File"):
             return
-        self._new_file_from_content(newfile.TEXT, "", self.active.path, title="New File", suggested="New file.txt")
+        self._new_file_from_content(newfile.TEXT, "", self.active.path, title="New File", suggested="New file.txt", edit=True)
 
-    def _new_file_from_content(self, kind: str, payload, folder: str, title: str = "Paste as New File", suggested: str = "") -> None:
+    def _new_file_from_content(self, kind: str, payload, folder: str, title: str = "Paste as New File", suggested: str = "",
+                               edit: bool = False) -> None:
+        """``edit``: open the new file in the editor (New File; a pasted file is already what it should be)."""
         if not self.fs.is_writable(folder) or folder.startswith("zip://"):
             self._say("A file cannot be made here: this place is read-only (an open archive, a catalogue, or the Home page)")
             return
@@ -90,5 +93,7 @@ class NewFromContentMixin:
                 if not panel.is_home and panel.path == folder:
                     panel.set_folder(panel.path, select=made)
             self._say(f"Made {made}")
+            if edit:
+                self.edit_file(path=path)
         run_in_background(self, self.cmd_runner, "Making the file", work, on_result=finished, tracked=self._size_jobs,
                           failed_title=title)

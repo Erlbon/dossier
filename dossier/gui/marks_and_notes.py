@@ -96,6 +96,23 @@ class MarksAndNotesMixin:
         QApplication.clipboard().setText(chr(10).join(paths))
         self._say(f"Copied {len(paths)} path{'s' if len(paths) != 1 else ''} as text")
 
+    def copy_marked_names(self) -> None:
+        """Edit > Copy Names as Text: the names only (no folder), one per line."""
+        paths = self.active.targets()
+        if not paths:
+            self._say("Nothing to copy: mark items or put the cursor on one")
+            return
+        QApplication.clipboard().setText(chr(10).join(self.fs.basename(p.rstrip(chr(92) + "/")) for p in paths))
+        self._say(f"Copied {len(paths)} name{'s' if len(paths) != 1 else ''} as text")
+
+    def copy_folder_path(self) -> None:
+        """Edit > Copy This Folder's Path: the path of the folder the active panel shows."""
+        if self.active.is_home or not self.active.path:
+            self._say("The Home page has no path to copy")
+            return
+        QApplication.clipboard().setText(self.active.path)
+        self._say(f"Copied {self.active.path}")
+
     # the folder note ---------------------------------------------------------------------------------------------
     def edit_folder_note(self) -> None:
         """Open the note of this folder in the editor (the one shown under the list); with none, create README.md with a

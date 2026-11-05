@@ -367,6 +367,21 @@ def windows_program(name: str) -> str:
     return os.path.join(root, *sub, name)
 
 
+FILE_MANAGER_NAME = "Explorer" if IS_WINDOWS else "Finder" if IS_MACOS else "the File Manager"
+
+
+def file_manager_command(path: str, select: bool):
+    """The command that shows ``path`` in the system's own file manager: with ``select``, its folder with ``path`` selected
+    (Linux has no standard way to select, so the folder only), else ``path`` itself opened. A string on Windows, where
+    Explorer's ``/select,`` wants its own quoting that a list would spoil; a list elsewhere."""
+    if IS_WINDOWS:
+        explorer = os.path.join(os.environ.get("SystemRoot") or os.environ.get("windir") or "C:" + chr(92) + "Windows", "explorer.exe")
+        return f'"{explorer}" /select,"{path}"' if select else f'"{explorer}" "{path}"'
+    if IS_MACOS:
+        return ["open", "-R", path] if select else ["open", path]
+    return ["xdg-open", os.path.dirname(path.rstrip("/")) or "/" if select else path]
+
+
 def console_encoding() -> str:
     """The encoding a console program's output is written in (the OEM code page on Windows)."""
     if IS_WINDOWS:

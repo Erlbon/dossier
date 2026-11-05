@@ -154,7 +154,7 @@ class ZipEditMixin:
             return
         archive, inside = parts
         old = os.path.basename(inside)
-        new = self.dialogs.ask_text("Rename", "New name:", old)
+        new = self.dialogs.ask_name("Rename", "New name:", old, entry.is_dir)
         if not new or new == old:
             return
         why = check_name(new)

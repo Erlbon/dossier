@@ -16,6 +16,7 @@ from PyQt6.QtGui import QAction, QActionGroup, QDesktopServices, QKeySequence
 from PyQt6.QtWidgets import QMenu
 
 from ..core import fkey_config
+from ..core.platform import FILE_MANAGER_NAME
 from ..core.version import APP_NAME, APP_REPO_URL
 from . import fkeys
 
@@ -111,12 +112,13 @@ class MenusMixin:
         self.act_delete = self._action("Delete", "Delete", self.delete)
         self.act_delete_perm = self._action("Delete Permanently", None, self.delete_permanently)
         self.act_properties = self._action("Properties", "Alt+Return", self.show_properties)
+        self.act_show_in_fm = self._action(f"Show in {FILE_MANAGER_NAME}", None, self.show_in_file_manager)
         self._add_all(file_menu,
                       (self.act_open, self.act_view, self.act_glass_view, self.act_edit),
                       (self.act_rename, self.act_copy, self.act_move, self.act_mkdir, self.act_new_file),
                       (self.act_change_dates, self.act_new_link),
                       (self.act_delete, self.act_delete_perm),
-                      (self.act_properties,),
+                      (self.act_properties, self.act_show_in_fm),
                       (self._action("Quit", "Ctrl+Q", self.close),))
 
     # Edit -----------------------------------------------------------------------------------------------------------------------
@@ -127,7 +129,9 @@ class MenusMixin:
                        self._action("Cut", "Ctrl+X", self.clip_cut),
                        self._action("Paste", "Ctrl+V", self.clip_paste),
                        self._action("Paste as New File...", "Ctrl+Shift+V", self.paste_as_new_file)),
-                      (self._action("Copy Paths as Text", None, self.copy_marked_paths),))
+                      (self._action("Copy Paths as Text", None, self.copy_marked_paths),
+                       self._action("Copy Names as Text", None, self.copy_marked_names),
+                       self._action("Copy This Folder's Path", None, self.copy_folder_path)))
 
     # Mark -----------------------------------------------------------------------------------------------------------------------
     def _build_mark_menu(self, mark) -> None:
@@ -194,6 +198,7 @@ class MenusMixin:
                        self._action("Folder History...", "Alt+Down", self.show_history),
                        self._action("Hotlist...", "Ctrl+B", self.show_hotlist)),
                       (self._action("Home Page", "Alt+Home", lambda: self.active.go_home()),
+                       self._action("Root of the Drive", "Ctrl+Backspace", self.go_to_root),
                        self._action("Edit the Path", "Ctrl+L", lambda: self.active.address_bar.start_edit()),
                        self._action("Pin Folder to Home Page", "Ctrl+D", self.pin_folder)),
                       (self._action("Open Cursor Folder in the Other Panel", ["Ctrl+Right", "Ctrl+Left"], self.open_in_other_panel),
@@ -253,9 +258,12 @@ class MenusMixin:
         tools.addSeparator()
         for a in (self._action("Terminal Here", "Ctrl+Shift+T", self.open_terminal),
                   self._action("Administrator Terminal Here", None, self.open_admin_terminal),
-                  self._action("SSH Terminal Here", None, self.open_ssh_terminal),
-                  self._action("Command Line History...", None, lambda: (self.cmdline.setFocus(), self.show_command_history()))):
+                  self._action("SSH Terminal Here", None, self.open_ssh_terminal)):
             tools.addAction(a)
+        command_line = tools.addMenu("Command Line")
+        command_line.addAction(self._action("Name to Command Line", "Ctrl+J", self.put_in_command_line))
+        command_line.addAction(self._action("Path to Command Line", "Ctrl+Shift+J", self.put_path_in_command_line))
+        command_line.addAction(self._action("Command Line History...", None, lambda: (self.cmdline.setFocus(), self.show_command_history())))
 
     # Network --------------------------------------------------------------------------------------------------------------------
     def _build_network_menu(self, network) -> None:

@@ -455,8 +455,11 @@ class MainWindow(FrostMixin, GlassViewMixin, KeysMixin, AutoRefreshMixin, Metada
                 if len(files) != 1:
                     return None, None, "Select one file to edit."
                 chosen = files[0]
-            if has_scheme(chosen):
+            if chosen.startswith("zip://"):
                 return chosen, None, "Items inside an archive are read-only. Copy the file out to edit it."
+            if has_scheme(chosen):
+                return chosen, None, ("Files on a server cannot be edited here yet: copy the file to this computer, edit it, "
+                                      "and copy it back.")
             if any(os.path.normcase(o) == os.path.normcase(chosen) for o in open_now):
                 return chosen, None, ""                         # open already: brought forward, not read again
             try:
@@ -595,8 +598,12 @@ class MainWindow(FrostMixin, GlassViewMixin, KeysMixin, AutoRefreshMixin, Metada
         if self.cmdline.text():
             self.cmdline.insert(" ")
             self.cmdline.setFocus()
-        else:
-            self.toggle_mark()
+            return
+        entry = None if self.active.is_home else self.active.current_entry()
+        self.toggle_mark()
+        if (entry is not None and entry.is_dir and entry.name != ".." and entry.path in self.selection
+                and not self.active.model.has_tree_size(entry.path)):
+            self.calculate_folder_sizes(paths=[entry.path])      # Space on a folder adds up its size, so the marked total is true
 
     def _type_to_command(self, text: str) -> None:
         self.cmdline.setFocus()
@@ -1045,7 +1052,7 @@ class MainWindow(FrostMixin, GlassViewMixin, KeysMixin, AutoRefreshMixin, Metada
             self._rename_in_zip(entry)
             return
         old = self.fs.basename(entry.path)
-        new = self.dialogs.ask_text("Rename", "New name:", old)
+        new = self.dialogs.ask_name("Rename", "New name:", old, entry.is_dir)
         if not new or new == old:
             return
         path = entry.path

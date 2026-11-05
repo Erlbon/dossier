@@ -1,8 +1,14 @@
-"""Going places: the folder history, the hotlist, and opening a folder in the other panel."""
+"""Going places: the folder history, the hotlist, opening a folder in the other panel, the drive's root, the system's file manager
+and the command line's Ctrl+J."""
 from __future__ import annotations
+
+import subprocess
 
 from PyQt6.QtCore import QPoint
 from PyQt6.QtWidgets import QMenu
+
+from ..core.platform import FILE_MANAGER_NAME, file_manager_command, has_scheme
+from .zip_edit import zip_parts
 
 
 class GoingPlacesMixin:
@@ -76,6 +82,44 @@ class GoingPlacesMixin:
             return
         self.other.set_folder(self.active.path)
         self._say(f"The other panel shows {self.active.path}")
+
+    def go_to_root(self) -> None:
+        """Go > Root of the Drive (Ctrl+Backspace; Backspace alone goes up one)."""
+        self.active.go_root()
+
+    def show_in_file_manager(self, folder_only: bool = False) -> None:
+        """File > Show in Explorer: the item under the cursor, selected in its folder (or the panel's folder itself when the
+        cursor is on nothing, or on the up row). An archive's inside shows the archive; a server has nothing to show."""
+        panel = self.active
+        if panel.is_home:
+            self._say("The Home page is Dossier's own: there is no folder to show")
+            return
+        entry = panel.current_entry()
+        on_item = entry is not None and entry.name != ".." and not folder_only
+        path, select = (entry.path, True) if on_item else (panel.path, False)
+        if path.startswith("zip://"):
+            path, select = (zip_parts(path) or ("", ""))[0], True
+        if not path or has_scheme(path):
+            self._say(f"{FILE_MANAGER_NAME} cannot show a folder on a server")
+            return
+        self._start_file_manager(file_manager_command(path, select))
+
+    def _start_file_manager(self, command) -> None:            # a seam: the tests do not open Explorer
+        subprocess.Popen(command)
+
+    def put_in_command_line(self, full_path: bool = False) -> None:
+        """Ctrl+J: the name under the cursor into the command line; Ctrl+Shift+J: its full path. Quoted when it holds a space."""
+        entry = self.active.current_entry()
+        if entry is None or entry.name == ".." or self.active.is_home:
+            return
+        text = entry.path if full_path else entry.name
+        if " " in text:
+            text = f'"{text}"'
+        before = self.cmdline.text()[:self.cmdline.cursorPosition()]
+        self._type_to_command(("" if not before or before.endswith(" ") else " ") + text + " ")
+
+    def put_path_in_command_line(self) -> None:
+        self.put_in_command_line(full_path=True)
 
     # which drive each letter held (opt-in: off by default, stored only when switched on) ------------------------------
     def _remember_drives(self) -> bool:

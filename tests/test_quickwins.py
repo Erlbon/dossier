@@ -319,6 +319,6 @@ def test_the_new_menu_has_its_entries(world):
     win, *_ = world
     menus = {a.text().replace("&", ""): a.menu() for a in win.menuBar().actions()}
     assert [a.text() for a in menus["Go"].actions() if not a.isSeparator()] == [
-        "Back", "Forward", "Folder History...", "Hotlist...", "Home Page", "Edit the Path", "Pin Folder to Home Page",
+        "Back", "Forward", "Folder History...", "Hotlist...", "Home Page", "Root of the Drive", "Edit the Path", "Pin Folder to Home Page",
         "Open Cursor Folder in the Other Panel", "Same Folder in the Other Panel", "Swap Panels", "Tabs", "Drives of Left Panel",
         "Drives of Right Panel"]

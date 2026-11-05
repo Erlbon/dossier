@@ -2,6 +2,21 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-05#06 -- The small gaps from the functionality review (cards 1, 8, 10, 12, 17-21)
+
+From `docs/functionality-review-2026-11-05.md`, the owner's Yes list.
+- **F4 says the right reason** (card 1): a file on a server is "on a server" (copy it to this computer, edit it, copy it back), not "inside an archive".
+- **New File opens the new file in the editor** (card 8), as Total Commander and Far do. A file made by Paste as New File does not.
+- **Rename selects the name without its extension** (card 10): F2 on `report.pdf` selects `report`, so typing keeps `.pdf`. A folder's whole name is selected; so is `.gitignore`. The same box inside a zip.
+- **The panel says what it holds** (card 12): "3 folders, 12 files, 45 MB" beside the free space, with "(12 of 40 shown)" while filtered. Folder sizes count once they are added up.
+- **Name and path to the command line** (card 17): Ctrl+J puts the name under the cursor into the command line, Ctrl+Shift+J its full path, quoted when it holds a space. Tools > Command Line holds them and the history.
+- **Show in Explorer** (card 18): File > Show in Explorer selects the item in Explorer (the folder itself on empty space: right-click > Open This Folder in Explorer). Inside an archive it shows the archive. Finder on a Mac, the file manager on Linux.
+- **Root of the Drive** (card 19): Ctrl+Backspace goes to the top of the drive, share or server (out of an archive too), standing on the folder the way down starts with. Go menu.
+- **Space on a folder adds up its size** (card 20), so the marked total in the status line is true. Only once per folder and listing.
+- **Copy Names as Text and Copy This Folder's Path** (card 21) beside Copy Paths as Text in the Edit menu.
+- The menu rules allow 16 entries a menu (File has 16 now).
+- New test `tests/test_review_small.py`.
+
 ## 2026-11-05#05 -- A Windows installer
 
 - **`dossier-setup.exe`** (Inno Setup 6, `installer/dossier.iss`) installs Dossier for the current user in `%LOCALAPPDATA%\Programs\Dossier`, with no administrator rights, a Start menu entry, an optional desktop shortcut, optional `dossier` on PATH for the command line, and an uninstaller. It installs per user only, because Help > Check for Updates swaps `dossier.exe` in place and could not do that under Program Files. Settings stay in AppData, so uninstalling keeps them.

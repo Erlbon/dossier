@@ -729,6 +729,11 @@ class Panel(QFrame):
         self.address_bar = AddressBar(fs)
         self.address = self.address_bar.line             # the text field behind the clickable parts
         self.free = QLabel()
+        self.counts = QLabel()                            # what the listing holds, beside the free space
+        self.counts.setObjectName("counts")
+        self.counts.setContentsMargins(0, 0, 10, 0)
+        self.model.modelReset.connect(self._update_counts)       # a new listing, a filter
+        self.model.layoutChanged.connect(self._update_counts)    # a sort, folder sizes added up
         bar = QHBoxLayout()
         bar.setContentsMargins(4, 2, 4, 2)
         self.home_button = QToolButton()
@@ -762,6 +767,7 @@ class Panel(QFrame):
         self.refresh_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.refresh_button.setToolTip("Refresh: read this folder again (Ctrl+R refreshes both panels)")
         self.refresh_button.clicked.connect(self.refresh)
+        bar.addWidget(self.counts)
         bar.addWidget(self.free)
         self.tool_group = QWidget()                      # the three small buttons sit close together, as one group, not a bar's usual gap apart
         group = QHBoxLayout(self.tool_group)
@@ -1623,6 +1629,21 @@ class Panel(QFrame):
         elif not self.is_home and self.path:
             self.set_folder(HOME_URL, select=self.path)      # above a drive root is the Home page
 
+    def go_root(self) -> None:
+        """To the top of this drive, share or server (inside an archive: of the drive the archive is on), standing on the folder
+        the way down starts with."""
+        if self.is_home or not self.path:
+            return
+        current, came_from = self.path, ""
+        for _ in range(pathparts.MAX_DEPTH):
+            above = self.fs.parent(current)
+            at_root = self.fs.is_root(current) and not current.startswith("zip://")    # an archive's top is not the drive's
+            if at_root or not above or above == current or is_home(above):
+                break
+            came_from, current = self.fs.basename(current.rstrip(pathparts.SEPARATORS)), above
+        if current != self.path:
+            self.set_folder(current, select=came_from)
+
     def open_current(self, new_tab: bool = False) -> None:
         row = self.table.currentIndex().row()
         entry = self.model.entry_at(row)
@@ -1725,6 +1746,9 @@ class Panel(QFrame):
             came_from = self.fs.basename(here[here.index(target) + 1].rstrip(pathparts.SEPARATORS))
         self.set_folder(target, select=came_from)
         self.view.setFocus()
+
+    def _update_counts(self) -> None:
+        self.counts.setText(self.model.summary())
 
     def _update_free(self, path: str) -> None:
         """Free space comes from a background thread: a dead network share must not freeze the window."""

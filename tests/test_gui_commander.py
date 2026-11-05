@@ -72,6 +72,10 @@ class FakeDialogs:
     def ask_text(self, title, label, default=""):
         return self.texts.pop(0) if self.texts else None
 
+    def ask_name(self, title, label, default, is_dir=False):
+        self.names_asked = getattr(self, "names_asked", []) + [(default, is_dir)]
+        return self.ask_text(title, label, default)
+
     def ask_conflicts(self, rows, where=""):
         self.conflict_rows_seen = list(rows)
         if self.conflict_answer is None:

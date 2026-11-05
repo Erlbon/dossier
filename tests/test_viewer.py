@@ -322,17 +322,20 @@ def test_menus_view_has_modes_and_notes_while_settings_has_the_choices(commander
     menus = {a.text().replace("&", ""): a.menu() for a in win.menuBar().actions()}
     texts = lambda name: [a.text().split("\t")[0] for a in menus[name].actions() if not a.isSeparator() and a.isVisible()]       # noqa: E731
     assert texts("File") == ["Open", "View", "View as Glass", "Edit", "Rename", "Copy to the Other Panel", "Move to the Other Panel", "New Folder",
-                             "New File...", "Change Dates and Attributes...", "New Link...", "Delete", "Delete Permanently", "Properties", "Quit"]
-    assert texts("Edit") == ["Undo", "Copy", "Cut", "Paste", "Paste as New File...", "Copy Paths as Text"]
+                             "New File...", "Change Dates and Attributes...", "New Link...", "Delete", "Delete Permanently", "Properties",
+                             "Show in Explorer", "Quit"]
+    assert texts("Edit") == ["Undo", "Copy", "Cut", "Paste", "Paste as New File...", "Copy Paths as Text", "Copy Names as Text",
+                             "Copy This Folder's Path"]
     assert texts("Mark") == ["Mark All", "Unmark All", "Invert Marks", "Mark by Pattern...", "Unmark by Pattern...", "Mark by Tag...",
                              "Unmark by Tag...", "Saved Marks"]
     assert texts("View") == ["Details", "Thumbnails", "Thumbnail Size", "Sort By", "Columns...", "Folder Layout", "All Files Below This Folder",
                              "Quick Filter", "Folder Sizes", "Refresh", "Folder Notes", "Tools Bar", "Bar Positions", "Full Screen"]
-    assert texts("Go") == ["Back", "Forward", "Folder History...", "Hotlist...", "Home Page", "Edit the Path", "Pin Folder to Home Page",
+    assert texts("Go") == ["Back", "Forward", "Folder History...", "Hotlist...", "Home Page", "Root of the Drive", "Edit the Path",
+                           "Pin Folder to Home Page",
                            "Open Cursor Folder in the Other Panel", "Same Folder in the Other Panel", "Swap Panels", "Tabs",
                            "Drives of Left Panel", "Drives of Right Panel"]
     assert texts("Tools") == ["Search...", "Find Duplicate Files...", "Check Folder Health...", "Compare", "Batch Rename", "Archives", "Checksums",
-                              "Quarantine", "Operations", "Terminal Here", "Administrator Terminal Here", "SSH Terminal Here", "Command Line History..."]
+                              "Quarantine", "Operations", "Terminal Here", "Administrator Terminal Here", "SSH Terminal Here", "Command Line"]
     assert texts("Network") == ["Add Server...", "Disconnect This Panel's Server", "Add Network Share...", "Client for NFS",
                                 "Show Tailnet Devices on the Home Page"]
     assert texts("Settings") == ["Appearance", "Copy and Move...", "Opening Files", "Mouse Wheel...", "Function Keys...", "Auto Refresh",

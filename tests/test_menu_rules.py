@@ -14,7 +14,7 @@ from tests.test_gui_commander import app, pump, world  # noqa: E402,F401
 from dossier.gui.menus import command_keys, command_label  # noqa: E402
 
 HEADINGS = ["File", "Edit", "Mark", "View", "Go", "Tools", "Network", "Settings", "Help"]
-MAX_ENTRIES = 15          # File has 15; one more and a group of it becomes a submenu
+MAX_ENTRIES = 16          # File has 16 (Show in Explorer, 2026-11-05); one more and a group of it becomes a submenu
 # right-click labels that say the same command better for the thing clicked on
 CONTEXT_LABELS = {"Open in the Other Panel", "Compare with the Other Panel...", "Properties of This Folder"}
 # submenus that list what the owner saved: one saved item is one entry

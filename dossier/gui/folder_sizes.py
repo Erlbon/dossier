@@ -9,9 +9,9 @@ from .models import human_size
 class FolderSizesMixin:
     """Part of ``MainWindow``."""
 
-    def calculate_folder_sizes(self, panel=None) -> None:
-        """Add up whole folder trees for the Size column: the marked folders of the panel, else every folder in
-        its list. In the background with a box that shows the total growing and a Cancel."""
+    def calculate_folder_sizes(self, panel=None, paths=None) -> None:
+        """Add up whole folder trees for the Size column: ``paths`` (Space on a folder), else the marked folders of the panel, else
+        every folder in its list. In the background with a box that shows the total growing and a Cancel."""
         panel = panel or self.active
         if panel.is_home:
             self._say("The Home page has no folders to add up")
@@ -20,7 +20,7 @@ class FolderSizesMixin:
         folders = [model.entry_at(r) for r in range(model.entry_count())
                    if model.entry_at(r) is not None and model.entry_at(r).is_dir and not model.is_up_row(r)]
         marked = set(panel.marked_here())
-        wanted = [e.path for e in folders if e.path in marked] or [e.path for e in folders]
+        wanted = list(paths) if paths else [e.path for e in folders if e.path in marked] or [e.path for e in folders]
         if not wanted:
             self._say("There are no folders in this list")
             return

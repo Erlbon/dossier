@@ -3,10 +3,10 @@ from __future__ import annotations
 
 from typing import Callable, Optional
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QFontDatabase
-from PyQt6.QtWidgets import (QDialog, QFileDialog, QInputDialog, QCheckBox, QMessageBox, QPlainTextEdit, QProgressDialog, QPushButton,
-                             QVBoxLayout, QWidget)
+from PyQt6.QtWidgets import (QDialog, QFileDialog, QInputDialog, QCheckBox, QLineEdit, QMessageBox, QPlainTextEdit, QProgressDialog,
+                             QPushButton, QVBoxLayout, QWidget)
 
 from ..core.progress import RateMeter, human_duration
 from ..core.sizefmt import human_size
@@ -14,6 +14,13 @@ from .owned_dialog import OwnedDialog
 
 
 BYTES_SHOWN = 1 << 20          # below this a progress total is a count of steps, not bytes
+
+
+def stem_length(name: str, is_dir: bool = False) -> int:
+    """How much of ``name`` a rename box selects: all of a folder's name, a file's name without its extension (``report`` of
+    ``report.pdf``; all of ``.gitignore``, whose dot starts the name)."""
+    dot = name.rfind(".")
+    return len(name) if is_dir or dot <= 0 else dot
 
 
 def _size(n: float) -> str:
@@ -166,6 +173,17 @@ class Dialogs:
         layout.addWidget(edit)
         layout.addWidget(close, 0, Qt.AlignmentFlag.AlignRight)
         dlg.exec()
+
+    def ask_name(self, title: str, label: str, default: str, is_dir: bool = False) -> Optional[str]:
+        """A name, with the part before the extension selected, so typing keeps the extension (F2, as in Explorer)."""
+        dlg = QInputDialog(self.parent)
+        dlg.setWindowTitle(title)
+        dlg.setLabelText(label)
+        dlg.setTextValue(default)
+        edit = dlg.findChild(QLineEdit)
+        if edit is not None:
+            QTimer.singleShot(0, dlg, lambda: edit.setSelection(0, stem_length(default, is_dir)))
+        return dlg.textValue() if dlg.exec() == QDialog.DialogCode.Accepted else None
 
     def ask_text(self, title: str, label: str, default: str = "") -> Optional[str]:
         text, ok = QInputDialog.getText(self.parent, title, label, text=default)

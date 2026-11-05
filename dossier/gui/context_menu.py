@@ -15,6 +15,7 @@ from PyQt6.QtWidgets import QApplication, QMenu
 
 from ..core import archives, sharing, shellmenu
 from ..core.mounting import SMB
+from ..core.platform import FILE_MANAGER_NAME
 from ..core.home import is_home
 from . import file_clipboard
 from .menus import command_keys, command_label
@@ -156,6 +157,7 @@ class ContextMenuMixin:
         cmd("move_to_quarantine")
         cmd("new_link", enabled=not many)
         cmd("show_properties")
+        cmd("show_in_file_manager")
         if shellmenu.can_show(paths):
             menu.addSeparator()
             add("More Options (Windows Menu)...", lambda: self._windows_menu(panel, paths, False))
@@ -196,6 +198,7 @@ class ContextMenuMixin:
         add(None, "refresh")
         menu.addSeparator()
         self._entry_action(menu, "Properties of This Folder", "show_properties", panel, here)
+        add(f"Open This Folder in {FILE_MANAGER_NAME}", lambda: self.show_in_file_manager(folder_only=True))
         if shellmenu.folder_can_show(panel.path):
             menu.addSeparator()
             add("More Options (Windows Menu)...", lambda: self._windows_menu(panel, here, True))
