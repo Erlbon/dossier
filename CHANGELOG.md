@@ -2,6 +2,13 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-05#01 -- The assistant: manifests, comparisons in pages, long calls as jobs, and a long approved copy no longer reported as "nothing was changed"
+
+- **Manifests** (`core/manifest.py`, tools `write_manifest` and `compare_with_manifest`): every file below a folder with its size, time and SHA-256, as a CSV in Dossier's own `reports` folder (never in the owner's folders, so no permission to change files is needed). Compared with a folder or a second manifest by path and checksum: only on one side, different, and one-sided files whose content is on the other side under another name (renamed or moved). Times are not trusted. A CSV with the columns RelPath, Length, LastWriteUtc and SHA256 made another way (backslashes and `ERROR:` rows included) is read too. For copies on two computers with no network between them.
+- **`compare_folders` for big trees:** pages (`offset`, `limit`, `status`) instead of the first 500 rows only, counts by status, `report` writes every row to a CSV, and `tolerance_seconds` and `ignore_hour` (summer time on copied files, on by default as in the window) are now the assistant's to set.
+- **Long calls are jobs** (`assistant/jobs.py`, tools `get_job`, `cancel_job`, `list_jobs`): comparing, hashing and committing wait up to `wait_seconds` (20) and then return a `job_id` with progress, so the server keeps answering while one runs, and a cancel stops it.
+- **Fix: an approved change that runs longer than three minutes** was answered "the owner did not answer in time; nothing was changed" while it was still running, and the window's later answer was lost. The window now claims the request when the owner presses Run (`bridge.claim`, one rename, so the window and a server that gives up at the same moment cannot both win); the server then follows the change for as long as it takes. Pressing Run after the server gave up does nothing and says so.
+
 ## 2026-11-04#10 -- Tags, ComicInfo and zips are written by the writer the Redactor apps use (review section 6)
 
 Shared part: redactor_common 2026-11-04#02 (`core/zip_rewrite.py`, `core/comicinfo_write.py`, `core/audio_write.py`). Dossier, cbzredactor and mp3redactor now write the same file the same way; the build 2026-11-04#08 fixes (control characters refused, the new ComicInfo.xml checked before the swap, legacy entry names kept, values stripped, ID3 v2.3 kept) are part of the shared writer.

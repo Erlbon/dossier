@@ -98,11 +98,13 @@ def wait_response(rid: str, timeout: float) -> Optional[dict]:
         time.sleep(POLL)
 
 
-def withdraw_request(rid: str) -> None:
+def withdraw_request(rid: str) -> bool:
+    """Take a request off the queue. True when it was still there (so the window has not claimed it)."""
     try:
         os.remove(os.path.join(paths.requests_dir(), rid + ".json"))
+        return True
     except OSError:
-        pass
+        return False
 
 
 def pending_requests() -> list:
@@ -126,7 +128,33 @@ def pending_requests() -> list:
     return sorted(out, key=lambda d: d.get("time", 0))
 
 
+def _running_file(rid: str) -> str:
+    return os.path.join(paths.responses_dir(), rid + ".running.json")
+
+
+def claim(rid: str, **details) -> bool:
+    """The window takes request ``rid`` to carry it out (the owner agreed). The request file is renamed to ``<id>.running.json`` in one step, so
+    the window and a server that gives up at the same moment cannot both win: False means the server had already withdrawn it (and told the
+    assistant that nothing was changed), so nothing must be done. A copy of many gigabytes takes longer than any wait for an answer; the
+    running file lets the server tell "still running" from "nobody answered". ``answer`` follows when it is finished."""
+    os.makedirs(paths.responses_dir(), exist_ok=True)
+    try:
+        os.replace(os.path.join(paths.requests_dir(), rid + ".json"), _running_file(rid))
+    except FileNotFoundError:
+        return False
+    write_json(_running_file(rid), {"id": rid, "time": time.time(), **details})
+    return True
+
+
+def running(rid: str) -> Optional[dict]:
+    return read_json(_running_file(rid))
+
+
 def answer(rid: str, status: str, message: str = "", **details) -> None:
     """The window's answer to a request (and the request is taken off the queue)."""
     write_json(os.path.join(paths.responses_dir(), rid + ".json"), {"id": rid, "status": status, "message": message, **details})
     withdraw_request(rid)
+    try:
+        os.remove(_running_file(rid))
+    except OSError:
+        pass

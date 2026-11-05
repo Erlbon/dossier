@@ -272,6 +272,14 @@ class AssistantMixin:
                 return refuse("; ".join(blocked) or "there is nothing to do any more", "failed")
             if not self.dialogs.confirm("An assistant asks to change files", self._assistant_summary(action, payload, plans), "Run"):
                 return refuse("the owner rejected it")
+            try:
+                claimed = bridge.claim(rid, steps=steps)             # from here the server waits for as long as the change takes
+            except OSError:
+                claimed = False
+            if not claimed:                                         # the assistant gave up waiting while the question was open: it was told
+                self._assistant_busy.discard(rid)                   # "nothing was changed", so nothing is
+                self._say("The assistant stopped waiting before you answered, so nothing was changed")
+                return
             self._assistant_run(rid, plans)
 
         self._plan_in_background("Preparing what the assistant asked for", build, then)
