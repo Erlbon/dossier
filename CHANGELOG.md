@@ -2,6 +2,11 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-05#15 -- Release 0.6
+
+- `RELEASE = "0.6"`, notes in `docs/releases/v0.6.md`; the first release with the installer (`dossier-setup.exe`, one-folder build) beside the one-file `dossier.exe`.
+- The README opens with what only Dossier has together (a plan before every change, servers and the tailnet as folders, folder notes, an assistant that only proposes) and "everything built in, no plugins" (comparison review card 1), and describes both downloads.
+
 ## 2026-11-05#14 -- The installed Dossier starts in under a second, and updates through its installer (comparison review card 2, option A)
 
 - **The installer ships the one-folder build:** an installed Dossier starts in 0.87 s (median of five, measured with `tools/time_startup.py`); the one-file `dossier.exe` takes 3.38 s, because it unpacks itself into a temporary folder at every start. The one-file exe stays the portable download. `dossier.spec` builds the folder with `DOSSIER_BUILD=folder`; `build_installer.bat` and the release workflow do that before making `dossier-setup.exe`.

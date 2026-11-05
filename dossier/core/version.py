@@ -11,8 +11,8 @@ with ``APP_VERSION``. The release workflow refuses a tag that is not this build'
 from __future__ import annotations
 
 APP_NAME = "Dossier"
-APP_VERSION = "2026-11-05#14"
-RELEASE = "0.5"
+APP_VERSION = "2026-11-05#15"
+RELEASE = "0.6"
 APP_REPO_URL = "https://github.com/Erlbon/dossier"
 
 
