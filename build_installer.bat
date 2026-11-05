@@ -1,13 +1,9 @@
 @echo off
-REM Builds dist\dossier-setup.exe (Inno Setup 6) from dist\dossier.exe. Run build_exe.bat first.
-REM Inno Setup: https://jrsoftware.org/isdl.php (a per-user install is enough). The release workflow builds the same installer.
+REM Builds dist\dossier-setup.exe (Inno Setup 6): first the one-folder program (dist\dossier\, about a second to start), then the
+REM installer around it. Inno Setup: https://jrsoftware.org/isdl.php (a per-user install is enough). The release workflow does the same.
+REM build_exe.bat builds the one-file dist\dossier.exe (the portable download); this does not need it.
 
 cd /d "%~dp0"
-if not exist dist\dossier.exe (
-    echo ERROR: dist\dossier.exe is missing: run build_exe.bat first.
-    pause
-    exit /b 1
-)
 
 set "ISCC="
 for %%P in ("%LOCALAPPDATA%\Programs\Inno Setup 6\ISCC.exe" "%ProgramFiles(x86)%\Inno Setup 6\ISCC.exe" "%ProgramFiles%\Inno Setup 6\ISCC.exe") do (
@@ -21,6 +17,17 @@ if not defined ISCC (
     pause
     exit /b 1
 )
+
+echo Building the one-folder program dist\dossier\ ...
+set "DOSSIER_BUILD=folder"
+python -m PyInstaller dossier.spec --noconfirm
+if errorlevel 1 (
+    echo.
+    echo ERROR: the build failed. See above.
+    pause
+    exit /b 1
+)
+set "DOSSIER_BUILD="
 
 for /f "usebackq delims=" %%L in (`python -c "from dossier.core.version import RELEASE, APP_VERSION; print(RELEASE + ' ' + APP_VERSION)"`) do set "VERSIONS=%%L"
 for /f "tokens=1,2" %%A in ("%VERSIONS%") do (

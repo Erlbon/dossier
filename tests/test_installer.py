@@ -1,6 +1,6 @@
-"""The Windows installer (installer/dossier.iss) must keep Help > Check for Updates working: it installs per user (a folder the program
-can write, so the updater can swap dossier.exe), it never takes the name dossier.exe for itself (that is the asset the updater
-downloads), and the release publishes both."""
+"""The Windows installer (installer/dossier.iss) must keep Help > Check for Updates working: it installs per user, it ships the one-folder
+build (which starts in a second), it never takes the name dossier.exe for itself (the asset a bare copy's update downloads), an update it
+runs silently starts Dossier again, and the release publishes both files."""
 import os
 
 ROOT = os.path.join(os.path.dirname(__file__), "..")
@@ -18,17 +18,25 @@ def setting(script, name):
     return None
 
 
-def test_the_installer_installs_per_user_where_the_updater_can_write():
+def test_the_installer_installs_per_user():
     iss = read("installer", "dossier.iss")
     assert setting(iss, "PrivilegesRequired") == "lowest"
-    assert setting(iss, "PrivilegesRequiredOverridesAllowed") is None   # no "for all users": Program Files is not writable
+    assert setting(iss, "PrivilegesRequiredOverridesAllowed") is None   # no "for all users"
     assert setting(iss, "DefaultDirName") == "{autopf}\\Dossier"          # %LOCALAPPDATA%\Programs\Dossier for a per-user install
 
 
 def test_the_installer_is_not_called_like_the_update_asset():
+    assert setting(read("installer", "dossier.iss"), "OutputBaseFilename") == "dossier-setup"
+
+
+def test_the_installer_ships_the_one_folder_build_and_restarts_after_a_silent_update():
+    """An update run by Check for Updates passes RESTARTAPP=1 (redactor_common selfupdate.installer_command); only then does the
+    installer start Dossier itself, since a silent run skips the usual "Start Dossier" box."""
     iss = read("installer", "dossier.iss")
-    assert setting(iss, "OutputBaseFilename") == "dossier-setup"
-    assert 'Source: "..\\dist\\dossier.exe"; DestDir: "{app}"' in iss
+    assert 'Source: "..\\dist\\dossier\\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs' in iss
+    assert "Check: RestartAfterUpdate" in iss and "{param:RESTARTAPP|0}" in iss
+    spec = read("dossier.spec")
+    assert 'os.environ.get("DOSSIER_BUILD", "") == "folder"' in spec and "COLLECT(" in spec
 
 
 def test_the_app_id_never_changes():
@@ -36,7 +44,8 @@ def test_the_app_id_never_changes():
     assert setting(read("installer", "dossier.iss"), "AppId") == "{{C61A77AD-D4A2-44EB-8CFB-B15A58A735F3}"
 
 
-def test_the_release_publishes_the_exe_and_the_installer():
+def test_the_release_builds_both_and_publishes_the_exe_and_the_installer():
     workflow = read(".github", "workflows", "release.yml")
     assert "installer\\dossier.iss" in workflow
+    assert "DOSSIER_BUILD=folder python -m PyInstaller dossier.spec" in workflow
     assert workflow.count("dist/dossier.exe dist/dossier-setup.exe") == 2

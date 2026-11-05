@@ -2,6 +2,12 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-05#14 -- The installed Dossier starts in under a second, and updates through its installer (comparison review card 2, option A)
+
+- **The installer ships the one-folder build:** an installed Dossier starts in 0.87 s (median of five, measured with `tools/time_startup.py`); the one-file `dossier.exe` takes 3.38 s, because it unpacks itself into a temporary folder at every start. The one-file exe stays the portable download. `dossier.spec` builds the folder with `DOSSIER_BUILD=folder`; `build_installer.bat` and the release workflow do that before making `dossier-setup.exe`.
+- **Check for Updates in an installed copy** (redactor_common 2026-11-05#03): it recognises the install by the uninstaller beside the program, downloads the new `dossier-setup.exe` (checked against GitHub's SHA-256 like every update), closes Dossier and runs the installer silently; the installer replaces the folder and starts Dossier again. A bare copy updates as before, by swapping `dossier.exe`. Tested for real: an installed copy updated itself through the installer and was started again by it.
+- Known small leftover: the downloaded `dossier-setup.exe` stays in the temporary folder after an update.
+
 ## 2026-11-05#13 -- File names coloured by type (comparison review card 9, option C); timing tools
 
 - **Names are coloured by type**, as in Just Manager, in four groups: pictures, video and music (teal), archives (coral), documents and code (blue), programs (muted red), each with its own shade for the light and the dark scheme. Hidden and system files are dimmed; a marked file keeps the gold of marks over its type. The extensions are the ones the icons use, so a name's colour and its icon always agree.

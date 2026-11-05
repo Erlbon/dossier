@@ -1,10 +1,13 @@
-; The Windows installer of Dossier (Inno Setup 6): dist\dossier.exe into the user's own programs folder, with a Start menu entry.
+; The Windows installer of Dossier (Inno Setup 6): the one-folder build (dist\dossier\, built with DOSSIER_BUILD=folder) into the user's
+; own programs folder, with a Start menu entry. The one-folder build starts in about a second; the one-file dossier.exe unpacks itself at
+; every start and takes over three (comparison review 2026-11-05, card 2), so it stays the portable download only.
 ;
-; Build:   iscc /DAppRelease=0.5 /DAppBuild=2026-11-05#01 installer\dossier.iss      (or build_installer.bat, which reads both)
+; Build:   iscc /DAppRelease=0.5 /DAppBuild=2026-11-05#01 installer\dossier.iss      (or build_installer.bat, which builds the folder too)
 ; Output:  dist\dossier-setup.exe
 ;
-; Per user, no administrator rights: %LOCALAPPDATA%\Programs\Dossier. That folder stays writable, so Help > Check for Updates can
-; swap dossier.exe in place as it does for the bare exe (redactor_common selfupdate). Settings are not here but in the user's
+; Per user, no administrator rights: %LOCALAPPDATA%\Programs\Dossier. Updating: Help > Check for Updates sees unins000.exe beside the
+; program (redactor_common selfupdate.is_installed), downloads the new dossier-setup.exe, checks it, closes Dossier and runs it with
+; /VERYSILENT /CLOSEAPPLICATIONS /RESTARTAPP=1; RESTARTAPP starts Dossier again at the end. Settings are not here but in the user's
 ; AppData (dossier.ini), so uninstalling leaves them, and a new install finds them again.
 
 #ifndef AppRelease
@@ -49,7 +52,7 @@ Name: "desktopicon"; Description: "A shortcut on the desktop"; GroupDescription:
 Name: "addtopath"; Description: "Add Dossier to PATH, so ""dossier ls"", ""dossier find"" and the other commands work in any terminal"; GroupDescription: "Command line:"; Flags: unchecked
 
 [Files]
-Source: "..\dist\dossier.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\dist\dossier\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\README.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\CHANGELOG.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
@@ -61,6 +64,12 @@ Name: "{autodesktop}\Dossier"; Filename: "{app}\dossier.exe"; Tasks: desktopicon
 
 [Run]
 Filename: "{app}\dossier.exe"; Description: "Start Dossier"; Flags: nowait postinstall skipifsilent
+; an update started by Check for Updates is silent: it starts Dossier again itself
+Filename: "{app}\dossier.exe"; Flags: nowait; Check: RestartAfterUpdate
+
+[InstallDelete]
+; a copy installed before the one-folder build had the one-file exe; its leftovers of an update go
+Type: files; Name: "{app}\dossier.exe.old"
 
 [UninstallDelete]
 ; what Help > Check for Updates leaves beside the exe: the old exe after a swap, and a download that did not finish
@@ -69,10 +78,15 @@ Type: files; Name: "{app}\dossier.exe.new"
 Type: files; Name: "{app}\dossier.exe.new.part"
 
 [Code]
-// Per user only (no "for all users" choice): under Program Files the updater could not swap dossier.exe. So PATH is the user's own.
+// Per user only (no "for all users" choice): the program stays where the user can write. So PATH is the user's own.
 const
   PathKeyRoot = HKEY_CURRENT_USER;
   PathKeyName = 'Environment';
+
+function RestartAfterUpdate: Boolean;
+begin
+  Result := ExpandConstant('{param:RESTARTAPP|0}') = '1';
+end;
 
 function PathHasApp(const Path, Dir: String): Boolean;
 begin

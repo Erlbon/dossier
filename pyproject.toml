@@ -1,6 +1,6 @@
 [project]
 name = "dossier"
-version = "2026.11.5.13"
+version = "2026.11.5.14"
 description = "Multi-window file manager with a shared selection, Markdown notes and file metadata"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -11,7 +11,7 @@ dependencies = [
     "keyring>=24",
     "PyQt6>=6.6",
     "PyQt6-QScintilla>=2.14",
-    "redactor_common @ git+https://github.com/Erlbon/redactor_common.git@2026-11-05-02",   # pin a tag, never @main
+    "redactor_common @ git+https://github.com/Erlbon/redactor_common.git@2026-11-05-03",   # pin a tag, never @main
 ]
 
 [project.optional-dependencies]

@@ -90,8 +90,21 @@ jobs:
           print(check.stdout, check.stderr)
           assert check.returncode == 0, "the exe is missing a package"
 
-      # The installer (per user, no administrator rights) beside the bare exe. Help > Check for Updates downloads dossier.exe, never
-      # the installer, and swaps it in whichever folder the program runs from.
+      # The installer (per user, no administrator rights) beside the bare exe. It ships the one-folder build (starts in a second; the
+      # one-file exe takes over three). Check for Updates in a bare copy swaps dossier.exe; an installed copy downloads and runs
+      # dossier-setup.exe silently (redactor_common selfupdate.is_installed). So both names must stay as they are.
+      - name: Build the one-folder program for the installer
+        shell: bash
+        run: DOSSIER_BUILD=folder python -m PyInstaller dossier.spec --noconfirm
+
+      - name: Try the one-folder program
+        shell: python
+        run: |
+          import subprocess
+          version = subprocess.run([r"dist\dossier\dossier.exe", "--version"], capture_output=True, text=True, timeout=120)
+          print(version.stdout, version.stderr)
+          assert version.returncode == 0 and "Dossier" in version.stdout, "the one-folder program does not report its version"
+
       - name: Build the installer
         shell: python
         run: |

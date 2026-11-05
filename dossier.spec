@@ -4,6 +4,8 @@
 # PyInstaller builds for the platform it runs ON: a Windows .exe cannot be made from Linux or macOS.
 #
 # The program is one exe: the window, and the command line (dossier ls, find, copy..., dossier mcp) in the same file.
+import os
+
 from PyInstaller.utils.hooks import collect_submodules
 
 block_cipher = None
@@ -37,13 +39,17 @@ a = Analysis(
 
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 
+# DOSSIER_BUILD=folder: the one-folder build the installer ships (dist\dossier\dossier.exe and its _internal folder). It starts in about
+# a second, against 3.4 s for the one-file exe, which unpacks itself at every start (comparison review 2026-11-05, card 2). The default
+# stays the one-file dossier.exe: the portable download, and the file a bare copy's Check for Updates swaps.
+FOLDER = os.environ.get("DOSSIER_BUILD", "") == "folder"
+
 exe = EXE(
     pyz,
     a.scripts,
-    a.binaries,
-    a.zipfiles,
-    a.datas,
+    *([] if FOLDER else [a.binaries, a.zipfiles, a.datas]),
     [],
+    exclude_binaries=FOLDER,
     name="dossier",
     debug=False,
     bootloader_ignore_signals=False,
@@ -59,3 +65,6 @@ exe = EXE(
     entitlements_file=None,
     icon="dossier/gui/appicon/dossier.ico",
 )
+
+if FOLDER:
+    coll = COLLECT(exe, a.binaries, a.zipfiles, a.datas, strip=False, upx=True, upx_exclude=[], name="dossier")
