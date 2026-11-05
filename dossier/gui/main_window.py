@@ -54,6 +54,7 @@ from .context_menu import ContextMenuMixin
 from .tools_bar import ToolsBarMixin
 from .view_modes import ViewModesMixin
 from .drop_handler import DragDropMixin
+from .remote_edit import RemoteEditMixin
 from .zip_edit import ZipEditMixin, zip_parts
 from .assistant import AssistantMixin
 from .open_files import OpenFilesMixin
@@ -99,7 +100,7 @@ CLOSE_WAIT = 5.0     # seconds a closing window waits for a cancelled copy to st
 EXTERNAL = "external"  # what F4's reading step hands over when the chosen editor program is to open the file
 
 
-class MainWindow(FrostMixin, GlassViewMixin, KeysMixin, AutoRefreshMixin, MetadataEditMixin, HealthMixin, QuarantineMixin, NewFromContentMixin, TabSetsMixin, CommandCompletionMixin, DatesLinksMixin, ViewModesMixin, ToolsBarMixin, ContextMenuMixin, DragDropMixin, LookMixin, ZipEditMixin, ArchiveCommandsMixin, CopySettingsMixin, AssistantMixin, OpenFilesMixin, MenusMixin, WheelMixin, ToolsBarPlaceMixin, TailnetMixin, CompareFoldersMixin, ServersMixin, DuplicatesMixin, FolderLayoutsMixin, QueueResumeMixin, ColumnsMixin, PropertiesMixin, SharingMixin, MountMixin, ChecksumMixin, MarksAndNotesMixin, SearchCommandMixin, BatchRenameMixin, OperationQueueMixin, StallLogMixin, GoingPlacesMixin, FolderSizesMixin, UnpackMixin, QMainWindow):
+class MainWindow(RemoteEditMixin, FrostMixin, GlassViewMixin, KeysMixin, AutoRefreshMixin, MetadataEditMixin, HealthMixin, QuarantineMixin, NewFromContentMixin, TabSetsMixin, CommandCompletionMixin, DatesLinksMixin, ViewModesMixin, ToolsBarMixin, ContextMenuMixin, DragDropMixin, LookMixin, ZipEditMixin, ArchiveCommandsMixin, CopySettingsMixin, AssistantMixin, OpenFilesMixin, MenusMixin, WheelMixin, ToolsBarPlaceMixin, TailnetMixin, CompareFoldersMixin, ServersMixin, DuplicatesMixin, FolderLayoutsMixin, QueueResumeMixin, ColumnsMixin, PropertiesMixin, SharingMixin, MountMixin, ChecksumMixin, MarksAndNotesMixin, SearchCommandMixin, BatchRenameMixin, OperationQueueMixin, StallLogMixin, GoingPlacesMixin, FolderSizesMixin, UnpackMixin, QMainWindow):
     def __init__(self, fs: Optional[FileSystem] = None, *, settings_path: Optional[str] = None, start=(None, None),
                  dialogs=None, trasher=None, terminal_launcher=None, which=None) -> None:
         super().__init__()
@@ -452,6 +453,7 @@ class MainWindow(FrostMixin, GlassViewMixin, KeysMixin, AutoRefreshMixin, Metada
         targets = list(self.active.targets()) if path is None else []
         open_now = [w.doc.path for w in self.editors]
         program = self.editor_program()
+        remote: dict = {}                                       # a server or zip file: the copy that is edited (remote_edit.py)
 
         def prepare(progress, cancel):                          # which file, and reading it: on a thread
             chosen = path
@@ -466,11 +468,16 @@ class MainWindow(FrostMixin, GlassViewMixin, KeysMixin, AutoRefreshMixin, Metada
                 if len(files) != 1:
                     return None, None, "Select one file to edit."
                 chosen = files[0]
-            if chosen.startswith("zip://"):
-                return chosen, None, "Items inside an archive are read-only. Copy the file out to edit it."
-            if has_scheme(chosen):
-                return chosen, None, ("Files on a server cannot be edited here yet: copy the file to this computer, edit it, "
-                                      "and copy it back.")
+            if has_scheme(chosen):                              # a server or a zip: edit a copy, written back on save
+                known = self.local_copy_of(chosen)
+                if known:
+                    chosen = known
+                else:
+                    edit, problem = self.prepare_remote_edit(chosen)
+                    if problem:
+                        return chosen, None, problem
+                    remote["edit"] = edit
+                    chosen = edit.local
             if program:
                 return chosen, EXTERNAL, ""                     # the chosen editor program reads it itself
             if any(os.path.normcase(o) == os.path.normcase(chosen) for o in open_now):
@@ -484,8 +491,11 @@ class MainWindow(FrostMixin, GlassViewMixin, KeysMixin, AutoRefreshMixin, Metada
                 return chosen, None, "This looks like a binary file, not text. Use View (F3)."
             except (OSError, EncodingProblem) as e:
                 return chosen, None, f"The file could not be opened: {getattr(e, 'strerror', None) or e}"
-        run_in_background(self, self.cmd_runner, "Opening", prepare,
-                          on_result=lambda found: self._edit_prepared(*found, show_replace=show_replace),
+        def opened(found) -> None:
+            if "edit" in remote:
+                self.register_remote_edit(remote["edit"])
+            self._edit_prepared(*found, show_replace=show_replace)
+        run_in_background(self, self.cmd_runner, "Opening", prepare, on_result=opened,
                           tracked=self._size_jobs, indeterminate=True, failed_title="Edit")
 
     def _bring_editor_forward(self, path: str, show_replace: bool) -> bool:
@@ -504,6 +514,9 @@ class MainWindow(FrostMixin, GlassViewMixin, KeysMixin, AutoRefreshMixin, Metada
             return
         if doc is EXTERNAL:
             self.edit_in_program(path)
+            edit = self.remote_edit_of(path)
+            if edit is not None:
+                self.watch_remote_edit(edit)                    # the program saves when it likes: watch the copy
             return
         if path is None or self._bring_editor_forward(path, show_replace) or doc is None:
             return
@@ -520,6 +533,10 @@ class MainWindow(FrostMixin, GlassViewMixin, KeysMixin, AutoRefreshMixin, Metada
         self.editors.append(win)
         win.closed.connect(lambda w: self.editors.remove(w) if w in self.editors else None)
         win.saved.connect(lambda _p: self.refresh())
+        edit = self.remote_edit_of(path)
+        if edit is not None:                                    # a copy of a server or zip file: each save writes it back
+            win.saved.connect(self.write_back)
+            self._say(f"Editing a copy of {edit.origin}: each save writes it back")
         win.show()
 
     def set_drive_style(self, style: str) -> None:
@@ -836,7 +853,9 @@ class MainWindow(FrostMixin, GlassViewMixin, KeysMixin, AutoRefreshMixin, Metada
         if answer is None:
             return
         text, criteria = answer
-        text = text.strip() or "*"
+        if not text.strip() and criteria.describe() == "everything":
+            return                                       # an empty box: nothing asked for, nothing changes
+        text = text.strip() or "*"                       # no name but a size, date or attribute: every name that passes it
         why = patterns.describe(text)
         if why:
             self.dialogs.info(title, why)

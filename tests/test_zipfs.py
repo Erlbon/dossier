@@ -225,8 +225,8 @@ def test_enter_opens_a_zip_like_a_folder_and_dotdot_leaves_it(tmp_path):
         settle(win)
         pump(win, lambda: win.left.path.endswith("docs"))
         assert panel_names(win.left) == ["..", "one.txt"]
-        # a zip can be changed now (see test_zip_edit.py): delete asks first, and a "no" changes nothing; opening a member for
-        # editing is still refused with a reason
+        # a zip can be changed now (see test_zip_edit.py): delete asks first, and a "no" changes nothing; F4 on a member edits a
+        # private copy that is written back on save (test_review_remote_edit.py)
         win.left.table.setCurrentIndex(win.left.model.index(win.left.model.row_of("one.txt"), 0))
         dialogs.confirm_answer = False
         dialogs.confirms.clear()
@@ -236,7 +236,9 @@ def test_enter_opens_a_zip_like_a_folder_and_dotdot_leaves_it(tmp_path):
         dialogs.infos.clear()
         win.edit_file()
         settle(win)
-        assert dialogs.infos
+        assert win.editors or dialogs.infos                   # an editor on a copy (or, without QScintilla, the reason)
+        for editor in list(win.editors):
+            editor.close()
         # copying out works from the window
         win.copy()                                            # the left panel is active, the target is the right one
         wait_planned(win)

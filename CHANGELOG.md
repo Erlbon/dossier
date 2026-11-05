@@ -2,6 +2,14 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-05#10 -- F4 on files on servers and inside zips (review card 25)
+
+- **F4 on a file on a server, or inside a zip, edits a private copy and writes it back on every save** (card 25). The copy is in Dossier's temporary folder; a save uploads it to the server, or puts it into the zip with one rewrite (the old zip to the recycle bin, as for every zip change). The editor program of Settings > Opening Files works too: its saves are noticed and written back.
+- **Nothing is overwritten that changed meanwhile:** before writing, the original is looked at again; when its size or time differ from when it was copied, nothing is written and the window says where your version is kept.
+- **Only where changes are allowed:** a server whose read-only switch is on is never written to (F4 says so), and only zip and zip-based archives can be changed; a 7z or RAR says why not.
+- **Mark by Pattern** with an empty name and no other test does nothing, as before (an empty name with a size, date or attribute test marks every name that passes it).
+- New test `tests/test_review_remote_edit.py`; the tests of the zip view, the Help menu and the pattern box follow.
+
 ## 2026-11-05#09 -- F5 and F6 to any folder, copy as a new name, and copy options (review cards 22, 23)
 
 - **The F5 / F6 box has an editable destination** (card 22), the other panel's folder to start with, with folder completion. A name like `backup` (or `backup\`) is a folder inside the other panel's folder and is made when it is missing; a full path works too. For one item, a path that is not a folder is its new name: F5 with `report-old.pdf` copies as, F6 moves as. Several items into a path that is a file are refused. A copy into the folder it comes from is a duplicate beside it (`a (2).txt`).

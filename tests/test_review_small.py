@@ -24,13 +24,13 @@ def cursor_on(panel, name):
 
 
 # 1 -----------------------------------------------------------------------------------------------------------------------------
-@pytest.mark.parametrize("path, words", [("zip://C:/a.zip!/x.txt", "inside an archive"),
-                                         ("sftp://host/etc/x.conf", "on a server")])
-def test_f4_says_why_a_file_cannot_be_edited(world, path, words):
+def test_f4_says_why_a_file_in_an_archive_cannot_be_edited(world, tmp_path):
+    """Card 1, and since card 25 a zip can be edited: a 7z (or anything not zip-based) says why it cannot."""
     win, dialogs, *_ = world
-    win.edit_file(path=path)
+    (tmp_path / "a.7z").write_bytes(b"7z")
+    win.edit_file(path=f"zip://{tmp_path / 'a.7z'}!/x.txt")
     pump(win, lambda: dialogs.infos)
-    assert words in dialogs.infos[-1][1]
+    assert "inside this archive cannot be changed" in dialogs.infos[-1][1]
 
 
 # 8 -----------------------------------------------------------------------------------------------------------------------------
