@@ -368,6 +368,20 @@ class ServersMixin:
             return servers.find(self.connections(), split_path(path_or_authority)[0], scheme_of(path_or_authority))
         return servers.find(self.connections(), path_or_authority)
 
+    def reconnect_server(self, scheme: str, authority: str):
+        """A new Session for an SFTP or SCP server whose connection died mid-job (called from the job's thread): the saved login only,
+        never a question. None when there is no saved connection or it would need one."""
+        conn = servers.find(self.connections(), authority, scheme)
+        if conn is None:
+            return None
+        password = servers.get_password(conn) if conn.save_password else ""
+        made = sshlink.reconnect_session(conn, password, os.path.join(self.ssh_folder(), "known_hosts"), self.ssh_folder())
+        if made is None:
+            return None
+        session, link = made
+        self._links[(conn.protocol, conn.authority())] = link
+        return session
+
     def server_fs(self, conn: servers.Connection):
         """The file system that holds the sessions of this kind of connection."""
         return {"scp": self.fs.scp, "webdav": self.fs.dav, "ftp": self.fs.ftp, "opds": self.fs.opds,

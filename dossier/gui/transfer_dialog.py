@@ -26,6 +26,7 @@ class TransferAnswer:
     only: str = ""                  # copy only files matching this
     flatten: bool = False           # every file straight into the destination
     newer: bool = False             # an existing file is replaced only by a newer one, else left
+    skip_same: bool = False         # a file already there and the same is left out (copy plan step 5, "finish the job")
 
 
 class TransferDialog(OwnedDialog):
@@ -56,15 +57,20 @@ class TransferDialog(OwnedDialog):
         self.only = QLineEdit(how)
         self.only.setPlaceholderText(ONLY_HINT)
         self.flatten = QCheckBox("Put every file straight into the destination (no folders)", how)
+        self.skip_same = QCheckBox("Skip what is already there and the same (size and time; with Verify on, the content)")
+        self.skip_same.setToolTip("To finish a copy that stopped: only what is missing or changed is copied, with no questions")
         self.newer = QCheckBox("Where a file is there already, replace it only with a newer one")
         self.verify = QCheckBox("Verify the copies afterwards (reads everything back and compares it)")
         self.verify.setChecked(verify)
+        self.skip_same.setParent(how)
         if move:                                                  # a move takes everything as it is
             self.only.hide()
             self.flatten.hide()
+            self.skip_same.hide()
         else:
             f.addRow("Only files named", self.only)
             f.addRow("", self.flatten)
+            f.addRow("", self.skip_same)
         f.addRow("", self.newer)
         f.addRow("", self.verify)
         layout.addWidget(how)
@@ -82,7 +88,7 @@ class TransferDialog(OwnedDialog):
 
     def answer(self) -> TransferAnswer:
         return TransferAnswer(self.dest.text().strip(), self.verify.isChecked(), self.only.text().strip(), self.flatten.isChecked(),
-                              self.newer.isChecked())
+                              self.newer.isChecked(), self.skip_same.isChecked() and not self.skip_same.isHidden())
 
     def _accept(self) -> None:
         if not self.dest.text().strip():

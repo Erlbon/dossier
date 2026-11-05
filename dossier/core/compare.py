@@ -67,6 +67,12 @@ def _time_relation(a: float, b: float, tolerance: float, ignore_hour: bool) -> i
     return 1 if d > 0 else -1
 
 
+def times_agree(a: float, b: float, tolerance: float = 2.0, ignore_hour: bool = True) -> bool:
+    """Whether two modified times are the same time, as Compare judges it (FAT keeps two seconds; a copy across a summer-time change
+    can be off by exactly one hour)."""
+    return _time_relation(a, b, tolerance, ignore_hour) == 0
+
+
 def same_content(fs: FileSystem, a: str, b: str, cancel: Optional[CancelToken] = None) -> bool:
     """Whether two files hold the same bytes (stops at the first difference). A file that cannot be read is not the same."""
     try:

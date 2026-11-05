@@ -96,6 +96,10 @@ class SftpFileSystem(FileSystem):
 
     def __init__(self, scheme: str = SCHEME) -> None:
         self.scheme = scheme
+        # reconnect(authority) -> a new Session, or None: set by the window and the assistant (sshlink.reconnect_session), so a session that
+        # died mid-job is made again from the saved login, never with a question (copy plan step 1)
+        self.reconnect = None
+        self._reconnect_lock = threading.Lock()
         self.sessions: dict = {}
 
     # sessions -------------------------------------------------------------------------------------------------------------------------
@@ -126,9 +130,26 @@ class SftpFileSystem(FileSystem):
     def _session(self, path: str) -> tuple:
         authority, remote = split_path(path)
         session = self.sessions.get(authority)
+        if session is not None and not session.alive and self.reconnect is not None:
+            session = self._reconnected(authority, session)
         if session is None or not session.alive:
             raise NotConnected(authority)
         return session, remote
+
+    def _reconnected(self, authority: str, dead: Session):
+        """A session that was connected and died: made again from the saved login (one thread at a time; the others find it done). A
+        network that is still away raises ConnectionResetError, so the copy waits and tries again; a login that needs a question gives
+        None (NotConnected: nothing to wait for)."""
+        with self._reconnect_lock:
+            current = self.sessions.get(authority)
+            if current is not None and current is not dead and current.alive:
+                return current
+            fresh = self.reconnect(authority)
+            if fresh is None:
+                return None
+            fresh.read_only = dead.read_only                       # the switch as the owner left it, even if changed since connecting
+            self.add_session(fresh)
+            return fresh
 
     def is_writable(self, path: str) -> bool:
         authority, _remote = split_path(path)

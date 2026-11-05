@@ -2,6 +2,16 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-05#17 -- Finish the job, Export Log, reconnect, folder tree, Share column (the owner's afternoon decisions)
+
+- **Skip what is already there and the same** (copy plan step 5, "finish the job"): an F5 option that leaves out every file already at the destination with the same size and time (Compare's rule, with the summer-time hour), or with Verify on the same content. A second run after a failed night copy copies only what is missing or changed, with no questions.
+- **Tools > Operations > Export Log...** (copy plan step 4, as the owner changed it): after a big job (500 steps, 1 GB or a minute), a Markdown table of every step (path, size, result, retries, seconds) saved where you choose. Nothing is written unless you ask.
+- **Reconnect** for SFTP, SCP and FTP: a connection that dies in the middle of a copy is made again from the saved login (a key file, the agent, or a stored password; never a question) and the copy goes on. A lost connection now counts as a network error, so the copy waits and tries the file again; a login that would need a question stops as before.
+- **Go > Folder Tree...** (Alt+F10, review card 26, the popup only): the drive's folders as a tree, opened down to where you are; Enter goes there.
+- **The Share column** (review card 32): each row's part of the folder in percent, filled once Folder Sizes has added up every folder (right-click a column header to show it).
+- The owner's decisions on the remaining Later points are in the review documents: saved searches and the Linux package stay Later; Quick View, synchronized browsing, search inside archives, saving the listing, Everything, every key changeable, single or stacked panels, and backup mode are not planned.
+- New tests: `tests/test_reconnect.py`, `tests/test_job_log.py`, `tests/test_folder_tree.py`, and Share and finish-the-job tests.
+
 ## 2026-11-05#16 -- Network paths work the same on Python 3.10
 
 - **On Python 3.10, going up from another computer's list of shares led to `\` instead of stopping**, so the address bar showed `\ > server > share` and the list of shares had a `..` row. Python before 3.12 reads `\\server` as `\server`. `LocalFileSystem` now treats a computer as the top itself. Found by GitHub's Tests run on 3.10, the oldest Python the README promises.

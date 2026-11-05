@@ -3,8 +3,10 @@
 Written 2026-11-05 after comparing the copy engine (`core/transfer.py`, `core/ops.py` `execute`) with robocopy for a 50 GB, 15,000-file
 transfer from one PC to a home server over the LAN.
 
-**Status (build 2026-11-05#02):** steps 1 to 3 are built, except reconnecting a dropped SFTP session inside step 1 (a dropped server
-session still fails its files; SMB network drives are covered). Steps 4 to 6 are open.
+**Status (build 2026-11-05#17):** steps 1 to 5 are built. Step 1's gap is closed: a dropped SFTP, SCP or FTP connection is made again
+from the saved login (never a question) and the copy goes on (`sshlink.reconnect_session`, `ftpclient._main`). Step 4 is Tools >
+Operations > Export Log... (a Markdown table, written only when asked, `core/joblog.py`). Step 5 is the F5 option *Skip what is already
+there and the same* (`ops.skip_same`). Step 6 is left out.
 
 **Decisions (the owner, 2026-11-05, afternoon):**
 - **Reconnect: build now, for SFTP, SCP and FTP alike.** FTP has the same gap: `ftpclient.py` logs in again for an idle connection and

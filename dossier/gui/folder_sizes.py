@@ -48,6 +48,8 @@ class FolderSizesMixin:
                 text += f"; {unread} folder{'s' if unread != 1 else ''} could not be read"
             if len(results) < len(wanted):
                 text += f"; stopped after {len(results)} of {len(wanted)}"
+            elif panel.path == at and panel.model.share_total() and "share" in self.column_choice(panel)[0]:
+                text += "; the Share column shows each one's part (right-click a column header to show it)"
             self._say(text)
 
         run_in_background(self, self.cmd_runner, "Folder sizes", work, on_result=finished, tracked=self._size_jobs,

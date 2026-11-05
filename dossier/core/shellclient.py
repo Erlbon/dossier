@@ -109,13 +109,13 @@ class ShellClient:
     # the wire -----------------------------------------------------------------------------------------------------------------------
     def _fail(self, why: str) -> None:
         self.closed = True
-        raise ConnectionError(why)
+        raise ConnectionResetError(why)                       # the shell is gone: a network error, which a copy waits for
 
     def run(self, command: str, *, binary: bool = True, timeout: float = 120.0) -> tuple:
         """Run one shell command; ``(its output, its exit status)``. The output is everything it wrote up to the marker line."""
         with self._lock:
             if self.closed:
-                raise ConnectionError("the connection to the server was lost")
+                raise ConnectionResetError("the connection to the server was lost")      # a network error: a copy waits and tries again
             mark = secrets.token_hex(8)
             tail = f"__DOSSIER_END_{mark}__".encode()
             line = f"{command}\nprintf '\\n__DOSSIER_END_{mark}__%d__\\n' $?\n"

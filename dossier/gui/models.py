@@ -28,6 +28,7 @@ from . import icon_set, look, theme
 
 COLUMNS = tuple(column_labels[k] for k in column_keys)       # one per logical column, see core/columns.py
 SHARED_COL = column_keys.index("shared")
+SHARE_COL = column_keys.index("share")      # each row's part of the folder, once Folder Sizes has added up every folder
 HOME_COLUMNS = ("Name", "Type", "Details")
 ENTRY_ROLE = Qt.ItemDataRole.UserRole
 SORT_ROLE = Qt.ItemDataRole.UserRole + 1
@@ -235,6 +236,22 @@ class FolderModel(QAbstractTableModel):
         self._rows = [dc_replace(e, size=sizes[e.path]) if e.is_dir and e.path in sizes else e for e in self._rows]
         self.sort(self._sort_col, self._sort_order)               # the cursor stays on its item, whatever the order
 
+    def share_total(self):
+        """The bytes of everything listed, or None while a folder in it has not been added up (a share would then be wrong)."""
+        if any(e.is_dir and e.path not in self._tree_sizes for e in self._rows):
+            return None
+        return sum(max(e.size, 0) for e in self._rows)
+
+    def _share_text(self, entry: Entry) -> str:
+        total = self._share_total_cache if getattr(self, "_share_key", None) == (id(self._rows), len(self._tree_sizes)) else None
+        if total is None:
+            total = self._share_total_cache = self.share_total()
+            self._share_key = (id(self._rows), len(self._tree_sizes))
+        if not total:
+            return ""
+        part = 100.0 * max(entry.size, 0) / total
+        return f"{part:.1f} %" if part < 10 else f"{part:.0f} %"
+
     def has_tree_size(self, path: str) -> bool:
         """Whether the folder ``path`` of this listing has been added up already."""
         return path in self._tree_sizes
@@ -368,6 +385,7 @@ class FolderModel(QAbstractTableModel):
                 8: lambda e: (self._tag(e.path)[0].lower(), natural_key(e.name)),
                 9: lambda e: (self._tag(e.path)[1], natural_key(e.name)),
                 10: lambda e: (self._tag(e.path)[2], natural_key(e.name))}
+        keys[SHARE_COL] = lambda e: (e.size, natural_key(e.name))        # a share is the size over one total: the same order
         keys[SHARED_COL] = lambda e: (not self._shared(e), self._shared(e).lower(), natural_key(e.name))   # shared first, by share name
         if self._sort_col not in keys:                   # a metadata column: by its text, numbers in their natural order
             meta_key = column_keys[self._sort_col]
@@ -446,6 +464,8 @@ class FolderModel(QAbstractTableModel):
                 return location_text(entry.path, self.fs.dirname)
             if col == SHARED_COL:
                 return self._shared(entry)
+            if col == SHARE_COL:
+                return self._share_text(entry)
             return self._meta(entry.path, column_keys[col])
         if role == Qt.ItemDataRole.DecorationRole and col == 0:
             if self.icon_px:

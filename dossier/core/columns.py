@@ -17,7 +17,7 @@ BASIC_KEYS = ("name", "size", "modified", "type", "created", "accessed", "attrib
 META_KEYS = ("m_title", "m_artist", "m_album", "m_track", "m_year", "m_genre", "m_length", "m_bitrate", "m_series", "m_number",
              "m_writer", "m_publisher", "m_pages", "m_resolution", "m_codec", "m_languages")
 # Columns added later go at the end, after the metadata ones, so no logical index of an older column moves.
-LATER_KEYS = ("shared",)
+LATER_KEYS = ("shared", "share")
 KEYS = BASIC_KEYS + META_KEYS + LATER_KEYS
 LEGACY_KEYS = BASIC_KEYS            # the columns that existed before the metadata ones (an old settings file knows only these)
 LABELS = {"name": "Name", "size": "Size", "modified": "Date", "type": "Type", "created": "Created",
@@ -25,16 +25,17 @@ LABELS = {"name": "Name", "size": "Size", "modified": "Date", "type": "Type", "c
           "label": "Label", "m_title": "Title (tag)", "m_artist": "Artist", "m_album": "Album", "m_track": "Track", "m_year": "Year",
           "m_genre": "Genre", "m_length": "Length", "m_bitrate": "Bitrate", "m_series": "Series", "m_number": "Issue",
           "m_writer": "Writer", "m_publisher": "Publisher", "m_pages": "Pages", "m_resolution": "Resolution",
-          "m_codec": "Video codec", "m_languages": "Audio languages", "shared": "Shared as"}
+          "m_codec": "Video codec", "m_languages": "Audio languages", "shared": "Shared as", "share": "Share"}
 PROTECTED = frozenset({"name", "type"})
-DEFAULT_ORDER = ("name", "type", "size", "modified", "created", "accessed", "attributes", "location", "tags", "rating",
+DEFAULT_ORDER = ("name", "type", "size", "share", "modified", "created", "accessed", "attributes", "location", "tags", "rating",
                  "label", "shared") + META_KEYS
-DEFAULT_HIDDEN = frozenset({"created", "accessed", "attributes", "location", "tags", "rating", "label", "shared"}) | frozenset(META_KEYS)
+DEFAULT_HIDDEN = frozenset({"created", "accessed", "attributes", "location", "tags", "rating", "label", "shared", "share"}) | frozenset(META_KEYS)
 DEFAULT_WIDTHS = {"name": 260, "size": 80, "modified": 130, "type": 90, "created": 130, "accessed": 130, "attributes": 80,
                   "location": 220, "tags": 200, "rating": 80, "label": 90, "m_title": 200, "m_artist": 160, "m_album": 160,
                   "m_track": 60, "m_year": 60, "m_genre": 110, "m_length": 70, "m_bitrate": 80, "m_series": 160, "m_number": 60,
-                  "m_writer": 130, "m_publisher": 130, "m_pages": 60, "m_resolution": 90, "m_codec": 120, "m_languages": 110, "shared": 140}
-RIGHT_ALIGNED = frozenset({"size", "m_track", "m_year", "m_length", "m_bitrate", "m_number", "m_pages"})
+                  "m_writer": 130, "m_publisher": 130, "m_pages": 60, "m_resolution": 90, "m_codec": 120, "m_languages": 110, "shared": 140,
+                  "share": 60}
+RIGHT_ALIGNED = frozenset({"size", "share", "m_track", "m_year", "m_length", "m_bitrate", "m_number", "m_pages"})
 
 
 def newly_hidden(known) -> frozenset:

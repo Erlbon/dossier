@@ -166,7 +166,7 @@ class SftpClient:
             part = self._r.read(n - len(out))
             if not part:
                 self.closed = True
-                raise ConnectionError("the connection to the server was lost")
+                raise ConnectionResetError("the connection to the server was lost")      # a network error: a copy waits and tries again
             out += part
         return out
 
@@ -176,7 +176,7 @@ class SftpClient:
             self._w.flush()
         except (OSError, ValueError) as e:
             self.closed = True
-            raise ConnectionError(f"the connection to the server was lost ({e})")
+            raise ConnectionResetError(f"the connection to the server was lost ({e})")
 
     def _recv_packet(self) -> tuple:
         length = struct.unpack(">I", self._read_exact(4))[0]

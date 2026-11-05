@@ -55,6 +55,7 @@ from .tools_bar import ToolsBarMixin
 from .view_modes import ViewModesMixin
 from .drop_handler import DragDropMixin
 from .file_colors import FileColorsMixin
+from .folder_tree import FolderTreeMixin
 from .remote_edit import RemoteEditMixin
 from .transfer import TransferMixin
 from .zip_edit import ZipEditMixin, zip_parts
@@ -101,7 +102,7 @@ CLOSE_WAIT = 5.0     # seconds a closing window waits for a cancelled copy to st
 EXTERNAL = "external"  # what F4's reading step hands over when the chosen editor program is to open the file
 
 
-class MainWindow(FileColorsMixin, TransferMixin, RemoteEditMixin, FrostMixin, GlassViewMixin, KeysMixin, AutoRefreshMixin, MetadataEditMixin, HealthMixin, QuarantineMixin, NewFromContentMixin, TabSetsMixin, CommandCompletionMixin, DatesLinksMixin, ViewModesMixin, ToolsBarMixin, ContextMenuMixin, DragDropMixin, LookMixin, ZipEditMixin, ArchiveCommandsMixin, CopySettingsMixin, AssistantMixin, OpenFilesMixin, MenusMixin, WheelMixin, ToolsBarPlaceMixin, TailnetMixin, CompareFoldersMixin, ServersMixin, DuplicatesMixin, FolderLayoutsMixin, QueueResumeMixin, ColumnsMixin, PropertiesMixin, SharingMixin, MountMixin, ChecksumMixin, MarksAndNotesMixin, SearchCommandMixin, BatchRenameMixin, OperationQueueMixin, StallLogMixin, GoingPlacesMixin, FolderSizesMixin, UnpackMixin, QMainWindow):
+class MainWindow(FolderTreeMixin, FileColorsMixin, TransferMixin, RemoteEditMixin, FrostMixin, GlassViewMixin, KeysMixin, AutoRefreshMixin, MetadataEditMixin, HealthMixin, QuarantineMixin, NewFromContentMixin, TabSetsMixin, CommandCompletionMixin, DatesLinksMixin, ViewModesMixin, ToolsBarMixin, ContextMenuMixin, DragDropMixin, LookMixin, ZipEditMixin, ArchiveCommandsMixin, CopySettingsMixin, AssistantMixin, OpenFilesMixin, MenusMixin, WheelMixin, ToolsBarPlaceMixin, TailnetMixin, CompareFoldersMixin, ServersMixin, DuplicatesMixin, FolderLayoutsMixin, QueueResumeMixin, ColumnsMixin, PropertiesMixin, SharingMixin, MountMixin, ChecksumMixin, MarksAndNotesMixin, SearchCommandMixin, BatchRenameMixin, OperationQueueMixin, StallLogMixin, GoingPlacesMixin, FolderSizesMixin, UnpackMixin, QMainWindow):
     def __init__(self, fs: Optional[FileSystem] = None, *, settings_path: Optional[str] = None, start=(None, None),
                  dialogs=None, trasher=None, terminal_launcher=None, which=None) -> None:
         super().__init__()
@@ -148,6 +149,8 @@ class MainWindow(FileColorsMixin, TransferMixin, RemoteEditMixin, FrostMixin, Gl
         self._jobs: list = []                      # running first, then the ones waiting
         self._init_taskbar()                       # the queue's progress on the taskbar button
         self._links: dict = {}                     # the ssh process of each connected server
+        for ssh_fs in (self.fs.sftp, self.fs.scp):   # a server that went away mid-job is connected again from its saved login
+            ssh_fs.reconnect = lambda authority, f=ssh_fs: self.reconnect_server(f.scheme, authority)
         self._size_jobs: list = []                 # folder size walks in the background
         self._size_thread = None                   # the thread that looks up sizes for the status line
         self._job: Optional[Job] = None

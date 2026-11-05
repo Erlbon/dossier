@@ -273,8 +273,13 @@ class FtpClient:
     def _main(self) -> ftplib.FTP:
         if self.closed:
             raise ConnectionError("the connection to the server was closed")
-        if self._ftp is None:
-            raise ConnectionError("the connection to the server was lost")
+        if self._ftp is None:                                        # lost mid-job: log in again, as for an idle connection, never asking
+            try:
+                self._ftp = self._new_session()
+            except (LoginError, CertificateError):
+                raise                                                # refused: only the owner can answer that, nothing to wait for
+            except (OSError, *ftplib.all_errors) as e:
+                raise ConnectionResetError(f"the connection to the server was lost ({_error(e, '')})") from e     # a copy waits for it
         if time.monotonic() - self._used > KEEPALIVE:
             try:
                 self._ftp.voidcmd("NOOP")
@@ -300,7 +305,9 @@ class FtpClient:
                 err = _error(e, path)
                 if isinstance(err, ConnectionError):
                     self._quit(ftp)
-                    self._ftp = None
+                    self._ftp = None                                  # the next call logs in again (_main)
+                    if type(err) is ConnectionError:                  # lost: a network error, so a copy waits and tries the file again
+                        raise ConnectionResetError(str(err)) from e
                 raise err
 
     # whole-item calls -----------------------------------------------------------------------------------------------------------------------

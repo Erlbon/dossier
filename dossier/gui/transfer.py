@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 
-from ..core.ops import Plan, Resolution, plan_copy, plan_move
+from ..core.ops import Plan, Resolution, plan_copy, plan_move, skip_same
 from ..core.platform import has_scheme, is_full_path, path_key
 from ..core.sizefmt import human_size
 from ..core.vfs import stat_or_none
@@ -79,7 +79,7 @@ class TransferMixin:
         if answer is None:
             return
         self.act_verify.setChecked(answer.verify)    # the choice is remembered for the next time (and shown in Settings)
-        if answer.dest == dest and not (answer.only or answer.flatten):
+        if answer.dest == dest and not (answer.only or answer.flatten or answer.skip_same):
             self._settle_and_run(plan, answer, sources, dest, origin, move)
             return
         typed = answer.dest
@@ -92,8 +92,11 @@ class TransferMixin:
                 return Plan("Move" if move else "Copy", blocking=("to copy into an archive, open it in the other panel first",)), folder
             if move:
                 return plan_move(self.fs, sources, folder, watch=watch, make_dest=make, new_name=new_name), folder
-            return plan_copy(self.fs, sources, folder, watch=watch, make_dest=make, new_name=new_name, only=answer.only,
-                             flatten=answer.flatten), folder
+            plan = plan_copy(self.fs, sources, folder, watch=watch, make_dest=make, new_name=new_name, only=answer.only,
+                             flatten=answer.flatten)
+            if answer.skip_same:                                 # finish the job: only what is missing or changed (by content with Verify)
+                plan = skip_same(plan, self.fs, by_content=answer.verify)
+            return plan, folder
 
         self._plan_in_background(f"Preparing the {'move' if move else 'copy'}", build,
                                  lambda found: self._settle_and_run(found[0], answer, sources, found[1], origin, move))

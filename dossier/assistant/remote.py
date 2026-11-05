@@ -29,6 +29,25 @@ class Remotes:
         self._links: dict = {}
         self._lock = threading.Lock()
 
+    def reconnect(self, config, scheme: str, authority: str):
+        """A new Session for a server whose connection died mid-job (set as the file system's ``reconnect``): the same rules as ``ensure``,
+        never a question."""
+        from ..core import sshlink
+        try:
+            conn = self._connection(config, scheme, authority)
+        except RemoteError:
+            return None
+        folder = config.ssh_folder
+        if not folder:
+            return None
+        password = servers.get_password(conn) if conn.save_password else ""
+        made = sshlink.reconnect_session(conn, password, os.path.join(folder, "known_hosts"), folder)
+        if made is None:
+            return None
+        session, link = made
+        self._links[(scheme, authority)] = link
+        return session
+
     def ensure(self, fs, config, path: str) -> None:
         """Connect the server of ``path`` (already checked against the listed roots) if it is not connected yet."""
         scheme = path.split("://", 1)[0]
@@ -36,6 +55,7 @@ class Remotes:
             raise RemoteError("only SFTP and SCP servers can be listed for an assistant")
         authority = split_path(path)[0]
         target = fs.scp if scheme == "scp" else fs.sftp
+        target.reconnect = lambda auth, s=scheme: self.reconnect(config, s, auth)
         with self._lock:
             session = target.sessions.get(authority)
             if session is not None and session.alive:

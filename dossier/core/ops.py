@@ -410,6 +410,26 @@ def _only_matching(fs: FileSystem, ops: list, wanted) -> list:
     return [op for op in ops if id(op) in keep or (op.kind is Kind.MKDIR and (not op.src or path_key(op.dst) in needed))]
 
 
+def skip_same(plan: Plan, fs: FileSystem, by_content: bool = False, cancel: Optional[CancelToken] = None) -> Plan:
+    """Copy plan step 5, "finish the job": leave out every file that is already at its destination and the same, so a second run after a
+    failed one copies only what is missing or changed, with no questions. The same means the same size and time (as Compare judges it,
+    with the summer-time hour), or with ``by_content`` (Verify on) the same bytes, which reads both files: call it on a thread."""
+    from .compare import same_content, times_agree
+    keep, skipped = [], list(plan.skipped)
+    for op in plan.ops:
+        same = (op.kind is Kind.COPY and op.conflict and not op.dst_is_dir and op.dst_size == op.size
+                and (same_content(fs, op.src, op.dst, cancel) if by_content else times_agree(op.src_mtime, op.dst_mtime)))
+        if same:
+            skipped.append(op.dst)
+        else:
+            keep.append(op)
+    if len(keep) == len(plan.ops):
+        return plan
+    left = len(plan.ops) - len(keep)
+    note = f"{left:,} file{'s are' if left != 1 else ' is'} already there and the same: left out"
+    return replace(plan, ops=tuple(keep), skipped=tuple(skipped), warnings=plan.warnings + (note,))
+
+
 def bad_relative(rel: str) -> str:
     """Why ``rel`` cannot be a path below a folder ("" when it can): it must be relative, with no ``..``, no drive and no empty part."""
     if not isinstance(rel, str) or not rel.strip():
@@ -654,6 +674,7 @@ class OpResult:
     status: str            # done | skipped | failed | cancelled
     error: str = ""
     attempts: int = 1      # more than one when a locked file was tried again
+    seconds: float = 0.0   # how long the step took, waits for a locked file or the network included (the Export Log shows it)
 
 
 @dataclass
@@ -884,6 +905,7 @@ def execute(
         sub = (lambda d, _t: done.partial(i, min(d, size_unit))) if progress else None
         sub_verify = (lambda d: done.partial(i, size_unit + min(d, size_unit))) if progress else None
         attempts, tries, net_tries = 0, 0, 0
+        began = time.monotonic()
         made_here = op.kind is Kind.MKDIR and opts.folder_times and bool(op.src) and _stat(fs, op.dst) is None
         while True:
             steps: list = []
@@ -941,6 +963,7 @@ def execute(
                 outcome = OpResult(op, "failed", str(e), attempts=attempts)
                 done.finish(i, unit)
                 break
+        outcome.seconds = time.monotonic() - began
         outcomes[i] = (outcome, steps)
 
     indexed = list(enumerate(plan.ops))

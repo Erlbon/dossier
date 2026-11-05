@@ -141,3 +141,36 @@ def test_the_real_box_hands_back_what_was_typed(world):
     move = TransferDialog(win, "Move", "1 item", "Move", "C:/x", False, move=True, local_completion=False)
     assert move.only.isHidden() and move.flatten.isHidden()
     move.close()
+
+
+# copy plan step 5: finish the job ------------------------------------------------------------------------------------------------
+def test_skip_what_is_already_there_and_the_same(world):
+    win, dialogs, left, right, _t = world
+    when = time.time() - 1000
+    for name, data in (("same.txt", b"one"), ("changed.txt", b"new!"), ("missing.txt", b"m")):
+        (left / name).write_bytes(data)
+        os.utime(left / name, (when, when))
+    (right / "same.txt").write_bytes(b"one")
+    os.utime(right / "same.txt", (when + 3600, when + 3600))                 # an hour off: a summer-time change, still the same
+    (right / "changed.txt").write_bytes(b"old")
+    os.utime(right / "changed.txt", (when - 500, when - 500))               # older than the one copied over it
+    listed(win, win.left, 4)
+    win.selection.add([str(left / n) for n in ("same.txt", "changed.txt", "missing.txt")])
+    dialogs.conflict_answer = None                                           # no question may come: "same" is not asked about
+    copy_with(win, dialogs, skip_same=True, newer=True)
+    pump(win, lambda: (right / "missing.txt").exists() and (right / "changed.txt").read_bytes() == b"new!")
+    assert (right / "same.txt").read_bytes() == b"one" and int(os.stat(right / "same.txt").st_mtime) == int(when + 3600)
+
+
+def test_with_verify_the_same_means_the_same_bytes(tmp_path):
+    from dossier.core.ops import plan_copy, skip_same
+    from dossier.core.vfs import LocalFileSystem
+    (tmp_path / "a").mkdir()
+    (tmp_path / "b").mkdir()
+    for side, data in (("a", b"abc"), ("b", b"abd")):                       # same size and time, other bytes
+        (tmp_path / side / "f.txt").write_bytes(data)
+        os.utime(tmp_path / side / "f.txt", (1_700_000_000, 1_700_000_000))
+    fs = LocalFileSystem()
+    plan = plan_copy(fs, [str(tmp_path / "a" / "f.txt")], str(tmp_path / "b"))
+    assert not skip_same(plan, fs).ops                                       # by size and time: the same, left out
+    assert len(skip_same(plan, fs, by_content=True).ops) == 1                # by content: different, copied

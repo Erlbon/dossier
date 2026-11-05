@@ -306,6 +306,26 @@ def _drain(stream, sink: list) -> None:
         pass
 
 
+def reconnect_session(c: Connection, password: str, known_hosts: str, askpass_folder: str):
+    """``(Session, Link)`` made again for a connection that died mid-job, with the saved login only (a key file, the agent, or the stored
+    ``password``; ssh never asks). None when the server refuses that login (only a question would help: nothing to wait for); a network
+    that is still away raises ConnectionResetError, which a copy waits for and tries again."""
+    from .sftpfs import Session
+    try:
+        link = connect(c, password, known_hosts, askpass_folder)
+    except ConnectError as e:
+        if e.kind == "auth":
+            return None
+        raise ConnectionResetError(f"{c.name}: {e}") from e
+    add_commands(c, link, password, known_hosts, askpass_folder)
+    try:
+        home = link.client.realpath(".")
+    except OSError:
+        home = "/"
+    commands = link.commands.client if link.commands is not None else None
+    return Session(c.authority(), link.client, read_only=c.read_only, home=home, scheme=c.protocol, commands=commands), link
+
+
 def add_commands(c: Connection, link: Link, password: str, known_hosts: str, askpass_folder: str) -> None:
     """When the owner allows commands on ``c`` (card 34): give ``link`` a shell for them, as ``link.commands`` (an SCP connection is a
     shell already). A server with no shell for this account simply has none: the work then goes the ordinary way, over SFTP."""

@@ -208,7 +208,8 @@ class MenusMixin:
         self._add_all(go,
                       (self.act_back, self.act_forward,
                        self._action("Folder History...", "Alt+Down", self.show_history),
-                       self._action("Hotlist...", "Ctrl+B", self.show_hotlist)),
+                       self._action("Hotlist...", "Ctrl+B", self.show_hotlist),
+                       self._action("Folder Tree...", "Alt+F10", self.show_folder_tree)),
                       (self._action("Home Page", "Alt+Home", lambda: self.active.go_home()),
                        self._action("Root of the Drive", "Ctrl+Backspace", self.go_to_root),
                        self._action("Edit the Path", "Ctrl+L", lambda: self.active.address_bar.start_edit()),
@@ -268,6 +269,7 @@ class MenusMixin:
         operations.addAction(self._action("Pause or Resume Operations", "Ctrl+Shift+P", self.toggle_pause))
         operations.addAction(self._action("Cancel Waiting Operations", None, self.cancel_waiting))
         operations.addAction(self._action("Unfinished Operations...", None, lambda: self.offer_resume(manual=True)))
+        operations.addAction(self._action("Export Log...", None, self.export_job_log))
         tools.addSeparator()
         for a in (self._action("Terminal Here", "Ctrl+Shift+T", self.open_terminal),
                   self._action("Administrator Terminal Here", None, self.open_admin_terminal),

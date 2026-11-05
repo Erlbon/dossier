@@ -203,3 +203,20 @@ def test_the_menu_item_and_the_other_panels_button_work(world):
     win.right.sizes_button.click()                       # the left panel is the active one; the button belongs to the right
     wait_sizes(win, win.right, "r")
     assert size_cells(win.right)["r"] == "4.0 K"
+
+
+def test_the_share_column_shows_each_rows_part_once_every_folder_is_added_up(world):
+    """Review card 32: a percentage column after Folder Sizes, empty while a folder is not added up (the share would be wrong)."""
+    from dossier.gui.models import SHARE_COL
+    win, _d, left, *_ = world
+    (left / "big").mkdir()
+    (left / "big" / "a.bin").write_bytes(b"x" * 9000)
+    (left / "small.bin").write_bytes(b"x" * 1000)
+    win.left.refresh()
+    pump(win, lambda: win.left.model.entry_count() >= 3)
+    model = win.left.model
+    share = lambda name: model.data(model.index(model.row_of(name), SHARE_COL))  # noqa: E731
+    assert share("small.bin") == "" and model.share_total() is None
+    win.calculate_folder_sizes(win.left)
+    pump(win, lambda: model.share_total() is not None)
+    assert share("big") == "90 %" and share("small.bin") == "10 %"

@@ -2,15 +2,19 @@
 pause, a list of what waits, and the report at the end."""
 from __future__ import annotations
 
+import os
 import threading
+import time
+from datetime import datetime
 from dataclasses import replace
 from typing import Optional
 
 from PyQt6.QtGui import QGuiApplication
 
+from ..core import joblog
 from ..core.ops import ExecOptions, Kind, Plan, selection_effects
 from ..core.progress import check
-from ..core.platform import taskbar_button
+from ..core.platform import home_dir, taskbar_button
 from ..core.queue_journal import plan_entry
 from ..core.taskbar import TaskbarProgress
 from ..core.worker import Job, JobState, run_plan_job
@@ -68,6 +72,7 @@ class OperationQueueMixin:
                                f"({attempt} of {of})")
 
         def progress(done: int, total: int) -> None:
+            shown.setdefault("started", time.time())               # when it really began (a queued plan waits its turn)
             if "box" not in shown:
                 shown["box"] = self.dialogs.make_progress(plan.title, lambda: holder["job"].cancel() if "job" in holder else None)
                 shown["box"].plan_bytes = plan_bytes
@@ -91,6 +96,7 @@ class OperationQueueMixin:
             self._job_progress = (0, 0)
             self._update_queue_label()
             self._report_with_red_button(job, unmark)
+            self._offer_job_log(job, plan.title, shown.get("started", time.time()))
             keep = select or self.active.current_name()
             self.active.set_folder(self.active.path, select=keep)
             self.other.refresh()
@@ -216,6 +222,35 @@ class OperationQueueMixin:
 
             options.on_error = on_error
         return options
+
+    # the log of a big job (copy plan step 4): kept in memory, written only when asked ------------------------------------------------
+    def _offer_job_log(self, job: Job, title: str, started: float) -> None:
+        result = job.result
+        finished = time.time()
+        if result is None or not result.results or not joblog.is_big(result, finished - started):
+            return
+        self._last_job_log = (result, title, started, finished)
+        self._say((self.status.text() + "  ·  " if self.status.text() else "") + "Tools > Operations > Export Log... saves every step")
+
+    def export_job_log(self) -> None:
+        """Tools > Operations > Export Log...: the last big job as a Markdown table, saved where the owner says. Nothing is kept on disk
+        otherwise."""
+        last = getattr(self, "_last_job_log", None)
+        if last is None:
+            self._say("There is no big job to log yet (a log is kept for a job of 500 steps, 1 GB or a minute and more)")
+            return
+        result, title, started, finished = last
+        default = os.path.join(home_dir(), f"Dossier log {datetime.fromtimestamp(finished).strftime('%Y-%m-%d %H%M')}.md")
+        path = self.dialogs.ask_save_path(default)
+        if not path:
+            return
+        try:
+            with open(path, "w", encoding="utf-8", newline="") as f:
+                f.write(joblog.markdown(result, title, started, finished))
+        except OSError as e:
+            self.dialogs.info("Export Log", f"The log could not be saved: {e.strerror or e}")
+            return
+        self._say(f"Saved the log of {len(result.results):,} steps to {path}")
 
     @staticmethod
     def _moved_to(result) -> list:
