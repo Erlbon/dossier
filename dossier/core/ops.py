@@ -333,19 +333,38 @@ def _check_sources_writable(fs: FileSystem, sources: Sequence[str], what: str, b
         blocking.append(f"cannot {what} items inside an archive (read-only); copy them out instead")
 
 
-def plan_copy(fs: FileSystem, sources: Sequence[str], dest_dir: str, *, flatten: bool = False, watch=None) -> Plan:
+def plan_copy(fs: FileSystem, sources: Sequence[str], dest_dir: str, *, flatten: bool = False, watch=None, make_dest: bool = False,
+              new_name: str = "", only: str = "") -> Plan:
     """Copy files and folders into ``dest_dir``. ``flatten`` puts every file straight into it. ``watch(n)`` is called
-    as the plan grows (``n`` steps so far); it may raise ``Cancelled`` to stop a plan of a huge tree."""
+    as the plan grows (``n`` steps so far); it may raise ``Cancelled`` to stop a plan of a huge tree.
+
+    ``make_dest``: a missing destination is made first (the plan's first steps). ``new_name``: the one source gets this name there
+    (copy as). ``only``: a name pattern (``*.jpg;*.png !thumb*``, as Mark by Pattern): only files that match are copied, and
+    folders only when something in them is."""
     ops: list = []
     warnings: list = []
     blocking: list = []
     skipped: list = []
     taken: set = set()
-    _check_destination(fs, dest_dir, blocking)
-    for src in _clean_sources(fs, sources, "copy", blocking):
+    if make_dest:
+        ops.extend(Op(Kind.MKDIR, "", folder, is_dir=True) for folder in _folders_to_make(fs, dest_dir, blocking))
+    else:
+        _check_destination(fs, dest_dir, blocking)
+    cleaned = _clean_sources(fs, sources, "copy", blocking)
+    if new_name and len(cleaned) != 1:
+        blocking.append("a new name is for one item only")
+    elif new_name and check_name(new_name):
+        blocking.append(f"{new_name}: {check_name(new_name)}")
+    wanted = None
+    if only:
+        from .patterns import parse
+        pattern = parse(only, case_sensitive=fs.case_sensitive)
+        wanted = lambda name: pattern.matches(name, False)          # noqa: E731
+    for src in cleaned:
         if watch is not None:
             watch(len(ops))
         e = _stat(fs, src)
+        name = new_name or fs.basename(src)
         if e is None:
             warnings.append(f"no longer there, left out: {src}")
             skipped.append(src)
@@ -357,15 +376,38 @@ def plan_copy(fs: FileSystem, sources: Sequence[str], dest_dir: str, *, flatten:
                 blocking.append(f"cannot copy a folder into itself: {src}")
             elif flatten:
                 for f in _flat_files(fs, src, warnings):
+                    if wanted is not None and not wanted(fs.basename(f.path)):
+                        continue
                     dst = fs.join(dest_dir, fs.basename(f.path))
                     ops.append(Op(Kind.COPY, f.path, dst, size=f.size, src_mtime=f.mtime,
                                   **_placed(fs, f.path, dst, taken, False)))
             else:
-                _tree_ops(fs, src, fs.join(dest_dir, fs.basename(src)), taken, ops, warnings, watch)
+                _tree_ops(fs, src, fs.join(dest_dir, name), taken, ops, warnings, watch)
+        elif wanted is not None and not wanted(fs.basename(src)):
+            skipped.append(src)
         else:
-            dst = fs.join(dest_dir, fs.basename(src))
+            dst = fs.join(dest_dir, name)
             ops.append(Op(Kind.COPY, src, dst, size=e.size, src_mtime=e.mtime, **_placed(fs, src, dst, taken, False)))
+    if wanted is not None:
+        ops = _only_matching(fs, ops, wanted)
     return Plan("Copy", tuple(ops), tuple(warnings), tuple(blocking), tuple(skipped))
+
+
+def _only_matching(fs: FileSystem, ops: list, wanted) -> list:
+    """The steps of a filtered copy: the files whose names ``wanted`` accepts, and the folders that hold one of them (a copy of
+    ``*.jpg`` from a tree does not leave a trail of empty folders). The destination's own folders made first stay."""
+    files = [op for op in ops if op.kind is Kind.COPY and wanted(fs.basename(op.src))]
+    needed: set = set()
+    for op in files:
+        here = fs.dirname(op.dst)
+        while here and path_key(here) not in needed:
+            needed.add(path_key(here))
+            above = fs.dirname(here)
+            if above == here:
+                break
+            here = above
+    keep = {id(op) for op in files}
+    return [op for op in ops if id(op) in keep or (op.kind is Kind.MKDIR and (not op.src or path_key(op.dst) in needed))]
 
 
 def bad_relative(rel: str) -> str:
@@ -474,9 +516,9 @@ def _folders_to_make(fs: FileSystem, folder: str, blocking: list) -> list:
     return missing[::-1]
 
 
-def plan_move(fs: FileSystem, sources: Sequence[str], dest_dir: str, *, watch=None, make_dest: bool = False) -> Plan:
+def plan_move(fs: FileSystem, sources: Sequence[str], dest_dir: str, *, watch=None, make_dest: bool = False, new_name: str = "") -> Plan:
     """Move ``sources`` into ``dest_dir``. With ``make_dest`` a missing destination (and the folders above it) is not an error: the plan begins
-    with steps that make it, so nothing is made until the plan runs."""
+    with steps that make it, so nothing is made until the plan runs. ``new_name``: the one source gets this name there."""
     ops: list = []
     warnings: list = []
     blocking: list = []
@@ -487,11 +529,16 @@ def plan_move(fs: FileSystem, sources: Sequence[str], dest_dir: str, *, watch=No
     else:
         _check_destination(fs, dest_dir, blocking)
     _check_sources_writable(fs, sources, "move", blocking)
-    for src in _clean_sources(fs, sources, "move", blocking):
+    cleaned = _clean_sources(fs, sources, "move", blocking)
+    if new_name and len(cleaned) != 1:
+        blocking.append("a new name is for one item only")
+    elif new_name and check_name(new_name):
+        blocking.append(f"{new_name}: {check_name(new_name)}")
+    for src in cleaned:
         if watch is not None:
             watch(len(ops))
         e = _stat(fs, src)
-        dst = fs.join(dest_dir, fs.basename(src))
+        dst = fs.join(dest_dir, new_name or fs.basename(src))
         if e is None:
             warnings.append(f"no longer there, left out: {src}")
             skipped.append(src)

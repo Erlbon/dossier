@@ -38,7 +38,7 @@ class DragDropMixin:
 
         def then(plan) -> None:
             if self.copy_settings()["ask_on_drop"]:
-                self._confirm_and_run(plan, paths, dest, origin)
+                self._confirm_and_run(plan, paths, dest, origin, move=plan.title == "Move")
                 return
             plan = self._settle(plan)                          # conflicts are asked about; the rest just runs
             if plan is not None:

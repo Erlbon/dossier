@@ -2,6 +2,13 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-05#09 -- F5 and F6 to any folder, copy as a new name, and copy options (review cards 22, 23)
+
+- **The F5 / F6 box has an editable destination** (card 22), the other panel's folder to start with, with folder completion. A name like `backup` (or `backup\`) is a folder inside the other panel's folder and is made when it is missing; a full path works too. For one item, a path that is not a folder is its new name: F5 with `report-old.pdf` copies as, F6 moves as. Several items into a path that is a file are refused. A copy into the folder it comes from is a duplicate beside it (`a (2).txt`).
+- **Copy options** (card 23) in the same box: Only files named (`*.jpg;*.png !thumb*`, as Mark by Pattern; folders only when something in them is copied), Put every file straight into the destination (flatten), and Replace only with a newer file (an existing newer file is left, an older one replaced). Verify is in the box as before.
+- The box now comes before the conflict question, so a changed destination is planned once and its conflicts asked about once. A drop with Settings > Copy and Move > ask on drop gets the same box.
+- New test `tests/test_review_transfer.py`.
+
 ## 2026-11-05#08 -- Many archives at once, tags in batch rename, text diff, nested folders, hidden files, tabs, sort keys, Ctrl+K (review cards 4, 5, 7, 9, 11, 13, 14, 16)
 
 - **Unpack and Convert work on all marked archives** (card 4). Alt+F9 with several marked asks once: each into a folder of its own name beside it (no `x\x` when the archive already holds that one folder), or all into this panel's folder; one plan, so conflicts are asked about once. Convert Archive to Zip converts each, and names the ones it left out (zips, other files).

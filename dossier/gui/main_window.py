@@ -16,7 +16,7 @@ from PyQt6.QtGui import QAction, QActionGroup, QKeySequence
 from PyQt6.QtWidgets import (QApplication, QHBoxLayout, QLabel, QMainWindow, QMenu, QPushButton, QSplitter,
                              QToolButton, QVBoxLayout, QWidget)
 
-from ..core.ops import (Plan, check_name, conflict_rows, plan_copy, plan_delete, plan_move, plan_rename)
+from ..core.ops import (Plan, Resolution, check_name, conflict_rows, plan_copy, plan_delete, plan_move, plan_rename)
 from ..core.home import ADD_NETWORK, HomeFileSystem, HomeProvider, RouterFileSystem, removable_from_home
 from ..core.commandline import Placeholders, expand, run_command
 from ..core import patterns, search, stage, viewmodes
@@ -999,19 +999,73 @@ class MainWindow(FrostMixin, GlassViewMixin, KeysMixin, AutoRefreshMixin, Metada
             return (plan_move if move else plan_copy)(self.fs, sources, dest, watch=watch)
 
         self._plan_in_background(f"Preparing the {'move' if move else 'copy'}", build,
-                                 lambda plan: self._confirm_and_run(plan, sources, dest, origin))
+                                 lambda plan: self._confirm_and_run(plan, sources, dest, origin, move))
 
-    def _confirm_and_run(self, plan: Plan, sources: list, dest: str, origin: str) -> None:
-        """The plan is ready: conflicts, the confirmation (with the verify choice), then the run."""
+    def _confirm_and_run(self, plan: Plan, sources: list, dest: str, origin: str, move: bool = False) -> None:
+        """The plan is ready: the F5 / F6 box (where to, verify, options), a new plan when the answer changed where or what, the
+        conflicts, then the run."""
+        answer = self.dialogs.ask_transfer(plan.title, self._summary(plan, dest, sources, origin), plan.title, dest,
+                                           self.act_verify.isChecked(), move, local=not has_scheme(dest))
+        if answer is None:
+            return
+        self.act_verify.setChecked(answer.verify)    # the choice is remembered for the next time (and shown in Settings)
+        if answer.dest == dest and not (answer.only or answer.flatten):
+            self._settle_and_run(plan, answer, sources, dest, origin, move)
+            return
+        typed = answer.dest
+
+        def build(watch):
+            folder, new_name, make, problem = self._transfer_target(typed, dest, sources)
+            if problem:
+                return Plan("Move" if move else "Copy", blocking=(problem,)), folder
+            if zip_parts(folder) is not None:
+                return Plan("Move" if move else "Copy", blocking=("to copy into an archive, open it in the other panel first",)), folder
+            if move:
+                return plan_move(self.fs, sources, folder, watch=watch, make_dest=make, new_name=new_name), folder
+            return plan_copy(self.fs, sources, folder, watch=watch, make_dest=make, new_name=new_name, only=answer.only,
+                             flatten=answer.flatten), folder
+
+        self._plan_in_background(f"Preparing the {'move' if move else 'copy'}", build,
+                                 lambda found: self._settle_and_run(found[0], answer, sources, found[1], origin, move))
+
+    def _transfer_target(self, typed: str, default_dest: str, sources: list) -> tuple:
+        """What a typed destination means: ``(folder, new name for the one item, make the folder, problem)``. A path that is not absolute is
+        below the other panel's folder; an existing folder (or a path ending in a separator) is the folder to copy into, made when
+        missing; for one item, any other path is its new name in the folder above. Looks at the disk: on a thread."""
+        fs = self.fs
+        text = typed.strip()
+        if not text:
+            return default_dest, "", False, "say where to"
+        into = text.endswith(("/", "\\"))
+        if not has_scheme(text) and not os.path.isabs(text) and not (len(text) > 1 and text[1] == ":"):
+            text = fs.join(default_dest, text)                   # backup -> backup inside the other panel's folder
+        if into:
+            text = text.rstrip("/\\") or text
+            return text, "", stat_or_none(fs, text) is None, ""
+        found = stat_or_none(fs, text)
+        if found is not None and found.is_dir:
+            return text, "", False, ""
+        if len(sources) != 1:
+            if found is not None:
+                return text, "", False, f"{text} is a file: several items go into a folder"
+            return text, "", True, ""                            # several items: the folder is made
+        above = fs.dirname(text)
+        parent = stat_or_none(fs, above)
+        if parent is not None and not parent.is_dir:
+            return above, "", False, f"{above} is a file"
+        return above, fs.basename(text), parent is None, ""
+
+    def _settle_and_run(self, plan: Plan, answer, sources: list, folder: str, origin: str, move: bool) -> None:
+        if not move and path_key(folder) == path_key(origin):      # a copy into its own folder is a duplicate beside it
+            same = [i for i, op in enumerate(plan.ops) if op.conflict and path_key(op.src) == path_key(op.dst)]
+            if same:
+                plan = plan.resolve(Resolution.KEEP_BOTH, self.fs, only=same)
+        if answer.newer:
+            plan = plan.resolve(Resolution.OVERWRITE_IF_NEWER, self.fs)       # an older file is replaced, a newer one stays
         plan = self._settle(plan)
         if plan is None:
             return
-        verify = self.dialogs.confirm_transfer(plan.title, self._summary(plan, dest, sources, origin), plan.title,
-                                                self.act_verify.isChecked())
-        if verify is None:
-            return
-        self.act_verify.setChecked(verify)           # the choice is remembered for the next time (and shown in Settings)
-        self._run(plan, unmark=sources, remember=self.intent_for(plan, sources, dest))
+        self._run(plan, unmark=sources, remember=self.intent_for(plan, sources, folder))
 
     def copy(self) -> None:
         self._transfer(move=False)
