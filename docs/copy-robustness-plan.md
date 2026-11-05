@@ -6,6 +6,15 @@ transfer from one PC to a home server over the LAN.
 **Status (build 2026-11-05#02):** steps 1 to 3 are built, except reconnecting a dropped SFTP session inside step 1 (a dropped server
 session still fails its files; SMB network drives are covered). Steps 4 to 6 are open.
 
+**Decisions (the owner, 2026-11-05, afternoon):**
+- **Reconnect: build now, for SFTP, SCP and FTP alike.** FTP has the same gap: `ftpclient.py` logs in again for an idle connection and
+  for each transfer, but a main connection lost mid-job is set to `None` and every later call fails with "the connection to the server
+  was lost", a plain `ConnectionError` that `is_network_error` does not wait for. Only with a saved login, never a prompt.
+- **Step 4: build now, but not as an automatic CSV.** After a big job the queue offers **Export Log…**, which saves a Markdown table
+  (path, size, result, retries, seconds) where the owner chooses. Nothing is written unless asked.
+- **Step 5: build now.** "This is something I actually want now."
+- **Step 6: leave out**, as planned.
+
 ## Where the engine stands
 
 Already as good as robocopy or better:

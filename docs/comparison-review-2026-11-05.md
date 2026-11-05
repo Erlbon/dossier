@@ -26,7 +26,10 @@ A critical comparison of Dossier (build 2026-11-05#01) with Total Commander 11 (
   - 4: measure big folders;
   - 5: no plugins, features built in;
   - 9: colour files by type.
-- **Later (stay open):** 6 (every key can be changed), 8 (a Linux package), 10 (one panel, or panels stacked).
+- **Later:** 6 (every key can be changed), 8 (a Linux package), 10 (one panel, or panels stacked). Walked through with the owner the same afternoon:
+  - **6: dropped.** A default key that turns out wrong is fixed in the defaults; there is no Keys page beyond the function-key rows.
+  - **8: stays Later**, now that the Windows installer has shipped.
+  - **10: dropped.** "I don't like this idea." Side by side stays the only layout.
 - **No:** 7 (Norwegian as a second language).
 - **What follows for the code and docs:**
   - **Card 3** means no new feature area until the functionality review's Yes cards are built and a release has had a week of use. Cards 33 and 34 of that review (the assistant acting on its own, commands on the server) are decided cards, not new areas.

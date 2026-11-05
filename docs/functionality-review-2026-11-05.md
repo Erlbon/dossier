@@ -14,8 +14,17 @@ A read-only review of what Dossier does as a dual-pane file manager: where a flo
 
 **Decisions (the owner, 2026-11-05, on the decision page).**
 - **Yes, to build:** 1-23 and 25. Card 20 (Space adds up a folder's size) is Yes against my Later. Card 23 comes after 22, in the same box. Card 25 waits until the copy-robustness and assistant PRs are merged.
-- **Later (stay open):** 24, 26, 27, 28, 29, 30, 31, 32.
+- **Later (stay open):** 24, 26, 27, 28, 29, 30, 31, 32. All of them were settled one by one in the walk-through below.
 - **No:** none.
+- **The Later cards, walked through with the owner (2026-11-05, afternoon):**
+  - **24, Quick View: dropped.** "I think the large icon view is as good as this for images"; F3 is enough for text.
+  - **26, folder tree: build now, as the popup only** (a key opens a tree, Enter jumps there, it closes), medium. No tree beside the panel.
+  - **27, synchronized browsing: dropped.** "This is for a very small subset of tasks."
+  - **28, saved searches: Later, placed.** Not on the Home page ("that would be cluttering"). Tools > Saved Searches with Run, Save Current Search and Forget, the same pattern as Mark > Saved Marks and Go > Tabs, plus a drop-down in the Search dialog to load one and change it before it runs.
+  - **29, search inside archives: dropped.**
+  - **30, save the listing as text or Markdown: dropped.**
+  - **31, Everything: dropped**, and so is the alternative of Everything's "Open Path" opening the folder in a running Dossier. The owner uses Everything heavily and searches there; "just drop it".
+  - **32, folder share after Folder Sizes: build now, as a percentage column only.** No bars to start with.
 - **Added later the same day:** cards 33 and 34 (the assistant acting on its own, and commands on the server). Both Yes, 33 first.
 
 **Suggested build order** (each card with a test that fails on the old code, as the reviews do):
