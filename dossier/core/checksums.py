@@ -29,6 +29,13 @@ class FileHash:
 def hash_file(fs, path: str, algorithms: Sequence[str] = ("sha256",), cancel: Optional[CancelToken] = None,
               on_bytes: Callable[[int], None] = lambda n: None) -> FileHash:
     result = FileHash(path)
+    if tuple(algorithms) == ("sha256",) and hasattr(fs, "sha256_on_server"):
+        remote = fs.sha256_on_server(path)            # a server that allows commands works it out itself: nothing is read here
+        if remote:
+            result.size = fs.stat(path).size
+            on_bytes(result.size)
+            result.digests = {"sha256": remote}
+            return result
     hashers = {a: hashlib.new(a) for a in algorithms}
     try:
         with fs.open_read(path) as f:

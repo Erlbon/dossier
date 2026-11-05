@@ -15,6 +15,7 @@ import threading
 from dataclasses import dataclass
 from typing import Optional
 
+from . import remote_commands
 from .sftp_proto import SftpClient, SftpReadFile, SftpWriteFile
 from .vfs import Entry, FileSystem, NotWritable
 
@@ -63,6 +64,7 @@ class Session:
     base: str = ""                    # a prefix put before every remote path (a fixed folder the whole session lives in)
     home: str = "/"                   # where the server put us at login: where the connection opens
     scheme: str = SCHEME              # which kind of connection: sftp, or scp (a shell)
+    commands: object = None           # a shell on the server for checksums and copies there, when the owner allows commands (remote_commands.py)
 
     def remote(self, remote_path: str) -> str:
         return (self.base.rstrip("/") + remote_path) if self.base else remote_path
@@ -110,10 +112,12 @@ class SftpFileSystem(FileSystem):
         session = self.sessions.pop(authority, None)
         if session is None:
             return
-        if wait:
-            session.client.close()
-        else:
-            threading.Thread(target=_close_quietly, args=(session.client,), daemon=True, name="dossier-disconnect").start()
+        clients = [session.client] + ([session.commands] if session.commands is not None and session.commands is not session.client else [])
+        for client in clients:                                    # the shell for commands on the server goes with it
+            if wait:
+                client.close()
+            else:
+                threading.Thread(target=_close_quietly, args=(client,), daemon=True, name="dossier-disconnect").start()
 
     def connected(self, authority: str) -> bool:
         s = self.sessions.get(authority)
@@ -238,6 +242,26 @@ class SftpFileSystem(FileSystem):
         if not overwrite and self._exists(session, rdst):
             raise FileExistsError(dst)
         session.client.rename(session.remote(rsrc), session.remote(rdst), overwrite=overwrite)
+
+    # work on the server itself (remote_commands.py) ----------------------------------------------------------------------------------
+    def copy_on_server(self, src: str, dst: str) -> bool:
+        """Copy ``src`` to the new name ``dst`` with a command on the server, when both are on one server that allows commands."""
+        try:
+            session, rsrc = self._session(src)
+            session2, rdst = self._need_write(dst)
+        except OSError:
+            return False
+        if session2 is not session or session.commands is None:
+            return False
+        return remote_commands.copy(session.commands, session.remote(rsrc), session.remote(rdst))
+
+    def sha256_on_server(self, path: str) -> Optional[str]:
+        """The SHA-256 of ``path`` worked out on the server, or None (commands not allowed, or no sha256sum there)."""
+        try:
+            session, remote = self._session(path)
+        except OSError:
+            return None
+        return remote_commands.sha256(session.commands, session.remote(remote)) if session.commands is not None else None
 
     def remove(self, path: str) -> None:
         session, remote = self._need_write(path)

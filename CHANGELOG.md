@@ -2,6 +2,13 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-05#12 -- Commands on the server: checksums and copies run there when you allow it (review card 34)
+
+- **"Allow commands on this server"** in the server's settings (SFTP and SCP only, off by default). With it on, a checksum of a file on that server is worked out there (`sha256sum`), and a copy from one folder of the server to another runs there (`cp -p`), instead of every byte coming to this computer and, for a copy, going back. Checksums, manifests (also the assistant's `write_manifest` and `compare_with_manifest`) and copies, in the window and in the assistant, all use it.
+- **Only Dossier's own commands:** fixed command lines built in `core/remote_commands.py`, every name quoted, never a command line from the assistant or anyone else. The copy goes to a part file that takes its name at the end, as every copy does, so nothing is overwritten that the plan did not say.
+- **It can only make things faster:** with the switch off, no shell for the account, or the command missing or failing, the work goes the ordinary way over SFTP. For an SFTP server Dossier opens a second ssh with a shell for the commands; it closes with the server.
+- New test `tests/test_remote_commands.py` (a real shell, including a file name made to try to run a command).
+
 ## 2026-11-05#11 -- The assistant can carry out its own plans when you allow it (review card 33); decisions of the comparison review
 
 - **Settings > Assistant Access > Let it carry out its own plans without asking** (card 33, off by default, only with file changes allowed): `commit_plan` then runs the plan in the assistant's server itself, so a job started from a phone works with the Dossier window closed. The guard rails are in the core (`assistant/planning.py`): the plan is made again at that moment and every path checked against the listed folders again; a file in the way is never overwritten (that step is left out and reported); a delete that cannot go to a recycle bin (a server, network drive, USB stick, or asked as permanent) still goes to the window for your Run; a read-only server stays read-only.

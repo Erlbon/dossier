@@ -53,11 +53,13 @@ class Remotes:
                 link = sshlink.connect(conn, password, known, folder)
             except sshlink.ConnectError as e:
                 raise RemoteError(f"{conn.name}: {e}")
+            sshlink.add_commands(conn, link, password, known, folder)
             try:
                 home = link.client.realpath(".")
             except OSError:
                 home = "/"
-            target.add_session(Session(authority, link.client, read_only=conn.read_only, home=home, scheme=scheme))
+            target.add_session(Session(authority, link.client, read_only=conn.read_only, home=home, scheme=scheme,
+                                       commands=link.commands.client if link.commands is not None else None))
             self._links[(scheme, authority)] = link
 
     @staticmethod

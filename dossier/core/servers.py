@@ -62,6 +62,7 @@ class Connection:
     cert: str = ""                     # WebDAV: the fingerprint of a certificate the owner approved for this server
     preset: str = ""                   # "nextcloud": made from the Nextcloud preset (still a WebDAV connection; the start folder follows the user)
     client_id: str = ""                # a cloud drive: the id of the app the owner registered (public; its secret is in the password store)
+    allow_commands: bool = False       # SFTP/SCP: checksums and copies on this server run there (sha256sum, cp; core/remote_commands.py)
 
     def authority(self) -> str:
         host = f"[{self.host}]" if ":" in self.host and not self.host.startswith("[") else self.host
@@ -100,9 +101,11 @@ class Connection:
         return ""
 
     def force_rules(self) -> "Connection":
-        """A catalogue is read-only whatever was asked."""
+        """A catalogue is read-only whatever was asked; only an SSH server (SFTP, SCP) can run commands."""
         if self.protocol in CATALOGS:
             self.read_only = True
+        if self.protocol not in ("sftp", "scp"):
+            self.allow_commands = False
         return self
 
 
@@ -162,7 +165,7 @@ def from_json(text) -> list:
                            int(item.get("port", DEFAULT_PORT)), str(item.get("protocol", "sftp")), str(item.get("key_file", "")),
                            str(item.get("start_dir", "")), bool(item.get("read_only", True)), bool(item.get("save_password", False)),
                            str(item.get("id") or uuid.uuid4().hex), bool(item.get("secure", True)), str(item.get("cert", "")),
-                           str(item.get("preset", "")), str(item.get("client_id", "")))
+                           str(item.get("preset", "")), str(item.get("client_id", "")), bool(item.get("allow_commands", False)))
         except (TypeError, ValueError):
             continue
         if not c.problem():

@@ -195,6 +195,14 @@ def copy_file(
         carry_tags(src_fs, src, dst_fs, dst, tags_lost)
         return
     try:
+        if throttle is None and src_fs is dst_fs and getattr(dst_fs, "copy_on_server", None) and dst_fs.copy_on_server(src, part):
+            _check_whole(dst_fs.stat(part).size, total, src)           # copied on the server itself (it allows commands): no bytes came here
+            if check_part is not None:
+                check_part(part)
+            _finish(dst_fs, part, dst, info, overwrite, cancel, swap)
+            if progress:
+                progress(total, total)
+            return
         if native and throttle is None and total >= fastcopy.FAST_MIN and _plain_local(src_fs, src) and _plain_local(dst_fs, dst):
             if fastcopy.fast_copy(src, part, total, progress, cancel):       # the system's own copy, in the kernel
                 _check_whole(dst_fs.stat(part).size, total, src)

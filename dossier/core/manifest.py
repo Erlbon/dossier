@@ -103,6 +103,13 @@ def build(fs: FileSystem, root: str, cancel: Optional[CancelToken] = None,
         check(cancel)
         h = hashlib.sha256()
         item = Item(rel, e.size, e.mtime)
+        remote = fs.sha256_on_server(e.path) if hasattr(fs, "sha256_on_server") else None
+        if remote:                                    # worked out on the server itself (it allows commands): nothing is read here
+            item.digest = remote
+            state.bytes += e.size
+            items.append(item)
+            state.files += 1
+            continue
         try:
             with fs.open_read(e.path) as f:
                 while True:

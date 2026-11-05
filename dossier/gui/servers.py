@@ -66,6 +66,10 @@ class ConnectionDialog(OwnedDialog):
         self.read_only.setChecked(c.read_only)
         self.remember = QCheckBox("Keep the password in the system's password store (otherwise it is asked for when needed)")
         self.remember.setChecked(c.save_password)
+        self.commands = QCheckBox("Allow commands on this server: checksums and copies within it run there (sha256sum, cp), much faster")
+        self.commands.setToolTip("Dossier sends only its own fixed commands, with every name quoted; never a command line from anyone else. "
+                                 "Without a shell or those programs it works the ordinary way.")
+        self.commands.setChecked(c.allow_commands)
         self.client_id = QLineEdit(c.client_id)                              # a cloud drive: the app the owner registered with the provider
         self.client_id.setPlaceholderText("for example  1234567890-abc.apps.googleusercontent.com")
         self.client_secret = QLineEdit(servers.get_secret(servers.client_secret_account(c.client_id)) if c.client_id else "")
@@ -93,6 +97,7 @@ class ConnectionDialog(OwnedDialog):
         form.addRow("Client ID", self.client_id)
         form.addRow("Client secret", self.client_secret)
         form.addRow("", self.read_only)
+        form.addRow("", self.commands)
         form.addRow("", self.remember)
         layout.addLayout(form)
         self.note = QLabel()
@@ -136,6 +141,7 @@ class ConnectionDialog(OwnedDialog):
         self._form.setRowVisible(self.secure, web)
         self._form.setRowVisible(self._key_row, not web)
         self._form.setRowVisible(self.read_only, not catalog)         # a catalogue is always read-only
+        self._form.setRowVisible(self.commands, kind in ("sftp", "scp"))    # only an SSH server has a shell
         self._form.setRowVisible(self.start_dir, not nextcloud)       # a Nextcloud's start folder follows from its address and the user
         if self.port.value() == self._last_default:                      # a port nobody changed follows the type
             self.port.setValue(servers.default_port(kind, self.secure.isChecked()))
@@ -209,7 +215,8 @@ class ConnectionDialog(OwnedDialog):
                                   self.base.id, self.secure.isChecked(),
                                   self.base.cert if (self.host.text().strip(), int(self.port.value()), self.secure.isChecked()) ==
                                   (self.base.host, self.base.port, self.base.secure) else "",
-                                  servers.NEXTCLOUD if nextcloud else "")
+                                  servers.NEXTCLOUD if nextcloud else "", "",
+                                  self.commands.isChecked() and self._kind() in ("sftp", "scp"))
 
     def _accept(self) -> None:
         why = self.connection().problem()
@@ -518,6 +525,7 @@ class ServersMixin:
                 if e.kind == "auth":
                     return "auth", str(e)
                 raise
+            sshlink.add_commands(conn, link, password, os.path.join(self.ssh_folder(), "known_hosts"), self.ssh_folder())
             try:
                 home = link.client.realpath(".")
             except OSError:
@@ -668,7 +676,8 @@ class ServersMixin:
         then(session)
 
     def _connected(self, conn, link, home: str, password: str, remember: bool, then) -> None:
-        session = Session(conn.authority(), link.client, read_only=conn.read_only, home=home, scheme=conn.protocol)
+        session = Session(conn.authority(), link.client, read_only=conn.read_only, home=home, scheme=conn.protocol,
+                          commands=link.commands.client if getattr(link, "commands", None) is not None else None)
         self.server_fs(conn).add_session(session)
         self._links[(conn.protocol, conn.authority())] = link
         if password:
@@ -711,10 +720,11 @@ class ServersMixin:
         """When the window closes: the ssh processes are ended at once (that also wakes any request waiting on them), and every
         connection is closed on a thread, so a server that stopped answering never keeps the window on the screen."""
         for link in list(self._links.values()):
-            try:
-                link.process.kill()
-            except (OSError, AttributeError):
-                pass
+            for process in (getattr(link, "process", None), getattr(getattr(link, "commands", None), "process", None)):
+                try:
+                    process.kill()
+                except (OSError, AttributeError):
+                    pass
         for fs in (self.fs.sftp, self.fs.scp, self.fs.dav, self.fs.ftp, self.fs.opds, self.fs.subsonic, self.fs.gdrive):
             for authority in list(fs.sessions):
                 fs.drop(authority, wait=False)

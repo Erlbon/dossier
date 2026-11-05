@@ -22,7 +22,7 @@ import shutil
 import subprocess
 import sys
 import threading
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Optional
 
 from .askpass import VARIABLE
@@ -294,6 +294,7 @@ class Link:
 
     def __init__(self, process: subprocess.Popen, client: SftpClient, stderr: "list") -> None:
         self.process, self.client, self._stderr = process, client, stderr
+        self.commands = None               # a second link with a shell, for commands on the server (``add_commands``)
 
 def _drain(stream, sink: list) -> None:
     try:
@@ -303,6 +304,20 @@ def _drain(stream, sink: list) -> None:
                 sink.pop(0)
     except (OSError, ValueError):
         pass
+
+
+def add_commands(c: Connection, link: Link, password: str, known_hosts: str, askpass_folder: str) -> None:
+    """When the owner allows commands on ``c`` (card 34): give ``link`` a shell for them, as ``link.commands`` (an SCP connection is a
+    shell already). A server with no shell for this account simply has none: the work then goes the ordinary way, over SFTP."""
+    if not c.allow_commands:
+        return
+    if c.protocol == "scp":
+        link.commands = link
+        return
+    try:
+        link.commands = connect(replace(c, protocol="scp"), password, known_hosts, askpass_folder)
+    except ConnectError:
+        link.commands = None
 
 
 def connect(c: Connection, password: str, known_hosts: str, askpass_folder: str, timeout: int = CONNECT_TIMEOUT + 5) -> Link:

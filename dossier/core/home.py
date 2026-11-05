@@ -301,3 +301,12 @@ class RouterFileSystem(FileSystem):
 
     def set_mtime(self, path: str, mtime: float) -> None:
         self.fs_for(path).set_mtime(path, mtime)
+
+    # work on a server itself, when it allows commands (core/remote_commands.py): False / None means do it the ordinary way
+    def copy_on_server(self, src: str, dst: str) -> bool:
+        target = self.fs_for(src)
+        return target is self.fs_for(dst) and hasattr(target, "copy_on_server") and target.copy_on_server(src, dst)
+
+    def sha256_on_server(self, path: str):
+        target = self.fs_for(path)
+        return target.sha256_on_server(path) if hasattr(target, "sha256_on_server") else None
