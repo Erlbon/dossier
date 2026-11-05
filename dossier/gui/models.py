@@ -20,6 +20,7 @@ from ..core import covers, sharing
 from ..core.drives import is_remote_quick
 from ..core.filetypes import DRIVE_ICONS, icon_name
 from ..core.home import HOME_URL, TYPE_NAMES, USER_FOLDER_NOTE
+from ..core.filecolors import FileColors
 from ..core.search import attribute_letters
 from ..core.selection import SelectionStore
 from ..core.vfs import Entry, FileSystem, natural_key
@@ -135,6 +136,7 @@ class FolderModel(QAbstractTableModel):
         self._source_rows: list = []             # the whole listing; _rows is what the quick filter lets through
         self._filter = ""
         self.show_hidden = True          # View > Show Hidden and System Files
+        self.file_colors = FileColors()  # the colours of names by type (Settings > Appearance > File Colours)
         self._tree_sizes: dict = {}
         self.drop_row = -1                       # the row a drag is hovering over (a folder that would take the drop)
         self.icon_px = 0                         # 0: the details table; otherwise the thumbnail view, with pictures this big
@@ -459,6 +461,13 @@ class FolderModel(QAbstractTableModel):
             return QBrush(QColor(LABEL_COLORS[self._tag(entry.path)[2]]))
         if role == Qt.ItemDataRole.ForegroundRole and self.is_marked(entry):
             return QBrush(marked_color())
+        if role == Qt.ItemDataRole.ForegroundRole and col == 0:   # the name: dimmed when hidden, else the colour of its type (filecolors.py)
+            if set(attribute_letters(entry)) & {"H", "S"}:
+                return QBrush(QColor(theme.current()["dim"]))
+            if not entry.is_dir:
+                colour = self.file_colors.color_of(entry.name, theme.is_dark())
+                if colour:
+                    return QBrush(QColor(colour))
         if role == Qt.ItemDataRole.FontRole and look.bold_lists and (self.is_marked(entry) or entry.is_dir):
             font = QFont()
             font.setBold(True)

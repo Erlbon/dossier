@@ -54,6 +54,7 @@ from .context_menu import ContextMenuMixin
 from .tools_bar import ToolsBarMixin
 from .view_modes import ViewModesMixin
 from .drop_handler import DragDropMixin
+from .file_colors import FileColorsMixin
 from .remote_edit import RemoteEditMixin
 from .transfer import TransferMixin
 from .zip_edit import ZipEditMixin, zip_parts
@@ -100,7 +101,7 @@ CLOSE_WAIT = 5.0     # seconds a closing window waits for a cancelled copy to st
 EXTERNAL = "external"  # what F4's reading step hands over when the chosen editor program is to open the file
 
 
-class MainWindow(TransferMixin, RemoteEditMixin, FrostMixin, GlassViewMixin, KeysMixin, AutoRefreshMixin, MetadataEditMixin, HealthMixin, QuarantineMixin, NewFromContentMixin, TabSetsMixin, CommandCompletionMixin, DatesLinksMixin, ViewModesMixin, ToolsBarMixin, ContextMenuMixin, DragDropMixin, LookMixin, ZipEditMixin, ArchiveCommandsMixin, CopySettingsMixin, AssistantMixin, OpenFilesMixin, MenusMixin, WheelMixin, ToolsBarPlaceMixin, TailnetMixin, CompareFoldersMixin, ServersMixin, DuplicatesMixin, FolderLayoutsMixin, QueueResumeMixin, ColumnsMixin, PropertiesMixin, SharingMixin, MountMixin, ChecksumMixin, MarksAndNotesMixin, SearchCommandMixin, BatchRenameMixin, OperationQueueMixin, StallLogMixin, GoingPlacesMixin, FolderSizesMixin, UnpackMixin, QMainWindow):
+class MainWindow(FileColorsMixin, TransferMixin, RemoteEditMixin, FrostMixin, GlassViewMixin, KeysMixin, AutoRefreshMixin, MetadataEditMixin, HealthMixin, QuarantineMixin, NewFromContentMixin, TabSetsMixin, CommandCompletionMixin, DatesLinksMixin, ViewModesMixin, ToolsBarMixin, ContextMenuMixin, DragDropMixin, LookMixin, ZipEditMixin, ArchiveCommandsMixin, CopySettingsMixin, AssistantMixin, OpenFilesMixin, MenusMixin, WheelMixin, ToolsBarPlaceMixin, TailnetMixin, CompareFoldersMixin, ServersMixin, DuplicatesMixin, FolderLayoutsMixin, QueueResumeMixin, ColumnsMixin, PropertiesMixin, SharingMixin, MountMixin, ChecksumMixin, MarksAndNotesMixin, SearchCommandMixin, BatchRenameMixin, OperationQueueMixin, StallLogMixin, GoingPlacesMixin, FolderSizesMixin, UnpackMixin, QMainWindow):
     def __init__(self, fs: Optional[FileSystem] = None, *, settings_path: Optional[str] = None, start=(None, None),
                  dialogs=None, trasher=None, terminal_launcher=None, which=None) -> None:
         super().__init__()
@@ -191,6 +192,7 @@ class MainWindow(TransferMixin, RemoteEditMixin, FrostMixin, GlassViewMixin, Key
         box.addLayout(status_row)
         self.setCentralWidget(central)
         self._build_menus()
+        self.apply_file_colors()
         self.apply_fkey_shortcuts()
         self.install_layer_watcher()
         for name in ("command", "fkeys", "tools"):                        # menus exist now: each bar goes where it was left

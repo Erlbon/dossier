@@ -342,7 +342,7 @@ def test_menus_view_has_modes_and_notes_while_settings_has_the_choices(commander
     assert texts("Settings") == ["Appearance", "Copy and Move...", "Opening Files", "Mouse Wheel...", "Function Keys...", "Auto Refresh",
                                  "Drives and Sharing", "Quarantine...", "Assistant Access..."]
     look = [a for a in menus["Settings"].actions() if a.text() == "Appearance"][0].menu()
-    assert [a.text() for a in look.actions()] == ["Color Scheme", "Icon Set", "Fonts and Bold...", "Thumbnails...", "Picture Viewer Glass...", "Frosted Background...", "Drive Selector"]
+    assert [a.text() for a in look.actions()] == ["Color Scheme", "Icon Set", "Fonts and Bold...", "File Colours...", "Thumbnails...", "Picture Viewer Glass...", "Frosted Background...", "Drive Selector"]
     win.set_sharing_allowed(True)
     menus["Network"].aboutToShow.emit()
     assert texts("Network")[4:6] == ["Share This Folder...", "Shared Folders of a Computer..."]

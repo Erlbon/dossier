@@ -70,8 +70,15 @@ def main(argv=None) -> int:
     app.setApplicationName("Dossier")
     app.setOrganizationName("Erlbon")
     app.setWindowIcon(app_icon())                 # every window of the program, the viewer and notepad too
-    window = MainWindow()
+    probe_folder = os.environ.get("DOSSIER_STARTUP_PROBE", "")
+    window = MainWindow(settings_path=os.path.join(probe_folder, "dossier.ini") if probe_folder else None)    # a probe never uses yours
     window.show()
+    if probe_folder:                               # tools/time_startup.py: say when the window is up and can be typed in, then close
+        from PyQt6.QtCore import QTimer
+        probe = QTimer(window)
+        probe.setSingleShot(True)
+        probe.timeout.connect(lambda: (print("dossier-ready", flush=True), window.close()))
+        probe.start(0)
     return leave(app.exec())
 
 

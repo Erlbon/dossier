@@ -2,6 +2,13 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-05#13 -- File names coloured by type (comparison review card 9, option C); timing tools
+
+- **Names are coloured by type**, as in Just Manager, in four groups: pictures, video and music (teal), archives (coral), documents and code (blue), programs (muted red), each with its own shade for the light and the dark scheme. Hidden and system files are dimmed; a marked file keeps the gold of marks over its type. The extensions are the ones the icons use, so a name's colour and its icon always agree.
+- **Settings > Appearance > File Colours...** switches it off, or changes a group's extensions and colours (Back to the Defaults puts them back).
+- **Two timing tools** for the comparison review: `tools/time_startup.py` (start of the process to a window you can type in, from the source and for an exe; it runs offscreen with its own settings file) and `tools/time_big_folders.py` (listing, sorting, marking and copying 10,000 and 100,000 files, locally or on the NAS). The window prints `dossier-ready` when `DOSSIER_STARTUP_PROBE` names a folder for its settings.
+- New test `tests/test_file_colors.py`.
+
 ## 2026-11-05#12 -- Commands on the server: checksums and copies run there when you allow it (review card 34)
 
 - **"Allow commands on this server"** in the server's settings (SFTP and SCP only, off by default). With it on, a checksum of a file on that server is worked out there (`sha256sum`), and a copy from one folder of the server to another runs there (`cp -p`), instead of every byte coming to this computer and, for a copy, going back. Checksums, manifests (also the assistant's `write_manifest` and `compare_with_manifest`) and copies, in the window and in the assistant, all use it.
