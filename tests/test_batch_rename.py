@@ -50,6 +50,7 @@ def test_rename_by_pattern_numbers_the_files_in_the_order_of_the_list_and_keeps_
     win.left.table.sortByColumn(0, Qt.SortOrder.DescendingOrder)               # the list shows c, b, a
     shown = answer(monkeypatch, RenamePatternDialog, lambda d: d.pattern_edit.setText("%counter% - %name%"))
     win.rename_by_pattern()
+    pump(win, lambda: shown)                     # a .jpg is marked: its tags are read on a thread before the dialog opens
     wait_planned(win)
     pump(win, lambda: not win.busy)
     assert listing(left) == ["1 - c.jpg", "2 - b.txt", "3 - a.txt"]             # counted in the order shown, extension kept
