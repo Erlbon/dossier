@@ -195,4 +195,4 @@ def test_the_quarantine_folder_opens_only_when_it_exists(world):
 def test_the_commands_are_in_the_menus(world):
     win, d, left, right, tmp = world
     texts = {a.text() for a in win.findChildren(type(win.menuBar().actions()[0])) if a.text()}
-    assert {"Move to Quarantine...", "Put Back from Quarantine", "Quarantine...", "Quarantine Folder"} <= texts
+    assert {"Move to Quarantine...", "Put Back", "Quarantine...", "Show the Quarantine Folder"} <= texts

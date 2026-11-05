@@ -114,7 +114,7 @@ def test_nothing_to_show_says_so_and_the_menu_has_properties(world):
     win.left.table.clearSelection()
     win.selection.clear()
     menus = {a.text().replace("&", ""): a.menu() for a in win.menuBar().actions()}
-    assert "Properties" in [a.text() for a in menus["Files"].actions()]
+    assert "Properties" in [a.text() for a in menus["File"].actions()]
     assert win.act_properties.shortcut().toString() in ("Alt+Return", "Alt+Enter")
 
 

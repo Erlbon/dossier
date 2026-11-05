@@ -1,7 +1,7 @@
 # Qt-free core needs nothing beyond the standard library.
 # GUI and shared code (added when the GUI shell starts):
 PyQt6>=6.6
-redactor_common @ git+https://github.com/Erlbon/redactor_common.git@2026-11-04-02   # pin a tag, never @main
+redactor_common @ git+https://github.com/Erlbon/redactor_common.git@2026-11-05-02   # pin a tag, never @main
 send2trash>=1.8
 pywin32>=306; sys_platform == "win32"   # send2trash's modern recycle bin: without it, an item Windows cannot recycle is deleted for good, silently
 keyring>=24                     # saved passwords go to the system's password store, only when the owner asks for it

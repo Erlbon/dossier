@@ -17,8 +17,7 @@ from ..core import barplace
 from . import theme
 
 SETTING = {"tools": "view/tools_bar_place", "fkeys": "view/fkeys_place", "command": "view/command_place"}
-TITLE = {"tools": "Programs Bar", "fkeys": "Function Key Bar (F2 ... F8)", "command": "Command Line"}
-NAME = {"fkeys": "Function Keys", "command": "Command Line"}
+NAME = {"tools": "Tools Bar", "fkeys": "Function Keys", "command": "Command Line"}
 ORDER = ("tools", "command", "fkeys")            # the order of the bars inside a group
 ABOVE = ("below_menu", "top")
 
@@ -75,16 +74,18 @@ class ToolsBarPlaceMixin:
         self.tools_bar.setVisible(str(self.settings.value("view/tools_bar", "true")).lower() == "true")
 
     def build_bar_place_menus(self, parent_menu) -> None:
-        """View > Bar Positions: one submenu with a group for each movable bar."""
+        """View > Bar Positions: one submenu with a group for each movable bar (each entry names its bar, so the groups need no titles)."""
         menu = parent_menu.addMenu("Bar Positions")
+        menu.menuAction().setToolTip("Or drag the dots at the left end of a bar")
         self.bar_place_actions = {}
         for name in ("tools", "fkeys", "command"):
-            menu.addSection(TITLE[name])
+            if name != "tools":
+                menu.addSeparator()
             group = QActionGroup(self)
             group.setExclusive(True)
             self.bar_place_actions[name] = {}
             for key, label in (barplace.PLACES if name == "tools" else barplace.FKEY_PLACES):
-                text = label if name == "tools" else f"{NAME[name]} {label[0].lower()}{label[1:]}"     # "Command Line at the Bottom"
+                text = f"{NAME[name]} {label[0].lower()}{label[1:]}"                # "Command Line at the Bottom"
                 act = QAction(text, self)
                 act.setCheckable(True)
                 act.setChecked(self.bar_place(name) == key)
@@ -92,8 +93,6 @@ class ToolsBarPlaceMixin:
                 group.addAction(act)
                 menu.addAction(act)
                 self.bar_place_actions[name][key] = act
-        menu.addSeparator()
-        menu.addAction("Or drag the dots at the left end of a bar").setEnabled(False)
         self.tools_bar_place_actions = self.bar_place_actions["tools"]
 
     def _fit_tools_bar(self) -> None:

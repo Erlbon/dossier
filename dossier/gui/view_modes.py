@@ -82,7 +82,7 @@ class ViewModesMixin:
         mode_group.addAction(icons)
         view_menu.addAction(icons)
         self.view_mode_actions["icons"] = icons
-        sizes = view_menu.addMenu("Thumbnail Size")
+        sizes = self.thumb_size_menu = view_menu.addMenu("Thumbnail Size")      # greyed while the panel shows Details
         size_group = QActionGroup(self)
         size_group.setExclusive(True)
         self.size_actions = {}
@@ -93,7 +93,7 @@ class ViewModesMixin:
             size_group.addAction(act)
             sizes.addAction(act)
             self.size_actions[px] = act
-        arrange = view_menu.addMenu("Arrange By")
+        arrange = view_menu.addMenu("Sort By")
         arrange_group = QActionGroup(self)
         arrange_group.setExclusive(True)
         self.arrange_actions = {}
@@ -124,6 +124,7 @@ class ViewModesMixin:
             act.setChecked(key == mode)
         for px, act in self.size_actions.items():
             act.setChecked(px == nearest_step(panel.icon_px))
+        self.thumb_size_menu.setEnabled(mode == "icons")
         header = panel.table.horizontalHeader()
         column = header.sortIndicatorSection()
         for key, act in self.arrange_actions.items():

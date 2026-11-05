@@ -1,4 +1,4 @@
-"""Settings > Quarantine..., Tools > Move to Quarantine / Put Back from Quarantine, Go > Quarantine Folder: the window for ``core/quarantine.py``.
+"""Settings > Quarantine..., Tools > Quarantine > Move to Quarantine, Put Back and Show the Quarantine Folder: the window for ``core/quarantine.py``.
 
 A file moved to the quarantine keeps its place in the folder tree and can be put back; nothing is deleted. Moving is an ordinary move plan
 (conflict dialog, progress, Cancel, Ctrl+Z on one drive), planned on a thread and confirmed once with the folder it goes to.
@@ -143,7 +143,7 @@ class QuarantineMixin:
         where = os.path.dirname(moves[0].dst)
         left_out = [w for w in plan.warnings if w.startswith("left out")]
         text = (f"Move {len([o for o in plan.ops if o.kind is Kind.MOVE]):,} item(s) to the quarantine folder?{chr(10)}{chr(10)}{where}{chr(10)}{chr(10)}"
-                "They keep their place in the folder tree there and nothing is deleted. Tools > Put Back from Quarantine brings them back."
+                "They keep their place in the folder tree there and nothing is deleted. Tools > Quarantine > Put Back brings them back."
                 + (f"{chr(10)}{chr(10)}{len(left_out)} item(s) are left out (already in the quarantine, or not on a drive of this computer)." if left_out else ""))
         if not self.dialogs.confirm("Move to Quarantine", text, "Move"):
             return

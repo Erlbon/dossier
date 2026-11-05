@@ -1,4 +1,4 @@
-"""Edit > Paste Picture or Text as New File..., Ctrl+V with no files on the clipboard, and dropping a picture or text on a panel.
+"""Edit > Paste as New File..., Ctrl+V with no files on the clipboard, and dropping a picture or text on a panel.
 
 The clipboard (or the drop) holds content, not files. After asking for a name (suggested from the time, with the extension the kind needs)
 the window encodes the picture or text and writes the file on a thread with ``core/newfile.py``, which never replaces an existing file.
@@ -58,7 +58,7 @@ class NewFromContentMixin:
             self._say("The clipboard holds no picture or text to make a file of")
 
     def new_file(self) -> None:
-        """Files > New File... (Shift+F4 by default): an empty text file in the folder of the active panel, named by the user."""
+        """File > New File... (Shift+F4 by default): an empty text file in the folder of the active panel, named by the user."""
         if self._home_blocked("New File") or self._no_folder_yet("New File"):
             return
         self._new_file_from_content(newfile.TEXT, "", self.active.path, title="New File", suggested="New file.txt")

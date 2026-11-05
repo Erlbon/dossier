@@ -38,7 +38,7 @@ def test_a_file_gets_the_file_commands(world):
     t = texts(menu)
     assert t[:3] == ["Open", "View", "Edit"] and "Rename" in t and "Delete" in t and "Properties" in t
     assert "Open in a New Tab" not in t and "Unpack..." not in t
-    assert "Pack to Zip..." in t and "Copy to the Other Panel" in t and "Copy the Path as Text" in t
+    assert "Pack to Zip..." in t and "Copy to the Other Panel" in t and "Copy Paths as Text" in t
 
 
 def test_a_folder_gets_the_folder_commands(world):
@@ -66,7 +66,7 @@ def test_archives_get_unpack_and_other_than_zip_also_convert(world):
 def test_empty_space_gets_the_folder_commands(world):
     win, d, left, *_ = world
     t = texts(win.build_context_menu(win.left, -1))
-    assert t[:3] == ["New Folder", "Paste", "Select All"] and "Terminal Here" in t and "Refresh" in t
+    assert t[:3] == ["New Folder", "Paste", "Mark All"] and "Terminal Here" in t and "Refresh" in t
     assert "Properties of This Folder" in t and "All Files Below This Folder" in t and "Search..." in t
 
 
@@ -149,7 +149,7 @@ def test_the_home_page_gets_its_own_short_menus(world):
     action =next(r for r in range(m.entry_count()) if m.entry_at(r).kind == "action")
     assert texts(win.build_context_menu(win.left, action)) == ["Add a network share"]
     header = next(r for r in range(m.entry_count()) if m.entry_at(r).kind == "header")
-    assert texts(win.build_context_menu(win.left, header)) == ["Add a Network Share..."]
+    assert texts(win.build_context_menu(win.left, header)) == ["Add Network Share..."]
 
 
 def test_a_pinned_folder_can_be_removed_from_the_menu(world):

@@ -232,7 +232,7 @@ def test_the_command_is_in_the_menus_and_can_be_given_a_function_key(world):
     win, *_ = world
     assert "glass_view" in fkeys.COMMANDS and "glass_view" in win._command_actions
     menus = {a.text().replace("&", ""): a.menu() for a in win.menuBar().actions()}
-    assert "View as Glass" in [a.text() for a in menus["Files"].actions()]
+    assert "View as Glass" in [a.text() for a in menus["File"].actions()]
     appearance = next(a.menu() for a in menus["Settings"].actions() if a.text() == "Appearance")
     assert "Picture Viewer Glass..." in [a.text() for a in appearance.actions()]
 

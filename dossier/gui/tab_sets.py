@@ -1,4 +1,4 @@
-"""View > Tabs > Save Tab Set As..., Open Tab Set, Add Tab Set, Forget Tab Set: named lists of a panel's tab folders (``core/tabsets.py``).
+"""Go > Tabs > Save Tab Set As..., Open Tab Set, Add Tab Set, Forget Tab Set: named lists of a panel's tab folders (``core/tabsets.py``).
 
 Opening a set replaces the active panel's tabs (like the saved session does); adding opens its folders as more tabs next to the ones
 there. The two submenus and Forget list the saved names each time the menu opens, as the saved selections of the Mark menu do.

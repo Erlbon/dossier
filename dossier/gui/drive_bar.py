@@ -1,4 +1,4 @@
-"""The drive selector, in two looks the user can switch between (View > Drive Selector):
+"""The drive selector, in two looks the user can switch between (Settings > Appearance > Drive Selector):
 
 * menu  - a chip left of the address bar that opens a list of drives with free space (default)
 * strip - one button per drive above the panel

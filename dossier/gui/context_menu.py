@@ -17,6 +17,7 @@ from ..core import archives, sharing, shellmenu
 from ..core.mounting import SMB
 from ..core.home import is_home
 from . import file_clipboard
+from .menus import command_keys, command_label
 from .tailnet import KINDS as TAILNET_KINDS
 
 ARCHIVE_NAMES = archives.FOLDER_EXTENSIONS
@@ -35,8 +36,15 @@ class ContextMenuMixin:
         finally:
             panel.target_override = None
 
-    def _entry_action(self, menu: QMenu, text: str, slot, panel, paths, enabled: bool = True, keys: str = "",
+    def _entry_action(self, menu: QMenu, text, slot, panel, paths, enabled: bool = True, keys: str = "",
                       row: int = -1) -> QAction:
+        """One entry. ``slot`` is a function, or the name of a menu-bar command ("rename"): then the key hint is always that menu action's
+        own keys (so it follows Settings > Function Keys), ``text=None`` takes its label too (a text given here is a label that fits this
+        menu better, "Properties of This Folder"), and the command is looked up when the entry is clicked."""
+        if isinstance(slot, str):
+            bar = self.bar_command(slot)
+            text = text or command_label(bar)
+            keys = command_keys(bar)
         action = menu.addAction(text + ("\t" + keys if keys else ""))
         action.setEnabled(enabled)
 
@@ -45,7 +53,7 @@ class ContextMenuMixin:
             if row >= 0:
                 panel.table.setCurrentIndex(panel.model.index(row, 0))          # the item the menu was opened on
             with self._acting_on(panel, paths):
-                slot()
+                (getattr(self, slot) if isinstance(slot, str) else slot)()
 
         action.triggered.connect(run)
         return action
@@ -110,45 +118,44 @@ class ContextMenuMixin:
         convertible = is_archive and not name.endswith(".zip")
         menu = QMenu(self)
         add = lambda text, slot, enabled=True, keys="": self._entry_action(menu, text, slot, panel, paths, enabled, keys, row)  # noqa: E731
-        add("Open", panel.open_current, keys="Enter")
+        cmd = lambda slot, enabled=True: add(None, slot, enabled)   # noqa: E731  a menu-bar command, with its label and keys
+        cmd("open_cursor_item")
         if entry.is_dir:
             add("Open in a New Tab", lambda: panel.open_current(new_tab=True), keys="Ctrl+Enter")
-            add("Open in the Other Panel", self.open_in_other_panel, keys="Ctrl+Left/Right")
-            add("Terminal Here", lambda: self.open_terminal(folder=entry.path), enabled=not many, keys="Ctrl+Shift+T")
-            add("Pin to the Home Page", lambda: self.pin_folder(entry.path), enabled=not many, keys="Ctrl+D")
+            add("Open in the Other Panel", "open_in_other_panel")
+            add("Terminal Here", lambda: self.open_terminal(folder=entry.path), enabled=not many, keys=self.keys_of("open_terminal"))
+            add("Pin to the Home Page", lambda: self.pin_folder(entry.path), enabled=not many, keys=self.keys_of("pin_folder"))
             if not many:
                 self.add_share_entries(menu, entry.path)
             add("Find Duplicate Files in This Folder...", lambda: self.find_duplicate_files(panel, entry.path), enabled=not many)
         else:
-            add("View", self.view_file, enabled=not many, keys="F3")
-            add("Edit", self.edit_file, enabled=not many, keys="F4")
+            cmd("view_file", enabled=not many)
+            cmd("edit_file", enabled=not many)
         menu.addSeparator()
-        add("Copy to the Other Panel", self.copy, keys="F5")
-        add("Move to the Other Panel", self.move, keys="F6")
+        cmd("copy")
+        cmd("move")
         menu.addSeparator()
-        add("Copy", self.clip_copy, keys="Ctrl+C")
-        add("Cut", self.clip_cut, keys="Ctrl+X")
-        add("Paste", self.clip_paste, enabled=bool(file_clipboard.get()[0]), keys="Ctrl+V")
-        add("Copy the Path as Text", self.copy_marked_paths)
+        cmd("clip_copy")
+        cmd("clip_cut")
+        cmd("clip_paste", enabled=bool(file_clipboard.get()[0]))
+        cmd("copy_marked_paths")
         menu.addSeparator()
-        add("Rename", self.rename, enabled=not many, keys="F2")
+        cmd("rename", enabled=not many)
         batch = menu.addMenu("Batch Rename")
-        for text, slot, keys in (("By Pattern...", self.rename_by_pattern, "Ctrl+M"),
-                                 ("Search and Replace in Names...", self.rename_search_replace, ""),
-                                 ("Change Case...", self.rename_case, ""), ("Number the Files...", self.rename_number, "")):
-            self._entry_action(batch, text, slot, panel, paths, True, keys, row)
-        add("Delete", self.delete, keys="F8")
+        for slot in ("rename_by_pattern", "rename_search_replace", "rename_case", "rename_number"):
+            self._entry_action(batch, None, slot, panel, paths, True, "", row)
+        cmd("delete")
         menu.addSeparator()
-        add("Pack to Zip...", self.pack_to_zip, keys="Alt+F5")
+        cmd("pack_to_zip")
         if is_archive:
-            add("Unpack...", self.unpack_archive, enabled=not many, keys="Alt+F9")
+            cmd("unpack_archive", enabled=not many)
         if convertible:
-            add("Convert Archive to Zip", self.convert_archive_to_zip, enabled=not many)
+            cmd("convert_archive_to_zip", enabled=not many)
         menu.addSeparator()
-        add("Change Dates and Attributes...", self.change_dates)
-        add("Move to Quarantine...", self.move_to_quarantine)
-        add("New Link...", self.new_link, enabled=not many)
-        add("Properties", self.show_properties, keys="Alt+Enter")
+        cmd("change_dates")
+        cmd("move_to_quarantine")
+        cmd("new_link", enabled=not many)
+        cmd("show_properties")
         if shellmenu.can_show(paths):
             menu.addSeparator()
             add("More Options (Windows Menu)...", lambda: self._windows_menu(panel, paths, False))
@@ -159,13 +166,13 @@ class ContextMenuMixin:
         change, move or delete the share itself."""
         menu = QMenu(self)
         add = lambda text, slot, enabled=True, keys="": self._entry_action(menu, text, slot, panel, [entry.path], enabled, keys, row)  # noqa: E731
-        add("Open", panel.open_current, keys="Enter")
+        add(None, "open_cursor_item")
         add("Open in a New Tab", lambda: panel.open_current(new_tab=True), keys="Ctrl+Enter")
-        add("Open in the Other Panel", self.open_in_other_panel, keys="Ctrl+Left/Right")
+        add("Open in the Other Panel", "open_in_other_panel")
         menu.addSeparator()
         add("Save on the Home Page", lambda: self.save_network_location(entry.path))
         add("Mount on a Drive Letter", lambda: self.mount_share_with(SMB, entry.path))
-        add("Copy the Path as Text", self.copy_marked_paths)
+        add(None, "copy_marked_paths")
         return menu
 
     def _empty_menu(self, panel) -> QMenu:
@@ -173,22 +180,22 @@ class ContextMenuMixin:
         here = [panel.path]
         add = lambda text, slot, enabled=True, keys="": self._entry_action(menu, text, slot, panel, None, enabled, keys)  # noqa: E731
         if sharing.machine_of(panel.path):                       # another computer's list of shares
-            add("Refresh", self.refresh, keys="Ctrl+R")
+            add(None, "refresh")
             add("Save This Computer on the Home Page", lambda: self.save_network_location(panel.path))
             return menu
-        add("New Folder", self.new_folder, keys="F7")
-        add("Paste", self.clip_paste, enabled=bool(file_clipboard.get()[0]), keys="Ctrl+V")
-        add("Select All", self.select_all, keys="Ctrl+A")
+        add(None, "new_folder")
+        add(None, "clip_paste", enabled=bool(file_clipboard.get()[0]))
+        add(None, "select_all")
         menu.addSeparator()
-        add("Terminal Here", self.open_terminal, keys="Ctrl+Shift+T")
+        add(None, "open_terminal")
         self.add_share_entries(menu, panel.path, here=True)
-        add("Search...", self.search_files, keys="Alt+F7")
-        add("Find Duplicate Files...", self.find_duplicate_files, keys="Alt+Shift+F7")
-        add("Compare with the Other Panel...", self.compare_folders, keys="Alt+Shift+F8")
-        add("All Files Below This Folder", lambda: self.show_all_files_below(panel), keys="Ctrl+Shift+B")
-        add("Refresh", self.refresh, keys="Ctrl+R")
+        add(None, "search_files")
+        add(None, "find_duplicate_files")
+        add("Compare with the Other Panel...", "compare_folders")
+        add("All Files Below This Folder", lambda: self.show_all_files_below(panel), keys=self.keys_of("show_all_files_below"))
+        add(None, "refresh")
         menu.addSeparator()
-        self._entry_action(menu, "Properties of This Folder", self.show_properties, panel, here, keys="Alt+Enter")
+        self._entry_action(menu, "Properties of This Folder", "show_properties", panel, here)
         if shellmenu.folder_can_show(panel.path):
             menu.addSeparator()
             add("More Options (Windows Menu)...", lambda: self._windows_menu(panel, here, True))
@@ -230,5 +237,5 @@ class ContextMenuMixin:
                     label = entry.name.split("  ", 1)[1] if "  " in entry.name else ""
                     self.add_share_entries(menu, entry.path, label=label)
         if not menu.actions():
-            add("Add a Network Share...", self.add_network_share)
+            add(None, "add_network_share")
         return menu

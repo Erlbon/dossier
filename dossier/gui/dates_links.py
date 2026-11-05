@@ -1,4 +1,4 @@
-"""Tools > Change Dates and Attributes... and Tools > New Link...: the windows for ``core/filetimes.py`` and ``core/links.py``.
+"""File > Change Dates and Attributes... and File > New Link...: the windows for ``core/filetimes.py`` and ``core/links.py``.
 
 The dates dialog is a plan-then-apply screen: what is chosen on the left of each row is turned into a plan on a thread, the table shows
 every item's old and new values, and nothing is written until Apply. The window then writes the plan on a thread with progress and Cancel.

@@ -228,7 +228,7 @@ def test_a_failed_staging_gives_the_other_program_nothing_instead_of_crashing(wo
 def test_the_edit_menu_has_the_command(world):
     win, d, left, right, tmp = world
     texts = {a.text() for a in win.findChildren(type(win.menuBar().actions()[0])) if a.text()}
-    assert "Paste Picture or Text as New File..." in texts
+    assert "Paste as New File..." in texts
 
 
 def test_a_web_link_dropped_from_a_browser_becomes_an_internet_shortcut(world):

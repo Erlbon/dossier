@@ -253,7 +253,7 @@ def test_while_sharing_is_switched_off_shares_are_shown_but_never_made_changed_o
     pump(win, lambda: dialogs and dialogs[0].sharing_tab.tree.topLevelItemCount() == 1)
     tab = dialogs[0].sharing_tab
     assert not tab.add_button.isEnabled() and not tab.change_button.isEnabled() and not tab.stop_button.isEnabled()
-    assert not tab.off_note.isHidden() and "Settings > Network Sharing" in tab.off_note.text()
+    assert not tab.off_note.isHidden() and "Settings > Drives and Sharing" in tab.off_note.text()
     win.new_share(folder)
     win.change_share(state["shares"][0])
     win.stop_share("Comics")

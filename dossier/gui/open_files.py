@@ -20,6 +20,7 @@ class OpenFilesMixin:
 
     def build_open_menu(self, parent_menu) -> None:
         menu = parent_menu.addMenu("Opening Files")
+        menu.menuAction().setToolTip("What Enter and double-click do. Ctrl+Enter does the other thing.")
         group = QActionGroup(self)
         group.setExclusive(True)
         self.open_actions = {}
@@ -38,8 +39,6 @@ class OpenFilesMixin:
         self.act_run_scripts.setToolTip("Off: Enter shows a script in the viewer, as any text file, and Ctrl+Enter runs it")
         self.act_run_scripts.toggled.connect(self.set_run_scripts)
         menu.addAction(self.act_run_scripts)
-        menu.addSeparator()
-        menu.addAction("What Enter and double-click do. Ctrl+Enter does the other thing.").setEnabled(False)
 
     def open_choice(self) -> str:
         value = str(self.settings.value("open/files", "viewer"))

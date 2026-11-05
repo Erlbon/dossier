@@ -318,21 +318,31 @@ def test_closing_the_commander_closes_its_viewers(commander):
 def test_menus_view_has_modes_and_notes_while_settings_has_the_choices(commander):
     win, _d = commander
     titles = [a.text().replace("&", "") for a in win.menuBar().actions()]
-    assert titles == ["Files", "Edit", "Mark", "View", "Go", "Tools", "Network", "Settings", "Help"]
+    assert titles == ["File", "Edit", "Mark", "View", "Go", "Tools", "Network", "Settings", "Help"]
     menus = {a.text().replace("&", ""): a.menu() for a in win.menuBar().actions()}
-    texts = lambda name: [a.text() for a in menus[name].actions() if not a.isSeparator()]       # noqa: E731
-    assert texts("Edit") == ["Undo", "Copy Files to Clipboard", "Cut Files to Clipboard", "Paste Files Here", "Paste Picture or Text as New File...", "Copy Marked Paths as Text"]
-    assert texts("Mark") == ["Select All", "Mark by Pattern...", "Unmark by Pattern...", "Invert Selection", "Deselect All", "Mark by Tag...",
-                             "Unmark by Tag...", "Saved Selections"]
-    assert texts("View") == ["Details", "Thumbnails", "Thumbnail Size", "Arrange By", "Folder Layout", "Folder Notes", "Tools Bar", "Bar Positions", "Tabs",
-                             "Quick Filter", "Folder Sizes", "Refresh", "Full Screen"]
-    assert texts("Tools") == ["Search...", "Find Duplicate Files...", "Check Folder Health...", "Compare Folders and Synchronize...", "Compare the Two Current Files",
-                              "Batch Rename", "Archives", "Change Dates and Attributes...", "New Link...", "Move to Quarantine...", "Put Back from Quarantine", "Checksums of Marked Files", "Verify Checksum...", "Edit Folder Note", "Command Line History...", "Operations",
-                              "Terminal Here", "Administrator Terminal Here", "SSH Terminal Here"]
-    assert texts("Network") == ["Add a Server...", "Disconnect from the Server of This Panel", "Add Network Share...", "Network Drives", "Show Tailnet Devices on the Home Page"]
-    assert texts("Settings") == ["Appearance", "Copy and Move...", "Quarantine...", "Opening Files", "Mouse Wheel...", "Function Keys...", "Auto Refresh", "Drive Memory", "Network Sharing", "Assistant Access..."]
+    texts = lambda name: [a.text().split("\t")[0] for a in menus[name].actions() if not a.isSeparator() and a.isVisible()]       # noqa: E731
+    assert texts("File") == ["Open", "View", "View as Glass", "Edit", "Rename", "Copy to the Other Panel", "Move to the Other Panel", "New Folder",
+                             "New File...", "Change Dates and Attributes...", "New Link...", "Delete", "Delete Permanently", "Properties", "Quit"]
+    assert texts("Edit") == ["Undo", "Copy", "Cut", "Paste", "Paste as New File...", "Copy Paths as Text"]
+    assert texts("Mark") == ["Mark All", "Unmark All", "Invert Marks", "Mark by Pattern...", "Unmark by Pattern...", "Mark by Tag...",
+                             "Unmark by Tag...", "Saved Marks"]
+    assert texts("View") == ["Details", "Thumbnails", "Thumbnail Size", "Sort By", "Columns...", "Folder Layout", "All Files Below This Folder",
+                             "Quick Filter", "Folder Sizes", "Refresh", "Folder Notes", "Tools Bar", "Bar Positions", "Full Screen"]
+    assert texts("Go") == ["Back", "Forward", "Folder History...", "Hotlist...", "Home Page", "Edit the Path", "Pin Folder to Home Page",
+                           "Open Cursor Folder in the Other Panel", "Same Folder in the Other Panel", "Swap Panels", "Tabs",
+                           "Drives of Left Panel", "Drives of Right Panel"]
+    assert texts("Tools") == ["Search...", "Find Duplicate Files...", "Check Folder Health...", "Compare", "Batch Rename", "Archives", "Checksums",
+                              "Quarantine", "Operations", "Terminal Here", "Administrator Terminal Here", "SSH Terminal Here", "Command Line History..."]
+    assert texts("Network") == ["Add Server...", "Disconnect This Panel's Server", "Add Network Share...", "Client for NFS",
+                                "Show Tailnet Devices on the Home Page"]
+    assert texts("Settings") == ["Appearance", "Copy and Move...", "Opening Files", "Mouse Wheel...", "Function Keys...", "Auto Refresh",
+                                 "Drives and Sharing", "Quarantine...", "Assistant Access..."]
     look = [a for a in menus["Settings"].actions() if a.text() == "Appearance"][0].menu()
-    assert [a.text() for a in look.actions()] == ["Color Scheme", "Icon Set", "Fonts and Bold...", "Thumbnails...", "Picture Viewer Glass...", "Frosted Background...", "Columns", "Drive Selector"]
+    assert [a.text() for a in look.actions()] == ["Color Scheme", "Icon Set", "Fonts and Bold...", "Thumbnails...", "Picture Viewer Glass...", "Frosted Background...", "Drive Selector"]
+    win.set_sharing_allowed(True)
+    menus["Network"].aboutToShow.emit()
+    assert texts("Network")[4:6] == ["Share This Folder...", "Shared Folders of a Computer..."]
+    win.set_sharing_allowed(False)
     # every command is in exactly one place
     seen = []
 

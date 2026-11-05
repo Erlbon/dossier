@@ -2,6 +2,21 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-05#01 -- The menus restructured after the menu review of 2026-11-05
+
+The menus had drifted since the layout of 2026-10-21: Tools grew from 12 to 23 entries, quarantine was in four menus, the right-click menu spelled commands differently and showed some keys wrong. Every key stays as it was.
+- **File** (was Files) starts with Open (Enter), and has Change Dates and Attributes and New Link (from Tools), in groups.
+- **Edit:** Copy, Cut, Paste, Paste as New File..., Copy Paths as Text, the same words as the right-click menu.
+- **Mark** says mark throughout: Mark All, Unmark All, Invert Marks, Saved Marks (Save Marks As...).
+- **View:** Columns... (from Settings > Appearance > Columns; Back to the Default Columns is a button in the dialog), All Files Below This Folder (from Go), Folder Notes as a submenu with Edit Folder Note (from Tools), Sort By (was Arrange By). Thumbnail Size is greyed while the panel shows Details. Bar Positions names each bar in its entries and lost its stray separator and grey hint (now a tooltip).
+- **Go:** Open Cursor Folder in the Other Panel and Same Folder in the Other Panel (clearer names), Tabs (from View), and Drives of Left Panel / Drives of Right Panel (Alt+F1, Alt+F2; they were in no menu).
+- **Tools** has 13 entries instead of 23: Compare, Batch Rename, Archives, Checksums and Quarantine are submenus. Quarantine holds Move to Quarantine, Put Back and Show the Quarantine Folder (from Go).
+- **Network:** Add Server..., Disconnect This Panel's Server, Client for NFS (was Network Drives), and, while sharing is allowed, Share This Folder... and Shared Folders of a Computer... (asks a name and lists its shares).
+- **Settings:** Drives and Sharing holds Remember Drives, Forget Remembered Drives and Allow Sharing Folders (were two thin submenus); Quarantine... sits with Assistant Access. Explanations are tooltips, not greyed lines.
+- **The right-click menu takes label and keys from the menu bar,** so its hints are right: Change Dates (Shift+F2), New Link (Shift+F3), Move to Quarantine (Shift+F7) and Terminal Here (F12) showed none or too few, and a key changed in Settings > Function Keys now shows there too.
+- **The update dialog** of the daily check says the switch is in the Help menu (it said Preferences). redactor_common 2026-11-05#02.
+- New test `tests/test_menu_rules.py` keeps the menus from drifting again; CLAUDE.md "Menus" says which question each menu answers.
+
 ## 2026-11-04#10 -- Tags, ComicInfo and zips are written by the writer the Redactor apps use (review section 6)
 
 Shared part: redactor_common 2026-11-04#02 (`core/zip_rewrite.py`, `core/comicinfo_write.py`, `core/audio_write.py`). Dossier, cbzredactor and mp3redactor now write the same file the same way; the build 2026-11-04#08 fixes (control characters refused, the new ComicInfo.xml checked before the swap, legacy entry names kept, values stripped, ID3 v2.3 kept) are part of the shared writer.

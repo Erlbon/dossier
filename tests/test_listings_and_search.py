@@ -310,7 +310,7 @@ def test_a_search_result_tab_is_saved_as_the_folder_it_started_in(world):
     assert str(left) in win.left.tab_paths() and not any(p.startswith(FOUND_PREFIX) for p in win.left.tab_paths())
 
 
-def test_the_go_menu_has_the_flat_view(world):
+def test_the_view_menu_has_the_flat_view(world):
     win, *_ = world
     menus = {a.text().replace("&", ""): a.menu() for a in win.menuBar().actions()}
-    assert "All Files Below This Folder" in [a.text() for a in menus["Go"].actions()]
+    assert "All Files Below This Folder" in [a.text() for a in menus["View"].actions()]

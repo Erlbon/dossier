@@ -1,4 +1,4 @@
-"""Files > Properties (Alt+Return): the facts of the selected items, and the metadata inside a file.
+"""File > Properties (Alt+Return): the facts of the selected items, and the metadata inside a file.
 
 Step 1 of the metadata work is read only (docs/metadata-plan.md): the tabs show; nothing here can change a file.
 """

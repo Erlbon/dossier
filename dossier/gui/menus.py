@@ -1,18 +1,37 @@
-"""The menu bar: Files, Edit, Mark, View, Go, Tools, Network, Settings, Help.
+"""The menu bar: File, Edit, Mark, View, Go, Tools, Network, Settings, Help.
 
-Each menu answers one question. Files: what can I do to the files under the cursor. Edit: undo and the clipboard. Mark: which files are
-marked. View: how a folder is shown. Go: where am I, and where to next. Tools: the bigger jobs (search, compare, rename, archives,
-checksums, terminals). Network: servers, shares and network drives. Settings: how Dossier looks (Appearance) and behaves. Help: About
-and the slowness log. Every command keeps its shortcut wherever it lives.
+Each menu answers one question, and a new command goes in the menu whose question it answers (CLAUDE.md, "Menus"). File: what can I do
+to the files under the cursor. Edit: undo and the clipboard. Mark: which files are marked. View: how a folder is shown. Go: where am I,
+and where to next (folders, panels, tabs, drives). Tools: the bigger jobs on many files (search, compare, rename, archives, checksums,
+quarantine, operations, terminals). Network: servers, shares and network drives. Settings: how Dossier looks (Appearance) and behaves.
+Help: shortcuts, updates, About and the slowness log. Every command keeps its shortcut wherever it lives.
+
+The right-click menu takes the label and the key hint of a command from its menu-bar action (``bar_command``), so the two never say
+different things and the hint follows Settings > Function Keys. ``tests/test_menu_rules.py`` keeps the menus from drifting.
 """
 from __future__ import annotations
 
 from PyQt6.QtCore import QUrl
 from PyQt6.QtGui import QAction, QActionGroup, QDesktopServices, QKeySequence
+from PyQt6.QtWidgets import QMenu
 
 from ..core import fkey_config
 from ..core.version import APP_NAME, APP_REPO_URL
 from . import fkeys
+
+
+def command_label(action: QAction) -> str:
+    """The label of a menu action without its key hint."""
+    return action.text().split("\t")[0]
+
+
+def command_keys(action: QAction) -> str:
+    """The keys of a menu action as the menus show them: its shortcuts, or the hint after a tab for a key the window does not own
+    (Enter belongs to the panel)."""
+    keys = [s.toString(QKeySequence.SequenceFormat.NativeText) for s in action.shortcuts()]
+    if keys:
+        return ", ".join(keys)
+    return action.text().split("\t", 1)[1] if "\t" in action.text() else ""
 
 
 class MenusMixin:
@@ -28,9 +47,19 @@ class MenusMixin:
         command = getattr(slot, "__name__", "")
         if command in fkeys.COMMANDS:
             self.__dict__.setdefault("_command_actions", {})[command] = (act, fixed)
+        if getattr(slot, "__self__", None) is self:          # a command of the window: the right-click menu finds it by its slot
+            self.__dict__.setdefault("_bar_commands", {})[command] = act
         act.triggered.connect(lambda _checked=False: slot())
         self.addAction(act)
         return act
+
+    def bar_command(self, name: str) -> QAction:
+        """The menu-bar action of the window's command ``name`` ("rename")."""
+        return self.__dict__["_bar_commands"][name]
+
+    def keys_of(self, name: str) -> str:
+        """The key hint of the window's command ``name``, for a right-click entry that runs it on the clicked item."""
+        return command_keys(self.bar_command(name))
 
     def apply_fkey_shortcuts(self) -> None:
         """Put every function key of the table on the action of its command (and take it off any other): one key, one action."""
@@ -41,7 +70,7 @@ class MenusMixin:
 
     def _build_menus(self) -> None:
         bar = self.menuBar()
-        self._build_files_menu(bar.addMenu("&Files"))
+        self._build_file_menu(bar.addMenu("&File"))
         self._build_edit_menu(bar.addMenu("&Edit"))
         self._build_mark_menu(bar.addMenu("&Mark"))
         self._build_view_menu(bar.addMenu("&View"))
@@ -50,55 +79,69 @@ class MenusMixin:
         self._build_network_menu(bar.addMenu("&Network"))
         self._build_settings_menu(bar.addMenu("&Settings"))
         self._build_help_menu()
+        for menu in bar.findChildren(QMenu):
+            menu.setToolTipsVisible(True)                    # the explanations of entries are their tooltips, not grey lines
 
-    # Files ----------------------------------------------------------------------------------------------------------------------
-    def _build_files_menu(self, files) -> None:
+    @staticmethod
+    def _add_all(menu, *groups) -> None:
+        """Add groups of actions with a separator between the groups."""
+        for i, group in enumerate(groups):
+            if i:
+                menu.addSeparator()
+            for a in group:
+                menu.addAction(a)
+
+    # File -----------------------------------------------------------------------------------------------------------------------
+    def open_cursor_item(self) -> None:
+        """File > Open: what Enter does in the active panel."""
+        self.active.open_current()
+
+    def _build_file_menu(self, file_menu) -> None:
+        self.act_open = self._action("Open\tEnter", None, self.open_cursor_item)
         self.act_view = self._action("View", None, self.view_file)
-        self.act_edit = self._action("Edit", None, self.edit_file)
         self.act_glass_view = self._action("View as Glass", None, self.glass_view)
+        self.act_edit = self._action("Edit", None, self.edit_file)
         self.act_rename = self._action("Rename", None, self.rename)
-        self.act_copy = self._action("Copy to Other Panel", None, self.copy)
-        self.act_move = self._action("Move to Other Panel", None, self.move)
+        self.act_copy = self._action("Copy to the Other Panel", None, self.copy)
+        self.act_move = self._action("Move to the Other Panel", None, self.move)
         self.act_mkdir = self._action("New Folder", None, self.new_folder)
         self.act_new_file = self._action("New File...", None, self.new_file)
+        self.act_change_dates = self._action("Change Dates and Attributes...", None, self.change_dates)
+        self.act_new_link = self._action("New Link...", None, self.new_link)
         self.act_delete = self._action("Delete", "Delete", self.delete)
         self.act_delete_perm = self._action("Delete Permanently", None, self.delete_permanently)
         self.act_properties = self._action("Properties", "Alt+Return", self.show_properties)
-        quit_ = self._action("Quit", "Ctrl+Q", self.close)
-        for a in (self.act_view, self.act_edit, self.act_glass_view, self.act_rename, self.act_copy, self.act_move, self.act_mkdir, self.act_new_file, self.act_delete,
-                  self.act_delete_perm):
-            files.addAction(a)
-        files.addSeparator()
-        files.addAction(self.act_properties)
-        files.addSeparator()
-        files.addAction(quit_)
+        self._add_all(file_menu,
+                      (self.act_open, self.act_view, self.act_glass_view, self.act_edit),
+                      (self.act_rename, self.act_copy, self.act_move, self.act_mkdir, self.act_new_file),
+                      (self.act_change_dates, self.act_new_link),
+                      (self.act_delete, self.act_delete_perm),
+                      (self.act_properties,),
+                      (self._action("Quit", "Ctrl+Q", self.close),))
 
     # Edit -----------------------------------------------------------------------------------------------------------------------
     def _build_edit_menu(self, edit) -> None:
-        edit.addAction(self._action("Undo", "Ctrl+Z", self.undo))
-        edit.addSeparator()
-        for a in (self._action("Copy Files to Clipboard", "Ctrl+C", self.clip_copy),
-                  self._action("Cut Files to Clipboard", "Ctrl+X", self.clip_cut),
-                  self._action("Paste Files Here", "Ctrl+V", self.clip_paste)):
-            edit.addAction(a)
-        edit.addAction(self._action("Paste Picture or Text as New File...", "Ctrl+Shift+V", self.paste_as_new_file))
-        edit.addSeparator()
-        edit.addAction(self._action("Copy Marked Paths as Text", None, self.copy_marked_paths))
+        self._add_all(edit,
+                      (self._action("Undo", "Ctrl+Z", self.undo),),
+                      (self._action("Copy", "Ctrl+C", self.clip_copy),
+                       self._action("Cut", "Ctrl+X", self.clip_cut),
+                       self._action("Paste", "Ctrl+V", self.clip_paste),
+                       self._action("Paste as New File...", "Ctrl+Shift+V", self.paste_as_new_file)),
+                      (self._action("Copy Paths as Text", None, self.copy_marked_paths),))
 
     # Mark -----------------------------------------------------------------------------------------------------------------------
     def _build_mark_menu(self, mark) -> None:
-        for a in (self._action("Select All", "Ctrl+A", self.select_all),
-                  self._action("Mark by Pattern...", "Ctrl+F", self.mark_by_pattern),
-                  self._action("Unmark by Pattern...", "Ctrl+Shift+F", lambda: self.mark_by_pattern(False)),
-                  self._action("Invert Selection", "*", self.invert_selection),
-                  self._action("Deselect All", "Ctrl+Shift+A", self.selection.clear)):
-            mark.addAction(a)
+        self._add_all(mark,
+                      (self._action("Mark All", "Ctrl+A", self.select_all),
+                       self._action("Unmark All", "Ctrl+Shift+A", self.selection.clear),
+                       self._action("Invert Marks", "*", self.invert_selection)),
+                      (self._action("Mark by Pattern...", "Ctrl+F", self.mark_by_pattern),
+                       self._action("Unmark by Pattern...", "Ctrl+Shift+F", lambda: self.mark_by_pattern(False)),
+                       self._action("Mark by Tag...", None, self.mark_by_tag),
+                       self._action("Unmark by Tag...", None, lambda: self.mark_by_tag(False))))
         mark.addSeparator()
-        mark.addAction(self._action("Mark by Tag...", None, self.mark_by_tag))
-        mark.addAction(self._action("Unmark by Tag...", None, lambda: self.mark_by_tag(False)))
-        mark.addSeparator()
-        saved = mark.addMenu("Saved Selections")
-        saved.addAction(self._action("Save Selection As...", None, self.save_selection))
+        saved = mark.addMenu("Saved Marks")
+        saved.addAction(self._action("Save Marks As...", None, self.save_selection))
         saved.addSeparator()
         self._restore_menu, self._add_menu, self._forget_menu = (saved.addMenu("Restore"), saved.addMenu("Add to Marks"),
                                                                  saved.addMenu("Forget"))
@@ -116,21 +159,48 @@ class MenusMixin:
         mode_group.addAction(details)
         view_menu.addAction(details)
         self.view_mode_actions["details"] = details
-        self.add_view_mode_actions(view_menu, mode_group)
+        self.add_view_mode_actions(view_menu, mode_group)              # Thumbnails, Thumbnail Size, Sort By
+        view_menu.addAction(self._action("Columns...", None, self.open_column_settings))
         self.add_layout_actions(view_menu)
+        view_menu.aboutToShow.connect(self.sync_mode_actions)            # Thumbnail Size is greyed while the panel shows Details
         view_menu.addSeparator()
-        self.act_notes = QAction("Folder Notes", self)
+        for a in (self._action("All Files Below This Folder", "Ctrl+Shift+B", self.show_all_files_below),
+                  self._action("Quick Filter", "Ctrl+S", lambda: self.active.start_filter()),
+                  self._action("Folder Sizes", "Alt+Shift+Return", self.calculate_folder_sizes),
+                  self._action("Refresh", "Ctrl+R", self.refresh)):
+            view_menu.addAction(a)
+        view_menu.addSeparator()
+        notes = view_menu.addMenu("Folder Notes")
+        self.act_notes = QAction("Show Folder Notes", self)
         self.act_notes.setCheckable(True)
         self.act_notes.setChecked(str(self.settings.value("view/notes", "true")).lower() != "false")
         self.act_notes.toggled.connect(self.set_notes_visible)
-        view_menu.addAction(self.act_notes)
+        notes.addAction(self.act_notes)
+        notes.addAction(self._action("Edit Folder Note", "Ctrl+Shift+E", self.edit_folder_note))
         self.act_tools_bar = QAction("Tools Bar", self)
         self.act_tools_bar.setCheckable(True)
         self.act_tools_bar.setChecked(self.tools_bar.isVisibleTo(self))
         self.act_tools_bar.toggled.connect(self.set_tools_bar_visible)
         view_menu.addAction(self.act_tools_bar)
         self.build_bar_place_menus(view_menu)
-        tabs_menu = view_menu.addMenu("Tabs")
+        view_menu.addAction(self._action("Full Screen", None, self.toggle_full_screen))
+
+    # Go -------------------------------------------------------------------------------------------------------------------------
+    def _build_go_menu(self, go) -> None:
+        self.act_back = self._action("Back", "Alt+Left", lambda: self.active.history_back())
+        self.act_forward = self._action("Forward", "Alt+Right", lambda: self.active.history_forward())
+        self._add_all(go,
+                      (self.act_back, self.act_forward,
+                       self._action("Folder History...", "Alt+Down", self.show_history),
+                       self._action("Hotlist...", "Ctrl+B", self.show_hotlist)),
+                      (self._action("Home Page", "Alt+Home", lambda: self.active.go_home()),
+                       self._action("Edit the Path", "Ctrl+L", lambda: self.active.address_bar.start_edit()),
+                       self._action("Pin Folder to Home Page", "Ctrl+D", self.pin_folder)),
+                      (self._action("Open Cursor Folder in the Other Panel", ["Ctrl+Right", "Ctrl+Left"], self.open_in_other_panel),
+                       self._action("Same Folder in the Other Panel", "Ctrl+Shift+O", self.same_in_other_panel),
+                       self._action("Swap Panels", "Ctrl+U", self.swap_panels)))
+        go.addSeparator()
+        tabs_menu = go.addMenu("Tabs")
         for text, keys, slot in (("New Tab", "Ctrl+T", lambda: self.active.new_tab()),
                                  ("Close Tab", "Ctrl+W", lambda: self.active.close_tab(self.active.tabs.currentIndex())),
                                  ("Next Tab", "Ctrl+Tab", lambda: self.active.next_tab(1)),
@@ -143,40 +213,20 @@ class MenusMixin:
                                                                           tabs_menu.addMenu("Forget Tab Set"))
         tabs_menu.aboutToShow.connect(lambda: self.build_tab_set_menus(self._tab_open_menu, self._tab_add_menu, self._tab_forget_menu))
         self.build_tab_set_menus(self._tab_open_menu, self._tab_add_menu, self._tab_forget_menu)
-        view_menu.addSeparator()
-        view_menu.addAction(self._action("Quick Filter", "Ctrl+S", lambda: self.active.start_filter()))
-        view_menu.addAction(self._action("Folder Sizes", "Alt+Shift+Return", self.calculate_folder_sizes))
-        view_menu.addAction(self._action("Refresh", "Ctrl+R", self.refresh))
-        view_menu.addAction(self._action("Full Screen", None, self.toggle_full_screen))
-
-    # Go -------------------------------------------------------------------------------------------------------------------------
-    def _build_go_menu(self, go) -> None:
-        self.act_back = self._action("Back", "Alt+Left", lambda: self.active.history_back())
-        self.act_forward = self._action("Forward", "Alt+Right", lambda: self.active.history_forward())
-        for a in (self.act_back, self.act_forward,
-                  self._action("Folder History...", "Alt+Down", self.show_history),
-                  self._action("Hotlist...", "Ctrl+B", self.show_hotlist)):
-            go.addAction(a)
         go.addSeparator()
-        go.addAction(self._action("Home Page", "Alt+Home", lambda: self.active.go_home()))
-        go.addAction(self._action("Edit the Path", "Ctrl+L", lambda: self.active.address_bar.start_edit()))
-        go.addAction(self._action("Pin Folder to Home Page", "Ctrl+D", self.pin_folder))
-        go.addAction(self._action("Quarantine Folder", None, self.show_quarantine_folder))
-        go.addSeparator()
-        for a in (self._action("All Files Below This Folder", "Ctrl+Shift+B", self.show_all_files_below),
-                  self._action("Open Folder in the Other Panel", ["Ctrl+Right", "Ctrl+Left"], self.open_in_other_panel),
-                  self._action("Other Panel Shows This Folder", "Ctrl+Shift+O", self.same_in_other_panel),
-                  self._action("Swap Panels", "Ctrl+U", self.swap_panels)):
-            go.addAction(a)
+        go.addAction(self._action("Drives of Left Panel", "Alt+F1", lambda: self.left.open_drive_menu()))
+        go.addAction(self._action("Drives of Right Panel", "Alt+F2", lambda: self.right.open_drive_menu()))
 
     # Tools ----------------------------------------------------------------------------------------------------------------------
     def _build_tools_menu(self, tools) -> None:
-        tools.addAction(self._action("Search...", "Alt+F7", self.search_files))
-        tools.addAction(self._action("Find Duplicate Files...", "Alt+Shift+F7", self.find_duplicate_files))
-        tools.addAction(self._action("Check Folder Health...", None, self.check_folder_health))
-        tools.addAction(self._action("Compare Folders and Synchronize...", "Alt+Shift+F8", self.compare_folders))
-        tools.addAction(self._action("Compare the Two Current Files", None, self.compare_files))
+        self._add_all(tools,
+                      (self._action("Search...", "Alt+F7", self.search_files),
+                       self._action("Find Duplicate Files...", "Alt+Shift+F7", self.find_duplicate_files),
+                       self._action("Check Folder Health...", None, self.check_folder_health)))
         tools.addSeparator()
+        compare = tools.addMenu("Compare")
+        compare.addAction(self._action("Folders and Synchronize...", "Alt+Shift+F8", self.compare_folders))
+        compare.addAction(self._action("Two Files Under the Cursors", None, self.compare_files))
         rename_menu = tools.addMenu("Batch Rename")
         for text, keys, slot in (("By Pattern...", "Ctrl+M", self.rename_by_pattern),
                                  ("Search and Replace in Names...", None, self.rename_search_replace),
@@ -188,14 +238,13 @@ class MenusMixin:
         archives.addAction(self._action("Pack to Zip...", "Alt+F5", self.pack_to_zip))
         archives.addAction(self._action("Unpack...", "Alt+F9", self.unpack_archive))
         archives.addAction(self._action("Convert Archive to Zip", None, self.convert_archive_to_zip))
-        tools.addAction(self._action("Change Dates and Attributes...", None, self.change_dates))
-        tools.addAction(self._action("New Link...", None, self.new_link))
-        tools.addAction(self._action("Move to Quarantine...", None, self.move_to_quarantine))
-        tools.addAction(self._action("Put Back from Quarantine", None, self.put_back_from_quarantine))
-        tools.addAction(self._action("Checksums of Marked Files", None, self.show_checksums))
-        tools.addAction(self._action("Verify Checksum...", None, self.verify_checksum))
-        tools.addAction(self._action("Edit Folder Note", "Ctrl+Shift+E", self.edit_folder_note))
-        tools.addAction(self._action("Command Line History...", None, lambda: (self.cmdline.setFocus(), self.show_command_history())))
+        checksums = tools.addMenu("Checksums")
+        checksums.addAction(self._action("Of Marked Files", None, self.show_checksums))
+        checksums.addAction(self._action("Verify a Checksum File...", None, self.verify_checksum))
+        quarantine = tools.addMenu("Quarantine")
+        quarantine.addAction(self._action("Move to Quarantine...", None, self.move_to_quarantine))
+        quarantine.addAction(self._action("Put Back", None, self.put_back_from_quarantine))
+        quarantine.addAction(self._action("Show the Quarantine Folder", None, self.show_quarantine_folder))
         tools.addSeparator()
         operations = tools.addMenu("Operations")
         operations.addAction(self._action("Pause or Resume Operations", "Ctrl+Shift+P", self.toggle_pause))
@@ -204,21 +253,34 @@ class MenusMixin:
         tools.addSeparator()
         for a in (self._action("Terminal Here", "Ctrl+Shift+T", self.open_terminal),
                   self._action("Administrator Terminal Here", None, self.open_admin_terminal),
-                  self._action("SSH Terminal Here", None, self.open_ssh_terminal)):
+                  self._action("SSH Terminal Here", None, self.open_ssh_terminal),
+                  self._action("Command Line History...", None, lambda: (self.cmdline.setFocus(), self.show_command_history()))):
             tools.addAction(a)
 
     # Network --------------------------------------------------------------------------------------------------------------------
     def _build_network_menu(self, network) -> None:
-        network.addAction(self._action("Add a Server...", None, self.add_server))
-        network.addAction(self._action("Disconnect from the Server of This Panel", None, self.disconnect_active_server))
+        network.addAction(self._action("Add Server...", None, self.add_server))
+        network.addAction(self._action("Disconnect This Panel's Server", None, self.disconnect_active_server))
         network.addSeparator()
         network.addAction(self._action("Add Network Share...", None, self.add_network_share))
-        net_menu = network.addMenu("Network Drives")
-        self._nfs_status = net_menu.addAction(self.nfs_status_text())
+        nfs_menu = network.addMenu("Client for NFS")
+        self._nfs_status = nfs_menu.addAction(self.nfs_status_text())
         self._nfs_status.setEnabled(False)
-        net_menu.aboutToShow.connect(lambda: self._nfs_status.setText(self.nfs_status_text()))
-        net_menu.addAction(self._action("How to Switch On Client for NFS...", None, self.explain_nfs))
+        nfs_menu.aboutToShow.connect(lambda: self._nfs_status.setText(self.nfs_status_text()))
+        nfs_menu.addAction(self._action("How to Switch On Client for NFS...", None, self.explain_nfs))
+        self._share_separator = network.addSeparator()
+        self.act_share_folder = self._action("Share This Folder...", None, self.share_this_folder)
+        self.act_computer_shares = self._action("Shared Folders of a Computer...", None, self.show_computer_shares)
+        network.addAction(self.act_share_folder)
+        network.addAction(self.act_computer_shares)
+        network.aboutToShow.connect(self._sync_network_menu)
+        self._sync_network_menu()
         self.build_tailnet_menu(network)
+
+    def _sync_network_menu(self) -> None:
+        """The two sharing entries show only while Settings > Drives and Sharing > Allow Sharing Folders is on."""
+        for act in (self._share_separator, self.act_share_folder, self.act_computer_shares):
+            act.setVisible(self.sharing_allowed())
 
     # Settings -------------------------------------------------------------------------------------------------------------------
     def _build_settings_menu(self, settings) -> None:
@@ -245,9 +307,6 @@ class MenusMixin:
         look.addAction(self._action("Thumbnails...", None, self.open_thumbnail_settings))
         look.addAction(self._action("Picture Viewer Glass...", None, self.open_glass_settings))
         look.addAction(self._action("Frosted Background...", None, self.open_frost_settings))
-        columns_menu = look.addMenu("Columns")
-        columns_menu.addAction(self._action("Add or Remove Columns...", None, self.open_column_settings))
-        columns_menu.addAction(self._action("Back to the Default Columns", None, self.reset_columns))
         drive_menu = look.addMenu("Drive Selector")
         drive_group = QActionGroup(self)
         drive_group.setExclusive(True)
@@ -261,29 +320,28 @@ class MenusMixin:
             drive_group.addAction(act)
             drive_menu.addAction(act)
             self.drive_style_actions[key] = act
-        self._action("Drives of Left Panel", "Alt+F1", lambda: self.left.open_drive_menu())
-        self._action("Drives of Right Panel", "Alt+F2", lambda: self.right.open_drive_menu())
         settings.addSeparator()
         settings.addAction(self._action("Copy and Move...", None, self.open_copy_settings))
-        settings.addAction(self._action("Quarantine...", None, self.open_quarantine_settings))
         self.build_open_menu(settings)
         settings.addAction(self._action("Mouse Wheel...", None, self.open_wheel_settings))
         settings.addAction(self._action("Function Keys...", None, self.open_function_keys_settings))
         self.add_auto_refresh_actions(settings)
-        drives_menu = settings.addMenu("Drive Memory")
-        self.act_remember_drives = QAction("Remember Drives Between Sessions (to notice a different drive under a letter)", self)
+        drives_menu = settings.addMenu("Drives and Sharing")
+        self.act_remember_drives = QAction("Remember Drives Between Sessions", self)
+        self.act_remember_drives.setToolTip("To notice a different drive under the same letter")
         self.act_remember_drives.setCheckable(True)
         self.act_remember_drives.setChecked(self._remember_drives())
         self.act_remember_drives.toggled.connect(self.set_remember_drives)
         drives_menu.addAction(self.act_remember_drives)
         drives_menu.addAction(self._action("Forget Remembered Drives", None, self.forget_remembered_drives))
-        sharing_menu = settings.addMenu("Network Sharing")
+        drives_menu.addSeparator()
         self.act_allow_sharing = QAction("Allow Sharing Folders (Experimental)", self)
         self.act_allow_sharing.setCheckable(True)
         self.act_allow_sharing.setChecked(self.sharing_allowed())
         self.act_allow_sharing.toggled.connect(self.set_sharing_allowed)
-        sharing_menu.addAction(self.act_allow_sharing)
+        drives_menu.addAction(self.act_allow_sharing)
         settings.addSeparator()
+        settings.addAction(self._action("Quarantine...", None, self.open_quarantine_settings))
         settings.addAction(self._action("Assistant Access...", None, self.open_assistant_settings))
         # these two hold the state of the choices the dialog (and the confirmation box) change; they are not in a menu
         self.act_verify = QAction("Verify Copies After Copying", self)

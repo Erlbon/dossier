@@ -1,10 +1,11 @@
-"""Which columns the folder listings show and in which order: Settings > Columns..., and a right-click on a column header.
+"""Which columns the folder listings show and in which order: View > Columns..., and a right-click on a column header.
 
 The dialog and the header menu are the shared ones of redactor_common (the same ones the Redactor apps use); this file only
 keeps the choice. It is stored by column NAME in the settings, one choice for both panels. Name and Type cannot be hidden.
 """
 from __future__ import annotations
 
+from PyQt6.QtWidgets import QDialogButtonBox
 from redactor_common.core.table_settings import is_column_visible, sanitize_hidden_fields
 from redactor_common.gui.column_menu import show_column_header_context_menu
 from redactor_common.gui.column_settings_dialog import ColumnSettingsDialog
@@ -88,9 +89,16 @@ class ColumnsMixin:
             on_toggle=self._column_toggled, open_column_settings_dialog=self.open_column_settings)
 
     def open_column_settings(self) -> None:
+        """View > Columns...: the shared dialog, plus a Back to the Default Columns button (which closes it)."""
         hidden, order = self.column_choice(self.active)
         dlg = ColumnSettingsDialog([(k, LABELS[k]) for k in order], hidden, PROTECTED, self)
+        dlg.reset_wanted = False
+        reset = dlg.findChild(QDialogButtonBox).addButton("Back to the Default Columns", QDialogButtonBox.ButtonRole.ResetRole)
+        reset.clicked.connect(lambda: (setattr(dlg, "reset_wanted", True), dlg.accept()))
         self._run_column_dialog(dlg)
+        if dlg.reset_wanted:
+            self.reset_columns()
+            return
         self._store_columns_for(self.active, sanitize_hidden_fields(dlg.hidden_fields(), PROTECTED), dlg.column_order())
         self.apply_columns_everywhere()
         if self.active.is_home:

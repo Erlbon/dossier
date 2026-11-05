@@ -39,6 +39,19 @@ The function list follows The Next Tool (Ebdac Software GmbH, discontinued 2007)
 - **The window is split into mixins** (`gui/ops_queue.py`, `stall_log.py`, `going_places.py`, `folder_sizes.py`, `unpack.py`) and the one background-job helper `gui/background.py`. New background work uses `run_in_background`; do not hand-roll another holder/box/finished pattern. Sizes are formatted by `core/sizefmt.py`, a missing file is `vfs.stat_or_none`.
 - **The window's thread never touches the disk.** Listing, notes, sizes, planning, unpacking and the status line's sizes all run on threads.
 
+## Menus (the owner, 2026-11-05, after the menu review)
+Each menu answers one question; a new command goes in the menu whose question it answers, at the end of the group it belongs to, never just at the bottom of Tools.
+- **File**: what can I do to the files under the cursor (open, view, edit, rename, copy, move, new, dates, links, delete, properties).
+- **Edit**: undo and the clipboard.
+- **Mark**: which files are marked. The word is *mark*, never *select*.
+- **View**: how a folder is shown (mode, sort, columns, layout, filter, notes, bars).
+- **Go**: where am I and where to next (history, Home, the other panel, tabs, drives).
+- **Tools**: the bigger jobs on many files, in submenus (Compare, Batch Rename, Archives, Checksums, Quarantine, Operations), and the terminals.
+- **Network**: servers, shares, network drives, sharing.
+- **Settings**: how Dossier looks (Appearance) and behaves. Explanations are tooltips, never greyed lines.
+- **Help**: shortcuts, documentation, updates, About.
+The right-click menu takes the label and the key hint of a menu-bar command from its action (`MenusMixin.bar_command`); give it its own text only when the clicked thing makes a better label ("Properties of This Folder"). `tests/test_menu_rules.py` holds the rules (headings, at most 15 entries a menu, no one-entry submenu, separators only between groups, no grey sentences, every shortcut in a menu, right-click = menu bar). The Redactor family lint (`redactor_common` `lint_menu_bar`) is not used: Dossier keeps Ctrl+S (Quick Filter), Ctrl+Shift+A (Unmark All), Ctrl+Shift+E and Ctrl+Shift+O.
+
 ## Lanes between sessions
 - A **local** session (the user's PC) owns everything that must be seen running: the GUI, the exe build, anything touching real folders, the Windows behaviour.
 - A **cloud** session may own the Qt-free core and its tests, specs and CI files.

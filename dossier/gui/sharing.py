@@ -27,7 +27,7 @@ from .owned_dialog import OwnedDialog
 EVERYONE_TEXT = "Everyone on the network"
 WINDOWS_NOTE = ("Windows asks for administrator rights once when you press {ok}. "
                 "The folder's own file permissions still apply on top of the share's.")
-SWITCHED_OFF = "Making and changing shares is switched off: Settings > Network Sharing."
+SWITCHED_OFF = "Making and changing shares is switched off: Settings > Drives and Sharing."
 LINUX_NOTE = ("The share is made with Samba's usershares, which need no root. Everyone means anyone with a Samba login on this "
               "computer; nobody gets in without a password. The folder's own file permissions still apply.")
 
@@ -356,7 +356,7 @@ class SharingMixin:
 
     # the switch: making and changing shares is experimental, off until the owner turns it on ----------------------------------
     def sharing_allowed(self) -> bool:
-        """Settings > Network Sharing > Allow Sharing Folders. Off by default: making, changing and stopping a share changes
+        """Settings > Drives and Sharing > Allow Sharing Folders. Off by default: making, changing and stopping a share changes
         the system's settings as administrator and can open a disk to the network. Reading what is shared always works."""
         return str(self.settings.value("sharing/allow_changes", "false")).lower() == "true"
 
@@ -466,6 +466,24 @@ class SharingMixin:
                     copy.addAction(text, lambda t=text: self.copy_share_address(t))
         elif self.sharing_allowed():
             menu.addAction("Share This Folder..." if here else "Share...", lambda: self.new_share(path, label=label))
+
+    # Network > Share This Folder... and Shared Folders of a Computer... ---------------------------------------------------
+    def share_this_folder(self) -> None:
+        """The folder of the active panel: its Sharing tab when it is shared already, else the Share dialog."""
+        path = self.active.path
+        if not can_share(path):
+            self._say("Only a folder on this computer can be shared")
+        elif self.shared_names(path):
+            self.show_sharing(path)
+        elif not self._sharing_blocked():
+            self.new_share(path)
+
+    def show_computer_shares(self) -> None:
+        """Ask for a computer's name (or address) and list its shared folders in the active panel."""
+        host = self.dialogs.ask_text("Shared Folders of a Computer", "Computer name or address:")
+        host = (host or "").strip().lstrip("\\/").split("\\")[0].split("/")[0]
+        if host:
+            self.show_machine_shares(host)
 
     def show_machine_shares(self, host: str, new_tab: bool = False) -> None:
         """Another computer's shared folders in the active panel, as the folder ``\\\\host``."""

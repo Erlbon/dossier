@@ -126,7 +126,8 @@ class MainWindow(FrostMixin, GlassViewMixin, KeysMixin, AutoRefreshMixin, Metada
         self.theme = ThemeManager(QApplication.instance(), str(self.settings.value("view/scheme", "auto")))
         # Help > Check for Updates (redactor_common): the daily check's switch lives in its own small file beside dossier.ini, off by default
         self.updates = UpdateController(self, APP_NAME, APP_VERSION, APP_REPO_URL,
-                                        os.path.join(os.path.dirname(self.settings.fileName()), "dossier_updates.json"))
+                                        os.path.join(os.path.dirname(self.settings.fileName()), "dossier_updates.json"),
+                                        switch_place="the Help menu")
         self._update_check_started = False
 
         self.dispatcher = QtDispatcher(self)
