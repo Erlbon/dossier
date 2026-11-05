@@ -19,7 +19,7 @@ from PyQt6.QtWidgets import (QApplication, QHBoxLayout, QLabel, QMainWindow, QMe
 from ..core.ops import (Plan, check_name, conflict_rows, plan_copy, plan_delete, plan_move, plan_rename)
 from ..core.home import ADD_NETWORK, HomeFileSystem, HomeProvider, RouterFileSystem, removable_from_home
 from ..core.commandline import Placeholders, expand, run_command
-from ..core import patterns, stage, viewmodes
+from ..core import patterns, search, stage, viewmodes
 from ..core.platform import IS_WINDOWS, has_scheme, is_elevated, machine_name, path_key, set_window_border
 from ..core.selection import SelectionStore
 from redactor_common.gui.update_controller import UpdateController
@@ -96,6 +96,7 @@ STAT_LIMIT = 200      # at most this many sizes are read from the disk for one s
 SUMMARY_ITEMS = 12    # the confirmation lists this many items, then says how many more
 SIZE_LIMIT = 1000    # the status line sizes at most this many marked items
 CLOSE_WAIT = 5.0     # seconds a closing window waits for a cancelled copy to stop
+EXTERNAL = "external"  # what F4's reading step hands over when the chosen editor program is to open the file
 
 
 class MainWindow(FrostMixin, GlassViewMixin, KeysMixin, AutoRefreshMixin, MetadataEditMixin, HealthMixin, QuarantineMixin, NewFromContentMixin, TabSetsMixin, CommandCompletionMixin, DatesLinksMixin, ViewModesMixin, ToolsBarMixin, ContextMenuMixin, DragDropMixin, LookMixin, ZipEditMixin, ArchiveCommandsMixin, CopySettingsMixin, AssistantMixin, OpenFilesMixin, MenusMixin, WheelMixin, ToolsBarPlaceMixin, TailnetMixin, CompareFoldersMixin, ServersMixin, DuplicatesMixin, FolderLayoutsMixin, QueueResumeMixin, ColumnsMixin, PropertiesMixin, SharingMixin, MountMixin, ChecksumMixin, MarksAndNotesMixin, SearchCommandMixin, BatchRenameMixin, OperationQueueMixin, StallLogMixin, GoingPlacesMixin, FolderSizesMixin, UnpackMixin, QMainWindow):
@@ -434,13 +435,15 @@ class MainWindow(FrostMixin, GlassViewMixin, KeysMixin, AutoRefreshMixin, Metada
             open_viewer({})
 
     def edit_file(self, path: Optional[str] = None, show_replace: bool = False) -> None:
-        """F4: open one file in the notepad. A file that is already open is brought forward, not opened twice."""
+        """F4: open one file in the notepad (or the editor program chosen in Settings > Opening Files). A file that is already open in
+        the notepad is brought forward, not opened twice."""
         if path is None and self._home_blocked("Edit"):
             return
         if path is not None and self._bring_editor_forward(path, show_replace):
             return
         targets = list(self.active.targets()) if path is None else []
         open_now = [w.doc.path for w in self.editors]
+        program = self.editor_program()
 
         def prepare(progress, cancel):                          # which file, and reading it: on a thread
             chosen = path
@@ -460,12 +463,15 @@ class MainWindow(FrostMixin, GlassViewMixin, KeysMixin, AutoRefreshMixin, Metada
             if has_scheme(chosen):
                 return chosen, None, ("Files on a server cannot be edited here yet: copy the file to this computer, edit it, "
                                       "and copy it back.")
+            if program:
+                return chosen, EXTERNAL, ""                     # the chosen editor program reads it itself
             if any(os.path.normcase(o) == os.path.normcase(chosen) for o in open_now):
                 return chosen, None, ""                         # open already: brought forward, not read again
             try:
                 return chosen, load_document(chosen), ""
             except FileTooLarge as e:
-                return chosen, None, f"{e}. Use View (F3) to read it, or an external editor to change it."
+                return chosen, None, (f"{e}. Use View (F3) to read it, or choose an editor program for F4 in Settings > "
+                                      "Opening Files to change it.")
             except BinaryFile:
                 return chosen, None, "This looks like a binary file, not text. Use View (F3)."
             except (OSError, EncodingProblem) as e:
@@ -487,6 +493,9 @@ class MainWindow(FrostMixin, GlassViewMixin, KeysMixin, AutoRefreshMixin, Metada
     def _edit_prepared(self, path, doc, problem: str, show_replace: bool = False) -> None:
         if problem:
             self.dialogs.info("Edit", problem)
+            return
+        if doc is EXTERNAL:
+            self.edit_in_program(path)
             return
         if path is None or self._bring_editor_forward(path, show_replace) or doc is None:
             return
@@ -808,35 +817,39 @@ class MainWindow(FrostMixin, GlassViewMixin, KeysMixin, AutoRefreshMixin, Metada
         return [m.entry_at(r).path for r in range(m.entry_count()) if not m.is_up_row(r)]
 
     def mark_by_pattern(self, mark: bool = True) -> None:
-        """Ctrl+F: ask for wildcard patterns and mark (or, with Ctrl+Shift+F, unmark) the matching items of the
-        active panel. Files by default; a pattern ending in / is for folders."""
+        """Ctrl+F: ask for wildcard patterns, and optionally size, date and attributes, and mark (or, with Ctrl+Shift+F, unmark)
+        the matching items of the active panel. Files by default; a pattern ending in / is for folders. Size, date and attributes
+        are tested as Search tests them (``core.search.fits``), on the listing the panel already holds."""
         if self.active.is_home:
             return
         title = "Mark by Pattern" if mark else "Unmark by Pattern"
         last = str(self.settings.value("mark/pattern", "*.*") or "*.*")
-        text = self.dialogs.ask_text(title, "Pattern (for example *.jpg;*.png  or  *.log !debug*  or  backup*/ for folders):", last)
-        if not text or not text.strip():
+        answer = self.dialogs.ask_mark(title, last)
+        if answer is None:
             return
+        text, criteria = answer
+        text = text.strip() or "*"
         why = patterns.describe(text)
         if why:
             self.dialogs.info(title, why)
             return
-        self.settings.setValue("mark/pattern", text.strip())
+        self.settings.setValue("mark/pattern", text)
         wanted = patterns.parse(text, case_sensitive=self.fs.case_sensitive)
         model = self.active.model
         hits = []
         for r in range(model.entry_count()):
             e = model.entry_at(r)
             if e is not None and not model.is_up_row(r) and e.kind not in ("header", "action") \
-                    and wanted.matches(self.fs.basename(e.path), e.is_dir):
+                    and wanted.matches(self.fs.basename(e.path), e.is_dir) and search.fits(e, criteria):
                 hits.append(e.path)
         if mark:
             self.selection.add(hits)
         else:
             self.selection.remove(hits)
         n = len(hits)
-        self._say(f"{'Marked' if mark else 'Unmarked'} {n} item{'s' if n != 1 else ''} matching {text.strip()}" if n
-                  else f"Nothing matches {text.strip()}")
+        what = text if criteria.describe() == "everything" else f"{text} {criteria.describe()}"
+        self._say(f"{'Marked' if mark else 'Unmarked'} {n} item{'s' if n != 1 else ''} matching {what}" if n
+                  else f"Nothing matches {what}")
 
     def select_all(self) -> None:
         if self.active.is_home:

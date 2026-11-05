@@ -339,7 +339,9 @@ def read_notes(ctx: Context, args: dict) -> dict:
        "text": S("the file must contain this text"), "kind": S("files, folders or both", enum=["files", "folders", "both"]),
        "min_size": N("at least this many bytes"), "max_size": N("at most this many bytes"),
        "newer_than": S("changed on or after this day (YYYY-MM-DD)"), "older_than": S("changed on or before this day (YYYY-MM-DD)"),
-       "tags": L("the file carries all of these tags"), "limit": N(f"at most this many (default {SEARCH_LIMIT}, up to {SEARCH_MAX})"),
+       "tags": L("the file carries all of these tags"),
+       "skip_folders": S("folders not to search, e.g. 'node_modules;.git;build*' (whole names or patterns)"),
+       "limit": N(f"at most this many (default {SEARCH_LIMIT}, up to {SEARCH_MAX})"),
        "offset": N("skip this many results first, for the next page (default 0; the search runs again, so ask for pages in order)"),
        "max_seconds": N(f"stop after this long (default {SECONDS_DEFAULT}, up to {SECONDS_MAX})")}, ("folder",))
 def search_tool(ctx: Context, args: dict) -> dict:
@@ -353,7 +355,7 @@ def search_tool(ctx: Context, args: dict) -> dict:
         criteria = Criteria(root=root, name=args.get("name") or "", kinds=args.get("kind") or "files", min_size=args.get("min_size"),
                             max_size=args.get("max_size"), newer_than=parse_date(args["newer_than"]) if args.get("newer_than") else None,
                             older_than=parse_date(args["older_than"]) if args.get("older_than") else None, text=args.get("text") or "",
-                            tags=list(args.get("tags") or []), max_results=limit)
+                            tags=list(args.get("tags") or []), max_results=limit, skip_folders=args.get("skip_folders") or "")
     except CliError as e:
         raise ToolError(str(e))
     token, stop = _timer(_int(args.get("max_seconds"), SECONDS_DEFAULT, 1, SECONDS_MAX, "max_seconds"))

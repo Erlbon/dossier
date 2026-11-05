@@ -382,6 +382,14 @@ def file_manager_command(path: str, select: bool):
     return ["xdg-open", os.path.dirname(path.rstrip("/")) or "/" if select else path]
 
 
+def open_with_command(path: str) -> Optional[list]:
+    """The system's own "Open with" chooser for one file, or None where there is none (only Windows has one to call)."""
+    if not IS_WINDOWS:
+        return None
+    root = os.environ.get("SystemRoot") or os.environ.get("windir") or "C:" + chr(92) + "Windows"
+    return [os.path.join(root, "System32", "rundll32.exe"), "shell32.dll,OpenAs_RunDLL", path]
+
+
 def console_encoding() -> str:
     """The encoding a console program's output is written in (the OEM code page on Windows)."""
     if IS_WINDOWS:

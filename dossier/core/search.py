@@ -12,12 +12,16 @@ from dataclasses import dataclass, field, replace
 from typing import Optional
 
 from .listings import relative
+from .platform import IS_WINDOWS
 from .progress import CancelToken, check
 from .vfs import Entry, FileSystem
 
 SNIFF = 8192                 # bytes looked at to tell text from a binary file
 MAX_TEXT_FILE = 100 * 1024 * 1024   # larger files are not opened for their text
 SNIPPET = 140
+# folders a programmer rarely wants searched; offered in the dialog, not used unless asked for
+DEFAULT_SKIP = ".git;.svn;.hg;node_modules;__pycache__;.venv;venv;.tox;.mypy_cache;.pytest_cache"
+ATTRIBUTES = (("H", "hidden", 0x2), ("R", "read-only", 0x1), ("S", "system", 0x4), ("A", "archive", 0x20))
 
 
 @dataclass
@@ -37,6 +41,8 @@ class Criteria:
     tags: list = field(default_factory=list)   # the file must carry all of these tags (kept on the file, see filetags.py)
     min_rating: int = 0                        # and at least this many stars
     label: str = ""                            # and this colour label
+    attributes: str = ""             # letters the item must have: H hidden, R read-only, S system, A archive
+    skip_folders: str = ""           # "node_modules;.git;build*": folders with these names are neither searched nor listed
     max_results: int = 100_000
 
     def describe(self) -> str:
@@ -56,6 +62,10 @@ class Criteria:
             parts.append("by size")
         if self.newer_than is not None or self.older_than is not None:
             parts.append("by date")
+        if self.attributes:
+            parts.append(", ".join(n for letter, n, _bit in ATTRIBUTES if letter in self.attributes))
+        if self.skip_folders:
+            parts.append(f"skipping {self.skip_folders}")
         return " ".join(parts) or "everything"
 
 
@@ -93,6 +103,44 @@ def _name_test(text: str, case_sensitive: bool):
     return lambda name: (not wanted or any(t(name) for t in wanted)) and not any(t(name) for t in unwanted)
 
 
+def skip_test(text: str):
+    """A function folder name -> bool: whether a folder of that name is skipped. ``;`` separates names; a name with ``*`` ``?``
+    or ``[`` is a pattern, any other must be the whole name (``build`` skips ``build``, not ``rebuild``). Case is ignored."""
+    exact, rxs = set(), []
+    for part in (p.strip() for p in text.split(";")):
+        if not part:
+            continue
+        if any(ch in part for ch in "*?["):
+            rxs.append(re.compile(fnmatch.translate(part), re.IGNORECASE).fullmatch)
+        else:
+            exact.add(part.casefold())
+    if not exact and not rxs:
+        return lambda name: False
+    return lambda name: name.casefold() in exact or any(t(name) for t in rxs)
+
+
+def attribute_letters(e: Entry) -> str:
+    """The attribute letters an item has (``HR``...). On Windows from its attributes; elsewhere a dot name is hidden and an item
+    without its owner's write bit is read-only (no system or archive there)."""
+    if IS_WINDOWS:
+        return "".join(letter for letter, _name, bit in ATTRIBUTES if e.attrs & bit)
+    return ("H" if e.name.startswith(".") else "") + ("R" if e.attrs and not e.attrs & 0o200 else "")
+
+
+def fits(e: Entry, c: Criteria) -> bool:
+    """Whether ``e`` passes the cheap tests of ``c`` that need no disk: size (files), date and attributes. The name, tags and text
+    are tested apart. The one check both Search and Mark use."""
+    if not e.is_dir and (c.min_size is not None and e.size < c.min_size or c.max_size is not None and e.size > c.max_size):
+        return False
+    if c.newer_than is not None and e.mtime < c.newer_than or c.older_than is not None and e.mtime > c.older_than:
+        return False
+    if c.attributes:
+        have = attribute_letters(e)
+        if any(letter not in have for letter in c.attributes):
+            return False
+    return True
+
+
 def _text_test(c: Criteria):
     if not c.text:
         return None
@@ -113,6 +161,9 @@ def validate(c: Criteria) -> None:
         raise BadCriteria("kinds must be files, folders or both")
     if c.text and c.kinds == "folders":
         raise BadCriteria("a folder has no text to search")
+    bad = [ch for ch in c.attributes if ch not in "".join(letter for letter, _n, _b in ATTRIBUTES)]
+    if bad:
+        raise BadCriteria(f"unknown attribute letter {bad[0]!r} (H, R, S or A)")
     _text_test(c)
 
 
@@ -175,6 +226,7 @@ def search(fs: FileSystem, c: Criteria, cancel: Optional[CancelToken] = None, pr
     """Run the search. Raises ``BadCriteria`` for criteria that cannot work, ``Cancelled`` when cancelled."""
     validate(c)
     name_ok = _name_test(c.name, c.case_sensitive)
+    skipped = skip_test(c.skip_folders)
     rx = _text_test(c)
     wants_tags = bool(c.tags or c.min_rating or c.label)
     out = SearchResult(entries=[])
@@ -193,16 +245,15 @@ def search(fs: FileSystem, c: Criteria, cancel: Optional[CancelToken] = None, pr
             if e.is_link:
                 continue
             out.scanned += 1
+            if e.is_dir and skipped(e.name):
+                continue
             if e.is_dir and c.subfolders:
                 stack.append(e.path)
             if e.is_dir and not want_folders or not e.is_dir and not want_files:
                 continue
             if not name_ok(e.name):
                 continue
-            if not e.is_dir:
-                if c.min_size is not None and e.size < c.min_size or c.max_size is not None and e.size > c.max_size:
-                    continue
-            if c.newer_than is not None and e.mtime < c.newer_than or c.older_than is not None and e.mtime > c.older_than:
+            if not fits(e, c):
                 continue
             if wants_tags and not _tags_ok(e.path, c):
                 continue

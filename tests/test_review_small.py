@@ -99,7 +99,7 @@ def test_show_in_explorer_selects_the_item_or_opens_the_folder(world, monkeypatc
     (left / "a.txt").write_text("a")
     listed(win, win.left, 2)
     started = []
-    monkeypatch.setattr(win, "_start_file_manager", started.append)
+    monkeypatch.setattr(win, "_start_command", started.append)
     cursor_on(win.left, "a.txt")
     win.show_in_file_manager()
     win.show_in_file_manager(folder_only=True)

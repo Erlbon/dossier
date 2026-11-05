@@ -72,6 +72,17 @@ class FakeDialogs:
     def ask_text(self, title, label, default=""):
         return self.texts.pop(0) if self.texts else None
 
+    def ask_mark(self, title, pattern):
+        """``mark_answer`` (pattern, Criteria) when a test set one, else the next text as a name pattern alone."""
+        from dossier.core.search import Criteria
+        if getattr(self, "mark_answer", None) is not None:
+            return self.mark_answer
+        text = self.ask_text(title, "", pattern)
+        return None if text is None else (text, Criteria(root=""))
+
+    def ask_program(self, title, current=""):
+        return getattr(self, "program_answer", None)
+
     def ask_name(self, title, label, default, is_dir=False):
         self.names_asked = getattr(self, "names_asked", []) + [(default, is_dir)]
         return self.ask_text(title, label, default)

@@ -102,9 +102,9 @@ class GoingPlacesMixin:
         if not path or has_scheme(path):
             self._say(f"{FILE_MANAGER_NAME} cannot show a folder on a server")
             return
-        self._start_file_manager(file_manager_command(path, select))
+        self._start_command(file_manager_command(path, select))
 
-    def _start_file_manager(self, command) -> None:            # a seam: the tests do not open Explorer
+    def _start_command(self, command) -> None:                 # a seam: the tests start no program
         subprocess.Popen(command)
 
     def put_in_command_line(self, full_path: bool = False) -> None:

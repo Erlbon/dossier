@@ -60,6 +60,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--newer", metavar="DATE", help="changed on or after this day (2024-05-17 or 2024-05-17 10:30)")
     p.add_argument("--older", metavar="DATE", help="changed on or before this day")
     p.add_argument("--no-subfolders", action="store_true", help="only this folder")
+    p.add_argument("--skip", default="", metavar="NAMES", help="folders not to search: 'node_modules;.git;build*' (whole names or patterns)")
     p.add_argument("--tag", action="append", default=[], help="the file carries this tag (repeat for several)")
     p.add_argument("--limit", type=int, default=100000, help="stop after this many results")
 
@@ -245,7 +246,8 @@ def cmd_find(args, out, fs) -> int:
     criteria = Criteria(root=root, name=args.name, case_sensitive=args.case, kinds=args.kind, subfolders=not args.no_subfolders,
                         min_size=parse_size(args.min_size) if args.min_size else None, max_size=parse_size(args.max_size) if args.max_size else None,
                         newer_than=parse_date(args.newer) if args.newer else None, older_than=parse_date(args.older) if args.older else None,
-                        text=args.text, text_regex=args.regex, text_case=args.case, tags=list(args.tag), max_results=args.limit)
+                        text=args.text, text_regex=args.regex, text_case=args.case, tags=list(args.tag), max_results=args.limit,
+                        skip_folders=args.skip)
     try:
         found = search(fs, criteria, None, lambda scanned, hits: out.info(f"{scanned:,} looked at, {hits:,} found") if scanned % 5000 < 200 else None)
     except BadCriteria as e:

@@ -34,8 +34,9 @@ technical facts of audio, the ComicInfo of a comic, the tracks of a video, the E
 ### find
 
 `dossier find folder [--name N] [--text T] [--regex] [--case] [--kind files|folders|both] [--min-size S] [--max-size S] [--newer D]
-[--older D] [--no-subfolders] [--tag X] [--limit N]` searches a folder tree and prints one path per line. Names: `report`,
+[--older D] [--no-subfolders] [--skip NAMES] [--tag X] [--limit N]` searches a folder tree and prints one path per line. Names: `report`,
 `*.jpg;*.png`, or `!*.tmp` to leave out. Sizes: `10K`, `1.5M`, `2G`. Dates: `2024-05-17` or `2024-05-17 10:30`. `--tag` can be repeated.
+`--skip node_modules;.git;build*` neither searches nor lists those folders (a plain name must be the whole name; `*` `?` make a pattern).
 
 ### checksum
 

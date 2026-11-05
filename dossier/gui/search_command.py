@@ -32,10 +32,13 @@ class SearchCommandMixin:
         from .search_dialog import SearchDialog
         root = panel.real_folder() if panel.path.startswith(("found:", "flat:")) else panel.path
         dlg = SearchDialog(self, root, getattr(self, "_last_search", None))
+        if getattr(self, "_last_search", None) is None:
+            dlg.skip.setText(str(self.settings.value("search/skip_folders", "") or ""))   # the skip list is kept between sessions
         if not self._ask_search(dlg):
             return
         criteria = dlg.criteria()
         self._last_search = criteria              # the next dialog starts from it (this session only)
+        self.settings.setValue("search/skip_folders", criteria.skip_folders)
         self.start_search(criteria, panel)
 
     def _ask_search(self, dlg) -> bool:           # a seam for tests

@@ -2,6 +2,15 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-05#07 -- An editor of your choice, Open With, marking by size and date, Search skips folders (review cards 2, 3, 6, 15)
+
+- **F4 can open another editor** (card 2): Settings > Opening Files > Edit (F4) in Another Program... picks a program (VS Code, Notepad++); F4 then starts it with the file, as a tools-bar tool is started. Edit (F4) in Dossier's Notepad goes back. A file too large for the notepad now says where to choose a program.
+- **Open With** (card 3) in the right-click menu: the tools bar's programs (its folders as submenus), run on what was clicked, then Choose Another Program... (the Windows chooser, for one file on this computer).
+- **Mark by Pattern can test size, date and attributes** (card 6): the Ctrl+F box has the Search dialog's At least / At most, changed on or after / before, and Hidden, Read-only, System, Archive. An empty name marks every name that passes the rest ("everything over 1 GB"). It reads only the listing the panel holds.
+- **Search skips folders** (card 15): a Skip folders field (`node_modules;.git;build*`; a plain name must be the whole name, `*` and `?` make a pattern), kept between sessions, with a Programmer's List button. Skipped folders are neither searched nor listed. The Search dialog can also ask for attributes. `dossier find --skip` and the assistant's `search` (`skip_folders`) have it too.
+- One test for both: `core.search.fits` (size, date, attributes) is used by Search and by Mark; `core.search.skip_test` by Search, the command line and the assistant.
+- New test `tests/test_review_medium_pairs.py`.
+
 ## 2026-11-05#06 -- The small gaps from the functionality review (cards 1, 8, 10, 12, 17-21)
 
 From `docs/functionality-review-2026-11-05.md`, the owner's Yes list.

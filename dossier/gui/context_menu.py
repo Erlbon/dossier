@@ -15,7 +15,7 @@ from PyQt6.QtWidgets import QApplication, QMenu
 
 from ..core import archives, sharing, shellmenu
 from ..core.mounting import SMB
-from ..core.platform import FILE_MANAGER_NAME
+from ..core.platform import FILE_MANAGER_NAME, has_scheme, open_with_command
 from ..core.home import is_home
 from . import file_clipboard
 from .menus import command_keys, command_label
@@ -132,6 +132,7 @@ class ContextMenuMixin:
         else:
             cmd("view_file", enabled=not many)
             cmd("edit_file", enabled=not many)
+        self._add_open_with(menu, panel, paths, row, single_file=not entry.is_dir and not many)
         menu.addSeparator()
         cmd("copy")
         cmd("move")
@@ -162,6 +163,28 @@ class ContextMenuMixin:
             menu.addSeparator()
             add("More Options (Windows Menu)...", lambda: self._windows_menu(panel, paths, False))
         return menu
+
+    def _add_open_with(self, menu: QMenu, panel, paths, row: int, single_file: bool) -> None:
+        """Open With: the tools bar's programs (its folders as submenus), run on what was clicked, then the system's own chooser
+        for one file on this computer. Not there when there is nothing to offer."""
+        chooser = open_with_command(paths[0]) if single_file and not has_scheme(paths[0]) else None
+        if not self.tools and chooser is None:
+            return
+        sub = menu.addMenu("Open With")
+
+        def fill(target: QMenu, items: list) -> None:
+            for item in items:
+                if item.kind == "folder":
+                    fill(target.addMenu(item.name), item.items)
+                elif item.kind == "separator":
+                    target.addSeparator()
+                else:
+                    self._entry_action(target, item.name, lambda t=item: self.run_tool(t), panel, paths, row=row)
+        fill(sub, self.tools)
+        if chooser is not None:
+            if self.tools:
+                sub.addSeparator()
+            self._entry_action(sub, "Choose Another Program...", lambda: self._start_command(chooser), panel, paths, row=row)
 
     def _machine_share_menu(self, panel, entry, row: int = -1) -> QMenu:
         """A share in another computer's list (``\\\\machine``): open it, keep it on the Home page or mount it. Nothing that would

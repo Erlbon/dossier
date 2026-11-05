@@ -185,6 +185,16 @@ class Dialogs:
             QTimer.singleShot(0, dlg, lambda: edit.setSelection(0, stem_length(default, is_dir)))
         return dlg.textValue() if dlg.exec() == QDialog.DialogCode.Accepted else None
 
+    def ask_mark(self, title: str, pattern: str) -> Optional[tuple]:
+        """Mark by Pattern: ``(pattern, criteria)`` (size, date, attributes), or None when cancelled."""
+        from .mark_dialog import ask_mark
+        return ask_mark(self.parent, title, pattern)
+
+    def ask_program(self, title: str, current: str = "") -> Optional[str]:
+        """A program file to start, or None when cancelled."""
+        path, _filter = QFileDialog.getOpenFileName(self.parent, title, current, "Programs (*.exe *.bat *.cmd *.com);;All files (*)")
+        return path or None
+
     def ask_text(self, title: str, label: str, default: str = "") -> Optional[str]:
         text, ok = QInputDialog.getText(self.parent, title, label, text=default)
         return text if ok else None

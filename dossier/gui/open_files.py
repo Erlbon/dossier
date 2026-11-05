@@ -3,6 +3,7 @@
 The rule itself is ``core.viewmodes.opens_in_viewer``; this is the window's side: the setting, its menu, and the hook a panel calls.
 Ctrl+Enter always does the opposite of the setting. Marking is untouched (Ctrl+click and Ctrl+Space still mark).
 A script (``core/scripts.py``) runs on Enter unless Settings > Opening Files > Run Scripts on Enter is switched off; Ctrl+Enter then shows it.
+The same menu chooses the editor for F4: Dossier's notepad, or a program of the user's (started with the file, as a tools-bar tool).
 """
 from __future__ import annotations
 
@@ -10,7 +11,7 @@ import os
 
 from PyQt6.QtGui import QAction, QActionGroup
 
-from ..core import scripts, viewmodes
+from ..core import scripts, tools, viewmodes
 from ..core.platform import has_scheme
 from .background import run_in_background
 
@@ -39,6 +40,55 @@ class OpenFilesMixin:
         self.act_run_scripts.setToolTip("Off: Enter shows a script in the viewer, as any text file, and Ctrl+Enter runs it")
         self.act_run_scripts.toggled.connect(self.set_run_scripts)
         menu.addAction(self.act_run_scripts)
+        menu.addSeparator()
+        editors = QActionGroup(self)
+        editors.setExclusive(True)
+        self.act_editor_notepad = QAction("Edit (F4) in Dossier's Notepad", self)
+        self.act_editor_program = QAction("", self)
+        for act in (self.act_editor_notepad, self.act_editor_program):
+            act.setCheckable(True)
+            editors.addAction(act)
+            menu.addAction(act)
+        self.act_editor_notepad.triggered.connect(lambda: self.set_editor_program(""))
+        self.act_editor_program.triggered.connect(self.choose_editor_program)
+        self._show_editor_choice()
+
+    # the editor for F4 ------------------------------------------------------------------------------------------------------------
+    def editor_program(self) -> str:
+        """The program F4 opens files in, or "" for Dossier's own notepad."""
+        return str(self.settings.value("editor/program", "") or "")
+
+    def set_editor_program(self, program: str) -> None:
+        self.settings.setValue("editor/program", program)
+        self._show_editor_choice()
+        self._say(f"F4 opens files in {os.path.basename(program)}" if program else "F4 opens files in Dossier's notepad")
+
+    def choose_editor_program(self) -> None:
+        program = self.dialogs.ask_program("Editor for F4", self.editor_program())
+        if program:
+            self.set_editor_program(program)
+        else:
+            self._show_editor_choice()                     # cancelled: the tick goes back to what is set
+
+    def _show_editor_choice(self) -> None:
+        program = self.editor_program()
+        self.act_editor_program.setText(f"Edit (F4) in {os.path.basename(program)} (Change...)" if program
+                                        else "Edit (F4) in Another Program...")
+        (self.act_editor_program if program else self.act_editor_notepad).setChecked(True)
+
+    def edit_in_program(self, path: str) -> bool:
+        """Open ``path`` in the chosen editor program; False when none is chosen. The file must be on this computer."""
+        program = self.editor_program()
+        if not program:
+            return False
+        tool = tools.Tool(os.path.basename(program), program, "{file}")
+        try:
+            tools.launch(tool, [path], os.path.dirname(path), "", starter=self.tool_starter)
+        except OSError as e:
+            self.dialogs.info("Edit", f"Could not start {program}: {e.strerror or e}")
+        else:
+            self._say(f"Opened {os.path.basename(path)} in {tool.name}")
+        return True
 
     def open_choice(self) -> str:
         value = str(self.settings.value("open/files", "viewer"))

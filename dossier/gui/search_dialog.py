@@ -9,9 +9,9 @@ from typing import Optional
 
 from PyQt6.QtCore import QDate
 from PyQt6.QtWidgets import (QCheckBox, QComboBox, QDateEdit, QDialog, QDialogButtonBox, QFormLayout, QGroupBox, QHBoxLayout,
-                             QLabel, QLineEdit, QVBoxLayout, QWidget)
+                             QLabel, QLineEdit, QPushButton, QVBoxLayout, QWidget)
 
-from ..core.search import BadCriteria, Criteria
+from ..core.search import ATTRIBUTES, DEFAULT_SKIP, BadCriteria, Criteria
 from .owned_dialog import OwnedDialog
 
 UNITS = (("KB", 1024), ("MB", 1024 ** 2), ("GB", 1024 ** 3), ("bytes", 1))
@@ -74,6 +74,28 @@ class _DateBox(QWidget):
         return datetime.combine(day.date(), dtime.max if end_of_day else dtime.min).timestamp()
 
 
+class _AttributeBox(QWidget):
+    """A tick box for each attribute; the ticked ones must all be there."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        row = QHBoxLayout(self)
+        row.setContentsMargins(0, 0, 0, 0)
+        self.boxes = {}
+        for letter, name, _bit in ATTRIBUTES:
+            box = QCheckBox(name.capitalize())
+            self.boxes[letter] = box
+            row.addWidget(box)
+        row.addStretch(1)
+
+    def value(self) -> str:
+        return "".join(letter for letter, box in self.boxes.items() if box.isChecked())
+
+    def set_value(self, letters: str) -> None:
+        for letter, box in self.boxes.items():
+            box.setChecked(letter in letters)
+
+
 class SearchDialog(OwnedDialog):
     def __init__(self, parent, root: str, last: Optional[Criteria] = None) -> None:
         super().__init__(parent)
@@ -90,21 +112,33 @@ class SearchDialog(OwnedDialog):
             self.kinds.addItem(label, key)
         self.subfolders = QCheckBox("Include subfolders")
         self.subfolders.setChecked(True)
+        self.skip = QLineEdit()
+        self.skip.setPlaceholderText("node_modules;.git;build*   (folders not to look in)")
+        offer = QPushButton("Programmer's List")
+        offer.setToolTip(DEFAULT_SKIP.replace(";", "  "))
+        offer.setAutoDefault(False)
+        offer.clicked.connect(lambda: self.skip.setText(DEFAULT_SKIP))
+        skip_row = QHBoxLayout()
+        skip_row.addWidget(self.skip, 1)
+        skip_row.addWidget(offer)
         form.addRow("Look in", self.root)
         form.addRow("Name", self.name)
         form.addRow("", self.case)
         form.addRow("Look for", self.kinds)
         form.addRow("", self.subfolders)
+        form.addRow("Skip folders", skip_row)
         layout.addLayout(form)
 
-        by = QGroupBox("Size and date")
+        by = QGroupBox("Size, date and attributes")
         sub = QFormLayout(by)
         self.min_size, self.max_size = _SizeBox(), _SizeBox()
         self.after, self.before = _DateBox("Changed on or after"), _DateBox("Changed on or before")
+        self.attributes = _AttributeBox()
         sub.addRow("At least", self.min_size)
         sub.addRow("At most", self.max_size)
         sub.addRow("", self.after)
         sub.addRow("", self.before)
+        sub.addRow("Must be", self.attributes)
         layout.addWidget(by)
 
         inside = QGroupBox("Text inside the files")
@@ -152,6 +186,8 @@ class SearchDialog(OwnedDialog):
         self.case.setChecked(c.case_sensitive)
         self.kinds.setCurrentIndex(max(0, self.kinds.findData(c.kinds)))
         self.subfolders.setChecked(c.subfolders)
+        self.skip.setText(c.skip_folders)
+        self.attributes.set_value(c.attributes)
         self.text.setText(c.text)
         self.regex.setChecked(c.text_regex)
         self.text_case.setChecked(c.text_case)
@@ -168,7 +204,8 @@ class SearchDialog(OwnedDialog):
                      newer_than=self.after.value(False), older_than=self.before.value(True),
                      text=self.text.text(), text_regex=self.regex.isChecked(), text_case=self.text_case.isChecked(),
                      tags=[t for t in (p.strip() for p in self.tags.text().replace(";", ",").split(",")) if t],
-                     min_rating=self.min_rating.currentData(), label=self.label.currentData())
+                     min_rating=self.min_rating.currentData(), label=self.label.currentData(),
+                     attributes=self.attributes.value(), skip_folders=self.skip.text().strip())
         if not c.root:
             raise BadCriteria("say where to look")
         validate(c)
