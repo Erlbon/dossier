@@ -13,9 +13,10 @@ from PyQt6.QtGui import QFileSystemModel, QKeyEvent
 from PyQt6.QtWidgets import QAbstractItemView, QDialog, QTreeView, QVBoxLayout
 
 from ..core.platform import has_scheme
+from .owned_dialog import OwnedDialog
 
 
-class FolderTreePopup(QDialog):
+class FolderTreePopup(OwnedDialog):
     def __init__(self, parent, start: str) -> None:
         super().__init__(parent, Qt.WindowType.Popup)
         self.chosen = ""
@@ -70,7 +71,6 @@ class FolderTreeMixin:
         popup.move(bar.mapToGlobal(QPoint(0, bar.height())))
         if self._ask_folder_tree(popup) and popup.chosen:
             panel.set_folder(popup.chosen)
-        popup.deleteLater()                                       # once the answer is read: not kept by the window for good
         panel.view.setFocus()
 
     def _ask_folder_tree(self, popup) -> bool:                    # a seam for tests

@@ -104,8 +104,10 @@ def test_ftp_logs_in_again_after_the_main_connection_was_lost(tmp_path):
     try:
         c = fc.FtpClient("127.0.0.1", server.port, secure=False)
         c.connect()
-        c._ftp = None                                                       # what a dropped main connection leaves behind
+        lost, c._ftp = c._ftp, None                                         # what a dropped main connection leaves behind
+        lost.close()
         assert [n.name for n in c.listdir("/")] == ["a.txt"]
+        c.close()
     finally:
         server.stop()
 

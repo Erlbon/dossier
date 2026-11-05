@@ -269,3 +269,28 @@ def test_qt_dispatcher_runs_callables_on_the_main_thread():
     t.join()
     assert got == [MAIN]
     assert app is not None
+
+
+def test_a_worker_that_finishes_after_the_window_closed_is_ignored():
+    pytest.importorskip("PyQt6")
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PyQt6 import sip
+    from PyQt6.QtCore import QCoreApplication
+
+    from dossier.gui.qt_bridge import QtDispatcher
+
+    app = QCoreApplication.instance() or QCoreApplication([])
+    dispatcher = QtDispatcher()
+    sip.delete(dispatcher)                                  # what closing the window leaves a late drive probe holding
+    errors = []
+    t = threading.Thread(target=lambda: _call_catching(dispatcher, errors))
+    t.start()
+    t.join()
+    assert errors == [] and app is not None
+
+
+def _call_catching(dispatcher, errors):
+    try:
+        dispatcher(lambda: None)
+    except Exception as e:                                  # noqa: BLE001 -- the test wants to see any error at all
+        errors.append(e)

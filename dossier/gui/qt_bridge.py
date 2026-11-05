@@ -21,7 +21,10 @@ class QtDispatcher(QObject):
         self._call.connect(self._run, Qt.ConnectionType.QueuedConnection)
 
     def __call__(self, fn: Callable[[], None]) -> None:
-        self._call.emit(fn)
+        try:
+            self._call.emit(fn)
+        except RuntimeError:            # the window closed while a worker (a drive probe, say) was still out: nothing is left to show it
+            pass
 
     @pyqtSlot(object)
     def _run(self, fn) -> None:

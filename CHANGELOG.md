@@ -2,6 +2,12 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-05#18 -- Folder tree popup is an owned dialog; test fixes
+
+- Go > Folder Tree... now uses the shared OwnedDialog base like every other window dialog.
+- A drive probe that finishes after its window closed is now dropped quietly instead of raising in its thread.
+- Tests: the Share column is counted among the later columns; the FTP reconnect test closes its connections.
+
 ## 2026-11-05#17 -- Finish the job, Export Log, reconnect, folder tree, Share column (the owner's afternoon decisions)
 
 - **Skip what is already there and the same** (copy plan step 5, "finish the job"): an F5 option that leaves out every file already at the destination with the same size and time (Compare's rule, with the summer-time hour), or with Verify on the same content. A second run after a failed night copy copies only what is missing or changed, with no questions.
