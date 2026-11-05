@@ -2,6 +2,11 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-05#16 -- Network paths work the same on Python 3.10
+
+- **On Python 3.10, going up from another computer's list of shares led to `\` instead of stopping**, so the address bar showed `\ > server > share` and the list of shares had a `..` row. Python before 3.12 reads `\\server` as `\server`. `LocalFileSystem` now treats a computer as the top itself. Found by GitHub's Tests run on 3.10, the oldest Python the README promises.
+- **Python 3.10 did not count a share root (`\\nas\Media`) as a full path**, so it could be turned away as "not a full path" by the assistant's settings, saved layouts, the address bar's completion, the Windows right-click menu and drag and drop. One helper, `platform.is_full_path`, now answers the same on every Python, and all 13 places use it.
+
 ## 2026-11-05#15 -- Release 0.6
 
 - `RELEASE = "0.6"`, notes in `docs/releases/v0.6.md`; the first release with the installer (`dossier-setup.exe`, one-folder build) beside the one-file `dossier.exe`.

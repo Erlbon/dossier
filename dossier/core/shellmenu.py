@@ -23,7 +23,7 @@ from ctypes import wintypes
 from dataclasses import dataclass
 from typing import Callable
 
-from .platform import IS_WINDOWS
+from .platform import IS_WINDOWS, is_full_path
 
 OUR_VERBS = ("cut", "copy", "paste", "delete", "rename")
 MAX_ITEMS = 500
@@ -54,7 +54,7 @@ def can_show(paths: list) -> bool:
         return False
     parents = set()
     for p in paths:
-        if not isinstance(p, str) or "://" in p or not os.path.isabs(p) or len(os.path.splitdrive(p)[0]) == 0:
+        if not isinstance(p, str) or "://" in p or not is_full_path(p) or len(os.path.splitdrive(p)[0]) == 0:
             return False
         parents.add(os.path.normcase(os.path.dirname(os.path.normpath(p))))
     return len(parents) == 1
@@ -62,7 +62,7 @@ def can_show(paths: list) -> bool:
 
 def folder_can_show(folder: str) -> bool:
     """Whether the menu of this folder itself (empty space in the list) can be offered."""
-    return bool(IS_WINDOWS and isinstance(folder, str) and "://" not in folder and os.path.isabs(folder)
+    return bool(IS_WINDOWS and isinstance(folder, str) and "://" not in folder and is_full_path(folder)
                 and os.path.splitdrive(folder)[0])
 
 

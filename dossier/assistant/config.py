@@ -6,6 +6,7 @@ import os
 from dataclasses import dataclass, field
 
 from . import paths
+from ..core.platform import is_full_path
 
 MAX_ROOTS = 50
 MIN_READ_KB, MAX_READ_KB = 4, 1024
@@ -44,13 +45,13 @@ class AssistantConfig:
         for r in self.roots:
             if not isinstance(r, str) or not r.strip():
                 continue
-            r = server_root(r) or (os.path.normpath(r) if os.path.isabs(r) and "://" not in r else "")
+            r = server_root(r) or (os.path.normpath(r) if is_full_path(r) and "://" not in r else "")
             if r and r not in roots:
                 roots.append(r)
         servers = [s for s in (self.servers or []) if isinstance(s, dict)][:MAX_ROOTS]
         return AssistantConfig(bool(self.enabled), roots[:MAX_ROOTS], bool(self.allow_file_changes), bool(self.log_calls),
                                max(MIN_READ_KB, min(MAX_READ_KB, int(self.max_read_kb or 256))), servers,
-                               self.ssh_folder if isinstance(self.ssh_folder, str) and self.ssh_folder and os.path.isabs(self.ssh_folder) else "",
+                               self.ssh_folder if isinstance(self.ssh_folder, str) and self.ssh_folder and is_full_path(self.ssh_folder) else "",
                                bool(self.act_unattended and self.allow_file_changes))
 
 

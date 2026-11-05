@@ -21,6 +21,7 @@ from PyQt6.QtWidgets import (QCheckBox, QDialog, QDialogButtonBox, QFileDialog, 
 
 from ..assistant import bridge, calllog, config as config_module, paths as assistant_paths, planning
 from ..assistant.scope import Denied, Scope
+from ..core.platform import is_full_path
 from ..core.sizefmt import human_size
 from .owned_dialog import OwnedDialog
 
@@ -42,7 +43,7 @@ def server_snippet() -> str:
 class AssistantDialog(OwnedDialog):
     def __init__(self, parent, current: config_module.AssistantConfig, panel_folders: Optional[list] = None) -> None:
         super().__init__(parent)
-        self.panel_folders = [p for p in (panel_folders or []) if p and (config_module.server_root(p) or os.path.isabs(p) and "://" not in p)]
+        self.panel_folders = [p for p in (panel_folders or []) if p and (config_module.server_root(p) or is_full_path(p) and "://" not in p)]
         self.setWindowTitle("Assistant Access")
         self.setMinimumWidth(620)
         layout = QVBoxLayout(self)

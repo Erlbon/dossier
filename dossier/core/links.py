@@ -20,7 +20,7 @@ import stat
 from dataclasses import dataclass, field
 from typing import Optional
 
-from .platform import IS_WINDOWS, strip_longpath
+from .platform import IS_WINDOWS, is_full_path, strip_longpath
 
 SYMLINK, JUNCTION, HARDLINK = "symlink", "junction", "hardlink"
 KINDS = (SYMLINK, JUNCTION, HARDLINK)
@@ -66,7 +66,7 @@ def inspect(path: str) -> LinkInfo:
             info.target = strip_longpath(os.readlink(path))
         except OSError:
             info.target = ""
-        shown = info.target if os.path.isabs(info.target) else os.path.join(os.path.dirname(path), info.target)
+        shown = info.target if is_full_path(info.target) else os.path.join(os.path.dirname(path), info.target)
         info.broken = not os.path.exists(path) or (bool(info.target) and not os.path.lexists(shown))
     elif stat.S_ISREG(st.st_mode) and st.st_nlink > 1:
         info.hardlinks = st.st_nlink

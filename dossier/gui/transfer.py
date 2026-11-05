@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 
 from ..core.ops import Plan, Resolution, plan_copy, plan_move
-from ..core.platform import has_scheme, path_key
+from ..core.platform import has_scheme, is_full_path, path_key
 from ..core.sizefmt import human_size
 from ..core.vfs import stat_or_none
 from .zip_edit import zip_parts
@@ -107,7 +107,7 @@ class TransferMixin:
         if not text:
             return default_dest, "", False, "say where to"
         into = text.endswith(("/", "\\"))
-        if not has_scheme(text) and not os.path.isabs(text) and not (len(text) > 1 and text[1] == ":"):
+        if not has_scheme(text) and not is_full_path(text) and not (len(text) > 1 and text[1] == ":"):
             text = fs.join(default_dest, text)                   # backup -> backup inside the other panel's folder
         if into:
             text = text.rstrip("/\\") or text

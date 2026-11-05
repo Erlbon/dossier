@@ -24,6 +24,7 @@ from typing import Callable, Optional
 from ..core import compare as cmp, duplicates as dup, manifest as mf, notes as notes_core, ops as ops_core, sync as sync_core
 from ..core.ops import Resolution, check_name, plan_copy, plan_delete, plan_move, plan_rename
 from ..core.progress import Cancelled, CancelToken
+from ..core.platform import is_full_path
 from ..core.search import BadCriteria, Criteria, search
 from ..core.textview import detect_encoding
 from ..core.version import APP_NAME, APP_VERSION
@@ -224,7 +225,7 @@ def _report(prefix: str, folder: str, text: str) -> str:
 
 def _manifest_file(ctx: Context, value) -> str:
     """A manifest the assistant names: inside the owner's folders, or one of the reports Dossier wrote itself."""
-    if isinstance(value, str) and value.strip() and os.path.isabs(value):
+    if isinstance(value, str) and value.strip() and is_full_path(value):
         own = _text_key(assistant_paths.reports_dir())
         if _under(_text_key(value), own):
             real = os.path.realpath(value)

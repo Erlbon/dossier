@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import os
 
+from ..core.platform import is_full_path
+
 
 class Denied(Exception):
     """A request the owner's settings do not allow. The text says why, in words the assistant can pass on."""
@@ -55,7 +57,7 @@ class Scope:
             if not self.server_roots:
                 raise Denied("only folders and files on this computer can be used (not archives or servers)")
             return self._resolve_server(path)
-        if not os.path.isabs(path):
+        if not is_full_path(path):
             raise Denied(f"use a full path (starting with a drive letter or a slash, or sftp:// for a listed server): {path}")
         if not self._keys:
             if self.server_roots:

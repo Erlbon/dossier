@@ -18,6 +18,7 @@ from PyQt6.QtWidgets import (QAbstractItemView, QComboBox, QDialog, QDialogButto
 from ..core import startmenu as SM
 from ..core import tools as T
 from ..core.drives import is_network_path
+from ..core.platform import is_full_path
 from . import frost, icon_set, theme
 from .owned_dialog import OwnedDialog
 from .background import run_in_background
@@ -29,7 +30,7 @@ PROGRAM_EXTENSIONS = (".exe", ".com", ".bat", ".cmd", ".lnk", ".ps1", ".msi", ".
 def program_icon(command: str) -> QIcon:
     """The program's own icon; nothing for a program on a network drive (asking would wait for the share)."""
     try:
-        if command and not is_network_path(command) and os.path.isabs(command):
+        if command and not is_network_path(command) and is_full_path(command):
             return QFileIconProvider().icon(QFileInfo(command))          # made when asked: not before the application exists
     except Exception:   # noqa: BLE001 -- an icon is a nicety
         pass

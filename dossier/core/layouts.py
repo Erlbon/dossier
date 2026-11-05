@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 from .columns import KEYS, LEGACY_KEYS, PROTECTED, newly_hidden
+from .platform import is_full_path
 
 SCOPES = ("only", "tree")
 MODES = ("details", "icons")
@@ -51,7 +52,7 @@ class Rule:
 
 def has_rules_for(path: str) -> bool:
     """Whether ``path`` is a real folder path a rule can apply to."""
-    return bool(path) and "://" not in path and os.path.isabs(path)
+    return bool(path) and "://" not in path and is_full_path(path)
 
 
 def key_of(path: str) -> str:

@@ -31,6 +31,12 @@ def has_scheme(path: str) -> bool:
 SERVER_SCHEMES = ("sftp://", "scp://", "webdav://", "ftp://", "opds://", "subsonic://", "gdrive://")
 
 
+def is_full_path(path: str) -> bool:
+    """``os.path.isabs``, but the same on every Python: before 3.12 a share root itself (``\\\\nas\\Media``, no backslash
+    after the share) was not absolute on Windows. Any path starting with two slashes there is a network or long path."""
+    return os.path.isabs(path) or (IS_WINDOWS and len(path) > 2 and path[0] in "\\/" and path[1] in "\\/")
+
+
 def is_server_path(path: str) -> bool:
     """True for a path on a server that is reached over the network (``sftp://user@host/dir``): no recycle bin, slow, may drop."""
     return path.startswith(SERVER_SCHEMES)

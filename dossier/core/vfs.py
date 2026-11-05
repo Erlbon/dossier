@@ -145,12 +145,16 @@ class LocalFileSystem(FileSystem):
         return os.path.dirname(path)
 
     def is_root(self, path: str) -> bool:
+        if sharing.machine_of(path):                 # \\machine: before 3.12 Python's normpath makes it \machine, below \
+            return True
         norm = os.path.normpath(path)
         return os.path.dirname(norm) == norm
 
     def parent(self, path: str) -> Optional[str]:
         if sharing.is_share_root(path):
             return sharing.machine_root(path)        # above a share of another computer: the list of its shares
+        if sharing.machine_of(path):
+            return None                              # a computer is the top (Python 3.10 would answer \ here)
         norm = os.path.normpath(path)
         above = os.path.dirname(norm)
         return above if above and above != norm else None

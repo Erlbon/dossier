@@ -3,9 +3,18 @@ import sys
 
 import pytest
 
-from dossier.core.platform import IS_WINDOWS, decode_name, path_key
+from dossier.core.platform import IS_WINDOWS, decode_name, is_full_path, path_key
 from dossier.core.selection import SelectionStore
 from dossier.core.vfs import LocalFileSystem, natural_key, sort_entries
+
+B = chr(92)
+
+
+@pytest.mark.skipif(not IS_WINDOWS, reason="network paths with backslashes are Windows paths")
+def test_a_share_root_is_a_full_path_on_every_python():
+    # Python 3.10's isabs says no to \\nas\Media (it wants a backslash after the share); 3.12 says yes. CI runs both.
+    assert is_full_path(B * 2 + "nas" + B + "Media") and is_full_path(B * 2 + "nas") and is_full_path("//nas/Media")
+    assert is_full_path("C:" + B + "x") and not is_full_path("C:x") and not is_full_path("x") and not is_full_path("")
 
 
 def test_natural_sort_and_folders_first(tmp_path):

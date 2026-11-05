@@ -10,7 +10,7 @@ import os
 from dataclasses import dataclass, field
 from typing import Iterable, Optional
 
-from .platform import IS_WINDOWS
+from .platform import IS_WINDOWS, is_full_path
 from .vfs import natural_key
 
 MAX_ITEMS = 500
@@ -127,7 +127,7 @@ def complete(text: str, pos: int, folder: str, *, path_dirs: Optional[Iterable[s
         cut = max(word.rfind("/"), word.rfind("\\") if IS_WINDOWS else -1)
         prefix, leaf = (word[:cut + 1], word[cut + 1:]) if cut >= 0 else ("", word)
         base = os.path.expanduser(prefix) if prefix.startswith("~") else prefix
-        where = base if os.path.isabs(base) else os.path.join(folder, base)
+        where = base if is_full_path(base) else os.path.join(folder, base)
         if prefix == "" and word.startswith("~"):
             prefix, leaf, where = "", word, folder
         for name, is_dir in _folder_names(where or folder):

@@ -13,6 +13,8 @@ import re
 from typing import Optional
 from urllib.parse import unquote, urlparse
 
+from .platform import is_full_path
+
 MAX_RENDER = 256 * 1024
 WEB = ("http", "https")
 _FENCE = re.compile(r"^(?P<mark>`{3,}|~{3,})[^\n]*\n.*?^(?P=mark)[ \t]*$", re.S | re.M)
@@ -87,7 +89,7 @@ def classify_link(url: str, base_dir: str = "") -> tuple:
     path = unquote(parsed.path)
     if not path:
         return "", ""
-    full = path if os.path.isabs(path) else os.path.join(base_dir, path)
+    full = path if is_full_path(path) else os.path.join(base_dir, path)
     return "file", os.path.normpath(full)
 
 
