@@ -326,6 +326,34 @@ def reconnect_session(c: Connection, password: str, known_hosts: str, askpass_fo
     return Session(c.authority(), link.client, read_only=c.read_only, home=home, scheme=c.protocol, commands=commands), link
 
 
+def end_link(link) -> None:
+    """End the ssh processes of ``link``: its own and that of its shell for commands. A process already gone is no error."""
+    for process in (getattr(link, "process", None), getattr(getattr(link, "commands", None), "process", None)):
+        try:
+            process.kill()
+        except (OSError, AttributeError):
+            pass
+
+
+def reconnect_saved(c: Connection, ssh_folder: str, links: dict):
+    """The one reconnect of the window and the assistant: a new Session for ``c`` from its saved login (``reconnect_session``), its link
+    kept in ``links`` under ``(protocol, authority)``, and the old link's processes ended (nothing is left running for the dead
+    connection). None when there is no ssh folder or the server refuses the login."""
+    if not ssh_folder:
+        return None
+    from . import servers
+    password = servers.get_password(c) if c.save_password else ""
+    made = reconnect_session(c, password, os.path.join(ssh_folder, "known_hosts"), ssh_folder)
+    if made is None:
+        return None
+    session, link = made
+    key = (c.protocol, c.authority())
+    old, links[key] = links.get(key), link
+    if old is not None and old is not link:
+        end_link(old)
+    return session
+
+
 def add_commands(c: Connection, link: Link, password: str, known_hosts: str, askpass_folder: str) -> None:
     """When the owner allows commands on ``c`` (card 34): give ``link`` a shell for them, as ``link.commands`` (an SCP connection is a
     shell already). A server with no shell for this account simply has none: the work then goes the ordinary way, over SFTP."""

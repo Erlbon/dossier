@@ -174,3 +174,64 @@ def test_with_verify_the_same_means_the_same_bytes(tmp_path):
     plan = plan_copy(fs, [str(tmp_path / "a" / "f.txt")], str(tmp_path / "b"))
     assert not skip_same(plan, fs).ops                                       # by size and time: the same, left out
     assert len(skip_same(plan, fs, by_content=True).ops) == 1                # by content: different, copied
+
+
+# the code review of 2026-11-05 ---------------------------------------------------------------------------------------------------
+def _clash(tmp_path, src_time, dst_time, data=(b"abc", b"abc")):
+    from dossier.core.ops import plan_copy
+    from dossier.core.vfs import LocalFileSystem
+    for side, d, t in (("a", data[0], src_time), ("b", data[1], dst_time)):
+        (tmp_path / side).mkdir(exist_ok=True)
+        (tmp_path / side / "f.txt").write_bytes(d)
+        os.utime(tmp_path / side / "f.txt", (1_700_000_000 + t, 1_700_000_000 + t))
+    fs = LocalFileSystem()
+    return plan_copy(fs, [str(tmp_path / "a" / "f.txt")], str(tmp_path / "b")), fs
+
+
+def test_skip_same_by_content_can_be_cancelled(tmp_path):
+    from dossier.core.ops import skip_same
+    from dossier.core.progress import Cancelled, CancelToken
+    plan, fs = _clash(tmp_path, 0, 0)
+    token = CancelToken()
+    token.cancel()
+    with pytest.raises(Cancelled):
+        skip_same(plan, fs, by_content=True, cancel=token)
+
+    def watch(n):                                                            # the planning job's Cancel, as the window hands it over
+        raise Cancelled()
+    watch.cancel = None
+    with pytest.raises(Cancelled):
+        skip_same(plan, fs, by_content=True, watch=watch)
+
+
+def test_the_window_hands_its_cancel_to_skip_same(world, monkeypatch):
+    from dossier.core import ops
+    from dossier.gui import transfer
+    win, dialogs, left, right, _t = world
+    (left / "a.txt").write_text("a")
+    (right / "a.txt").write_text("a")
+    listed(win, win.left, 2)
+    cursor_on(win.left, "a.txt")
+    seen = {}
+
+    def spy(plan, fs, by_content=False, cancel=None, watch=None):
+        seen.update(cancel=cancel, watch=watch)
+        return ops.skip_same(plan, fs, by_content, cancel, watch)
+    monkeypatch.setattr(transfer, "skip_same", spy)
+    copy_with(win, dialogs, skip_same=True, verify=True)
+    pump(win, lambda: seen)
+    assert seen["cancel"] is not None and seen["watch"] is not None
+
+
+def test_unknown_times_are_never_the_same(tmp_path):
+    from dataclasses import replace
+    from dossier.core.ops import skip_same
+    plan, fs = _clash(tmp_path, 0, 0, (b"abc", b"xyz"))
+    unknown = replace(plan, ops=tuple(replace(op, src_mtime=0.0, dst_mtime=0.0) for op in plan.ops))
+    assert len(skip_same(unknown, fs).ops) == 1                              # a server that gives no times: copied, not guessed
+
+
+def test_the_conflict_box_and_skip_same_agree_on_the_summer_time_hour(tmp_path):
+    from dossier.core.ops import looks_identical, skip_same
+    plan, fs = _clash(tmp_path, 0, 3600)
+    assert looks_identical(plan.ops[0]) and not skip_same(plan, fs).ops

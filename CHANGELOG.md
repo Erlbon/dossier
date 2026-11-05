@@ -2,6 +2,16 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-05#19 -- Code review fixes before the release
+
+- Reconnect (SFTP, SCP, FTP): a saved login the server refuses is tried once, not once per file, so a server that bans after a few
+  refused logins never bans this computer. A server disconnected while a job is reconnecting stays disconnected.
+- A reconnect ends the old connection's ssh processes and its shell for commands; nothing is left running. The window and the
+  assistant now share one reconnect (`sshlink.reconnect_saved`).
+- Skip what is already there and the same: Cancel now stops it, also while it compares contents with Verify on. A file whose time is
+  unknown is never taken as the same. The conflict box and this option now agree on what "identical" is (the summer-time hour included).
+- Export Log: a move on the same drive is no longer a "big job" by its size (it is a rename).
+
 ## 2026-11-05#18 -- Folder tree popup is an owned dialog; test fixes
 
 - Go > Folder Tree... now uses the shared OwnedDialog base like every other window dialog.

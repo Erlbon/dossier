@@ -95,7 +95,7 @@ class TransferMixin:
             plan = plan_copy(self.fs, sources, folder, watch=watch, make_dest=make, new_name=new_name, only=answer.only,
                              flatten=answer.flatten)
             if answer.skip_same:                                 # finish the job: only what is missing or changed (by content with Verify)
-                plan = skip_same(plan, self.fs, by_content=answer.verify)
+                plan = skip_same(plan, self.fs, by_content=answer.verify, cancel=getattr(watch, "cancel", None), watch=watch)
             return plan, folder
 
         self._plan_in_background(f"Preparing the {'move' if move else 'copy'}", build,

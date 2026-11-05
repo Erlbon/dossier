@@ -372,15 +372,7 @@ class ServersMixin:
         """A new Session for an SFTP or SCP server whose connection died mid-job (called from the job's thread): the saved login only,
         never a question. None when there is no saved connection or it would need one."""
         conn = servers.find(self.connections(), authority, scheme)
-        if conn is None:
-            return None
-        password = servers.get_password(conn) if conn.save_password else ""
-        made = sshlink.reconnect_session(conn, password, os.path.join(self.ssh_folder(), "known_hosts"), self.ssh_folder())
-        if made is None:
-            return None
-        session, link = made
-        self._links[(conn.protocol, conn.authority())] = link
-        return session
+        return None if conn is None else sshlink.reconnect_saved(conn, self.ssh_folder(), self._links)
 
     def server_fs(self, conn: servers.Connection):
         """The file system that holds the sessions of this kind of connection."""
@@ -734,11 +726,7 @@ class ServersMixin:
         """When the window closes: the ssh processes are ended at once (that also wakes any request waiting on them), and every
         connection is closed on a thread, so a server that stopped answering never keeps the window on the screen."""
         for link in list(self._links.values()):
-            for process in (getattr(link, "process", None), getattr(getattr(link, "commands", None), "process", None)):
-                try:
-                    process.kill()
-                except (OSError, AttributeError):
-                    pass
+            sshlink.end_link(link)
         for fs in (self.fs.sftp, self.fs.scp, self.fs.dav, self.fs.ftp, self.fs.opds, self.fs.subsonic, self.fs.gdrive):
             for authority in list(fs.sessions):
                 fs.drop(authority, wait=False)

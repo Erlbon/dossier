@@ -108,6 +108,8 @@ class SftpFileSystem(FileSystem):
         self.sessions[session.authority] = session
         if old is not None and old is not session:
             old.client.close()
+            if old.commands is not None and old.commands is not old.client:
+                old.commands.close()                             # the shell for commands on the server goes with it, as in drop
 
     def drop(self, authority: str, wait: bool = True) -> None:
         """Forget the connection to ``authority`` and close it. A request stuck on a dead server holds the client until its timeout
@@ -142,10 +144,11 @@ class SftpFileSystem(FileSystem):
         None (NotConnected: nothing to wait for)."""
         with self._reconnect_lock:
             current = self.sessions.get(authority)
-            if current is not None and current is not dead and current.alive:
-                return current
+            if current is not dead:                                # made again by another thread, or the owner disconnected: never undo that
+                return current if current is not None and current.alive else None
             fresh = self.reconnect(authority)
             if fresh is None:
+                self.drop(authority)                               # refused once is enough: no login per file (a server bans for that)
                 return None
             fresh.read_only = dead.read_only                       # the switch as the owner left it, even if changed since connecting
             self.add_session(fresh)

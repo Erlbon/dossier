@@ -277,7 +277,8 @@ class FtpClient:
             try:
                 self._ftp = self._new_session()
             except (LoginError, CertificateError):
-                raise                                                # refused: only the owner can answer that, nothing to wait for
+                self.closed = True                                   # refused: only the owner can answer that. Tried once, never per
+                raise                                                # file (a server bans an address after a few refused logins)
             except (OSError, *ftplib.all_errors) as e:
                 raise ConnectionResetError(f"the connection to the server was lost ({_error(e, '')})") from e     # a copy waits for it
         if time.monotonic() - self._used > KEEPALIVE:

@@ -45,3 +45,8 @@ def test_after_a_big_job_the_log_can_be_exported_and_nothing_is_written_before(w
     win.export_job_log()
     text = (tmp_path / "log.md").read_text(encoding="utf-8")
     assert text.startswith("# Copy") and text.count("| done |") == 3
+
+
+def test_a_move_on_the_same_drive_is_not_big_by_its_size():
+    move = Result([OpResult(Op(Kind.MOVE, "a", "b", size=2 ** 31), "done")])
+    assert not joblog.is_big(move, 0.1)

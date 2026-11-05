@@ -40,6 +40,7 @@ class OperationQueueMixin:
                 check(cancel)
                 count["n"] = n
                 progress(n, 0)
+            watch.cancel = cancel                          # for work that also reads files (skip-same by content) and stops mid-file
             return build(watch)
 
         run_in_background(self, self.cmd_runner, title, work, on_result=then, tracked=self._plans,

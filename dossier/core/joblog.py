@@ -17,7 +17,8 @@ BIG_SECONDS = 60.0              # or when it took this long
 
 
 def is_big(result: Result, seconds: float) -> bool:
-    copied = sum(r.op.size for r in result.results if r.op.kind in (Kind.COPY, Kind.MOVE) and not r.op.is_dir)
+    # bytes count only when copied: a move on the same drive is a rename, however big the file (a slow move counts by its time)
+    copied = sum(r.op.size for r in result.results if r.op.kind is Kind.COPY and not r.op.is_dir)
     return len(result.results) >= BIG_STEPS or copied >= BIG_BYTES or seconds >= BIG_SECONDS
 
 

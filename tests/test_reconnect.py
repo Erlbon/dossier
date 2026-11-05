@@ -50,6 +50,7 @@ def test_no_saved_login_means_not_connected_and_a_network_still_away_is_waited_f
 
     def away(authority):
         raise ConnectionResetError("the network is still away")
+    fs.add_session(Session(AUTH, _Dead(), read_only=False, scheme="scp"))     # the refusal above forgot the session
     fs.reconnect = away
     with pytest.raises(ConnectionResetError) as e:
         fs.stat(path)
@@ -118,3 +119,70 @@ class _Dead:
 
     def close(self):
         pass
+
+
+# the code review of 2026-11-05 ---------------------------------------------------------------------------------------------------
+def test_a_refused_login_is_tried_once_and_the_session_forgotten():
+    fs = SftpFileSystem("scp")
+    fs.add_session(Session(AUTH, _Dead(), read_only=False, scheme="scp"))
+    tries = []
+    fs.reconnect = lambda authority: tries.append(authority)                 # None: the saved login was refused
+    path = make_path(AUTH, "/x", "scp")
+    for _ in range(3):
+        with pytest.raises(NotConnected):
+            fs.stat(path)
+    assert tries == [AUTH] and AUTH not in fs.sessions                       # one refused login, not one per file (a ban waits for more)
+
+
+def test_a_refused_ftp_login_after_a_loss_is_not_tried_again(monkeypatch):
+    c = fc.FtpClient("127.0.0.1", 21, secure=False)
+    tries = []
+
+    def refused():
+        tries.append(1)
+        raise fc.LoginError(13, "530 Login incorrect")
+    monkeypatch.setattr(c, "_new_session", refused)
+    c._ftp = None
+    with pytest.raises(fc.LoginError):
+        c.listdir("/")
+    with pytest.raises(ConnectionError):
+        c.listdir("/")
+    assert tries == [1]
+
+
+def test_a_server_disconnected_while_a_job_reconnects_stays_disconnected():
+    fs = SftpFileSystem("scp")
+    dead = Session(AUTH, _Dead(), read_only=False, scheme="scp")
+    fs.add_session(dead)
+    tries = []
+    fs.reconnect = lambda authority: tries.append(authority) or Session(authority, _Dead(), scheme="scp")
+    fs.drop(AUTH)                                                            # the owner disconnects after the job saw the dead session
+    assert fs._reconnected(AUTH, dead) is None and tries == [] and AUTH not in fs.sessions
+
+
+def test_a_reconnect_ends_the_old_link_and_the_old_shell(monkeypatch):
+    conn = servers.Connection("NAS", "nas", "me", protocol="scp")
+    killed = []
+
+    class Proc:
+        def __init__(self, name):
+            self.name = name
+
+        def kill(self):
+            killed.append(self.name)
+
+    old = sshlink.Link.__new__(sshlink.Link)
+    old.process, old.commands = Proc("ssh"), type("C", (), {"process": Proc("shell")})()
+    links = {("scp", conn.authority()): old}
+    fresh = Session(conn.authority(), _Dead(), scheme="scp")
+    new_link = object()
+    monkeypatch.setattr(sshlink, "reconnect_session", lambda *a: (fresh, new_link))
+    assert sshlink.reconnect_saved(conn, "C:/ssh" if os.name == "nt" else "/ssh", links) is fresh
+    assert links[("scp", conn.authority())] is new_link and sorted(killed) == ["shell", "ssh"]
+
+    closed = []
+    fs = SftpFileSystem("scp")
+    shell = type("S", (), {"close": lambda self: closed.append("shell")})()
+    fs.add_session(Session(AUTH, _Dead(), scheme="scp", commands=shell))
+    fs.add_session(Session(AUTH, _Dead(), scheme="scp"))
+    assert closed == ["shell"]

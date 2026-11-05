@@ -157,10 +157,12 @@ class Plan:
 
 
 def looks_identical(op: "Op") -> bool:
-    """A file that is in the way and has the same size and (to the second, two for FAT) the same modified time as the
-    one being copied. Not proof of equal content, only a good reason to skip it."""
-    return (not op.is_dir and not op.dst_is_dir and op.dst_mtime > 0 and op.size == op.dst_size
-            and abs(op.src_mtime - op.dst_mtime) <= 2.0)
+    """A file that is in the way and has the same size and the same modified time as the one being copied, as Compare judges it
+    (two seconds for FAT, or exactly one hour off after a summer-time change). A time that is not known (0) is never the same. Not proof
+    of equal content, only a good reason to skip it; "Skip what is already there and the same" uses this too."""
+    from .compare import times_agree
+    return (not op.is_dir and not op.dst_is_dir and op.src_mtime > 0 and op.dst_mtime > 0 and op.size == op.dst_size
+            and times_agree(op.src_mtime, op.dst_mtime))
 
 
 @dataclass(frozen=True)
@@ -410,15 +412,20 @@ def _only_matching(fs: FileSystem, ops: list, wanted) -> list:
     return [op for op in ops if id(op) in keep or (op.kind is Kind.MKDIR and (not op.src or path_key(op.dst) in needed))]
 
 
-def skip_same(plan: Plan, fs: FileSystem, by_content: bool = False, cancel: Optional[CancelToken] = None) -> Plan:
+def skip_same(plan: Plan, fs: FileSystem, by_content: bool = False, cancel: Optional[CancelToken] = None, watch=None) -> Plan:
     """Copy plan step 5, "finish the job": leave out every file that is already at its destination and the same, so a second run after a
-    failed one copies only what is missing or changed, with no questions. The same means the same size and time (as Compare judges it,
-    with the summer-time hour), or with ``by_content`` (Verify on) the same bytes, which reads both files: call it on a thread."""
-    from .compare import same_content, times_agree
+    failed one copies only what is missing or changed, with no questions. The same means what the conflict box calls identical (size and
+    time, with the summer-time hour), or with ``by_content`` (Verify on) the same size and bytes, which reads both files: call it on a
+    thread, with the planning job's ``cancel`` and ``watch(n)`` so its Cancel stops the reading."""
+    from .compare import same_content
     keep, skipped = [], list(plan.skipped)
-    for op in plan.ops:
-        same = (op.kind is Kind.COPY and op.conflict and not op.dst_is_dir and op.dst_size == op.size
-                and (same_content(fs, op.src, op.dst, cancel) if by_content else times_agree(op.src_mtime, op.dst_mtime)))
+    for n, op in enumerate(plan.ops):
+        if watch is not None:
+            watch(n)
+        check(cancel)
+        same = (op.kind is Kind.COPY and bool(op.conflict)
+                and (not op.is_dir and not op.dst_is_dir and op.dst_size == op.size and same_content(fs, op.src, op.dst, cancel)
+                     if by_content else looks_identical(op)))
         if same:
             skipped.append(op.dst)
         else:

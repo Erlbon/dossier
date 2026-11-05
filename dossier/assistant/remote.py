@@ -37,16 +37,7 @@ class Remotes:
             conn = self._connection(config, scheme, authority)
         except RemoteError:
             return None
-        folder = config.ssh_folder
-        if not folder:
-            return None
-        password = servers.get_password(conn) if conn.save_password else ""
-        made = sshlink.reconnect_session(conn, password, os.path.join(folder, "known_hosts"), folder)
-        if made is None:
-            return None
-        session, link = made
-        self._links[(scheme, authority)] = link
-        return session
+        return sshlink.reconnect_saved(conn, config.ssh_folder, self._links)
 
     def ensure(self, fs, config, path: str) -> None:
         """Connect the server of ``path`` (already checked against the listed roots) if it is not connected yet."""
