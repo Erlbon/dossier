@@ -607,6 +607,10 @@ class ExecOptions:
     small_limit: int = SMALL_FILE_LIMIT
     retries: int = 3                      # extra tries for a locked file (the virus scanner has it for a moment)
     retry_delay: float = 0.25             # first wait; doubles each try
+    network_retries: int = 20             # extra tries when the network or the server went away (robocopy /R); about nine minutes
+    network_wait: float = 30.0            # the longest wait between them, in seconds (robocopy /W); the first ones are shorter
+    on_wait: Optional[Callable] = None    # (op, try number, of how many, seconds, error text): a network wait has begun
+    folder_times: bool = True             # a folder the copy made gets the modified time of the folder it copies (robocopy /DCOPY:T)
     limit_bps: Optional[int] = None       # copy speed limit in bytes per second, for all workers together
     verify: bool = False                  # read every copy back and compare it with the original (C6)
     flush: Optional[bool] = None          # push the data to the device at the end: None = only for removable and network targets
@@ -631,6 +635,28 @@ def is_transient(error: OSError) -> bool:
         return False
     return (isinstance(error, PermissionError) or getattr(error, "winerror", None) in _BUSY_WINERRORS
             or error.errno in _BUSY_ERRNOS)
+
+
+_NET_WINERRORS = (53, 59, 64, 121, 1231, 1236, 2250)   # network path not found, unexpected network error, the network name is no longer
+#                                                      # available, semaphore timeout, network unreachable, connection aborted,
+#                                                      # the network connection does not exist
+_NET_ERRNOS = tuple(getattr(errno, n) for n in ("ETIMEDOUT", "ECONNRESET", "ECONNABORTED", "EHOSTUNREACH", "ENETUNREACH", "ENETDOWN",
+                                                "ENETRESET", "EPIPE", "EHOSTDOWN") if hasattr(errno, n))
+
+
+def is_network_error(error: OSError) -> bool:
+    """A failure of the network or the server, not of the file: worth waiting for, longer than for a locked file. A server session
+    that is gone for good (``NotConnected``: nobody is logging in again) is not."""
+    if type(error).__name__ == "NotConnected":
+        return False
+    if isinstance(error, (TimeoutError, ConnectionResetError, ConnectionAbortedError, BrokenPipeError)):
+        return True
+    return getattr(error, "winerror", None) in _NET_WINERRORS or error.errno in _NET_ERRNOS
+
+
+def network_wait(tries: int, longest: float) -> float:
+    """The wait before network retry ``tries`` (0 for the first): 5, 10, 20 seconds and so on, never longer than ``longest``."""
+    return min(longest, 5.0 * (2 ** tries))
 
 
 def target_kind(plan: Plan) -> str:
@@ -719,6 +745,9 @@ def execute(
     ask_lock = threading.Lock()                      # so is the user
     stop = threading.Event()                         # set when the user chose to abort
     started, started_lock = [0], threading.Lock()
+    network_down = threading.Event()                 # set when the network stayed away through every wait: later files fail at once
+    made_folders: list = []                          # folders this run made, to get their originals' times at the end
+    made_lock = threading.Lock()
     visible_steps = sum(1 for op in plan.ops if op.kind is not Kind.MKDIR)
     limit = SpeedLimit(opts.limit_bps) if opts.limit_bps else None
     pause = time.sleep if opts.retry_delay else (lambda _s: None)
@@ -747,7 +776,8 @@ def execute(
         unit = size_unit * (2 if opts.verify and op.kind is Kind.COPY else 1)
         sub = (lambda d, _t: done.partial(i, min(d, size_unit))) if progress else None
         sub_verify = (lambda d: done.partial(i, size_unit + min(d, size_unit))) if progress else None
-        attempts, tries = 0, 0
+        attempts, tries, net_tries = 0, 0, 0
+        made_here = op.kind is Kind.MKDIR and opts.folder_times and bool(op.src) and _stat(fs, op.dst) is None
         while True:
             steps: list = []
             attempts += 1
@@ -759,11 +789,29 @@ def execute(
                             sub_verify if opts.verify else False, tags_lost, flush=flush_moves)
                 outcome = OpResult(op, "done", attempts=attempts)
                 done.finish(i, unit)
+                network_down.clear()                 # something worked: the network is back
+                if made_here:
+                    with made_lock:
+                        made_folders.append(op)
                 break
             except Cancelled:
                 outcome = OpResult(op, "cancelled", attempts=attempts)
                 break
             except OSError as e:
+                if is_network_error(e) and net_tries < opts.network_retries and not network_down.is_set():
+                    seconds = network_wait(net_tries, opts.network_wait)
+                    if opts.on_wait is not None:
+                        opts.on_wait(op, net_tries + 1, opts.network_retries, seconds, str(e))
+                    try:
+                        wait_to_retry(seconds)
+                    except Cancelled:
+                        outcome = OpResult(op, "cancelled", attempts=attempts)
+                        break
+                    net_tries += 1
+                    if net_tries >= opts.network_retries:
+                        network_down.set()           # this was the last wait: after it, nobody else waits all over again
+                    done.partial(i, 0)
+                    continue
                 if is_transient(e) and tries < opts.retries:
                     try:
                         wait_to_retry(opts.retry_delay * (2 ** tries))
@@ -807,6 +855,7 @@ def execute(
                 run_one(i, op)
         for i, op in big + others:
             run_one(i, op)
+        _set_folder_times(fs, made_folders)
         if want_flush and not stop.is_set() and not (cancel is not None and cancel.cancelled):
             _flush_pass(outcomes, done, flush_share, cancel)
     finally:
@@ -827,6 +876,16 @@ def execute(
             if undo_log is not None:
                 undo_log.push(result.action)
     return result
+
+
+def _set_folder_times(fs: FileSystem, folders: list) -> None:
+    """Give each folder the copy made the modified time of the folder it copies. Writing into a folder changes its time, so this
+    comes after everything else, deepest folder first. A time that cannot be set is left (a folder's time is never worth a failure)."""
+    for op in sorted(folders, key=lambda o: len(o.dst), reverse=True):
+        try:
+            fs.set_mtime(op.dst, fs.stat(op.src).mtime)
+        except Exception:   # noqa: BLE001 -- see above
+            pass
 
 
 def _flush_pass(outcomes: dict, done: _Progress, share: int, cancel) -> None:

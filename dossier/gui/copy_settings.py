@@ -9,7 +9,8 @@ from PyQt6.QtWidgets import (QHBoxLayout, QCheckBox, QComboBox, QDialog, QDialog
                              QPushButton, QSpinBox, QVBoxLayout)
 
 DEFAULTS = {"limit_mb": 0.0, "verify": False, "ask_on_error": False, "retries": 3, "retry_delay": 0.25, "workers": 0,
-            "native": True, "flush": "auto", "ask_on_drop": False, "remember_queue": False}
+            "native": True, "flush": "auto", "ask_on_drop": False, "remember_queue": False, "network_retries": 20, "network_wait": 30.0,
+            "folder_times": True}
 from .owned_dialog import OwnedDialog
 FLUSH_CHOICES = (("Only for removable and network drives", "auto"), ("Always", "always"), ("Never", "never"))
 
@@ -34,7 +35,9 @@ def read_settings(settings) -> dict:
             "retries": _number(g("retries"), 3, 0, 20, int), "retry_delay": _number(g("retry_delay"), 0.25, 0.0, 30.0),
             "workers": _number(g("workers"), 0, 0, 32, int), "native": _flag(g("native"), True),
             "flush": flush if flush in ("auto", "always", "never") else "auto", "ask_on_drop": _flag(g("ask_on_drop"), False),
-            "remember_queue": _flag(g("remember_queue"), False)}
+            "remember_queue": _flag(g("remember_queue"), False),
+            "network_retries": _number(g("network_retries"), 20, 0, 1000, int), "network_wait": _number(g("network_wait"), 30.0, 1.0, 600.0),
+            "folder_times": _flag(g("folder_times"), True)}
 
 
 def write_settings(settings, values: dict) -> None:
@@ -76,8 +79,11 @@ class CopySettingsDialog(OwnedDialog):
         for label, key in FLUSH_CHOICES:
             self.flush.addItem(label, key)
         self.flush.setCurrentIndex(max(0, self.flush.findData(values["flush"])))
+        self.folder_times = QCheckBox("Give the folders a copy makes the times of the folders they copy")
+        self.folder_times.setChecked(values["folder_times"])
         form.addRow(self.verify)
         form.addRow("Push the data to the drive at the end", self.flush)
+        form.addRow(self.folder_times)
         layout.addWidget(safe)
 
         problems = QGroupBox("When a file cannot be copied")
@@ -92,8 +98,18 @@ class CopySettingsDialog(OwnedDialog):
         self.retry_delay.setValue(values["retry_delay"])
         self.ask = QCheckBox("Ask me what to do (try again, skip, skip all, stop) instead of skipping it")
         self.ask.setChecked(values["ask_on_error"])
+        self.network_retries = QSpinBox()
+        self.network_retries.setRange(0, 1000)
+        self.network_retries.setValue(values["network_retries"])
+        self.network_wait = QDoubleSpinBox()
+        self.network_wait.setRange(1.0, 600.0)
+        self.network_wait.setDecimals(0)
+        self.network_wait.setSuffix(" s")
+        self.network_wait.setValue(values["network_wait"])
         form.addRow("Extra tries for a file another program holds", self.retries)
         form.addRow("Wait before the first retry (doubles each time)", self.retry_delay)
+        form.addRow("Extra tries when the network or the server goes away", self.network_retries)
+        form.addRow("Longest wait between them (5 s, 10 s, 20 s... up to this)", self.network_wait)
         form.addRow(self.ask)
         layout.addWidget(problems)
 
@@ -139,7 +155,9 @@ class CopySettingsDialog(OwnedDialog):
         return {"limit_mb": float(self.limit.value()), "verify": self.verify.isChecked(), "ask_on_error": self.ask.isChecked(),
                 "retries": int(self.retries.value()), "retry_delay": float(self.retry_delay.value()),
                 "workers": int(self.workers.value()), "native": self.native.isChecked(), "flush": self.flush.currentData(),
-                "ask_on_drop": self.ask_drop.isChecked(), "remember_queue": self.remember.isChecked()}
+                "ask_on_drop": self.ask_drop.isChecked(), "remember_queue": self.remember.isChecked(),
+                "network_retries": int(self.network_retries.value()), "network_wait": float(self.network_wait.value()),
+                "folder_times": self.folder_times.isChecked()}
 
 
 class CopySettingsMixin:

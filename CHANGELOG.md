@@ -2,6 +2,12 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-05#02 -- Copies wait for the network, continue a big file where it stopped, and give folders their times (docs/copy-robustness-plan.md, steps 1 to 3)
+
+- **Waiting for the network** (`ops.is_network_error`, `ExecOptions.network_retries` and `network_wait`): a dropped SMB session, a timeout, an unreachable host or a reset connection is no longer a failed file at once. The copy waits 5, 10, 20, then 30 seconds between tries, 20 tries by default (about nine minutes, robocopy's /R and /W), and the progress box says it is waiting. Locked files keep their own short retries. When the network stays away through every try, the files after it fail at once instead of each waiting nine minutes again; the next file that works ends that. A pause or cancel still stops a wait at once. Settings > Copy and Move has the two numbers.
+- **A big file continues where it stopped** (`transfer.copy_file`, 64 MB and up, between two paths of this computer, network drives included): a copy that breaks off keeps its `name.dossier-part` and a small note beside it (`.dossier-part.json`: the original's path, size and time). The next try, a retry, a restart or a second run, goes back 4 MB, checks the 1 MB before that against the original, and goes on from there. A changed original, a missing note or a part that does not match starts over. A cancel still removes everything.
+- **Folder times** (`ExecOptions.folder_times`, on by default, robocopy's /DCOPY:T): the folders a copy makes get the modified times of the folders they copy, set at the end, deepest first.
+
 ## 2026-11-05#01 -- The menus restructured after the menu review of 2026-11-05
 
 The menus had drifted since the layout of 2026-10-21: Tools grew from 12 to 23 entries, quarantine was in four menus, the right-click menu spelled commands differently and showed some keys wrong. Every key stays as it was.

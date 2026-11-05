@@ -12,7 +12,7 @@ import uuid
 from typing import Callable, Optional
 
 from . import fastcopy
-from .platform import IS_WINDOWS, has_scheme
+from .platform import IS_WINDOWS, has_scheme, longpath
 from .progress import CancelToken, ProgressFn, check
 from .vfs import FileSystem, NotWritable
 
@@ -173,6 +173,27 @@ def copy_file(
     total = info.size
     part = side_name(dst_fs, dst, PART_SUFFIX)
     done = 0
+    resumable = total >= RESUME_MIN and part == dst + PART_SUFFIX and _plain_local(src_fs, src) and _plain_local(dst_fs, dst)
+    if resumable:
+        try:
+            _copy_resumable(src, part, info, progress, cancel, chunk_size, throttle)
+        except OSError:
+            raise                                      # the part and its note stay: the next try goes on from there
+        except BaseException:
+            _drop_part(part)                           # a cancel (or a bug) removes it, as for any copy
+            raise
+        try:
+            _check_whole(os.path.getsize(longpath(part)), total, src)
+            copy_mode(src, part)
+            if check_part is not None:
+                check_part(part)
+            _finish(dst_fs, part, dst, info, overwrite, cancel, swap)
+        except BaseException:
+            _drop_part(part)
+            raise
+        _drop_note(part)
+        carry_tags(src_fs, src, dst_fs, dst, tags_lost)
+        return
     try:
         if native and throttle is None and total >= fastcopy.FAST_MIN and _plain_local(src_fs, src) and _plain_local(dst_fs, dst):
             if fastcopy.fast_copy(src, part, total, progress, cancel):       # the system's own copy, in the kernel
@@ -209,6 +230,96 @@ def copy_file(
         except OSError:
             pass
         raise
+
+
+RESUME_MIN = 64 * 1024 * 1024       # a file at least this big continues where an interrupted copy stopped
+RESUME_BACK = 4 * 1024 * 1024       # what was written last may not have reached the target: go back this far and write it again
+RESUME_CHECK = 1024 * 1024          # and compare this much before that point with the original first
+NOTE_SUFFIX = ".json"
+
+
+def _note_path(part: str) -> str:
+    return part + NOTE_SUFFIX
+
+
+def _drop_note(part: str) -> None:
+    try:
+        os.remove(longpath(_note_path(part)))
+    except OSError:
+        pass
+
+
+def _drop_part(part: str) -> None:
+    for p in (part, _note_path(part)):
+        try:
+            os.remove(longpath(p))
+        except OSError:
+            pass
+
+
+def _resume_from(src: str, part: str, info) -> int:
+    """Where a copy into ``part`` can go on: 0 to start over. The note beside the part (written when the copy began, while the
+    target could still be reached) must name the same original, with the same size and time; the part is cut back a little
+    (``RESUME_BACK``), and the stretch before that point must match the original, or nothing of it is trusted."""
+    import json
+    try:
+        with open(longpath(_note_path(part)), encoding="utf-8") as f:
+            note = json.load(f)
+        have = os.path.getsize(longpath(part))
+    except (OSError, ValueError):
+        return 0
+    if not isinstance(note, dict) or note.get("source") != os.path.abspath(src) or note.get("size") != info.size \
+            or abs(float(note.get("mtime", 0)) - info.mtime) > 1:
+        return 0
+    good = min(have, info.size) - RESUME_BACK
+    if good <= RESUME_CHECK:
+        return 0
+    try:
+        with open(longpath(src), "rb") as a, open(longpath(part), "rb") as b:
+            a.seek(good - RESUME_CHECK)
+            b.seek(good - RESUME_CHECK)
+            if a.read(RESUME_CHECK) != b.read(RESUME_CHECK):
+                return 0
+    except OSError:
+        return 0
+    return good
+
+
+def _copy_resumable(src: str, part: str, info, progress, cancel, chunk_size: int, throttle) -> None:
+    """Copy a big local file into ``part``, going on from an earlier interrupted copy when its part is still there and sound.
+    The system's own copy cannot continue a part, so this is the plain loop; it is not slower over a network."""
+    import json
+    start = _resume_from(src, part, info)
+    if start == 0:
+        try:
+            with open(longpath(_note_path(part)), "w", encoding="utf-8") as f:
+                json.dump({"source": os.path.abspath(src), "size": info.size, "mtime": info.mtime}, f)
+        except OSError:
+            pass                                       # no note: this copy simply cannot be continued later
+    done = start
+    with open(longpath(src), "rb") as r, open(longpath(part), "r+b" if start else "wb") as w:
+        if start:
+            r.seek(start)
+            w.seek(start)
+            w.truncate()
+            if progress:
+                progress(done, info.size)
+        while True:
+            check(cancel)
+            chunk = r.read(chunk_size)
+            if not chunk:
+                break
+            w.write(chunk)
+            done += len(chunk)
+            if throttle is not None:
+                throttle.wait(len(chunk), cancel)
+            if progress:
+                progress(done, info.size)
+
+
+def resumed_part(dst: str) -> bool:
+    """Whether a copy to ``dst`` left a part that a next try can continue (for tests and the Health window)."""
+    return os.path.exists(longpath(dst + PART_SUFFIX)) and os.path.exists(longpath(_note_path(dst + PART_SUFFIX)))
 
 
 def _plain_local(fs: FileSystem, path: str) -> bool:
