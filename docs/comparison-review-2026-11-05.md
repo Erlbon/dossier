@@ -191,6 +191,15 @@ Worth knowing: the tree and Quick View, which you answered Later, are both thing
 - **Why:** 3.3-3.7 seconds before Python has even printed the version, against instant for TC and Far. It is the first thing any new user notices.
 - **Where:** `dossier.spec` and `installer\dossier.iss` (the build), `dossier/__main__.py` and `gui/app.py` (what is imported at start).
 - **Effort:** large. **Recommendation:** Yes.
+- **Measured (build 2026-11-05#13, `tools/time_startup.py`, start of the process to a window that can be typed in, offscreen):**
+
+  | How it starts | first start | then, median of 5 |
+  |---|---:|---:|
+  | from the source | 1.23 s | 1.41 s |
+  | one-file exe (what releases ship today) | 3.83 s | 3.38 s |
+  | one-folder exe (unpacked, 140 MB in a folder) | 2.21 s | 1.08 s |
+
+  **Most of the 3.4 s is the one-file exe unpacking itself into a temporary folder at every start.** The one-folder build starts in about a second, as fast as the source. Of that second, importing the window's modules is about 0.7 s (the update check alone pulls in `urllib` and `http`, 0.1 s); later imports can cut more, but the build is the big step. The catch: the installer would then install the folder, and Help > Check for Updates swaps only `dossier.exe`, so an installed copy needs another way to update (run the new installer silently). That is the owner's call.
 
 ### 3. Core before new areas
 - **What:** no new feature area until the functionality review's Yes cards are built and a release has run for a week of real use. New areas here means new protocols, new checkers, new viewers and new kinds of tags. The Yes cards include F5 to any folder, F4 with another editor or on a server, tabs, Unpack of many archives, and the small ones. Fixes and those cards go on as normal.
@@ -202,6 +211,20 @@ Worth knowing: the tree and Quick View, which you answered Later, are both thing
 - **Why:** this review cannot say whether Dossier is slow or fast on big folders, because it was never measured. A commander that stalls on a big folder loses users as surely as one that loses files.
 - **Where:** a script in `tools\` (scratch folders in `C:\Temp\Claude`), and the slowness log for the window.
 - **Effort:** medium. **Recommendation:** Yes.
+- **Measured (build 2026-11-05#13, `tools/time_big_folders.py`, the owner's laptop, local SSD, Defender on; files of 1 byte to 2 KB):**
+
+  | Step | 10,000 files | 100,000 files |
+  |---|---:|---:|
+  | list the folder (on a thread) | 0.08 s | 1.04 s |
+  | sort by name, folders first | 0.01 s | 0.16 s |
+  | show it in the list | 0.01 s | 0.14 s |
+  | sort the list by size (window thread) | 0.02 s | 0.31 s |
+  | sort the list by date (window thread) | 0.04 s | 0.64 s |
+  | mark every file / invert the marks | 0.01 s | 0.09 s / 0.12 s |
+  | plan the copy | 0.31 s | 3.25 s |
+  | copy it | 18.8 s | 178.9 s |
+
+  Listing, sorting and marking scale well. Two things to look at: **sorting 100,000 by date takes 0.6 s on the window's thread** (a stall you can feel), and **copying small files runs at about 550 a second**, which is likely slower than Explorer for many small files (the copy goes one file at a time through Python's file calls; the virus scanner counts too). Explorer, Total Commander and Double Commander were not timed yet: run the script with `--keep` and time them on the same folders by hand. Not timed on the NAS yet either: `--where \\nas\share\dossier-timing --sizes 10000`.
 
 ### 5. No plugins: build features in
 - **What:** Dossier gets no plugin system, neither its own nor TC's. A format or a source of files that is worth having is built in (`core/vfs.py` is one interface for every source), with tests, in the normal menus and settings. Spec A7 (a plug-in interface for file systems) and the plug-in part of V9 are dropped; V9's mapping of a file type to a program stays (functionality review cards 2 and 3).
