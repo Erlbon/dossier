@@ -91,6 +91,19 @@ def test_the_build_number_is_in_the_status_line_and_in_the_about_box(world):
     assert "Dossier" in title and f"Build {version.APP_VERSION}" in text and version.APP_REPO_URL in text
 
 
+def test_the_about_box_address_is_a_link_that_opens_in_the_browser(world):
+    from PyQt6.QtWidgets import QLabel, QMessageBox
+    win, dialogs, *_ = world
+    win.about()
+    title, text = dialogs.infos[-1]
+    assert f'<a href="{version.APP_REPO_URL}">' in text
+    # the real info box, built the way Dialogs.info builds it: its label renders the link and opens it in the browser
+    real = QMessageBox(QMessageBox.Icon.Information, title, text, QMessageBox.StandardButton.Ok, win)
+    shown = [label for label in real.findChildren(QLabel) if version.APP_REPO_URL in label.text()]
+    assert shown and shown[0].openExternalLinks()
+    real.deleteLater()
+
+
 def test_the_help_menu_has_about(world):
     win, *_ = world
     menus = {a.text().replace("&", ""): a.menu() for a in win.menuBar().actions()}

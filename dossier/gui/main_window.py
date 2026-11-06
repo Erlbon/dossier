@@ -102,6 +102,15 @@ CLOSE_WAIT = 5.0     # seconds a closing window waits for a cancelled copy to st
 EXTERNAL = "external"  # what F4's reading step hands over when the chosen editor program is to open the file
 
 
+def about_html() -> str:
+    """The About box text. Rich text, so the project address is a link the message box opens in the browser."""
+    return (f"<p>{APP_NAME} {RELEASE}, a dual-pane file manager<br>Build {APP_VERSION}</p>"
+            f'<p><a href="{APP_REPO_URL}">{APP_REPO_URL}</a></p>'
+            "<p>Free software under the GPL, version 3 or later.<br>"
+            "Made with Python and Qt (PyQt6), the QScintilla editor component, and the Tabler and Lucide icon sets.<br>"
+            "The full credits are in CREDITS.md.</p>")
+
+
 class MainWindow(FolderTreeMixin, FileColorsMixin, TransferMixin, RemoteEditMixin, FrostMixin, GlassViewMixin, KeysMixin, AutoRefreshMixin, MetadataEditMixin, HealthMixin, QuarantineMixin, NewFromContentMixin, TabSetsMixin, CommandCompletionMixin, DatesLinksMixin, ViewModesMixin, ToolsBarMixin, ContextMenuMixin, DragDropMixin, LookMixin, ZipEditMixin, ArchiveCommandsMixin, CopySettingsMixin, AssistantMixin, OpenFilesMixin, MenusMixin, WheelMixin, ToolsBarPlaceMixin, TailnetMixin, CompareFoldersMixin, ServersMixin, DuplicatesMixin, FolderLayoutsMixin, QueueResumeMixin, ColumnsMixin, PropertiesMixin, SharingMixin, MountMixin, ChecksumMixin, MarksAndNotesMixin, SearchCommandMixin, BatchRenameMixin, OperationQueueMixin, StallLogMixin, GoingPlacesMixin, FolderSizesMixin, UnpackMixin, QMainWindow):
     def __init__(self, fs: Optional[FileSystem] = None, *, settings_path: Optional[str] = None, start=(None, None),
                  dialogs=None, trasher=None, terminal_launcher=None, which=None) -> None:
@@ -1193,15 +1202,7 @@ class MainWindow(FolderTreeMixin, FileColorsMixin, TransferMixin, RemoteEditMixi
             self.split.setSizes([int(s) for s in sizes])
 
     def about(self) -> None:
-        self.dialogs.info(f"About {APP_NAME}", chr(10).join([
-            f"{APP_NAME} {RELEASE}, a dual-pane file manager",
-            f"Build {APP_VERSION}",
-            "",
-            APP_REPO_URL,
-            "",
-            "Free software under the GPL, version 3 or later.",
-            "Made with Python and Qt (PyQt6), the QScintilla editor component, and the Tabler and Lucide icon sets.",
-            "The full credits are in CREDITS.md."]))
+        self.dialogs.info(f"About {APP_NAME}", about_html())
 
     def closeEvent(self, event) -> None:
         self.thumbs.shutdown()                       # the thumbnail threads end before the window does

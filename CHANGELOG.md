@@ -2,6 +2,12 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-06#07 -- The address in Help > About is a link
+
+- The project's GitHub address in Help > About Dossier opens in your browser when clicked, instead of being plain text
+  (owner, 6 Nov: every URL in Help/About and such is a clickable link). The text is rich text now, so the message box
+  renders the link.
+
 ## 2026-11-06#06 -- The copy box: a bar for the file, a bar for the whole job, and Pause (option R, after TeraCopy)
 
 - **This file:** while a big file (over 8 MB) is copied, the box shows a bar for it with its own bytes, speed and time left. Big
