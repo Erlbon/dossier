@@ -2,7 +2,7 @@
 
 * zip      the standard library, always there;
 * 7z       the ``py7zr`` package when it is installed (``pip install dossier[archives]``);
-* the rest 7-Zip's command line (``7z``, ``7zz``, ``7za``) when it is on the PATH or in its usual folder:
+* the rest 7-Zip's command line (``7z``, ``7zz``, ``7za``), or NanaZip's (``NanaZipC``, ``K7C``), on the PATH or in its usual folder:
            RAR, CAB, ISO, TAR, GZ, BZ2, XZ, ARJ, LZH and more. This is also the fallback for 7z.
 
 An archive no reader can open is not an error: ``backend_for`` returns None and ``missing_reader`` says what
@@ -180,16 +180,28 @@ class SevenZipBackend:
 
 
 # everything else through 7-Zip's command line ------------------------------------------------------------
-_SEVEN_ZIP_NAMES = ("7z", "7zz", "7za", "7zr")
-_SEVEN_ZIP_FOLDERS = (r"C:\Program Files\7-Zip", r"C:\Program Files (x86)\7-Zip")
+# 7-Zip's own names, then NanaZip's (a 7-Zip fork from the Microsoft Store, 2026-11-06): its command line is NanaZipC.exe, K7C.exe
+# and 7z.exe, but the 7z.exe alias can be switched off (Settings > Apps > App execution aliases) and the portable edition has none.
+_SEVEN_ZIP_NAMES = ("7z", "7zz", "7za", "7zr", "NanaZipC", "K7C")
+_PROGRAM_FOLDERS = (r"C:\Program Files\7-Zip", r"C:\Program Files (x86)\7-Zip")
+
+
+def _seven_zip_folders() -> list:
+    """Where 7-Zip installs itself, and the folder of the Store's app aliases (NanaZip's), which may be missing from the PATH."""
+    folders = list(_PROGRAM_FOLDERS)
+    local = os.environ.get("LOCALAPPDATA", "")
+    if IS_WINDOWS and local:
+        folders.append(os.path.join(local, "Microsoft", "WindowsApps"))
+    return folders
 
 
 def find_seven_zip() -> Optional[str]:
+    """7-Zip's or NanaZip's command-line program, or None."""
     for name in _SEVEN_ZIP_NAMES:
         found = shutil.which(name)
         if found:
             return found
-    for folder in _SEVEN_ZIP_FOLDERS:
+    for folder in _seven_zip_folders():
         for name in _SEVEN_ZIP_NAMES:
             candidate = os.path.join(folder, name + ".exe")
             if os.path.isfile(candidate):
@@ -352,8 +364,10 @@ def missing_reader(path: str) -> str:
         return ""
     name = os.path.basename(path)
     if kind == "7z":
-        return f"{name} is a 7z archive. Install the py7zr package (pip install py7zr) or 7-Zip to open it as a folder."
-    return f"{name} is an archive Dossier can open with 7-Zip, which was not found. Install 7-Zip (7-zip.org) to open it as a folder."
+        return (f"{name} is a 7z archive. Install 7-Zip (7-zip.org) or NanaZip (Microsoft Store) to open it as a folder; from a source "
+                "checkout, the py7zr package (pip install py7zr) does it too.")
+    return (f"{name} is an archive Dossier can open with 7-Zip or NanaZip, and neither was found. Install 7-Zip (7-zip.org) or NanaZip "
+            "(Microsoft Store) to open it as a folder.")
 
 
 def opens_by_name(path: str) -> bool:

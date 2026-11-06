@@ -97,6 +97,7 @@ def test_without_any_reader_the_archive_is_not_openable_and_the_message_says_wha
     assert archives.backend_for(str(sevenz)) is None and not zipfs.is_archive(str(sevenz))
     assert "py7zr" in archives.missing_reader(str(sevenz)) and "7-Zip" in archives.missing_reader(str(sevenz))
     assert "7-Zip" in archives.missing_reader(str(rar)) and "py7zr" not in archives.missing_reader(str(rar))
+    assert "NanaZip" in archives.missing_reader(str(sevenz)) and "NanaZip" in archives.missing_reader(str(rar))
     (tmp_path / "plain.txt").write_text("x")
     assert archives.missing_reader(str(tmp_path / "plain.txt")) == ""
     with pytest.raises(OSError, match="7-Zip"):
@@ -274,3 +275,27 @@ def test_enter_on_an_archive_nobody_can_read_says_what_helps_and_does_not_crash(
         assert "7-Zip" in win.status.text() and len(opened) == 1 and not win.left.path.startswith("zip://")
     finally:
         win.close()
+
+
+# NanaZip (2026-11-06): a 7-Zip fork from the Store, found by none of 7-Zip's names when its "7z" alias is off -----------------------
+def test_nanazip_is_found_by_its_own_command_names(monkeypatch):
+    for name in ("NanaZipC", "K7C"):
+        monkeypatch.setattr(archives.shutil, "which", lambda n, want=name: f"C:/Apps/{want}.exe" if n == want else None)
+        monkeypatch.setattr(archives, "_seven_zip_folders", lambda: [])
+        assert archives.find_seven_zip() == f"C:/Apps/{name}.exe"
+
+
+def test_nanazip_is_found_in_the_store_alias_folder_even_off_the_path(monkeypatch, tmp_path):
+    aliases = tmp_path / "Microsoft" / "WindowsApps"
+    aliases.mkdir(parents=True)
+    (aliases / "NanaZipC.exe").write_bytes(b"")                  # an app execution alias is an empty file to Python
+    monkeypatch.setattr(archives.shutil, "which", lambda n: None)
+    monkeypatch.setattr(archives, "_PROGRAM_FOLDERS", ())         # this computer may have a real 7-Zip there
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    assert archives.find_seven_zip() == str(aliases / "NanaZipC.exe")
+
+
+def test_the_exe_carries_its_own_7z_reader():
+    spec = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "dossier.spec"), encoding="utf-8").read()
+    excludes = spec.split("excludes=", 1)[1].split("]", 1)[0]
+    assert "py7zr" not in excludes                               # with it left out, the exe opened no 7z without 7-Zip installed

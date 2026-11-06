@@ -58,7 +58,7 @@ def test_a_picture_on_the_clipboard_becomes_a_png_that_opens_again(world):
     put_on_clipboard(image=picture())
     d.texts.append("shot")
     win.paste_as_new_file()
-    wait(lambda: (left / "shot.png").exists())
+    wait(lambda: not QImage(str(left / "shot.png")).isNull())               # written, not only made (the file appears empty first)
     back = QImage(str(left / "shot.png"))
     assert (back.width(), back.height()) == (6, 4) and back.pixelColor(0, 0) == QColor("#336699")
 
@@ -69,7 +69,7 @@ def test_the_extension_picks_the_format_and_a_taken_name_is_not_overwritten(worl
     put_on_clipboard(image=picture())
     d.texts.append("pic.jpg")
     win.paste_as_new_file()
-    wait(lambda: (left / "pic (2).jpg").exists())
+    wait(lambda: (left / "pic (2).jpg").exists() and (left / "pic (2).jpg").stat().st_size > 0)
     assert (left / "pic.jpg").read_text() == "mine"
     assert (left / "pic (2).jpg").read_bytes()[:2] == b"\xff\xd8"          # a JPEG, because the name said so
 

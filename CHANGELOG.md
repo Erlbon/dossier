@@ -2,6 +2,17 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-06#01 -- 7z with nothing installed, and NanaZip found
+
+- **The exe opens 7z archives by itself:** py7zr is now built in (it was left out of the exe, so a 7z needed 7-Zip on the computer, and
+  the message asked the owner to install a Python package). It is in `requirements.txt`, so the release workflow bundles it.
+- **NanaZip is found** (the 7-Zip fork from the Microsoft Store): by its own command names `NanaZipC` and `K7C`, and in the Store's
+  alias folder (`%LOCALAPPDATA%\Microsoft\WindowsApps`) when that is not on the PATH. Before, only 7-Zip's names were tried, so
+  NanaZip with its `7z` alias switched off was never seen. RAR, ISO, tar and the rest work through it as through 7-Zip.
+- The message for an archive nothing can open names 7-Zip and NanaZip; the README says zip and 7z are built in.
+- Tests: the two paste-a-picture tests wait for the picture to be written, not only for the file to appear (they failed now and then).
+  Measured: py7zr adds 1.9 MB to the one-file exe (+3.1 %, 61.6 to 63.5 MB in the same local build).
+
 ## 2026-11-05#20 -- Release 0.7
 
 - `RELEASE = "0.7"`, notes in `docs/releases/v0.7.md`: finish the job (skip what is there and the same), reconnect for SFTP, SCP and FTP, Export Log, Folder Tree, the Share column, and the code review fixes. The first update of an installed copy through its installer.

@@ -30,7 +30,7 @@ a = Analysis(
     hooksconfig={},
     runtime_hooks=[],
     # Not used by the program; PyInstaller would bundle them whenever they happen to be installed on the build machine.
-    excludes=["numpy", "tkinter", "unittest", "pytest", "py7zr"],
+    excludes=["numpy", "tkinter", "unittest", "pytest"],          # py7zr stays in: the exe opens 7z files with nothing else installed
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
     cipher=block_cipher,
