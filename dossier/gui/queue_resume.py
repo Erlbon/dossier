@@ -13,7 +13,7 @@ from typing import Optional
 from PyQt6.QtCore import QTimer
 
 from ..core.ops import plan_copy, plan_delete, plan_move
-from ..core.queue_journal import Entry, Journal, remaining_plan, skip_identical
+from ..core.queue_journal import Entry, Journal, remaining_plan, settle_leftovers
 
 KIND_OF_TITLE = (("Copy", "copy"), ("Move", "move"), ("Delete", "delete"))
 
@@ -80,7 +80,7 @@ class QueueResumeMixin:
             if entry.kind == "delete":
                 return plan_delete(self.fs, entry.sources, to_trash=entry.to_trash)
             plan = (plan_move if entry.kind == "move" else plan_copy)(self.fs, entry.sources, entry.dest, watch=watch)
-            return skip_identical(plan, self.fs)
+            return settle_leftovers(plan, self.fs, entry.started)
 
         def go(plan) -> None:
             plan = self._settle(plan) if plan.ops or plan.blocking else plan

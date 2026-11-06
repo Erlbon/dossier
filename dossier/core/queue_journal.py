@@ -3,8 +3,9 @@
 It is opt-in (Settings > Copy and Move) because it names folders and files. What is kept for a copy, move or delete is the *intention*,
 not the plan: what was asked for, the items, and where they were going. After a restart the plan is made again from what is still
 there: a source that was already moved is gone and drops out by itself, a file that was copied completely is recognised as identical to
-its source and skipped, and a half-written file never carries its final name (it is written as ``name.dossier-part`` and renamed at the
-end), so nothing half done is ever mistaken for done. An entry is taken off the list when its operation finishes or the owner cancels
+its source and skipped. A half-written file is never mistaken for done: a big file or one that replaces another is written as
+``name.dossier-part`` and renamed at the end, and a small new file, which the system copies straight to its name at full size, still
+has the time it was made, after the job started, so it is copied again (``is_leftover``). An entry is taken off the list when its operation finishes or the owner cancels
 it; it stays when the program is closed or killed while the operation is running or waiting, and when it ended with failed steps
 (``note`` then says so).
 
@@ -20,7 +21,7 @@ import threading
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass, field, fields
+from dataclasses import dataclass, field, fields, replace
 from typing import Optional
 
 from .ops import Kind, Op, Plan
@@ -110,8 +111,9 @@ def plan_entry(plan: Plan) -> Optional[Entry]:
 
 def remaining_plan(entry: Entry, fs: FileSystem) -> Plan:
     """The steps of a plan entry that are still to do. A step whose source is gone was done (or the item went away); a copy whose
-    destination is already the same file (same size, same time to the second) was made before the program stopped. Nothing else is
-    dropped: a folder step merges, and the removal after a move across drives still needs its source."""
+    destination is already the same file (same size, same time to the second) was made before the program stopped, unless it is a
+    leftover the stopped run was still writing (``is_leftover``), which is copied again over it. Nothing else is dropped: a folder
+    step merges, and the removal after a move across drives still needs its source."""
     kept = []
     for op in entry.ops:
         if op.kind is Kind.MKDIR:
@@ -124,6 +126,9 @@ def remaining_plan(entry: Entry, fs: FileSystem) -> Plan:
             dst = stat_or_none(fs, op.dst) if op.kind is Kind.COPY and not op.is_dir else None
         except OSError:
             kept.append(op)                      # cannot tell (a server that does not answer): leave the step in
+            continue
+        if dst is not None and not dst.is_dir and is_leftover(dst.size, dst.mtime, src.size, entry.started):
+            kept.append(replace(op, overwrite=True))     # what the stopped run was still writing: copied again over it
             continue
         if dst is not None and not dst.is_dir and dst.size == src.size and abs(dst.mtime - op.src_mtime) <= SAME_TIME:
             continue
@@ -201,9 +206,23 @@ class Journal:
             self._save([])
 
 
-def skip_identical(plan, fs):
-    """Settle the clashes that are only the leftovers of the interrupted run: a file at the destination with the same size and (to the
-    second) the same time as its source is the copy that was already made, so it is skipped. Every other clash stays for the owner."""
+def is_leftover(dst_size: int, dst_mtime: float, src_size: int, started: float) -> bool:
+    """A file the interrupted run was still writing when it stopped. A small file is copied straight to its name by the system, which
+    reserves the full size at once, so a cut-off copy has the right size; but it has the time it was made, after the job started,
+    where a finished copy carries the source's time. (A file someone else wrote there in the meantime with exactly the source's size
+    would be taken for one too: it is replaced, on a drive with a recycle bin into the bin.)"""
+    return started > 0 and dst_size == src_size and dst_mtime >= started - SAME_TIME
+
+
+def settle_leftovers(plan, fs, started: float):
+    """Settle the clashes that are only what the interrupted run (begun at ``started``) left behind: a leftover it was still writing is
+    copied again without a question, and only then a file with the source's size and time is the copy already made, skipped. Every
+    other clash stays for the owner."""
     from .ops import Resolution, conflict_rows
-    same = {row.index: Resolution.SKIP for row in conflict_rows(plan, fs) if row.identical}
-    return plan.resolve_each(same, fs) if same else plan
+    choices = {}
+    for row in conflict_rows(plan, fs):
+        if row.can_overwrite and is_leftover(row.dst_size, row.dst_mtime, row.size, started):
+            choices[row.index] = Resolution.OVERWRITE
+        elif row.identical:
+            choices[row.index] = Resolution.SKIP
+    return plan.resolve_each(choices, fs) if choices else plan

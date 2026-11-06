@@ -3,7 +3,7 @@ import json
 import os
 
 from dossier.core.ops import plan_copy, plan_move
-from dossier.core.queue_journal import Entry, Journal, skip_identical
+from dossier.core.queue_journal import Entry, Journal, settle_leftovers
 from dossier.core.vfs import LocalFileSystem
 
 fs = LocalFileSystem()
@@ -68,7 +68,7 @@ def test_files_that_were_copied_before_the_interruption_are_skipped_and_the_rest
     write(dst / "b.txt", "different", 1_700_000_000)                      # a different file with the same name
     plan = plan_copy(fs, [str(src / n) for n in ("a.txt", "b.txt", "c.txt")], str(dst))
     assert len(plan.conflicts) == 2
-    after = skip_identical(plan, fs)
+    after = settle_leftovers(plan, fs, 1_800_000_000.0)
     assert [os.path.basename(op.dst) for op in after.ops] == ["b.txt", "c.txt"] and len(after.conflicts) == 1      # b still asks
     assert os.path.basename(after.ops[after.conflicts[0]].dst) == "b.txt"
 
@@ -81,7 +81,7 @@ def test_a_move_that_was_part_done_plans_only_what_is_left(tmp_path):
     write(dst / "gone.txt", "y", 1_700_000_000)                           # already moved: not in the source any more
     plan = plan_move(fs, [str(src / "left.txt")], str(dst))
     assert [os.path.basename(op.src) for op in plan.ops] == ["left.txt"] and not plan.conflicts
-    assert skip_identical(plan, fs) is plan                               # nothing to settle: the same plan comes back
+    assert settle_leftovers(plan, fs, 1_800_000_000.0) is plan                               # nothing to settle: the same plan comes back
 
 
 # plan entries: any settled plan (unpack, sync, flatten, the assistant) is kept as its steps ---------------------------------------------------
@@ -165,3 +165,62 @@ def test_a_note_is_kept_and_shown(tmp_path):
     j = Journal(str(tmp_path / "queue.json"))
     j.add(Entry("copy", ["a"], "d", note="2 failed last time"))
     assert j.load()[0].describe() == "Copy 1 item to d (2 failed last time)"
+
+
+# J (2026-11-06): a small file is now copied straight to its name, and Windows' copy reserves the full size at once, so a run that was
+# cut off can leave a file of the right size under the right name. Its time gives it away: a finished copy carries the source's time,
+# a leftover the time it was made, after the job started. Such a file is copied again without a question, never taken as done. -------
+def leftover(path, size, made):
+    path.write_bytes(bytes(size))                                       # what a cut-off system copy leaves: full size, zeros
+    os.utime(path, (made, made))
+
+
+def test_a_leftover_of_the_interrupted_run_is_copied_again_without_a_question(tmp_path):
+    from dossier.core.ops import execute
+    src, dst = tmp_path / "src", tmp_path / "dst"
+    src.mkdir()
+    dst.mkdir()
+    write(src / "a.txt", "a.txt" * 10, 1_700_000_000)
+    started = 1_800_000_000.0
+    leftover(dst / "a.txt", 50, started + 3)
+    plan = settle_leftovers(plan_copy(fs, [str(src / "a.txt")], str(dst)), fs, started)
+    assert not plan.conflicts and [op.overwrite for op in plan.ops] == [True]
+    assert not execute(plan, fs).failed and (dst / "a.txt").read_text() == "a.txt" * 10
+
+
+def test_a_leftover_is_never_taken_as_done_even_when_its_time_looks_like_the_source_s(tmp_path):
+    src, dst = tmp_path / "src", tmp_path / "dst"
+    src.mkdir()
+    dst.mkdir()
+    started = 1_800_000_000.0
+    write(src / "fresh.txt", "x" * 50, started - 1)                    # saved a second before the copy began
+    write(src / "hour.txt", "y" * 50, started - 3600)                   # saved an hour before: the summer-time allowance
+    leftover(dst / "fresh.txt", 50, started + 0.5)
+    leftover(dst / "hour.txt", 50, started + 0.5)
+    plan = settle_leftovers(plan_copy(fs, [str(src / n) for n in ("fresh.txt", "hour.txt")], str(dst)), fs, started)
+    assert len(plan.ops) == 2 and all(op.overwrite for op in plan.ops) and not plan.conflicts
+
+
+def test_a_finished_copy_is_still_skipped_and_someone_else_s_older_file_still_asks(tmp_path):
+    src, dst = tmp_path / "src", tmp_path / "dst"
+    src.mkdir()
+    dst.mkdir()
+    started = 1_800_000_000.0
+    write(src / "done.txt", "d" * 20, 1_700_000_000)
+    write(dst / "done.txt", "d" * 20, 1_700_000_000)                    # finished: the source's time
+    write(src / "theirs.txt", "t" * 20, 1_700_000_000)
+    write(dst / "theirs.txt", "o" * 20, 1_600_000_000)                  # there before the job: the owner decides
+    plan = settle_leftovers(plan_copy(fs, [str(src / n) for n in ("done.txt", "theirs.txt")], str(dst)), fs, started)
+    assert [os.path.basename(op.dst) for op in plan.ops] == ["theirs.txt"] and len(plan.conflicts) == 1
+
+
+def test_a_plan_entry_copies_a_leftover_again_over_it(tmp_path):
+    from dossier.core.queue_journal import plan_entry, remaining_plan
+    src, dst = tmp_path / "s", tmp_path / "d"
+    make_files(src, ["a.txt"])
+    entry = plan_entry(plan_copy(fs, [str(src / "a.txt")], str(dst)))
+    entry.started = 1_800_000_000.0
+    dst.mkdir()
+    leftover(dst / "a.txt", (src / "a.txt").stat().st_size, entry.started + 2)
+    left = remaining_plan(entry, fs)
+    assert [op.overwrite for op in left.ops if op.src] == [True]

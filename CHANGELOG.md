@@ -2,6 +2,16 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-06#04 -- A copy cut off halfway is never taken for done when the job continues
+
+- **Found by killing Windows' copy halfway** through a 2 GB file: it reserves the full size at once, so what is left has the right
+  size (the end all zeros), but the time it was made, not the source's (a finished copy gets the source's time).
+- **Continue Unfinished Operations** now copies such a leftover again without a question: a file at the destination with the
+  source's size and a time after the job started (`queue_journal.is_leftover`). Before, size and time within two seconds or exactly
+  one hour (the summer-time allowance) counted as done, so a leftover of a file saved just before the copy, or an hour before, would
+  have been skipped. `skip_identical` is now `settle_leftovers`; plan entries (`remaining_plan`) do the same.
+- Applies when Settings > Copy and Move remembers unfinished operations (opt-in, off by default).
+
 ## 2026-11-06#03 -- Each file system says itself whether the system may copy for it
 
 - `FileSystem.system_copy_path(path)`: the real path under which the operating system's own copy may copy a file for this file
