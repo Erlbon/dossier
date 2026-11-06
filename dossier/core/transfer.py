@@ -203,13 +203,13 @@ def copy_file(
             if progress:
                 progress(total, total)
             return
-        if (native and throttle is None and not overwrite and swap is None and total < fastcopy.FAST_MIN
-                and _system_can_copy(src_fs, src) and _system_can_copy(dst_fs, dst)):
-            if _copy_straight(src_fs, src, dst_fs, dst, info, progress, cancel, check_part):
+        system = _system_paths(src_fs, src, dst_fs, dst) if native and throttle is None else None   # (src, dst) for the system's copy
+        if system is not None and not overwrite and swap is None and total < fastcopy.FAST_MIN:
+            if _copy_straight(dst_fs, system[0], system[1], info, progress, cancel, check_part):
                 carry_tags(src_fs, src, dst_fs, dst, tags_lost)
                 return
-        if native and throttle is None and total >= fastcopy.FAST_MIN and _system_can_copy(src_fs, src) and _system_can_copy(dst_fs, dst):
-            if fastcopy.fast_copy(src, part, total, progress, cancel):       # the system's own copy, in the kernel
+        if system is not None and total >= fastcopy.FAST_MIN and dst_fs.system_copy_path(part) is not None:
+            if fastcopy.fast_copy(system[0], dst_fs.system_copy_path(part), total, progress, cancel):   # the system's own copy, in the kernel
                 _check_whole(dst_fs.stat(part).size, total, src)
                 if check_part is not None:
                     check_part(part)
@@ -335,7 +335,7 @@ def resumed_part(dst: str) -> bool:
     return os.path.exists(longpath(dst + PART_SUFFIX)) and os.path.exists(longpath(_note_path(dst + PART_SUFFIX)))
 
 
-def _copy_straight(src_fs: FileSystem, src: str, dst_fs: FileSystem, dst: str, info, progress, cancel, check_part) -> bool:
+def _copy_straight(dst_fs: FileSystem, src: str, dst: str, info, progress, cancel, check_part) -> bool:
     """A small new file, copied by the system straight to its name (decided with the owner 2026-11-06, after timing against
     robocopy): the part file and its rename cost about a quarter of the time of a small file. Nothing is replaced: the system
     refuses a name that was taken meanwhile. A failure, a cancel or a Verify that fails removes the file it made, so what is
@@ -371,14 +371,11 @@ def _drop_partial(path: str) -> None:
         pass
 
 
-def _system_can_copy(fs: FileSystem, path: str) -> bool:
-    """Whether the system's own copy may stand in for ``fs``: a plain local path, and a file system that reads and writes files the
-    plain local way (one that changes how, a wrapper or a test's, keeps its own calls)."""
-    from .vfs import LocalFileSystem
-    if not _plain_local(fs, path):
-        return False
-    real = fs.fs_for(path) if hasattr(fs, "fs_for") else fs          # the window's router hands a local path to its local disk
-    return type(real).open_read is LocalFileSystem.open_read and type(real).open_write is LocalFileSystem.open_write
+def _system_paths(src_fs: FileSystem, src: str, dst_fs: FileSystem, dst: str) -> Optional[tuple]:
+    """``(src, dst)`` as the operating system's own copy may take them, or None when either file system says it may not
+    (``FileSystem.system_copy_path``: only the local disk, read and written the plain way, says yes)."""
+    real_src, real_dst = src_fs.system_copy_path(src), dst_fs.system_copy_path(dst)
+    return (real_src, real_dst) if real_src is not None and real_dst is not None else None
 
 
 def _plain_local(fs: FileSystem, path: str) -> bool:

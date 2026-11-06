@@ -2,6 +2,14 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-06#03 -- Each file system says itself whether the system may copy for it
+
+- `FileSystem.system_copy_path(path)`: the real path under which the operating system's own copy may copy a file for this file
+  system, or None. Only the local disk says yes, and not when a subclass reads or writes its own way (checked in the local disk's own
+  class, so a new subclass is covered without anyone remembering to say so). The window's router asks the file system that holds the
+  path. The copy code (`transfer._system_paths`) only asks; it no longer looks for a router or compares functions itself.
+- Same behaviour and speed as #02 (timed again: 1,599 files a second; robocopy /MT:8 1,727 in the same round).
+
 ## 2026-11-06#02 -- Small files copy twice as fast (the system's copy, straight to the name)
 
 - **Why it was slow** (timed against robocopy, 10,000 files of 2 KB, this laptop's disk): each small file was read and written by

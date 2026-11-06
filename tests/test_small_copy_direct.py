@@ -110,3 +110,21 @@ def test_a_file_system_that_reads_its_own_way_keeps_its_own_calls(tmp_path, monk
     src, dst = make(tmp_path / "a.txt"), str(tmp_path / "b.txt")
     transfer.copy_file(Watched(), src, Watched(), dst)
     assert calls == [] and opened == [src]
+
+
+# each file system says itself whether the system may copy for it (2026-11-06, option G) -------------------------------------------
+def test_each_file_system_answers_whether_the_system_may_copy_for_it(tmp_path):
+    from dossier.core.home import HomeFileSystem, HomeProvider, RouterFileSystem
+    from dossier.core.memfs import MemoryFileSystem
+
+    class OwnWay(LocalFileSystem):
+        def open_write(self, path, *, exclusive=False):
+            return super().open_write(path, exclusive=exclusive)
+    local = str(tmp_path / "a.txt")
+    router = RouterFileSystem(LocalFileSystem(), HomeFileSystem(HomeProvider(pins=lambda: [], network=lambda: [])))
+    assert LocalFileSystem().system_copy_path(local) == local
+    assert router.system_copy_path(local) == local                              # the router asks the disk that holds the path
+    assert router.system_copy_path("home://") is None and router.system_copy_path("zip://" + local + "/x") is None
+    assert router.system_copy_path("sftp://me@nas/x") is None
+    assert MemoryFileSystem().system_copy_path("mem://x") is None
+    assert OwnWay().system_copy_path(local) is None                             # it writes its own way: its own calls are used

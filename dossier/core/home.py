@@ -299,6 +299,9 @@ class RouterFileSystem(FileSystem):
     def open_write(self, path: str, *, exclusive: bool = False):
         return self.fs_for(path).open_write(path, exclusive=exclusive)
 
+    def system_copy_path(self, path: str) -> Optional[str]:
+        return self.fs_for(path).system_copy_path(path)
+
     def set_mtime(self, path: str, mtime: float) -> None:
         self.fs_for(path).set_mtime(path, mtime)
 

@@ -12,7 +12,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import BinaryIO, Iterator, Optional
 
-from .platform import IS_WINDOWS, decode_name, is_link_like, longpath, path_key, strip_longpath
+from .platform import IS_WINDOWS, decode_name, has_scheme, is_link_like, longpath, path_key, strip_longpath
 from . import sharing
 
 
@@ -117,6 +117,11 @@ class FileSystem(ABC):
         """Create or truncate a file. ``exclusive`` fails if it already exists."""
         raise NotWritable(path)
 
+    def system_copy_path(self, path: str) -> Optional[str]:
+        """The real path under which the operating system's own copy (``fastcopy``) may copy ``path`` for this file system, or None
+        when it may not: then the copy goes through ``open_read`` and ``open_write``. Only the local disk says yes."""
+        return None
+
     def set_mtime(self, path: str, mtime: float) -> None:
         raise NotWritable(path)
 
@@ -213,6 +218,12 @@ class LocalFileSystem(FileSystem):
 
     def open_write(self, path: str, *, exclusive: bool = False) -> BinaryIO:
         return open(longpath(path), "xb" if exclusive else "wb")
+
+    def system_copy_path(self, path: str) -> Optional[str]:
+        # A subclass that reads or writes its own way (a wrapper, a test's) must have its own calls used: the system's copy would
+        # go round them. Checked here, so a new subclass is covered without anyone remembering to say so.
+        own_way = type(self).open_read is not LocalFileSystem.open_read or type(self).open_write is not LocalFileSystem.open_write
+        return None if own_way or has_scheme(path) or not self.writable else path
 
     def set_mtime(self, path: str, mtime: float) -> None:
         os.utime(longpath(path), (mtime, mtime))
