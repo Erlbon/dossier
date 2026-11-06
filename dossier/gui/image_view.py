@@ -16,7 +16,7 @@ from PyQt6.QtGui import QColor, QImage, QImageReader, QKeySequence, QPainter, QP
 from PyQt6.QtWidgets import (QAbstractItemView, QGraphicsPixmapItem, QGraphicsScene, QGraphicsView, QHeaderView, QSplitter,
                              QTreeWidget, QTreeWidgetItem, QWidget)
 
-from ..core import wheel
+from ..core import viewmodes, wheel
 from ..core.exif import Exif
 from . import file_clipboard, theme
 
@@ -93,10 +93,23 @@ class ImageView(QGraphicsView):
         self.copied.emit(message)
         return message
 
+    def _is_svg(self) -> bool:
+        return self._path.lower().endswith(viewmodes.SVG_EXTENSIONS)
+
     def _show(self) -> None:
-        image = self.shown_image()
         self._scene.clear()
-        self._item = self._scene.addPixmap(QPixmap.fromImage(image))
+        if self._is_svg():
+            from PyQt6.QtSvgWidgets import QGraphicsSvgItem
+            item = QGraphicsSvgItem(self._path)        # drawn from the vector at every zoom: sharp, where a picture would blur
+            if item.renderer().isValid():
+                box = item.boundingRect()
+                item.setTransformOriginPoint(box.center())
+                item.setRotation(90 * self._turn)
+                self._scene.addItem(item)
+                self._item = item
+                self._scene.setSceneRect(item.sceneBoundingRect())
+                return
+        self._item = self._scene.addPixmap(QPixmap.fromImage(self.shown_image()))
         self._scene.setSceneRect(QRectF(self._item.boundingRect()))
 
     # zoom and turn ----------------------------------------------------------------------------------------------------------------
@@ -105,14 +118,16 @@ class ImageView(QGraphicsView):
         return self.transform().m11()
 
     def fit(self) -> None:
-        """Show the whole picture in the window (never bigger than it is)."""
+        """Show the whole picture in the window (a photo never bigger than it is; an SVG, being drawn, as big as fits)."""
         if self._item is None:
             return
         self._fit = True
         self.resetTransform()
-        view, pic = self.viewport().size(), self._item.boundingRect()
+        view, pic = self.viewport().size(), self._scene.sceneRect()
         if pic.width() > 0 and pic.height() > 0:
-            scale = min(view.width() / pic.width(), view.height() / pic.height(), 1.0)
+            scale = min(view.width() / pic.width(), view.height() / pic.height())
+            if not self._is_svg():
+                scale = min(scale, 1.0)
             self.scale(scale, scale)
         self.centerOn(self._item)
         self.changed.emit()

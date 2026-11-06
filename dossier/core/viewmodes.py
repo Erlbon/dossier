@@ -1,6 +1,7 @@
 """Which viewer a file gets in F3, chosen by what is inside it and not only by its name.
 
-``image``    a picture (judged by its first bytes, so a photo called ``.dat`` is still shown as a photo);
+``image``    a picture (judged by its first bytes, so a photo called ``.dat`` is still shown as a photo; an SVG by its first element
+             and its name);
 ``markdown`` a text file that is Markdown (by its extension: nothing in the content tells it from plain text);
 ``text``     any other text;
 ``hex``      a binary file (zero bytes in text that is not wide), where text would only be noise.
@@ -16,7 +17,8 @@ from typing import Callable, Optional
 from .textview import SAMPLE, detect_encoding, looks_binary
 from .vfs import natural_key
 
-IMAGE_EXTENSIONS = (".png", ".jpg", ".jpeg", ".jpe", ".jfif", ".gif", ".bmp", ".webp", ".tif", ".tiff", ".ico")
+IMAGE_EXTENSIONS = (".png", ".jpg", ".jpeg", ".jpe", ".jfif", ".gif", ".bmp", ".webp", ".tif", ".tiff", ".ico", ".svg", ".svgz")
+SVG_EXTENSIONS = (".svg", ".svgz")
 MARKDOWN_EXTENSIONS = (".md", ".markdown", ".mdown", ".mkd", ".mkdn")
 HEAD = 8192
 LABELS = {"image": "Image", "markdown": "Markdown", "text": "Text", "hex": "Hex"}
@@ -34,7 +36,26 @@ def image_kind(head: bytes, name: str = "") -> str:
         return "webp"
     if head[:2] == b"BM" and name.lower().endswith(".bmp") and len(head) >= 14:
         return "bmp"
+    if name.lower().endswith(SVG_EXTENSIONS) and is_svg(head):
+        return "svg"
     return ""
+
+
+def is_svg(head: bytes) -> bool:
+    """An SVG drawing: a gzip stream (.svgz), or text whose first element is ``<svg`` (after an XML declaration, comments or a
+    DOCTYPE). Believed only with an .svg or .svgz name: plenty of XML files hold an svg element somewhere."""
+    if head[:2] == b"\x1f\x8b":
+        return True
+    text = head.decode("utf-8", "ignore").lstrip(chr(0xFEFF))
+    while True:
+        text = text.lstrip()
+        if text.startswith("<?") or text.startswith("<!--") or text.startswith("<!DOCTYPE") or text.startswith("<!doctype"):
+            end = text.find("-->" if text.startswith("<!--") else ">")
+            if end < 0:
+                return False
+            text = text[end + (3 if text.startswith("<!--") else 1):]
+            continue
+        return text.startswith("<svg") or text.startswith("<svg:svg")
 
 
 def is_binary(head: bytes) -> bool:
@@ -66,6 +87,8 @@ def modes_for(path: str, head: Optional[bytes] = None) -> list:
     """The modes that make sense for ``path``, the one F3 opens first."""
     first = mode_for(path, head)
     others = {"image": ["hex"], "markdown": ["text", "hex"], "text": ["hex"], "hex": ["text"]}[first]
+    if first == "image" and path.lower().endswith(".svg"):
+        others = ["text", "hex"]                    # an SVG is also its XML
     return [first] + others
 
 

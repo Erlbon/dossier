@@ -2,6 +2,15 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-06#09 -- SVG in the viewer
+
+- **F3 shows an SVG as a picture**, drawn from the vector (`QGraphicsSvgItem`) so it stays sharp at any zoom, and Fit enlarges a
+  small one (an icon) to the window, where a photo is still never shown bigger than it is. Turning works as for any picture. "View
+  as" offers Text and Hex for its XML. The same view is the glass viewer's.
+- An SVG is told by its first element (after an XML declaration, comments or a DOCTYPE) together with an .svg or .svgz name, so an
+  .svg that is no drawing opens as text and an XML file holding a drawing stays XML.
+- SVGs are among the pictures the wheel steps through, and a small one fills its thumbnail instead of staying icon-sized.
+
 ## 2026-11-06#08 -- More covers in the thumbnail view
 
 - **Comics in RAR, 7z and tar** (.cbr, .cb7, .cbt) show their cover, as .cbz did; a .cbr that is really a zip or 7z is read by its

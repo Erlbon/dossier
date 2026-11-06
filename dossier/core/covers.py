@@ -20,7 +20,7 @@ from typing import Optional
 from .platform import no_window_flags
 from .vfs import natural_key
 
-IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".jpe", ".png", ".gif", ".bmp", ".webp", ".tif", ".tiff", ".ico", ".avif", ".svg")
+IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".jpe", ".png", ".gif", ".bmp", ".webp", ".tif", ".tiff", ".ico", ".avif", ".svg", ".svgz")
 ARCHIVE_PAGES = (".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".tif", ".tiff", ".avif")
 AUDIO_EXTENSIONS = (".mp3", ".flac", ".m4a", ".m4b", ".mp4a", ".ogg", ".oga", ".opus", ".wma", ".wv", ".ape")
 VIDEO_EXTENSIONS = (".mp4", ".m4v", ".mkv", ".avi", ".mov", ".wmv", ".webm", ".mpg", ".mpeg", ".ts", ".m2ts", ".flv", ".3gp")

@@ -38,7 +38,8 @@ def read_file(path: str, px: int) -> QImage:
     reader = QImageReader(path)
     reader.setAutoTransform(True)                       # a photo taken upright shows upright
     size = reader.size()
-    if size.isValid() and (size.width() > px or size.height() > px):
+    drawing = path.lower().endswith((".svg", ".svgz"))  # drawn at any size: a small icon fills its tile, sharp
+    if size.isValid() and (drawing or size.width() > px or size.height() > px):
         size.scale(QSize(px, px), Qt.AspectRatioMode.KeepAspectRatio)
         reader.setScaledSize(size)
     image = reader.read()
