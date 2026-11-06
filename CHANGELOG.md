@@ -2,6 +2,17 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-06#08 -- More covers in the thumbnail view
+
+- **Comics in RAR, 7z and tar** (.cbr, .cb7, .cbt) show their cover, as .cbz did; a .cbr that is really a zip or 7z is read by its
+  content. RAR goes through 7-Zip or NanaZip; 7z and tar need nothing. The archive readers are the ones that open archives as folders.
+- **The ComicInfo cover:** the page ComicInfo.xml marks `FrontCover` is the thumbnail; without one, the first page by name, as before.
+- **Video covers:** the cover attached to an MKV (`cover.*`, `cover_land.*`, `small_cover.*`, else the first attached picture; found
+  through the SeekHead, only that picture is read) or stored in an MP4 is the thumbnail, without ffmpeg; a frame through ffmpeg only
+  when there is none and ffmpeg is switched on.
+- **PDF:** the first page, drawn by Qt's PDF module on white.
+- Tests with real files where the tools are there: MKV and MP4 made by ffmpeg, a .cbr made by 7-Zip, a PDF made by Qt.
+
 ## 2026-11-06#07 -- The address in Help > About is a link
 
 - The project's GitHub address in Help > About Dossier opens in your browser when clicked, instead of being plain text

@@ -12,7 +12,7 @@ from collections import OrderedDict
 from typing import Optional
 
 from PyQt6.QtCore import QBuffer, QByteArray, QIODevice, QObject, QRunnable, QSize, Qt, QThreadPool, pyqtSignal
-from PyQt6.QtGui import QImage, QImageReader, QPixmap
+from PyQt6.QtGui import QImage, QImageReader, QPainter, QPixmap
 from PyQt6.QtWidgets import QApplication
 
 from ..core import covers
@@ -59,8 +59,34 @@ def make(kind: str, path: str, px: int, ffmpeg: str = "") -> Optional[QImage]:
     found = covers.picture_for(kind, path, ffmpeg, px)
     if found is None:
         return None
-    image = read_file(found[1], px) if found[0] == "file" else read_bytes(found[1], px)
+    if found[0] == "pdf":
+        image = read_pdf(found[1], px)
+    else:
+        image = read_file(found[1], px) if found[0] == "file" else read_bytes(found[1], px)
     return None if image.isNull() else image
+
+
+def read_pdf(path: str, px: int) -> QImage:
+    """The first page of a PDF, drawn at thumbnail size on white (Qt's PDF module; a worker thread has a document of its own)."""
+    from PyQt6.QtPdf import QPdfDocument
+    document = QPdfDocument(None)
+    try:
+        if document.load(path) != QPdfDocument.Error.None_ or document.pageCount() < 1:
+            return QImage()
+        page = document.pagePointSize(0)
+        if page.width() <= 0 or page.height() <= 0:
+            return QImage()
+        scale = px / max(page.width(), page.height())
+        size = QSize(max(1, round(page.width() * scale)), max(1, round(page.height() * scale)))
+        drawn = document.render(0, size)
+        image = QImage(size, QImage.Format.Format_RGB32)
+        image.fill(Qt.GlobalColor.white)              # a page with no background of its own is white paper, not see-through
+        painter = QPainter(image)
+        painter.drawImage(0, 0, drawn)
+        painter.end()
+        return image
+    finally:
+        document.close()
 
 
 class _Done(QObject):
