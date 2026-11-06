@@ -2,6 +2,20 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-06#02 -- Small files copy twice as fast (the system's copy, straight to the name)
+
+- **Why it was slow** (timed against robocopy, 10,000 files of 2 KB, this laptop's disk): each small file was read and written by
+  Python into a `.dossier-part` file, its time set separately, then renamed; the part file and its rename alone cost about a
+  quarter of a small file's time.
+- **Now** a small new file (under 8 MB) on a local disk is copied by Windows' own copy (`CopyFileExW`, as Explorer uses), straight to
+  its name: one call that also keeps the time, the attributes and the tags. Measured: 820 to 1,708 files a second (robocopy: 1,022
+  one at a time, 2,094 with /MT:8).
+- **Still safe:** the system refuses a name that was taken meanwhile (nothing is ever replaced this way), and a failure, a cancel
+  or a Verify that fails removes the file it made. A file that replaces another, a big file, and anything on a server or in an
+  archive still go through the part file. Only a power cut in the middle of a small file can leave it short under its name.
+- The system copy (small and big files) is used only for a file system that reads and writes the plain local way, looked up
+  through the window's router; one that does it its own way keeps its own calls.
+
 ## 2026-11-06#01 -- 7z with nothing installed, and NanaZip found
 
 - **The exe opens 7z archives by itself:** py7zr is now built in (it was left out of the exe, so a 7z needed 7-Zip on the computer, and

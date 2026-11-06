@@ -52,11 +52,9 @@ def test_a_large_local_file_is_copied_by_the_system_with_content_and_time_intact
     assert not os.path.exists(dst + transfer.PART_SUFFIX)
 
 
-def test_a_small_file_a_throttled_copy_and_the_switch_use_the_plain_path(tmp_path, monkeypatch):
+def test_a_throttled_copy_and_the_switch_use_the_plain_path(tmp_path, monkeypatch):
     calls = spy(monkeypatch)
     fs = LocalFileSystem()
-    small = make(tmp_path / "small.bin", 500)
-    transfer.copy_file(fs, small, fs, str(tmp_path / "small2.bin"))
     big = make(tmp_path / "big.bin", 200_000)
     transfer.copy_file(fs, big, fs, str(tmp_path / "t.bin"), throttle=SpeedLimit(50_000_000))
     transfer.copy_file(fs, big, fs, str(tmp_path / "n.bin"), native=False)

@@ -27,18 +27,20 @@ def available() -> bool:
     return IS_WINDOWS or hasattr(os, "copy_file_range")
 
 
-def fast_copy(src: str, dst: str, total: int, progress: Optional[ProgressFn], cancel: Optional[CancelToken]) -> bool:
+def fast_copy(src: str, dst: str, total: int, progress: Optional[ProgressFn], cancel: Optional[CancelToken],
+              fail_if_exists: bool = False) -> bool:
     """Copy ``src`` to ``dst`` (both plain local paths). True when done; False when the system cannot do it
-    and nothing was written; raises ``Cancelled`` or ``OSError`` otherwise (``dst`` may then be partial)."""
+    and nothing was written; raises ``Cancelled`` or ``OSError`` otherwise (``dst`` may then be partial). With
+    ``fail_if_exists`` a file already at ``dst`` is never replaced: ``FileExistsError``, and it is left as it was."""
     if IS_WINDOWS:
-        return _copy_file_ex(src, dst, total, progress, cancel)
+        return _copy_file_ex(src, dst, total, progress, cancel, fail_if_exists)
     if hasattr(os, "copy_file_range") and IS_LINUX:
-        return _copy_range(src, dst, total, progress, cancel)
+        return _copy_range(src, dst, total, progress, cancel, fail_if_exists)
     return False
 
 
 # Windows -------------------------------------------------------------------------------------------
-def _copy_file_ex(src: str, dst: str, total: int, progress, cancel) -> bool:
+def _copy_file_ex(src: str, dst: str, total: int, progress, cancel, fail_if_exists: bool = False) -> bool:
     import ctypes
     from ctypes import wintypes
 
@@ -51,8 +53,8 @@ def _copy_file_ex(src: str, dst: str, total: int, progress, cancel) -> bool:
                      wintypes.DWORD]
     copy.restype = wintypes.BOOL
     PROGRESS_CONTINUE, PROGRESS_CANCEL = 0, 1
-    ALLOW_DECRYPTED_DESTINATION = 0x8
-    ERROR_REQUEST_ABORTED = 1235
+    FAIL_IF_EXISTS, ALLOW_DECRYPTED_DESTINATION = 0x1, 0x8
+    ERROR_REQUEST_ABORTED, ERROR_FILE_EXISTS, ERROR_ALREADY_EXISTS = 1235, 80, 183
     stopped: dict = {}
 
     def on_chunk(file_size, transferred, _stream_size, _stream_done, _stream, _reason, _hsrc, _hdst, _data):
@@ -66,27 +68,33 @@ def _copy_file_ex(src: str, dst: str, total: int, progress, cancel) -> bool:
         return PROGRESS_CONTINUE
 
     callback = routine(on_chunk)                           # kept alive for the whole call
-    ok = copy(longpath(src), longpath(dst), callback, None, None, ALLOW_DECRYPTED_DESTINATION)
+    flags = ALLOW_DECRYPTED_DESTINATION | (FAIL_IF_EXISTS if fail_if_exists else 0)
+    ok = copy(longpath(src), longpath(dst), callback, None, None, flags)
     if "why" in stopped:
         raise stopped["why"]
     if not ok:
         code = ctypes.get_last_error()
         if code == ERROR_REQUEST_ABORTED and cancel is not None and cancel.cancelled:
             raise Cancelled()
+        if code in (ERROR_FILE_EXISTS, ERROR_ALREADY_EXISTS):
+            raise FileExistsError(errno.EEXIST, "a file of that name is already there", dst)
         raise ctypes.WinError(code)
     return True
 
 
 # Linux ---------------------------------------------------------------------------------------------
-def _copy_range(src: str, dst: str, total: int, progress, cancel) -> bool:
+def _copy_range(src: str, dst: str, total: int, progress, cancel, fail_if_exists: bool = False) -> bool:
     done = 0
-    with open(src, "rb") as r, open(dst, "wb") as w:
+    with open(src, "rb") as r, open(dst, "xb" if fail_if_exists else "wb") as w:
         while done < total:
             check(cancel)
             try:
                 n = os.copy_file_range(r.fileno(), w.fileno(), min(RANGE_CHUNK, total - done))
             except OSError as e:
                 if done == 0 and e.errno in _NOT_HERE:
+                    w.close()
+                    if fail_if_exists:
+                        os.remove(dst)                     # made just now by this call: nothing was there before
                     return False                           # this pair of files cannot be done this way
                 raise
             if n == 0:
