@@ -334,7 +334,7 @@ class Session:
                     break
         self.finish(conn)
 
-    def do_STOR(self, arg: str) -> None:
+    def do_STOR(self, arg: str, mode: str = "wb") -> None:
         target = self.real(arg)
         if not os.path.isdir(os.path.dirname(target)):
             return self.send("550 no such directory")
@@ -345,7 +345,7 @@ class Session:
         conn = self.secure_data(conn)
         if conn is None:
             return
-        with open(target, "wb") as f:
+        with open(target, mode) as f:
             while True:
                 try:
                     block = conn.recv(65536)
@@ -355,6 +355,11 @@ class Session:
                     break
                 f.write(block)
         self.finish(conn)
+
+    def do_APPE(self, arg: str) -> None:
+        if not os.path.isfile(self.real(arg)):
+            return self.send("550 no such file")
+        self.do_STOR(arg, "ab")
 
     def do_DELE(self, arg: str) -> None:
         target = self.real(arg)

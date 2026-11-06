@@ -430,12 +430,17 @@ class SftpReadFile(io.RawIOBase):
 
 
 class SftpWriteFile(io.RawIOBase):
-    """A remote file opened for writing (created or emptied)."""
+    """A remote file opened for writing (created or emptied), or with ``append`` an existing one written on from its end (a big copy
+    that was cut off goes on where it stopped)."""
 
-    def __init__(self, client: SftpClient, path: str, exclusive: bool = False) -> None:
+    def __init__(self, client: SftpClient, path: str, exclusive: bool = False, append: bool = False) -> None:
         super().__init__()
         self._handle = None
         self._client, self._path = client, path
+        if append:
+            self._pos = client.stat(path).size
+            self._handle = client.open(path, WRITE_FLAG | APPEND_FLAG)
+            return
         flags = WRITE_FLAG | CREAT_FLAG | (EXCL_FLAG if exclusive else TRUNC_FLAG)
         self._handle = client.open(path, flags)
         self._pos = 0

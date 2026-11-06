@@ -117,6 +117,15 @@ class FileSystem(ABC):
         """Create or truncate a file. ``exclusive`` fails if it already exists."""
         raise NotWritable(path)
 
+    def can_append(self, path: str) -> bool:
+        """Whether ``open_append`` works here: an existing file written on from its end, so a big copy that was cut off can go on
+        where it stopped (``transfer.copy_file``). The local disk does it its own way (it cuts the end and goes back a little)."""
+        return False
+
+    def open_append(self, path: str) -> BinaryIO:
+        """An existing file opened to write on from its end; ``tell()`` is where that is."""
+        raise NotWritable(path)
+
     def system_copy_path(self, path: str) -> Optional[str]:
         """The real path under which the operating system's own copy (``fastcopy``) may copy ``path`` for this file system, or None
         when it may not: then the copy goes through ``open_read`` and ``open_write``. Only the local disk says yes."""

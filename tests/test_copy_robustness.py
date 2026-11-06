@@ -161,7 +161,7 @@ def test_a_part_that_does_not_match_the_original_any_more_is_not_trusted(tmp_pat
     transfer.copy_file(LocalFileSystem(), src, LocalFileSystem(), str(dst), progress=lambda d, t: seen.append(d))
     assert dst.read_bytes() == data and seen[0] <= 1024 * 1024       # started over: the first report is the first chunk
     os.utime(src, (T0 + 50, T0 + 50))
-    assert transfer._resume_from(src, part, LocalFileSystem().stat(src)) == 0       # a changed original: never continued
+    assert transfer._resume_from(LocalFileSystem(), src, LocalFileSystem(), part, LocalFileSystem().stat(src)) == 0       # a changed original: never continued
 
 
 def test_a_cancelled_big_copy_leaves_nothing_behind(tmp_path, monkeypatch):

@@ -2,6 +2,19 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-06#05 -- Big copies to and from SFTP, SCP and FTP servers go on where they stopped
+
+- A big file (64 MB and up) copied to or from an SFTP, SCP or FTP server keeps its part file and note when the connection breaks,
+  and the next try (the copy waiting for the network, Continue Unfinished Operations, or simply copying it again) goes on from there,
+  as between local disks since 0.6. Before, a server copy always started over.
+- A server cannot cut a file, so an upload goes on from the end of the part on the server, after the last 1 MB before it is
+  compared with the original; a download into a local part steps back 4 MB and checks, as before. Anything that does not match
+  starts over. A cancel still removes the part.
+- New file-system calls `can_append` / `open_append` (SFTP: the APPEND open flag; FTP: `APPE`; SCP: the shell appends). WebDAV and
+  Google Drive, which share the server class, say no. A copy within one server is left to the server or starts over.
+- One resumable routine for every pair (`transfer._copy_resumable`) through the file systems' own calls; the local one was folded in.
+  Tests against OpenSSH's sftp-server, a POSIX shell and the test FTP server (which now knows `APPE`).
+
 ## 2026-11-06#04 -- A copy cut off halfway is never taken for done when the job continues
 
 - **Found by killing Windows' copy halfway** through a 2 GB file: it reserves the full size at once, so what is left has the right

@@ -88,6 +88,9 @@ def _entry(session: Session, folder: str, name: str, attrs, size_of_link=None) -
                  atime=float(attrs.atime))
 
 
+APPENDING_SCHEMES = ("sftp", "scp", "ftp")
+
+
 class SftpFileSystem(FileSystem):
     writable = True
     sep = "/"
@@ -298,6 +301,14 @@ class SftpFileSystem(FileSystem):
     def open_write(self, path: str, *, exclusive: bool = False):
         session, remote = self._need_write(path)
         return SftpWriteFile(session.client, session.remote(remote), exclusive)
+
+    def can_append(self, path: str) -> bool:
+        # SFTP, a shell (SCP) and FTP (APPE) write on from a file's end; WebDAV and Google Drive (which share this class) cannot
+        return self.scheme in APPENDING_SCHEMES
+
+    def open_append(self, path: str):
+        session, remote = self._need_write(path)
+        return SftpWriteFile(session.client, session.remote(remote), append=True)
 
     def set_mtime(self, path: str, mtime: float) -> None:
         session, remote = self._need_write(path)

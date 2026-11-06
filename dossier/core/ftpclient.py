@@ -28,7 +28,7 @@ from typing import Callable, Optional
 
 from .davclient import AuthError, CertificateError, fingerprint_of
 from .shellclient import parse_ls_line
-from .sftp_proto import EXCL_FLAG, FAILURE, NO_SUCH_FILE, PERMISSION_DENIED, S_IFDIR, S_IFLNK, S_IFREG, WRITE_FLAG, Attrs, Name, SftpError, error_for
+from .sftp_proto import APPEND_FLAG, EXCL_FLAG, FAILURE, NO_SUCH_FILE, PERMISSION_DENIED, S_IFDIR, S_IFLNK, S_IFREG, WRITE_FLAG, Attrs, Name, SftpError, error_for
 
 TIMEOUT = 30
 MAX_TRANSFERS = 2
@@ -446,13 +446,14 @@ class FtpClient:
                     pass
                 else:
                     raise SftpError(FAILURE, "the file already exists", path)
+            start = self.stat(path).size if flags & APPEND_FLAG else 0   # APPE: written on from the end (a cut-off copy goes on)
             session = self._take_session("write")
             try:
-                conn, _size = session.ntransfercmd(f"STOR {path}")
+                conn, _size = session.ntransfercmd(f"{'APPE' if flags & APPEND_FLAG else 'STOR'} {path}")
             except ftplib.all_errors as e:
                 self._give_back(session, False, "write")
                 raise _error(e, path)
-            state = {"path": path, "write": True, "conn": conn, "session": session, "pos": 0}
+            state = {"path": path, "write": True, "conn": conn, "session": session, "pos": start}
         else:
             attrs = self.stat(path)
             if attrs.is_dir:

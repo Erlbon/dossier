@@ -302,6 +302,12 @@ class RouterFileSystem(FileSystem):
     def system_copy_path(self, path: str) -> Optional[str]:
         return self.fs_for(path).system_copy_path(path)
 
+    def can_append(self, path: str) -> bool:
+        return self.fs_for(path).can_append(path)
+
+    def open_append(self, path: str):
+        return self.fs_for(path).open_append(path)
+
     def set_mtime(self, path: str, mtime: float) -> None:
         self.fs_for(path).set_mtime(path, mtime)
 

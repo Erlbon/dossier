@@ -173,25 +173,26 @@ def copy_file(
     total = info.size
     part = side_name(dst_fs, dst, PART_SUFFIX)
     done = 0
-    resumable = total >= RESUME_MIN and part == dst + PART_SUFFIX and _plain_local(src_fs, src) and _plain_local(dst_fs, dst)
+    resumable = total >= RESUME_MIN and part == dst + PART_SUFFIX and _can_resume(src_fs, src, dst_fs, dst)
     if resumable:
         try:
-            _copy_resumable(src, part, info, progress, cancel, chunk_size, throttle)
+            _copy_resumable(src_fs, src, dst_fs, part, info, progress, cancel, chunk_size, throttle)
         except OSError:
             raise                                      # the part and its note stay: the next try goes on from there
         except BaseException:
-            _drop_part(part)                           # a cancel (or a bug) removes it, as for any copy
+            _drop_part(dst_fs, part)                   # a cancel (or a bug) removes it, as for any copy
             raise
         try:
-            _check_whole(os.path.getsize(longpath(part)), total, src)
-            copy_mode(src, part)
+            _check_whole(dst_fs.stat(part).size, total, src)
+            if _plain_local(src_fs, src) and _plain_local(dst_fs, dst):
+                copy_mode(src, part)
             if check_part is not None:
                 check_part(part)
             _finish(dst_fs, part, dst, info, overwrite, cancel, swap)
         except BaseException:
-            _drop_part(part)
+            _drop_part(dst_fs, part)
             raise
-        _drop_note(part)
+        _drop_note(dst_fs, part)
         carry_tags(src_fs, src, dst_fs, dst, tags_lost)
         return
     try:
@@ -255,66 +256,95 @@ def _note_path(part: str) -> str:
     return part + NOTE_SUFFIX
 
 
-def _drop_note(part: str) -> None:
+def _drop_note(fs: FileSystem, part: str) -> None:
     try:
-        os.remove(longpath(_note_path(part)))
+        fs.remove(_note_path(part))
     except OSError:
         pass
 
 
-def _drop_part(part: str) -> None:
+def _drop_part(fs: FileSystem, part: str) -> None:
     for p in (part, _note_path(part)):
         try:
-            os.remove(longpath(p))
+            fs.remove(p)
         except OSError:
             pass
 
 
-def _resume_from(src: str, part: str, info) -> int:
+def _can_resume(src_fs: FileSystem, src: str, dst_fs: FileSystem, dst: str) -> bool:
+    """Whether a big copy from ``src`` to ``dst`` can go on where an interrupted one stopped: between local disks (Windows shares
+    included), and to or from an SFTP, SCP or FTP server, which can read from any point and write on from a file's end
+    (``FileSystem.can_append``). A copy within one server is left to the server (``copy_on_server``) or starts over."""
+    src_ok = _plain_local(src_fs, src) or src_fs.can_append(src)
+    dst_ok = _plain_local(dst_fs, dst) or dst_fs.can_append(dst)
+    same_server = has_scheme(src) and has_scheme(dst) and src.split("/", 3)[:3] == dst.split("/", 3)[:3]
+    return src_ok and dst_ok and not same_server
+
+
+def _source_id(fs: FileSystem, src: str) -> str:
+    return os.path.abspath(src) if _plain_local(fs, src) else src
+
+
+def _resume_from(src_fs: FileSystem, src: str, dst_fs: FileSystem, part: str, info) -> int:
     """Where a copy into ``part`` can go on: 0 to start over. The note beside the part (written when the copy began, while the
-    target could still be reached) must name the same original, with the same size and time; the part is cut back a little
-    (``RESUME_BACK``), and the stretch before that point must match the original, or nothing of it is trusted."""
+    target could still be reached) must name the same original, with the same size and time. On a local disk the part is cut back
+    a little (``RESUME_BACK``: what was written last may not have reached the disk); a server cannot cut a file, so there the copy
+    goes on from the part's end. Either way the stretch before that point must match the original, or nothing of it is trusted."""
     import json
     try:
-        with open(longpath(_note_path(part)), encoding="utf-8") as f:
-            note = json.load(f)
-        have = os.path.getsize(longpath(part))
+        with dst_fs.open_read(_note_path(part)) as f:
+            note = json.loads(f.read().decode("utf-8"))
+        have = dst_fs.stat(part).size
     except (OSError, ValueError):
         return 0
-    if not isinstance(note, dict) or note.get("source") != os.path.abspath(src) or note.get("size") != info.size \
+    if not isinstance(note, dict) or note.get("source") != _source_id(src_fs, src) or note.get("size") != info.size \
             or abs(float(note.get("mtime", 0)) - info.mtime) > 1:
         return 0
-    good = min(have, info.size) - RESUME_BACK
+    if _plain_local(dst_fs, part):
+        good = min(have, info.size) - RESUME_BACK
+    elif have > info.size:
+        return 0
+    else:
+        good = have
     if good <= RESUME_CHECK:
         return 0
     try:
-        with open(longpath(src), "rb") as a, open(longpath(part), "rb") as b:
+        with src_fs.open_read(src) as a, dst_fs.open_read(part) as b:
             a.seek(good - RESUME_CHECK)
             b.seek(good - RESUME_CHECK)
-            if a.read(RESUME_CHECK) != b.read(RESUME_CHECK):
+            if _read_exact(a, RESUME_CHECK) != _read_exact(b, RESUME_CHECK):
                 return 0
     except OSError:
         return 0
     return good
 
 
-def _copy_resumable(src: str, part: str, info, progress, cancel, chunk_size: int, throttle) -> None:
-    """Copy a big local file into ``part``, going on from an earlier interrupted copy when its part is still there and sound.
-    The system's own copy cannot continue a part, so this is the plain loop; it is not slower over a network."""
+def _copy_resumable(src_fs: FileSystem, src: str, dst_fs: FileSystem, part: str, info, progress, cancel, chunk_size: int,
+                    throttle) -> None:
+    """Copy a big file into ``part``, going on from an earlier interrupted copy when its part is still there and sound (local disks,
+    and SFTP, SCP or FTP servers either way: ``_can_resume``). The system's own copy cannot continue a part, so this is the plain
+    loop; it is not slower over a network."""
     import json
-    start = _resume_from(src, part, info)
+    start = _resume_from(src_fs, src, dst_fs, part, info)
     if start == 0:
         try:
-            with open(longpath(_note_path(part)), "w", encoding="utf-8") as f:
-                json.dump({"source": os.path.abspath(src), "size": info.size, "mtime": info.mtime}, f)
+            with dst_fs.open_write(_note_path(part)) as f:
+                f.write(json.dumps({"source": _source_id(src_fs, src), "size": info.size, "mtime": info.mtime}).encode("utf-8"))
         except OSError:
             pass                                       # no note: this copy simply cannot be continued later
     done = start
-    with open(longpath(src), "rb") as r, open(longpath(part), "r+b" if start else "wb") as w:
+    if _plain_local(dst_fs, part):
+        writer = open(longpath(part), "r+b" if start else "wb")
+    else:
+        writer = dst_fs.open_append(part) if start else dst_fs.open_write(part)
+    with src_fs.open_read(src) as r, writer as w:
         if start:
             r.seek(start)
-            w.seek(start)
-            w.truncate()
+            if _plain_local(dst_fs, part):
+                w.seek(start)
+                w.truncate()
+            elif w.tell() != start:
+                raise OSError(f"the part on the server changed while it was checked: {part}")
             if progress:
                 progress(done, info.size)
         while True:

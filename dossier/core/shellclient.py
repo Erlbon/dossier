@@ -24,7 +24,7 @@ import time
 from datetime import datetime, timezone
 from typing import BinaryIO, Callable, Optional
 
-from .sftp_proto import (CREAT_FLAG, EXCL_FLAG, FAILURE, NO_SUCH_FILE, PERMISSION_DENIED, S_IFDIR, S_IFLNK, S_IFREG, SftpError,
+from .sftp_proto import (APPEND_FLAG, CREAT_FLAG, EXCL_FLAG, FAILURE, NO_SUCH_FILE, PERMISSION_DENIED, S_IFDIR, S_IFLNK, S_IFREG, SftpError,
                          WRITE_FLAG, Attrs, Name, error_for)
 
 BLOCK = 65536                         # dd's block size: reads start on a block boundary, so ``skip`` can seek
@@ -207,9 +207,14 @@ class ShellClient:
 
     # contents -----------------------------------------------------------------------------------------------------------------------------
     def open(self, path: str, flags: int) -> bytes:
-        """A handle for reading, or for writing (created, or emptied unless ``EXCL``): the handle is a number the client keeps."""
+        """A handle for reading, or for writing (created, or emptied unless ``EXCL``; with ``APPEND`` an existing file written on from
+        its end): the handle is a number the client keeps."""
         with self._lock:
-            if flags & WRITE_FLAG:
+            if flags & WRITE_FLAG and flags & APPEND_FLAG:
+                _out, status = self.run(f"[ -f {quote(path)} ]")
+                if status != 0:
+                    raise FileNotFoundError(errno.ENOENT, "no such file", path)
+            elif flags & WRITE_FLAG:
                 if flags & EXCL_FLAG:
                     _out, status = self.run(f"[ -e {quote(path)} ]")
                     if status == 0:
