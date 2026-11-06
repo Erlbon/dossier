@@ -67,6 +67,10 @@ class OperationQueueMixin:
 
         def on_item(op, number: int, count: int) -> None:       # a worker thread: only stores the text
             current["text"] = f"{self.fs.basename(op.src or op.dst)}  ({number} of {count})"
+            current["file"] = None                               # a big file says so itself (on_file_bytes)
+
+        def on_file_bytes(op, done: int, size: int) -> None:    # a worker thread, as above: the file bar of a big file
+            current["file"] = (self.fs.basename(op.src or op.dst), done, size)
 
         def on_wait(op, attempt: int, of: int, seconds: float, error: str) -> None:     # a worker thread, as above
             current["text"] = (f"The network is away ({error}). Trying {self.fs.basename(op.src or op.dst)} again in {seconds:.0f} s "
@@ -75,9 +79,14 @@ class OperationQueueMixin:
         def progress(done: int, total: int) -> None:
             shown.setdefault("started", time.time())               # when it really began (a queued plan waits its turn)
             if "box" not in shown:
-                shown["box"] = self.dialogs.make_progress(plan.title, lambda: holder["job"].cancel() if "job" in holder else None)
+                shown["box"] = self.dialogs.make_progress(plan.title, lambda: holder["job"].cancel() if "job" in holder else None,
+                                                          self.toggle_pause)
                 shown["box"].plan_bytes = plan_bytes
+                shown["box"].set_paused(self.paused)
+                self._active_box = shown["box"]
             shown["box"].detail = current.get("text", "")
+            file = current.get("file")
+            shown["box"].set_file(*file) if file else shown["box"].clear_file()
             shown["box"].update(done, total)
             self._job_progress = (done, total)
             self._update_taskbar()
@@ -91,6 +100,8 @@ class OperationQueueMixin:
                     journal.remove(remember.id)
             if "box" in shown:
                 shown["box"].close()
+                if getattr(self, "_active_box", None) is shown["box"]:
+                    self._active_box = None
             if job in self._jobs:
                 self._jobs.remove(job)
             self._job = self._jobs[0] if self._jobs else None
@@ -105,7 +116,7 @@ class OperationQueueMixin:
                 on_done(job)
 
         job = run_plan_job(self.runner, plan, self.fs, selection=self.selection, undo_log=self.undo_log,
-                           on_progress=progress, on_done=finished, options=self._exec_options(on_item, on_wait),
+                           on_progress=progress, on_done=finished, options=self._exec_options(on_item, on_wait, on_file_bytes),
                            **({} if self.trasher is None else {"trasher": self.trasher}))
         holder["job"] = job
         if self.paused:
@@ -133,6 +144,9 @@ class OperationQueueMixin:
         self.paused = not self.paused
         for job in self._jobs:
             job.token.pause() if self.paused else job.token.resume()
+        box = getattr(self, "_active_box", None)
+        if box is not None:
+            box.set_paused(self.paused)                # the box says it, and its button turns into Resume
         self._update_queue_label()
 
     def cancel_waiting(self) -> None:
@@ -182,13 +196,13 @@ class OperationQueueMixin:
         self.queue_label.setText((" " + chr(0xB7) + " ").join(parts))
         self.queue_label.setVisible(bool(parts))
 
-    def _exec_options(self, on_item=None, on_wait=None) -> ExecOptions:
+    def _exec_options(self, on_item=None, on_wait=None, on_file_bytes=None) -> ExecOptions:
         """The run options from Settings > Copy and Move (gui/copy_settings.py)."""
         s = self.copy_settings()
         options = ExecOptions(limit_bps=int(s["limit_mb"] * 1024 * 1024) or None, on_item=on_item, verify=s["verify"],
                               retries=s["retries"], retry_delay=s["retry_delay"], workers=s["workers"] or None,
                               network_retries=s["network_retries"], network_wait=s["network_wait"], on_wait=on_wait,
-                              folder_times=s["folder_times"],
+                              folder_times=s["folder_times"], on_file_bytes=on_file_bytes,
                               native_copy=s["native"], flush={"auto": None, "always": True, "never": False}[s["flush"]])
         if s["ask_on_error"]:
             skip_all = []

@@ -248,7 +248,7 @@ def test_the_progress_box_shows_speed_and_time_left_for_bytes_but_not_for_counts
     box.close()
     count_box = dialogs.ProgressBox(None, "Delete", lambda: None)
     count_box.update(3, 10)
-    assert count_box._dlg.labelText() == "Delete"             # a count of steps has no speed
+    assert count_box.text() == "Delete"             # a count of steps has no speed
     count_box.close()
 
 
@@ -317,7 +317,7 @@ def test_the_box_says_the_item_the_sizes_done_and_remaining_the_speed_and_the_ti
     for second in range(6):
         clock.t = 100.0 + second
         box.update(second * 40 * 1024 * 1024, total)
-    text = box._dlg.labelText()
+    text = box.text()
     lines = text.split(chr(10))
     assert lines[0] == "Copy" and lines[1] == "holiday.mkv  (2 of 5)"
     assert "100 MB of 400 MB" in lines[2] and "300 MB remaining" in lines[2]       # real bytes, not the bar's total
@@ -335,5 +335,5 @@ def test_the_box_shows_the_item_even_when_the_job_is_not_bytes():
     box = dialogs.ProgressBox(None, "Delete", lambda: None)
     box.detail = "old.log  (3 of 40)"
     box.update(3, 40)
-    assert box._dlg.labelText() == "Delete" + chr(10) + "old.log  (3 of 40)"
+    assert box.text() == "Delete" + chr(10) + "old.log  (3 of 40)"
     box.close()

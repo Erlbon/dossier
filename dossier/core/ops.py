@@ -751,6 +751,7 @@ class ExecOptions:
     flush: Optional[bool] = None          # push the data to the device at the end: None = only for removable and network targets
     native_copy: bool = True              # large local files go through the operating system's own copy (C5)
     on_item: Optional[Callable] = None    # (op, number started, number of steps): which item is being worked on
+    on_file_bytes: Optional[Callable] = None   # (op, bytes done, size): a big file's own progress (big files go one at a time)
     on_error: Optional[Callable] = None   # (op, error text) -> "retry" | "skip" | "abort", after the retries ran out
 
 
@@ -909,7 +910,15 @@ def execute(
             opts.on_item(op, number, visible_steps)
         size_unit = max(op.size, 1) if counts_bytes else 1
         unit = size_unit * (2 if opts.verify and op.kind is Kind.COPY else 1)
-        sub = (lambda d, _t: done.partial(i, min(d, size_unit))) if progress else None
+        file_bytes = opts.on_file_bytes if counts_bytes and op.size > opts.small_limit else None
+
+        def sub(d: int, _t: int) -> None:
+            if progress:
+                done.partial(i, min(d, size_unit))
+            if file_bytes is not None:
+                file_bytes(op, min(d, op.size), op.size)
+        if not progress and file_bytes is None:
+            sub = None
         sub_verify = (lambda d: done.partial(i, size_unit + min(d, size_unit))) if progress else None
         attempts, tries, net_tries = 0, 0, 0
         began = time.monotonic()

@@ -109,16 +109,21 @@ class FakeDialogs:
             return None
         return {r.index: self.conflict_answer for r in rows}
 
-    def make_progress(self, title, on_cancel):
+    def make_progress(self, title, on_cancel, on_pause=None):
         shown = self.progress_boxes
 
         class Box:
             detail = ""
             closed = False
+            paused = False
+            def __init__(self): self.files = []
             def update(self, done, total): pass
+            def set_file(self, name, done, size): self.files.append((name, done, size))
+            def clear_file(self): pass
+            def set_paused(self, paused): self.paused = paused
             def close(self): self.closed = True
         box = Box()
-        box.title, box.cancel = title, on_cancel
+        box.title, box.cancel, box.pause = title, on_cancel, on_pause
         shown.append(box)
         return box
 

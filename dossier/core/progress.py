@@ -75,6 +75,10 @@ class RateMeter:
         while len(self._points) > 2 and now - self._points[1][0] > self._window:
             self._points.pop(0)
 
+    def reset(self) -> None:
+        """Measure from scratch (the next file of the copy box's file bar)."""
+        self._points.clear()
+
     def speed(self) -> float:
         """Bytes per second, 0 until two reports a moment apart have arrived."""
         if len(self._points) < 2:

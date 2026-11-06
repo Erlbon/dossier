@@ -5,8 +5,8 @@ from typing import Callable, Optional
 
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QFontDatabase
-from PyQt6.QtWidgets import (QDialog, QFileDialog, QInputDialog, QCheckBox, QLineEdit, QMessageBox, QPlainTextEdit, QProgressDialog,
-                             QPushButton, QVBoxLayout, QWidget)
+from PyQt6.QtWidgets import (QCheckBox, QDialog, QFileDialog, QHBoxLayout, QInputDialog, QLabel, QLineEdit, QMessageBox, QPlainTextEdit,
+                             QProgressBar, QPushButton, QVBoxLayout, QWidget)
 
 from ..core.progress import RateMeter, human_duration
 from ..core.sizefmt import human_size
@@ -27,62 +27,176 @@ def _size(n: float) -> str:
     return human_size(n, long=True, whole_from=10)
 
 
+DOT = "  " + chr(0xB7) + "  "
+
+
+class _ProgressWindow(OwnedDialog):
+    """The window of a ``ProgressBox``. Esc and the close button cancel, as Cancel does; closing it because the work is over does not."""
+
+    def __init__(self, parent: Optional[QWidget], on_cancel: Callable[[], None]) -> None:
+        super().__init__(parent)
+        self._on_cancel = on_cancel
+        self.ending = False
+
+    def reject(self) -> None:
+        if not self.ending:
+            self._on_cancel()
+        super().reject()
+
+
+def _line(parent: QWidget) -> QLabel:
+    label = QLabel(parent)
+    label.setWordWrap(True)                        # labels word-wrap (house rule)
+    return label
+
+
+def _bar(parent: QWidget) -> QProgressBar:
+    bar = QProgressBar(parent)
+    bar.setRange(0, 1000)
+    bar.setTextVisible(False)
+    return bar
+
+
 class ProgressBox:
-    """A progress dialog that only appears when the work takes a moment (spec: slow things show
-    progress). Wraps QProgressDialog so the rest of the code never touches it."""
-
-    def __init__(self, parent: QWidget, title: str, on_cancel: Callable[[], None]) -> None:
-        self._dlg = QProgressDialog(title, "Cancel", 0, 1000, parent)
-        self._dlg.setWindowTitle(title)
-        self._dlg.setMinimumDuration(400)
-        self._dlg.setMinimumWidth(440)             # the text changes all the time: keep the box from jumping in size
-        self._dlg.setAutoClose(False)
-        self._dlg.setAutoReset(False)
-        self._dlg.setLabelText(title)
-        label = self._dlg.findChild(QWidget, "qt_progress_label") or None
-        if label is not None and hasattr(label, "setWordWrap"):
-            label.setWordWrap(True)          # labels word-wrap (house rule)
-        self._dlg.canceled.connect(on_cancel)
-        self._dlg.setValue(0)
-        self._title = title
-        self._meter = RateMeter()
-
-    def indeterminate(self) -> None:
-        """The work has no known size: the bar just moves."""
-        self._dlg.setRange(0, 0)
+    """A progress box that only appears when the work takes a moment (spec: slow things show progress): what is being done, a bar
+    for the file when a big one is copied (with its own speed and time left), a bar for the whole job with the bytes done, what
+    remains, the speed and the time left, and Pause (when the window can pause the work) and Cancel (decided 2026-11-06, option R).
+    Big files go one at a time, so "this file" is one file; small files go several at once and get no file bar."""
 
     detail = ""                  # the item being worked on, set by the window
     plan_bytes = None            # the bytes the plan moves; the bar's own total also counts reading back and flushing
 
+    def __init__(self, parent: Optional[QWidget], title: str, on_cancel: Callable[[], None],
+                 on_pause: Optional[Callable[[], None]] = None) -> None:
+        dlg = self._dlg = _ProgressWindow(parent, on_cancel)
+        dlg.setWindowTitle(title)
+        dlg.setMinimumWidth(440)                   # the text changes all the time: keep the box from jumping in size
+        layout = QVBoxLayout(dlg)
+        self._top, self._file_label, self._job_label, self._speed_label = (_line(dlg) for _ in range(4))
+        self._file_bar, self._bar = _bar(dlg), _bar(dlg)
+        for widget in (self._top, self._file_label, self._file_bar, self._job_label, self._bar, self._speed_label):
+            layout.addWidget(widget)
+        for widget in (self._file_label, self._file_bar, self._job_label, self._speed_label):
+            widget.hide()
+        buttons = QHBoxLayout()
+        buttons.addStretch(1)
+        self.pause_button: Optional[QPushButton] = None
+        if on_pause is not None:
+            self.pause_button = QPushButton("Pause", dlg)
+            self.pause_button.clicked.connect(on_pause)
+            buttons.addWidget(self.pause_button)
+        cancel = QPushButton("Cancel", dlg)
+        cancel.clicked.connect(dlg.reject)
+        buttons.addWidget(cancel)
+        layout.addLayout(buttons)
+        self._title = title
+        self._top.setText(title)
+        self._meter, self._file_meter = RateMeter(), RateMeter()
+        self._file_name: Optional[str] = None
+        self._file_at = (0, 0)
+        self._paused = False
+        self._speed = ""
+        self._closed = False
+        self._timer = QTimer(dlg)                  # shown only when the work takes a moment
+        self._timer.setSingleShot(True)
+        self._timer.setInterval(400)
+        self._timer.timeout.connect(self._show)
+        self._timer.start()
+
+    def _show(self) -> None:
+        if not self._closed:
+            self._dlg.show()
+
+    def indeterminate(self) -> None:
+        """The work has no known size: the bar just moves."""
+        self._bar.setRange(0, 0)
+
     def update(self, done: int, total: int) -> None:
         if total > 0:
-            self._dlg.setValue(min(1000, int(1000 * done / total)))
+            self._bar.setValue(min(1000, int(1000 * done / total)))
+        self._top.setText(self._title + (chr(10) + self.detail if self.detail else ""))
         nominal = self.plan_bytes or total
         if total > 0 and nominal >= BYTES_SHOWN:       # a count of items has no speed worth showing
             got = int(nominal * min(done, total) / total) if self.plan_bytes else done
             self._meter.add(got)
-            self._dlg.setLabelText(self.status_text(got, nominal))
-        elif self.detail:
-            self._dlg.setLabelText(self._title + chr(10) + self.detail)
+            self._job_label.setText(self._job_line(got, nominal))
+            self._job_label.show()
+            self._speed = self._speed_line(self._meter, got, nominal)
+        self._show_speed()
+
+    @staticmethod
+    def _job_line(done: int, total: int) -> str:
+        return DOT.join(["Whole job", f"{_size(done)} of {_size(total)}", f"{_size(max(0, total - done))} remaining"])
+
+    @staticmethod
+    def _speed_line(meter: RateMeter, done: int, total: int) -> str:
+        rate = meter.speed()
+        if rate <= 0:
+            return ""
+        left = human_duration(meter.seconds_left(done, total))
+        return DOT.join([f"{_size(rate)}/s"] + ([f"{left} left"] if left else []))
+
+    def _show_speed(self) -> None:
+        text = "Paused" if self._paused else self._speed
+        self._speed_label.setText(text)
+        self._speed_label.setVisible(bool(text))
 
     def status_text(self, done: int, total: int) -> str:
-        """What the box says: the item, the size done of the whole and what remains, then speed and time left."""
-        dot = "  " + chr(0xB7) + "  "
-        lines = [self._title]
-        if self.detail:
-            lines.append(self.detail)
-        lines.append(dot.join([f"{_size(done)} of {_size(total)}", f"{_size(max(0, total - done))} remaining"]))
-        rate = self._meter.speed()
-        if rate > 0:
-            parts = [f"{_size(rate)}/s"]
-            left = human_duration(self._meter.seconds_left(done, total))
-            if left:
-                parts.append(f"{left} left")
-            lines.append(dot.join(parts))
-        return chr(10).join(lines)
+        """What the box says of the whole job: the item, the size done of the whole and what remains, then speed and time left."""
+        lines = [self._title] + ([self.detail] if self.detail else []) + [self._job_line(done, total)]
+        speed = self._speed_line(self._meter, done, total)
+        return chr(10).join(lines + ([speed] if speed else []))
+
+    def text(self) -> str:
+        """Everything the box says about the whole job, line by line (the file's line is ``file_text``)."""
+        parts = [self._top.text()] + [w.text() for w in (self._job_label, self._speed_label) if not w.isHidden()]
+        return chr(10).join(p for p in parts if p)
+
+    # the file bar --------------------------------------------------------------------------------------------------------------------
+    def set_file(self, name: str, done: int, size: int) -> None:
+        """A big file is being copied: its own bar, bytes, speed and time left."""
+        if name != self._file_name:
+            self._file_name = name
+            self._file_meter.reset()               # a new file: its own speed, not the last one's
+        self._file_meter.add(done)
+        if size > 0:
+            self._file_bar.setValue(min(1000, int(1000 * done / size)))
+        self._file_at = (done, size)
+        self._show_file()
+        self._file_label.show()
+        self._file_bar.show()
+
+    def _show_file(self) -> None:
+        done, size = self._file_at
+        speed = "" if self._paused else self._speed_line(self._file_meter, done, size)     # paused: no speed that is not there
+        self._file_label.setText(DOT.join(["This file", f"{_size(done)} of {_size(size)}"] + ([speed] if speed else [])))
+
+    def clear_file(self) -> None:
+        """No big file now (small ones, or other steps): no file bar."""
+        self._file_name = None
+        self._file_label.hide()
+        self._file_bar.hide()
+
+    def file_shown(self) -> bool:
+        return not self._file_bar.isHidden()
+
+    def file_text(self) -> str:
+        return self._file_label.text()
+
+    # pause ---------------------------------------------------------------------------------------------------------------------------
+    def set_paused(self, paused: bool) -> None:
+        """Say whether the work is paused (the button turns into Resume)."""
+        self._paused = paused
+        if self.pause_button is not None:
+            self.pause_button.setText("Resume" if paused else "Pause")
+        self._show_speed()
+        if self._file_name is not None:
+            self._show_file()
 
     def close(self) -> None:
-        self._dlg.canceled.disconnect()
+        self._closed = True
+        self._timer.stop()
+        self._dlg.ending = True                    # the work is over: closing is not a cancel
         self._dlg.close()
         self._dlg.deleteLater()
 
@@ -242,5 +356,5 @@ class Dialogs:
         box.deleteLater()                                      # freed once the answer has been read, not kept by the window for good
         return buttons.get(box.clickedButton(), "skip")
 
-    def make_progress(self, title: str, on_cancel: Callable[[], None]) -> ProgressBox:
-        return ProgressBox(self.parent, title, on_cancel)
+    def make_progress(self, title: str, on_cancel: Callable[[], None], on_pause: Optional[Callable[[], None]] = None) -> ProgressBox:
+        return ProgressBox(self.parent, title, on_cancel, on_pause)

@@ -2,6 +2,18 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-06#06 -- The copy box: a bar for the file, a bar for the whole job, and Pause (option R, after TeraCopy)
+
+- **This file:** while a big file (over 8 MB) is copied, the box shows a bar for it with its own bytes, speed and time left. Big
+  files go one at a time, so it is one file; small files go several at once and get no file bar. A new file measures its speed
+  afresh. `ExecOptions.on_file_bytes` reports a big file's own bytes.
+- **Whole job:** the bar and line as before, now labelled "Whole job".
+- **Pause / Resume** in the box: the same as Tools > Operations > Pause or Resume Operations (Ctrl+Shift+P), and the box follows
+  either way. While paused it says "Paused" and shows no speed or time left that is not there.
+- `ProgressBox` is now an `OwnedDialog` of its own instead of a `QProgressDialog` (which has room for one bar and one button);
+  it still appears only when the work takes a moment, and Esc or the close button cancel as before. Closing it because the work
+  is over is not a cancel.
+
 ## 2026-11-06#05 -- Big copies to and from SFTP, SCP and FTP servers go on where they stopped
 
 - A big file (64 MB and up) copied to or from an SFTP, SCP or FTP server keeps its part file and note when the connection breaks,
