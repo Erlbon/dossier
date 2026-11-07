@@ -2,6 +2,11 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-07#03 -- Release 0.8 prepared
+
+- `RELEASE` is 0.8 (the owner's number, 2026-11-07) and its notes are in `docs/releases/v0.8.md`: covers for comics, films and
+  PDFs, SVG in the viewer, the update framework, the clickable About address, and why the exe is bigger (no UPX).
+
 ## 2026-11-07#02 -- No UPX
 
 - **The exe and the installer's program are no longer packed with UPX**, as in the Redactor apps since 2026-10-30: Microsoft
