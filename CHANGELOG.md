@@ -2,6 +2,15 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-07#06 -- Follow a log, like tail -f, from the viewer's bar
+
+- **Follow is a button on the F3 viewer's bar** for text files, and the **F** key, where before it was only in Settings ("Follow
+  the End of the File", still there and in step). The viewer stays open and the new lines of a growing file come in as they are
+  written, the end kept in view.
+- **Reading further up is not yanked away**: while following, a view scrolled up stays where it is, and the status says how many new
+  lines are waiting below; End (Ctrl+End) goes there and follows again, as `less` does with `tail -f`. A file that a logger cuts
+  short and starts again is read afresh, as before.
+
 ## 2026-11-07#05 -- Parts of Windows on the tools bar
 
 - **Add a Program has a "Windows" group** at the top, for the parts of Windows that are not in the Start menu and whose program names

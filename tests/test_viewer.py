@@ -188,6 +188,49 @@ def test_follow_picks_up_new_lines_and_keeps_the_end_in_view(viewer):
     win.follow.setChecked(False)
 
 
+def test_follow_is_a_button_on_the_bar_and_the_f_key_and_all_three_agree(viewer):
+    """2026-11-07: following a log was only in Settings, where nobody found it ("Could we implement the tail option?")."""
+    win = viewer({"log.txt": lines(200)})
+    button = win.floating.buttons["follow"]
+    assert not button.isHidden() and button.isCheckable() and "F" in button.toolTip()
+    button.click()
+    assert win.follow.isChecked() and button.isChecked() and win.view.at_end()
+    QTest.keyClick(win.view, Qt.Key.Key_F)
+    assert not win.follow.isChecked() and not button.isChecked()
+    QTest.keyClick(win.view, Qt.Key.Key_F)
+    assert win.follow.isChecked()
+    menu = win._settings_menu()
+    assert next(a for a in menu.actions() if a.text() == "Follow the End of the File").isChecked()
+    win.follow.setChecked(False)
+
+
+def test_follow_waits_while_you_read_further_up_and_goes_on_at_the_end(viewer):
+    """Like tail -f in less: reading higher up is not yanked away; the new lines are counted; End follows again."""
+    win = viewer({"log.txt": lines(2000)})
+    win.follow.setChecked(True)
+    win.view.verticalScrollBar().setValue(500)                               # reading higher up
+    top = win.view.top
+    assert 0 < top and not win.view.at_end()
+    with open(win.source.path, "ab") as f:
+        f.write(b"".join(b"more %d\n" % i for i in range(30)))
+    win._poll()
+    assert win.source.line_count == 2030 and not win.view.at_end() and win.view.top == top
+    assert "30 new lines" in win.status.text() and "End" in win.status.text()
+    QTest.keyClick(win.view, Qt.Key.Key_End, Qt.KeyboardModifier.ControlModifier)
+    with open(win.source.path, "ab") as f:
+        f.write(b"last\n")
+    win._poll()
+    assert win.view.at_end() and win.source.line_count == 2031
+    win.follow.setChecked(False)
+
+
+def test_the_follow_button_is_only_for_text(viewer, tmp_path):
+    win = viewer({"log.txt": lines(20)})
+    assert not win.floating.buttons["follow"].isHidden()
+    win.enter_mode("hex")
+    assert win.floating.buttons["follow"].isHidden()
+
+
 def test_the_viewer_does_not_stop_another_program_truncating_the_file(viewer):
     win = viewer({"log.txt": lines(50)})
     with open(win.source.path, "wb") as f:      # a logger rotating its file by truncating it

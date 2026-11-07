@@ -84,7 +84,8 @@ class TextViewerWindow(FrostSurface, QMainWindow):
         self.hex_find_kind.setToolTip("What the find box holds")
         self.case = QCheckBox("Match case")
         self.follow = QCheckBox("Follow")
-        self.follow.setToolTip("Keep the end of a growing file (a log) in view")
+        self.follow.setToolTip("Follow the end of a growing file, like tail -f (F): new lines come in as they are written. "
+                               "Scroll up to read and it waits; End follows again")
         self.follow.toggled.connect(self._follow_toggled)
         self.image_info = QCheckBox("Info (I)")
         self.image_info.toggled.connect(self.image_page.show_info)
@@ -101,7 +102,7 @@ class TextViewerWindow(FrostSurface, QMainWindow):
                            (["Esc"], self._escape), (["F3"], self.close), (["Ctrl+F"], self._focus_find),
                            (["Ctrl+G"], self.ask_goto), (["Ctrl+PgDown"], lambda: self.step(1)),
                            (["Ctrl+PgUp"], lambda: self.step(-1)), (["Shift+Return"], lambda: self.find(forward=False)),
-                           (["I"], self._toggle_info)):
+                           (["I"], self._toggle_info), (["F"], self._toggle_follow)):
             act = QAction(self)
             act.setShortcuts([QKeySequence(k) for k in keys])
             act.triggered.connect(lambda _c=False, s=slot: s())
@@ -193,13 +194,17 @@ class TextViewerWindow(FrostSurface, QMainWindow):
         self.info_button = bar.add_button("info", "ⓘ", "The file's facts and, for a photo, its EXIF (I)", lambda: None, checkable=True)
         self.info_button.clicked.connect(self.image_info.setChecked)
         self.image_info.toggled.connect(self.info_button.setChecked)
+        self.follow_button = bar.add_button("follow", "Follow", self.follow.toolTip(), lambda: None, checkable=True,
+                                            icon="chevron-down")
+        self.follow_button.clicked.connect(self.follow.setChecked)
+        self.follow.toggled.connect(self.follow_button.setChecked)
         self._pill["sep_tools"] = bar.add_separator()
         self.position = bar.add_label()
         bar.add_button("settings", "Settings", "View as, encoding, follow", self._popup_settings, icon="settings")
         for page in (self.view, self.hex, self.markdown, view):
             bar.watch(page)
 
-    PILL_KEYS = {"text": ("edit", "find", "goto", "copy"), "hex": ("find", "goto", "copy"), "markdown": ("edit", "find", "copy"),
+    PILL_KEYS = {"text": ("edit", "find", "goto", "copy", "follow"), "hex": ("find", "goto", "copy"), "markdown": ("edit", "find", "copy"),
                  "image": ("copy", "out", "in", "fit", "actual", "left", "right", "info")}
 
     def copy_selection(self) -> None:
@@ -387,6 +392,10 @@ class TextViewerWindow(FrostSurface, QMainWindow):
             return
         self.paths.insert(self.index + 1, path)
         self.load(self.index + 1)
+
+    def _toggle_follow(self) -> None:
+        if self.mode == "text":
+            self.follow.setChecked(not self.follow.isChecked())
 
     def _toggle_info(self) -> None:
         if self.mode == "image":
@@ -583,15 +592,22 @@ class TextViewerWindow(FrostSurface, QMainWindow):
             return
         if self.source is None or self.busy:
             return
-        stick = self.view.at_end() or self.follow.isChecked()
+        stick = self.view.at_end()                    # following, but reading higher up: the new lines wait (as in less)
+        before = self.source.line_count
         try:
             changed = self.source.refresh()
         except OSError:
             return
         if changed:
             self.view.refresh_counts()
-            if stick and self.follow.isChecked():
+            if not self.follow.isChecked():
+                return
+            if stick:
+                self._waiting = 0
                 self.view.scroll_to_end()
+            else:
+                self._waiting = getattr(self, "_waiting", 0) + max(0, self.source.line_count - before)
+                self.status.setText(f"Following: {self._waiting:,} new lines below. End (Ctrl+End) goes there and follows again")
 
     # status ----------------------------------------------------------------------------------
     def _update_status(self) -> None:
