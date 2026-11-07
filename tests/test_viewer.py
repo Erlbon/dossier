@@ -382,7 +382,7 @@ def test_menus_view_has_modes_and_notes_while_settings_has_the_choices(commander
                               "Quarantine", "Operations", "Terminal Here", "Administrator Terminal Here", "SSH Terminal Here", "Command Line"]
     assert texts("Network") == ["Add Server...", "Disconnect This Panel's Server", "Add Network Share...", "Client for NFS",
                                 "Show Tailnet Devices on the Home Page"]
-    assert texts("Settings") == ["Appearance", "Copy and Move...", "Opening Files", "Mouse Wheel...", "Function Keys...", "Auto Refresh",
+    assert texts("Settings") == ["Appearance", "Copy and Move...", "Opening Files", "Mouse Wheel...", "Function Keys...", "Auto Refresh", "Git Status on Network Drives (can be slow)",
                                  "Drives and Sharing", "Quarantine...", "Assistant Access..."]
     look = [a for a in menus["Settings"].actions() if a.text() == "Appearance"][0].menu()
     assert [a.text() for a in look.actions()] == ["Color Scheme", "Icon Set", "Fonts and Bold...", "File Colours...", "Thumbnails...", "Picture Viewer Glass...", "Frosted Background...", "Drive Selector"]

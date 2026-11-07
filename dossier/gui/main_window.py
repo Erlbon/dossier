@@ -42,6 +42,7 @@ from .quarantine_ui import QuarantineMixin
 from .health_window import HealthMixin
 from .metadata_edit import MetadataEditMixin
 from .auto_refresh import AutoRefreshMixin
+from .git_awareness import GitAwarenessMixin
 from .dates_links import DatesLinksMixin
 from .checksums import ChecksumMixin
 from .mounting import MountMixin
@@ -111,7 +112,7 @@ def about_html() -> str:
             "The full credits are in CREDITS.md.</p>")
 
 
-class MainWindow(FolderTreeMixin, FileColorsMixin, TransferMixin, RemoteEditMixin, FrostMixin, GlassViewMixin, KeysMixin, AutoRefreshMixin, MetadataEditMixin, HealthMixin, QuarantineMixin, NewFromContentMixin, TabSetsMixin, CommandCompletionMixin, DatesLinksMixin, ViewModesMixin, ToolsBarMixin, ContextMenuMixin, DragDropMixin, LookMixin, ZipEditMixin, ArchiveCommandsMixin, CopySettingsMixin, AssistantMixin, OpenFilesMixin, MenusMixin, WheelMixin, ToolsBarPlaceMixin, TailnetMixin, CompareFoldersMixin, ServersMixin, DuplicatesMixin, FolderLayoutsMixin, QueueResumeMixin, ColumnsMixin, PropertiesMixin, SharingMixin, MountMixin, ChecksumMixin, MarksAndNotesMixin, SearchCommandMixin, BatchRenameMixin, OperationQueueMixin, StallLogMixin, GoingPlacesMixin, FolderSizesMixin, UnpackMixin, QMainWindow):
+class MainWindow(FolderTreeMixin, FileColorsMixin, TransferMixin, RemoteEditMixin, FrostMixin, GlassViewMixin, KeysMixin, AutoRefreshMixin, GitAwarenessMixin, MetadataEditMixin, HealthMixin, QuarantineMixin, NewFromContentMixin, TabSetsMixin, CommandCompletionMixin, DatesLinksMixin, ViewModesMixin, ToolsBarMixin, ContextMenuMixin, DragDropMixin, LookMixin, ZipEditMixin, ArchiveCommandsMixin, CopySettingsMixin, AssistantMixin, OpenFilesMixin, MenusMixin, WheelMixin, ToolsBarPlaceMixin, TailnetMixin, CompareFoldersMixin, ServersMixin, DuplicatesMixin, FolderLayoutsMixin, QueueResumeMixin, ColumnsMixin, PropertiesMixin, SharingMixin, MountMixin, ChecksumMixin, MarksAndNotesMixin, SearchCommandMixin, BatchRenameMixin, OperationQueueMixin, StallLogMixin, GoingPlacesMixin, FolderSizesMixin, UnpackMixin, QMainWindow):
     def __init__(self, fs: Optional[FileSystem] = None, *, settings_path: Optional[str] = None, start=(None, None),
                  dialogs=None, trasher=None, terminal_launcher=None, which=None) -> None:
         super().__init__()
@@ -246,6 +247,7 @@ class MainWindow(FolderTreeMixin, FileColorsMixin, TransferMixin, RemoteEditMixi
         self.apply_look()                            # the font and the bold the user chose
         self.build_thumbnails()                      # the thumbnail maker, and each panel's remembered view
         self.build_auto_refresh()                    # a change made by another program shows without a manual refresh (the two switches are in Settings)
+        self.build_git_awareness()                   # the branch and the Git column: network drives only when switched on
         self.build_layouts()                         # folder layouts: applied when a folder is shown
         self.build_assistant()                       # the assistant feature (off until the owner switches it on)
         self.build_sharing()                         # which folders are shared (read on a thread), for their mark and column

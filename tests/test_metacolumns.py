@@ -135,7 +135,7 @@ def test_read_many_stops_when_cancelled():
 
 
 def test_a_column_added_later_starts_hidden_in_old_choices_and_old_layouts():
-    assert newly_hidden(LEGACY_KEYS) == frozenset(META_KEYS) | {"shared", "share"}
+    assert newly_hidden(LEGACY_KEYS) == frozenset(META_KEYS) | {"shared", "share", "git"}
     assert newly_hidden(KEYS) == frozenset()
     assert set(META_KEYS) <= DEFAULT_HIDDEN
     old = '[{"path": "%s", "scope": "only", "hidden": ["size"], "order": ["name"], "mode": "details", "size": 128, "sort": "name", "desc": false}]' \

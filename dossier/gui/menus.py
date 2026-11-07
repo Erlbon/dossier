@@ -350,6 +350,7 @@ class MenusMixin:
         settings.addAction(self._action("Mouse Wheel...", None, self.open_wheel_settings))
         settings.addAction(self._action("Function Keys...", None, self.open_function_keys_settings))
         self.add_auto_refresh_actions(settings)
+        self.add_git_actions(settings)
         drives_menu = settings.addMenu("Drives and Sharing")
         self.act_remember_drives = QAction("Remember Drives Between Sessions", self)
         self.act_remember_drives.setToolTip("To notice a different drive under the same letter")

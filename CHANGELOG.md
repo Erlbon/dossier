@@ -2,6 +2,23 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-07#07 -- Git awareness: the branch and what changed, read-only
+
+The parts of `docs/git-awareness-plan-2026-11-07.md` the owner said yes to (cards 1-4 and 8; 5-7 later). Dossier never writes to a
+repository: no init, commit, sync or restore.
+
+- **In a folder that is in a git repository, the panel's bar shows the branch and what changed**: "⎇ main · 3 changed, 1 new · 2
+  ahead". The tooltip says where the repository is and which remote branch it follows. Outside a repository nothing is shown.
+- **A Git column** (off until switched on, like the other extra columns): Changed, Staged, New, Conflict or Ignored for each item,
+  and for a folder the strongest state of anything below it. Sorting by it puts what changed first.
+- **Looking never changes the repository.** It runs the git that is installed (Git for Windows) with commands that only read, and
+  without git's optional locks, so not even git's index file is touched (a test checks it byte for byte). With no git installed
+  nothing is shown and nothing asks for it; a repository git does not trust (a share owned by another user) says so in its tooltip.
+- Read on a thread, kept a few seconds per repository, asked again on a refresh and by auto refresh. **Network drives only when
+  switched on** (Settings > Git Status on Network Drives), as with thumbnails; never on servers or inside archives.
+- **Git tools on the tools bar**: Add a Program suggests what is installed of TortoiseGit (log or commit of this folder), VS Code on
+  this folder, GitHub Desktop and Git GUI. Committing and syncing belong there.
+
 ## 2026-11-07#06 -- Follow a log, like tail -f, from the viewer's bar
 
 - **Follow is a button on the F3 viewer's bar** for text files, and the **F** key, where before it was only in Settings ("Follow

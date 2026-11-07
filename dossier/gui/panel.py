@@ -13,7 +13,7 @@ from PyQt6.QtWidgets import (QAbstractItemView, QApplication, QFrame, QListView,
                              QTabBar, QToolButton,
                              QTableView, QTextBrowser, QVBoxLayout, QWidget)
 
-from ..core import archives, pathparts, zipfs
+from ..core import archives, gitinfo, pathparts, zipfs
 from ..core.notes import compose_markdown, find_notes
 from ..core.selection import SelectionStore
 from ..core.vfs import Entry, FileSystem
@@ -22,7 +22,7 @@ from ..core import metacolumns
 from ..core.columns import index_of as column_index
 from redactor_common.core.table_settings import is_column_visible
 from redactor_common.gui.column_order import apply_column_order, visual_column_keys
-from ..core.drives import drive_of, probe_async, usage_async
+from ..core.drives import drive_of, is_network_path, probe_async, usage_async
 from ..core.lights import FAILED, OK, describe
 from ..core.home import HOME_URL, is_home
 from ..core.platform import has_scheme, path_key
@@ -755,6 +755,11 @@ class Panel(QFrame):
         self.counts = QLabel()                            # what the listing holds, beside the free space
         self.counts.setObjectName("counts")
         self.counts.setContentsMargins(0, 0, 10, 0)
+        self.git_label = QLabel()                         # the branch and what changed, in a folder that is in a git repository
+        self.git_label.setObjectName("gitlabel")
+        self.git_label.setContentsMargins(0, 0, 10, 0)
+        self.git_label.setMaximumWidth(360)               # a long branch name must not push the address away
+        self.git_label.hide()
         self.model.modelReset.connect(self._update_counts)       # a new listing, a filter
         self._counts_timer = QTimer(self)                         # after the bar's layout has settled
         self._counts_timer.setSingleShot(True)
@@ -795,6 +800,7 @@ class Panel(QFrame):
         self.refresh_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.refresh_button.setToolTip("Refresh: read this folder again (Ctrl+R refreshes both panels)")
         self.refresh_button.clicked.connect(self.refresh)
+        bar.addWidget(self.git_label)
         bar.addWidget(self.counts)
         bar.addWidget(self.free)
         self.tool_group = QWidget()                      # the three small buttons sit close together, as one group, not a bar's usual gap apart
@@ -1393,6 +1399,51 @@ class Panel(QFrame):
 
         threading.Thread(target=work, daemon=True, name="dossier-meta").start()
 
+    # git (git awareness plan 2026-11-07: read-only, core/gitinfo.py) ---------------------------------------------------------------------
+    git_allowed = staticmethod(lambda path: not is_network_path(path))   # the window adds the owner's network-drive switch
+    git_cache = gitinfo.SHARED_CACHE
+    git_reader = staticmethod(gitinfo.read_status)                     # a seam for tests
+
+    def refresh_git(self) -> None:
+        """Ask git about this folder's repository on a thread: the branch and counts in the bar, the states in the Git column. Nothing
+        for the Home page, a server, an archive, a network drive whose switch is off, a folder in no repository, or no git installed."""
+        self._git_gen = getattr(self, "_git_gen", 0) + 1
+        path = self.path
+        fresh, self._git_fresh = getattr(self, "_git_fresh", False), False
+        if self._dispatch is None or self.is_home or not path or has_scheme(path) or not self.git_allowed(path):
+            self._show_git(None, "")
+            return
+        gen, cache, reader = self._git_gen, self.git_cache, self.git_reader
+
+        def work() -> None:
+            st, problem = None, ""
+            root = gitinfo.find_root(path)
+            if root is not None and gitinfo.git_program():
+                if fresh:
+                    cache.forget(root)
+                try:
+                    st = cache.get(root, reader)
+                except gitinfo.GitError as e:
+                    problem = str(e)
+
+            def show() -> None:
+                if gen == self._git_gen and self.path == path:
+                    self._show_git(st, problem)
+            self._dispatch(show)
+
+        threading.Thread(target=work, daemon=True, name="dossier-git").start()
+
+    def _show_git(self, st, problem: str) -> None:
+        self.model.set_git(st)
+        if st is not None:
+            self.git_label.setText(chr(0x2387) + " " + gitinfo.summary(st))        # the branch sign
+            self.git_label.setToolTip(gitinfo.details(st))
+        elif problem:
+            self.git_label.setText(chr(0x2387) + " git: cannot read")
+            self.git_label.setToolTip(f"Git repository, but {problem}")
+        self.git_label.setVisible(st is not None or bool(problem))
+        self._fit_counts()
+
     def _fill_home_usage(self, entries: list) -> None:
         """Free space of the drives, asked on background threads: a dead network drive only delays its own row."""
         if self._dispatch is None:
@@ -1463,6 +1514,7 @@ class Panel(QFrame):
         else:
             self.refresh_tags()
             self.refresh_meta()
+        self.refresh_git()
         if row >= 0:
             self.table.setCurrentIndex(self.model.index(row, 0))
         self.view.scrollToTop() if not select else self.view.scrollTo(self.table.currentIndex())
@@ -1696,6 +1748,7 @@ class Panel(QFrame):
 
     def refresh(self) -> None:
         keep = self.current_name()
+        self._git_fresh = True                               # a refresh asks git again rather than use its answer of a moment ago
         self.set_folder(self.path, select=keep)
 
     def go_home(self) -> None:

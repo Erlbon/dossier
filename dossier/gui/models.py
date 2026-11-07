@@ -16,7 +16,7 @@ from PyQt6.QtWidgets import QApplication
 
 from ..core.columns import KEYS as column_keys, LABELS as column_labels, RIGHT_ALIGNED, attributes_text, location_text, type_text
 from ..core.columns import LABEL_COLORS, META_KEYS, label_text, rating_text, when
-from ..core import covers, sharing
+from ..core import covers, gitinfo, sharing
 from ..core.drives import is_remote_quick
 from ..core.filetypes import DRIVE_ICONS, icon_name
 from ..core.home import HOME_URL, TYPE_NAMES, USER_FOLDER_NOTE
@@ -29,6 +29,7 @@ from . import icon_set, look, theme
 COLUMNS = tuple(column_labels[k] for k in column_keys)       # one per logical column, see core/columns.py
 SHARED_COL = column_keys.index("shared")
 SHARE_COL = column_keys.index("share")      # each row's part of the folder, once Folder Sizes has added up every folder
+GIT_COL = column_keys.index("git")          # what git knows of each item, in a folder that is in a repository (core/gitinfo.py)
 HOME_COLUMNS = ("Name", "Type", "Details")
 ENTRY_ROLE = Qt.ItemDataRole.UserRole
 SORT_ROLE = Qt.ItemDataRole.UserRole + 1
@@ -148,6 +149,7 @@ class FolderModel(QAbstractTableModel):
         self._framed_cache: dict = {}
         self._tag_info: dict = {}                # path -> (tags text, rating, label), filled in on a thread when a column is on
         self._meta_info: dict = {}               # path -> {metadata column key: text}, read from the files on a thread
+        self._git = None                         # gitinfo.GitStatus of the folder's repository, read on a thread (None outside one)
         self._has_note = False
         self._sort_col = 0
         self._sort_order = Qt.SortOrder.AscendingOrder
@@ -204,6 +206,21 @@ class FolderModel(QAbstractTableModel):
             self.sort(self._sort_col, self._sort_order)
         if self.rowCount():
             self.dataChanged.emit(self.index(0, 0), self.index(self.rowCount() - 1, self.columnCount() - 1))
+
+    def set_git(self, status) -> None:
+        """What git knows about the folder's repository (a ``gitinfo.GitStatus``, or None outside one), for the Git column. It arrives
+        after the listing, from a thread."""
+        self._git = status
+        if self._sort_col == GIT_COL:
+            self.sort(self._sort_col, self._sort_order)
+        if self.entry_count():
+            self.dataChanged.emit(self.index(0, GIT_COL), self.index(self.entry_count() - 1, GIT_COL))
+
+    def git_state(self, entry: Entry) -> str:
+        st = self._git
+        if st is None or entry.name == "..":
+            return ""
+        return gitinfo.state_of(st, entry.path, entry.is_dir)
 
     def _shared(self, entry: Entry) -> str:
         return ", ".join(sharing.KNOWN.names_for(entry.path)) if entry.is_dir else ""
@@ -387,6 +404,8 @@ class FolderModel(QAbstractTableModel):
                 10: lambda e: (self._tag(e.path)[2], natural_key(e.name))}
         keys[SHARE_COL] = lambda e: (e.size, natural_key(e.name))        # a share is the size over one total: the same order
         keys[SHARED_COL] = lambda e: (not self._shared(e), self._shared(e).lower(), natural_key(e.name))   # shared first, by share name
+        rank = {s: i for i, s in enumerate(gitinfo.STATES)}
+        keys[GIT_COL] = lambda e: (rank.get(self.git_state(e), len(rank)), natural_key(e.name))     # conflicts and changes first
         if self._sort_col not in keys:                   # a metadata column: by its text, numbers in their natural order
             meta_key = column_keys[self._sort_col]
             keys[self._sort_col] = lambda e: (natural_key(self._meta(e.path, meta_key)), natural_key(e.name))
@@ -466,6 +485,8 @@ class FolderModel(QAbstractTableModel):
                 return self._shared(entry)
             if col == SHARE_COL:
                 return self._share_text(entry)
+            if col == GIT_COL:
+                return gitinfo.LABELS[self.git_state(entry)]
             return self._meta(entry.path, column_keys[col])
         if role == Qt.ItemDataRole.DecorationRole and col == 0:
             if self.icon_px:

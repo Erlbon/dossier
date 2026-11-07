@@ -207,16 +207,25 @@ SUGGESTED = (
     ("Windows Terminal", r"C:\Program Files\WindowsApps\Microsoft.WindowsTerminal_*\wt.exe", ""),
     ("Notepad", r"C:\Windows\System32\notepad.exe", "{file}"),
     ("Calculator", r"C:\Windows\System32\calc.exe", ""),
+    # git tools (git awareness plan 2026-11-07, card 8): committing, branching and syncing belong in them; Dossier only reads git
+    ("TortoiseGit: Log of This Folder", r"C:\Program Files\TortoiseGit\bin\TortoiseGitProc.exe", "/command:log /path:{dir}"),
+    ("TortoiseGit: Commit This Folder", r"C:\Program Files\TortoiseGit\bin\TortoiseGitProc.exe", "/command:commit /path:{dir}"),
+    ("VS Code on This Folder", r"%LOCALAPPDATA%\Programs\Microsoft VS Code\Code.exe", "{dir}"),
+    ("VS Code on This Folder", r"C:\Program Files\Microsoft VS Code\Code.exe", "{dir}"),
+    ("GitHub Desktop", r"%LOCALAPPDATA%\GitHubDesktop\GitHubDesktop.exe", ""),
+    ("Git GUI", r"C:\Program Files\Git\cmd\git-gui.exe", ""),
 )
 
 
 def suggestions(exists: Callable = os.path.isfile) -> list:
-    """Programs that are installed here and make a good start: ``[Tool]``. Looks at a few known places on the disk, so the window
-    calls it on a thread."""
-    found = []
+    """Programs that are installed here and make a good start: ``[Tool]``. Looks at a few known places on the disk (``%LOCALAPPDATA%``
+    and the like filled in), so the window calls it on a thread. A program found in two places is offered once."""
+    found, names = [], set()
     for name, path, args in SUGGESTED:
-        if "*" in path:
+        if "*" in path or name in names:
             continue
-        if exists(path):
+        path = os.path.expandvars(path)
+        if "%" not in path and exists(path):
             found.append(Tool(name, path, args))
+            names.add(name)
     return found

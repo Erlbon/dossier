@@ -93,6 +93,17 @@ def test_suggestions_only_offer_what_is_installed():
     assert "Notepad" in names and any("Locksmith" in n for n in names) and "Calculator" not in names
 
 
+def test_the_git_tools_found_here_are_suggested_once_each_with_this_folder(monkeypatch):
+    """Git awareness plan 2026-11-07, card 8: Dossier only reads git; committing and syncing are one click away in the real tools."""
+    monkeypatch.setenv("LOCALAPPDATA", "C:" + os.sep + "Users" + os.sep + "me" + os.sep + "AppData" + os.sep + "Local")
+    found = T.suggestions(exists=lambda p: "TortoiseGit" in p or "VS Code" in p)
+    by_name = {t.name: t for t in found}
+    assert by_name["TortoiseGit: Log of This Folder"].args == "/command:log /path:{dir}"
+    assert by_name["VS Code on This Folder"].args == "{dir}" and "%" not in by_name["VS Code on This Folder"].command
+    assert [t.name for t in found].count("VS Code on This Folder") == 1               # found in two places, offered once
+    assert "GitHub Desktop" not in by_name
+
+
 # the bar in the window --------------------------------------------------------------------------------------------------
 pytest.importorskip("PyQt6")
 
