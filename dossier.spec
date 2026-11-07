@@ -63,7 +63,8 @@ exe = EXE(
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True,
+    # UPX off (2026-11-07, as in the Redactor apps since 2026-10-30): Defender flagged UPX-packed, unsigned releases as malware.
+    upx=False,
     upx_exclude=[],
     runtime_tmpdir=None,
     console=False,  # a window program: no console box behind it (output still goes to a pipe or a file)
@@ -76,6 +77,6 @@ exe = EXE(
 )
 
 if FOLDER:
-    coll = COLLECT(exe, a.binaries, a.zipfiles, a.datas, strip=False, upx=True, upx_exclude=[], name="dossier")
+    coll = COLLECT(exe, a.binaries, a.zipfiles, a.datas, strip=False, upx=False, upx_exclude=[], name="dossier")
     with open(os.path.join(DISTPATH, "dossier", "update-channel"), "w", encoding="utf-8") as channel:
         channel.write("windows-zip\n")

@@ -64,6 +64,12 @@ def test_every_build_declares_its_update_channel():
     assert 'os.path.join(DISTPATH, "dossier", "update-channel")' in spec and 'channel.write("windows-zip\\n")' in spec
 
 
+def test_no_build_is_packed_with_upx():
+    """Defender flags UPX-packed, unsigned exes as malware (the Redactor apps 2026-10-30, Dossier 2026-11-07)."""
+    spec = read("dossier.spec")
+    assert "upx=True" not in spec and spec.count("upx=False") == 2
+
+
 def test_the_app_id_never_changes_and_the_release_tool_knows_it():
     """A new AppId would install a second Dossier beside the first instead of upgrading it; the release gate finds the scratch install
     (and refuses to run beside a real one) by the same id."""

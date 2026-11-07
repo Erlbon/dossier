@@ -2,6 +2,12 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-07#02 -- No UPX
+
+- **The exe and the installer's program are no longer packed with UPX**, as in the Redactor apps since 2026-10-30: Microsoft
+  Defender flags UPX-packed, unsigned programs as malware. 0.7 was still packed (the old release workflow installed UPX), so the next
+  release's `dossier.exe` is about 64 MB instead of 54 MB for that reason alone. A test keeps UPX off.
+
 ## 2026-11-07#01 -- Updates through the family's update framework
 
 - **Dossier updates the way every Erlbon app now does** (redactor_common 2026-11-07-06, `docs/update-framework.md`). Each release

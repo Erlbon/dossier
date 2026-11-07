@@ -12,7 +12,7 @@ with ``APP_VERSION``. The release tool (``python -m redactor_common.release publ
 from __future__ import annotations
 
 APP_NAME = "Dossier"
-APP_VERSION = "2026-11-07#01"
+APP_VERSION = "2026-11-07#02"
 RELEASE = "0.7"
 APP_REPO_URL = "https://github.com/Erlbon/dossier"
 
