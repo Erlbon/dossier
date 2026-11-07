@@ -466,25 +466,42 @@ NAV_BUDGET = 0.15      # seconds a folder gets to answer before the window stops
 
 
 class _Listing:
-    """A folder being listed on its own thread, so a slow file system can never freeze the window."""
+    """A folder being listed on its own thread, so a slow file system can never freeze the window. With ``allow_file`` a
+    path that turns out to be a file lists the folder holding it instead (``path`` then says which, ``file`` the file)."""
 
-    def __init__(self, fs: FileSystem, path: str, with_notes: bool = False) -> None:
+    def __init__(self, fs: FileSystem, path: str, with_notes: bool = False, allow_file: bool = False) -> None:
+        self.path = path
+        self.file = ""
         self.entries: Optional[list] = None
         self.notes: list = []                # the folder's notes, read on this thread too: the window never reads a file
         self.error: Optional[BaseException] = None
         self.cancelled = False
         self.done = threading.Event()
-        threading.Thread(target=self._run, args=(fs, path, with_notes), daemon=True, name="dossier-listing").start()
+        threading.Thread(target=self._run, args=(fs, path, with_notes, allow_file), daemon=True, name="dossier-listing").start()
 
-    def _run(self, fs: FileSystem, path: str, with_notes: bool) -> None:
+    def _run(self, fs: FileSystem, path: str, with_notes: bool, allow_file: bool) -> None:
         try:
-            self.entries = fs.list(path)
+            try:
+                self.entries = fs.list(path)
+            except OSError:
+                if not (allow_file and _is_file(fs, path)):
+                    raise
+                self.file, path = path, fs.dirname(path)
+                self.path = path
+                self.entries = fs.list(path)
             if with_notes:
                 self.notes = find_notes(fs, path, self.entries)
         except BaseException as e:           # reported to the panel, never raised in the thread
             self.error = e
         finally:
             self.done.set()
+
+
+def _is_file(fs: FileSystem, path: str) -> bool:
+    try:
+        return not fs.stat(path).is_dir
+    except OSError:
+        return False
 
 
 @dataclass
@@ -677,6 +694,7 @@ class Panel(QFrame):
     flatten_requested = pyqtSignal()      # the button for "all files below this folder" was pressed
     home_action = pyqtSignal(str)         # an action entry of the Home page was opened (its path says which)
     server_requested = pyqtSignal(str, bool)   # a server of the Home page was opened: (its address, in a new tab)
+    file_entered = pyqtSignal(str)        # the address named a file: its folder is shown with the cursor on it; the window views it
     tab_menu_requested = pyqtSignal(int, object)   # a right-click on a tab: (its index, global position)
     connect_needed = pyqtSignal(str)      # a folder of a server that is not connected was asked for (its address)
     login_needed = pyqtSignal(str)        # a network share refused us (user name or password): the window asks for a login
@@ -1059,14 +1077,15 @@ class Panel(QFrame):
         return self.fs.basename(e.path) if e else ""
 
     # navigation ----------------------------------------------------------------------
-    def set_folder(self, path: str, select: str = "") -> bool:
+    def set_folder(self, path: str, select: str = "", file_ok: bool = False) -> bool:
         """Show ``path``. The listing is made on a worker thread; a folder that answers within a moment (every
         local one) is shown at once. A slow one (a dead network share, a server) leaves the window alive: the
         old folder stays, a message says what is being opened, Esc cancels, and the new folder appears when the
         answer arrives. Returns False (with a message) when it cannot be listed, True when shown or still
-        pending."""
+        pending. ``file_ok`` (a path typed into the address): a file shows its folder with the cursor on it, and
+        ``file_entered`` asks the window to view it."""
         self._cancel_navigation()
-        listing = _Listing(self.fs, path, self.notes_enabled and not is_home(path))
+        listing = _Listing(self.fs, path, self.notes_enabled and not is_home(path), allow_file=file_ok)
         if listing.done.wait(NAV_BUDGET):
             return self._finish_listing(listing, path, select)
         self._pending = (listing, path, select)
@@ -1400,6 +1419,8 @@ class Panel(QFrame):
         probe_async(paths, ready)
 
     def _finish_listing(self, listing: "_Listing", path: str, select: str) -> bool:
+        if listing.file and listing.error is None:            # a file was named: its folder, with the cursor on it
+            path, select = listing.path, self.fs.basename(listing.file)
         provider = getattr(getattr(self.fs, "home", None), "provider", None)
         if listing.error is not None:
             e = listing.error
@@ -1447,6 +1468,8 @@ class Panel(QFrame):
         self.view.scrollToTop() if not select else self.view.scrollTo(self.table.currentIndex())
         self._label_current_tab(path)
         self.folder_changed.emit(self)
+        if listing.file:
+            self.file_entered.emit(listing.file)
         return True
 
     # tabs: each panel has its own, every tab is one folder ----------------------------------------------
@@ -1795,8 +1818,8 @@ class Panel(QFrame):
         text = self.address.text().strip()
         if text.lower() in ("home", "home:", "home:/", "home://"):
             text = HOME_URL
-        typed = text if has_scheme(text) else os.path.normpath(os.path.expanduser(text))
-        if text and not self.set_folder(typed):
+        typed = pathparts.expand_typed(text)          # %APPDATA%\..., ~, and the quotes of Explorer's "Copy as path"
+        if typed and not self.set_folder(typed, file_ok=True):
             self.address.setText(self.path)
         self.address_bar.finish_edit()
         self.view.setFocus()

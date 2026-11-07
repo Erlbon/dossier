@@ -121,6 +121,67 @@ def test_the_empty_end_of_the_field_turns_it_into_text_to_type_and_enter_goes_th
     assert not bar.editing
 
 
+def test_a_typed_path_expands_windows_variables_quotes_and_the_home_folder(tmp_path, monkeypatch):
+    """%APPDATA%\\Accipio\\rules.json copied from a page or a note (2026-11-07), and Explorer's "Copy as path", which adds quotes."""
+    monkeypatch.setenv("DOSSIER_TEST_PLACE", str(tmp_path))
+    sep = os.sep
+    assert pathparts.expand_typed("%DOSSIER_TEST_PLACE%" + sep + "a" + sep + "b.json") == os.path.join(str(tmp_path), "a", "b.json")
+    assert pathparts.expand_typed('  "' + str(tmp_path) + '"  ') == str(tmp_path)
+    assert pathparts.expand_typed("%NO_SUCH_VARIABLE_HERE%" + sep + "x") == "%NO_SUCH_VARIABLE_HERE%" + sep + "x"     # left as typed
+    assert pathparts.expand_typed("~") == os.path.expanduser("~")
+    assert pathparts.expand_typed("sftp://me@host:22/%HOME%") == "sftp://me@host:22/%HOME%"       # a server's path is the server's
+    assert pathparts.expand_typed("   ") == ""
+
+
+def type_address(win, text):
+    win.left.address_bar.start_edit()
+    win.left.address.setText(text)
+    QTest.keyClick(win.left.address, Qt.Key.Key_Return)
+
+
+def test_a_folder_with_a_variable_in_the_address_is_opened(world, monkeypatch):
+    win, _d, left, right, tmp = world
+    monkeypatch.setenv("DOSSIER_TEST_PLACE", str(tmp))
+    type_address(win, "%DOSSIER_TEST_PLACE%" + os.sep + os.path.basename(str(right)))
+    pump(win, lambda: win.left.path == str(right))
+
+
+def test_a_file_in_the_address_opens_its_folder_with_the_cursor_on_it_and_shows_it_in_the_viewer(world, monkeypatch):
+    """What the owner expects of %APPDATA%\\Accipio\\rules.json (2026-11-07): the folder, the file under the cursor, and F3 on it."""
+    win, _d, left, right, tmp = world
+    target = right / "rules.json"
+    target.write_text('{"rules": []}', encoding="utf-8")
+    viewed = []
+    monkeypatch.setattr(win, "view_file", lambda paths=None: viewed.append(list(paths or [])))
+    monkeypatch.setenv("DOSSIER_TEST_PLACE", str(tmp))
+    type_address(win, '"%DOSSIER_TEST_PLACE%' + os.sep + os.path.basename(str(right)) + os.sep + 'rules.json"')
+    pump(win, lambda: win.left.path == str(right) and bool(viewed))
+    entry = win.left.current_entry()
+    assert entry is not None and entry.name == "rules.json"
+    assert viewed == [[str(target)]] and not win.left.address_bar.editing
+
+
+def test_the_viewer_really_opens_on_a_file_typed_into_the_address(world):
+    from tests.helpers import settle
+    win, _d, left, right, tmp = world
+    target = right / "rules.json"
+    target.write_text('{"rules": []}', encoding="utf-8")
+    type_address(win, str(target))
+    pump(win, lambda: win.left.path == str(right))
+    settle(win)
+    pump(win, lambda: bool(win.viewers))
+    assert win.viewers[0].paths == [str(target)]
+    win.viewers[0].close()
+
+
+def test_a_path_that_is_not_there_still_says_so_and_keeps_the_folder(world):
+    win, _d, left, right, tmp = world
+    before = win.left.path
+    type_address(win, str(tmp / "nothing-here" / "rules.json"))
+    QApplication.processEvents()
+    assert win.left.path == before
+
+
 def test_escape_and_ctrl_l(world):
     win, _d, left, right, tmp = world
     bar = win.left.address_bar

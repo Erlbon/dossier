@@ -226,6 +226,7 @@ class MainWindow(FolderTreeMixin, FileColorsMixin, TransferMixin, RemoteEditMixi
             panel.message.connect(self._say)
             panel.home_action.connect(self._home_action)
             panel.server_requested.connect(lambda path, new_tab, p=panel: self.open_server(path, new_tab, p))
+            panel.file_entered.connect(lambda path: self.view_file([path]))      # a file typed into the address: F3 on it
             panel.connect_needed.connect(lambda path, p=panel: self._connect_needed(path, p))
             panel.login_needed.connect(lambda path, p=panel: self.ask_share_login(path, p))
             panel.note_edit_requested.connect(self.edit_folder_note)

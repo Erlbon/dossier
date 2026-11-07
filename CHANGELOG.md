@@ -2,6 +2,14 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-07#04 -- %APPDATA% and files in the address
+
+- **The address takes Windows variables**: `%APPDATA%\Accipio`, `%LOCALAPPDATA%`, `%USERPROFILE%\Downloads` and the rest go
+  where they say (a variable that is not set stays as typed, and a server's address is left alone). Quotes around a pasted path, as
+  Explorer's "Copy as path" adds them, are taken off.
+- **A file in the address opens it**: `%APPDATA%\Accipio\rules.json` shows the folder with the cursor on `rules.json` and opens
+  it in the viewer (F3). Whether it is a file is found out on the listing's thread, so a slow drive still cannot freeze the window.
+
 ## 2026-11-07#03 -- Release 0.8 prepared
 
 - `RELEASE` is 0.8 (the owner's number, 2026-11-07) and its notes are in `docs/releases/v0.8.md`: covers for comics, films and
