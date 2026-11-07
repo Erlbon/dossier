@@ -20,6 +20,8 @@ class Node:
     name: str
     path: str = ""                                 # the shortcut (empty for a group)
     children: list = field(default_factory=list)
+    args: str = ""                                 # what the program is given (a part of Windows: core/windows_parts.py)
+    icon: str = ""                                 # the file holding its icon, "file,index" (empty: the program's own)
 
     @property
     def is_group(self) -> bool:
@@ -97,7 +99,7 @@ def filter_tree(nodes: list, text: str) -> list:
         if n.is_group:
             kept = filter_tree(n.children, text)
             if kept:
-                out.append(Node(n.name, "", kept))
+                out.append(Node(n.name, "", kept, n.args, n.icon))
         elif needle in n.name.casefold():
             out.append(n)
     return out

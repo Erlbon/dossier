@@ -2,6 +2,18 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-07#05 -- Parts of Windows on the tools bar
+
+- **Add a Program has a "Windows" group** at the top, for the parts of Windows that are not in the Start menu and whose program names
+  nobody remembers: System, Settings, Windows Update, Installed Apps, Network and Internet, Network Connections, Windows Security,
+  Firewall, Device Manager, Services, Event Viewer, Disk Management, Computer Management, Task Scheduler, Task Manager, Environment
+  Variables, Advanced System Settings, Power Options, Sound, Control Panel and Registry Editor. Pick one and it becomes a button,
+  with its arguments filled in (Environment Variables is `rundll32.exe sysdm.cpl,EditEnvironmentVariables`). The search box finds
+  them too. A part whose program is not on this computer is left out.
+- **Each has its own icon** on the button, also for a Settings page or a console, which Qt would show as a blank page: the icon is
+  read from the Windows file that holds it (`devmgr.dll,5` for Device Manager), and the tool keeps it in the settings. Editing a
+  tool keeps its icon until its program is changed.
+
 ## 2026-11-07#04 -- %APPDATA% and files in the address
 
 - **The address takes Windows variables**: `%APPDATA%\Accipio`, `%LOCALAPPDATA%`, `%USERPROFILE%\Downloads` and the rest go

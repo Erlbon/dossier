@@ -366,7 +366,7 @@ def test_add_program_really_scans_the_start_menu_on_its_thread_with_the_real_can
     monkeypatch.setattr(type(win), "_ask_start_menu", lambda self, dlg: (got.append(dlg.tree.topLevelItemCount()), False)[1])
     win.add_program()
     pump(win, lambda: got)
-    assert got == [2]
+    assert got == [2 + (1 if os.name == "nt" else 0)]                        # and the Windows group first (test_windows_parts)
 
 
 def test_the_bar_and_its_folders_follow_the_colour_scheme(world):

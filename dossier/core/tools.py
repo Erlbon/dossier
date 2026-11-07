@@ -1,6 +1,7 @@
 """The tools bar: programs the user keeps one click away, like bookmarks, and folders of them.
 
-A tool is a name, a program, the arguments to give it and an optional folder to start in. The arguments can name what the program is
+A tool is a name, a program, the arguments to give it, an optional folder to start in and an optional icon (for a part of Windows, whose
+console or Settings page has none Qt can find: core/windows_parts.py). The arguments can name what the program is
 to work on: ``{files}`` (every marked item, or the one under the cursor), ``{file}`` (the first of them), ``{name}`` (its name),
 ``{dir}`` (the folder of the active panel) and ``{other}`` (the folder of the other panel). The text is cut into words first and the
 values are put in afterwards, each as one argument, so a name with spaces or quotes can never become a second argument or a command.
@@ -31,6 +32,7 @@ class Tool:
     command: str
     args: str = ""
     start_in: str = ""                       # empty: the folder of the active panel
+    icon: str = ""                           # the file holding its icon, "file,index" (empty: the program's own); a part of Windows
 
     kind = "tool"
 
@@ -59,7 +61,10 @@ def to_data(items: list) -> list:
     out = []
     for it in items:
         if isinstance(it, Tool):
-            out.append({"type": "tool", "name": it.name, "command": it.command, "args": it.args, "start_in": it.start_in})
+            stored = {"type": "tool", "name": it.name, "command": it.command, "args": it.args, "start_in": it.start_in}
+            if it.icon:
+                stored["icon"] = it.icon
+            out.append(stored)
         elif isinstance(it, Folder):
             out.append({"type": "folder", "name": it.name, "items": to_data(it.items)})
         else:
@@ -80,7 +85,8 @@ def from_data(data, depth: int = 0, budget: Optional[list] = None) -> list:
         kind = d.get("type")
         name = str(d.get("name", ""))[:80]
         if kind == "tool" and name.strip() and str(d.get("command", "")).strip():
-            out.append(Tool(name.strip(), str(d["command"]).strip(), str(d.get("args", "")), str(d.get("start_in", ""))))
+            out.append(Tool(name.strip(), str(d["command"]).strip(), str(d.get("args", "")), str(d.get("start_in", "")),
+                            str(d.get("icon", ""))))
         elif kind == "folder" and name.strip():
             out.append(Folder(name.strip(), from_data(d.get("items"), depth + 1, budget)))
         elif kind == "separator":

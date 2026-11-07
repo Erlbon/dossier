@@ -10,15 +10,16 @@ import os
 from typing import Optional
 
 from PyQt6.QtCore import QFileInfo, Qt, pyqtSignal
-from PyQt6.QtGui import QAction, QIcon
+from PyQt6.QtGui import QAction, QIcon, QImage, QPixmap
 from PyQt6.QtWidgets import (QAbstractItemView, QComboBox, QDialog, QDialogButtonBox, QFileDialog, QFileIconProvider, QFormLayout,
                              QFrame, QHBoxLayout, QLabel, QLineEdit, QMenu, QPushButton, QSizePolicy, QToolButton,
                              QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget)
 
 from ..core import startmenu as SM
 from ..core import tools as T
+from ..core import windows_parts
 from ..core.drives import is_network_path
-from ..core.platform import is_full_path
+from ..core.platform import IS_WINDOWS, is_full_path
 from . import frost, icon_set, theme
 from .owned_dialog import OwnedDialog
 from .background import run_in_background
@@ -27,14 +28,59 @@ from .bar_grip import BarGrip
 PROGRAM_EXTENSIONS = (".exe", ".com", ".bat", ".cmd", ".lnk", ".ps1", ".msi", ".appref-ms", ".jar", ".py", ".sh")
 
 
-def program_icon(command: str) -> QIcon:
-    """The program's own icon; nothing for a program on a network drive (asking would wait for the share)."""
+def program_icon(command: str, icon: str = "") -> QIcon:
+    """The tool's icon (``icon``: a file, or "file,index" as Windows writes it, for a part of Windows), else the program's own;
+    nothing for a program on a network drive (asking would wait for the share)."""
+    if icon:
+        found = _icon_from(icon)
+        if not found.isNull():
+            return found
     try:
         if command and not is_network_path(command) and is_full_path(command):
             return QFileIconProvider().icon(QFileInfo(command))          # made when asked: not before the application exists
     except Exception:   # noqa: BLE001 -- an icon is a nicety
         pass
     return QIcon()
+
+
+_ICONS: dict = {}                    # "file,index" -> QIcon: read once, the bar is drawn again often
+
+
+def _icon_from(spec: str) -> QIcon:
+    if spec in _ICONS:
+        return _ICONS[spec]
+    path, index = windows_parts.icon_spec(spec)
+    icon = QIcon()
+    try:
+        if path and not is_network_path(path) and is_full_path(path):
+            if index is None:
+                icon = QFileIconProvider().icon(QFileInfo(path))
+            elif IS_WINDOWS:
+                icon = _extracted(path, index)
+    except Exception:   # noqa: BLE001 -- an icon is a nicety
+        icon = QIcon()
+    _ICONS[spec] = icon
+    return icon
+
+
+def _extracted(path: str, index: int) -> QIcon:
+    """Icon ``index`` of a program or library file, the way Windows reads it (Qt's own lookup gives a console or a Control Panel item
+    a blank page): the large and the small size."""
+    import ctypes
+    from ctypes import wintypes
+    shell32, user32 = ctypes.WinDLL("shell32"), ctypes.WinDLL("user32")
+    shell32.ExtractIconExW.argtypes = [wintypes.LPCWSTR, ctypes.c_int, ctypes.POINTER(wintypes.HICON),
+                                       ctypes.POINTER(wintypes.HICON), wintypes.UINT]
+    shell32.ExtractIconExW.restype = wintypes.UINT
+    user32.DestroyIcon.argtypes = [wintypes.HICON]
+    large, small = wintypes.HICON(), wintypes.HICON()
+    icon = QIcon()
+    shell32.ExtractIconExW(path, index, ctypes.byref(large), ctypes.byref(small), 1)
+    for handle in (large, small):
+        if handle.value:
+            icon.addPixmap(QPixmap.fromImage(QImage.fromHICON(handle.value)))
+            user32.DestroyIcon(handle)
+    return icon
 
 
 def folder_icon() -> QIcon:
@@ -53,7 +99,7 @@ class StartMenuDialog(OwnedDialog):
         self.other = False
         self.picked: Optional[SM.Node] = None
         layout = QVBoxLayout(self)
-        layout.addWidget(QLabel("Choose a program from the Start menu:"))
+        layout.addWidget(QLabel("Choose a program from the Start menu, or a part of Windows (System, Network, Security...):"))
         self.search = QLineEdit()
         self.search.setPlaceholderText("Search")
         self.search.setClearButtonEnabled(True)
@@ -89,7 +135,7 @@ class StartMenuDialog(OwnedDialog):
                     add(item, n.children)
                     item.setExpanded(searching)
                 else:
-                    item.setIcon(0, program_icon(n.path))
+                    item.setIcon(0, program_icon(n.path, n.icon))
         add(None, shown)
 
     def _selection(self) -> None:
@@ -129,6 +175,7 @@ class ToolDialog(OwnedDialog):
             form.addRow("", self.suggest)
         self.name = QLineEdit(tool.name if tool else "")
         self.command = QLineEdit(tool.command if tool else "")
+        self._icon = (tool.icon, tool.command) if tool else ("", "")     # kept while the program stays the same
         browse = QPushButton("Browse...")
         browse.setAutoDefault(False)
         browse.clicked.connect(self._browse)
@@ -194,7 +241,8 @@ class ToolDialog(OwnedDialog):
         if not command:
             raise T.BadTool("say which program to start")
         T.check_args(self.args.text())
-        return T.Tool(name, command, self.args.text().strip(), self.start_in.text().strip())
+        icon = self._icon[0] if command == self._icon[1] else ""
+        return T.Tool(name, command, self.args.text().strip(), self.start_in.text().strip(), icon)
 
     def place_index(self) -> int:
         return self.where.currentIndex() if self.where is not None else 0
@@ -441,7 +489,7 @@ class ToolsBar(QWidget):
             b.setToolTip(f"{it.name}: {len(it.items)} item{'s' if len(it.items) != 1 else ''}")
         else:
             b.setText(it.name)
-            b.setIcon(program_icon(it.command))
+            b.setIcon(program_icon(it.command, it.icon))
             b.setToolTip(f"{it.command} {it.args}".strip())
             b.clicked.connect(lambda _c=False, t=it: self.run_requested.emit(t))
         return b
@@ -458,7 +506,7 @@ class ToolsBar(QWidget):
                 menu.addMenu(sub)
             else:
                 action = QAction(it.name, menu)
-                action.setIcon(program_icon(it.command))
+                action.setIcon(program_icon(it.command, it.icon))
                 action.setToolTip(f"{it.command} {it.args}".strip())
                 action.triggered.connect(lambda _c=False, t=it: self.run_requested.emit(t))
                 menu.addAction(action)
@@ -586,7 +634,11 @@ class ToolsBarMixin:
         """Start from the programs of the Windows Start menu (when there is one); "Other program..." goes on to the plain dialog."""
         def work(progress, cancel):
             progress(0, 0)
-            return SM.scan(SM.roots(), cancel.check), T.suggestions()
+            tree = SM.scan(SM.roots(), cancel.check)
+            if IS_WINDOWS:                                    # System, Network, Security, Device Manager...: not in the Start menu
+                group = windows_parts.windows_group()
+                tree = ([group] if group.children else []) + tree
+            return tree, T.suggestions()
 
         run_in_background(self, self.cmd_runner, "Looking for programs", work, on_result=self._programs_found,
                           tracked=self._size_jobs, indeterminate=True, failed_title="Add a Program")
@@ -598,7 +650,8 @@ class ToolsBarMixin:
             if not self._ask_start_menu(dlg):
                 return
             if dlg.picked is not None:
-                self._add_program_dialog(T.Tool(dlg.picked.name, dlg.picked.path), suggestions)
+                picked = dlg.picked
+                self._add_program_dialog(T.Tool(picked.name, picked.path, picked.args, "", picked.icon), suggestions)
                 return
         self._add_program_dialog(None, suggestions)
 
