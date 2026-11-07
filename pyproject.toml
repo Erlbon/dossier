@@ -1,6 +1,6 @@
 [project]
 name = "dossier"
-version = "2026.11.6.9"
+version = "2026.11.7.1"
 description = "Multi-window file manager with a shared selection, Markdown notes and file metadata"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -11,7 +11,7 @@ dependencies = [
     "keyring>=24",
     "PyQt6>=6.6",
     "PyQt6-QScintilla>=2.14",
-    "redactor_common @ git+https://github.com/Erlbon/redactor_common.git@2026-11-05-03",   # pin a tag, never @main
+    "redactor_common @ git+https://github.com/Erlbon/redactor_common.git@2026-11-07-06",   # pin a tag, never @main
 ]
 
 [project.optional-dependencies]
@@ -20,6 +20,23 @@ archives = ["py7zr>=0.21"]          # 7z archives as folders; RAR and the rest u
 
 [project.gui-scripts]
 dossier = "dossier.gui.app:main"
+
+# python -m redactor_common.release publish: build, manifest, pre-release, the update gate, then Latest (CLAUDE.md, "To release").
+# The file names stay dossier.exe and dossier-setup.exe: copies from before the update framework (0.7) look for exactly those.
+[tool.redactor-release]
+app = "dossier"
+name = "Dossier"
+repo = "Erlbon/dossier"
+version_file = "dossier/core/version.py"
+build = ["build_release.bat", "--no-pause"]                      # called by its full path, stdin closed
+exe = "dossier.exe"
+installer_app_id = "{C61A77AD-D4A2-44EB-8CFB-B15A58A735F3}"     # installer\dossier.iss AppId (a test keeps them equal)
+title = "{name} {release} (build {version})"
+notes = "docs/releases/v{release}.md"
+
+[tool.redactor-release.packages]
+windows-installer = "dist/dossier-setup.exe"
+windows-exe = "dist/dossier.exe"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

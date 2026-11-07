@@ -1,8 +1,8 @@
 @echo off
 REM Builds dist\dossier.exe with PyInstaller. Run it on Windows with Python 3.10 or newer on the path.
 REM
-REM It does not bump the build number (python bump_version.py does) and does not publish anything: a release is made by pushing
-REM a tag, v + RELEASE from dossier\core\version.py (see .github\workflows\release.yml).
+REM It does not bump the build number (python bump_version.py does) and does not publish anything: a release is made with
+REM python -m redactor_common.release publish, which runs build_release.bat (see CLAUDE.md, "To release").
 
 cd /d "%~dp0"
 echo Working directory: %cd%

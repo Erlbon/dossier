@@ -10,6 +10,20 @@ from PyInstaller.utils.hooks import collect_submodules
 
 block_cipher = None
 
+# DOSSIER_BUILD=folder: the one-folder build the installer ships (dist\dossier\dossier.exe and its _internal folder). It starts in about
+# a second, against 3.4 s for the one-file exe, which unpacks itself at every start (comparison review 2026-11-05, card 2). The default
+# stays the one-file dossier.exe: the portable download, and the file a bare copy's Check for Updates swaps.
+FOLDER = os.environ.get("DOSSIER_BUILD", "") == "folder"
+
+# The update framework's channel (redactor_common docs/update-framework.md): how this copy updates itself. The one-file exe carries
+# "windows-exe" inside (it swaps itself); the folder build gets "windows-zip" beside its exe below, which the installer replaces with
+# "windows-installer".
+CHANNEL = os.path.join(workpath, "update-channel")
+if not FOLDER:
+    os.makedirs(workpath, exist_ok=True)
+    with open(CHANNEL, "w", encoding="utf-8") as channel:
+        channel.write("windows-exe\n")
+
 a = Analysis(
     ["dossier/__main__.py"],
     pathex=["."],
@@ -21,7 +35,7 @@ a = Analysis(
         ("CHANGELOG.md", "."),
         ("CREDITS.md", "."),
         ("LICENSE", "."),
-    ],
+    ] + ([] if FOLDER else [(CHANNEL, ".")]),
     # Found by name when they are needed, so the static analysis cannot see them: the whole program (the window loads some parts
     # lazily), the shared Redactor package (the command line), the password store's back ends and the recycle bin's.
     hiddenimports=(collect_submodules("dossier") + collect_submodules("redactor_common") + collect_submodules("keyring.backends")
@@ -38,11 +52,6 @@ a = Analysis(
 )
 
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
-
-# DOSSIER_BUILD=folder: the one-folder build the installer ships (dist\dossier\dossier.exe and its _internal folder). It starts in about
-# a second, against 3.4 s for the one-file exe, which unpacks itself at every start (comparison review 2026-11-05, card 2). The default
-# stays the one-file dossier.exe: the portable download, and the file a bare copy's Check for Updates swaps.
-FOLDER = os.environ.get("DOSSIER_BUILD", "") == "folder"
 
 exe = EXE(
     pyz,
@@ -68,3 +77,5 @@ exe = EXE(
 
 if FOLDER:
     coll = COLLECT(exe, a.binaries, a.zipfiles, a.datas, strip=False, upx=True, upx_exclude=[], name="dossier")
+    with open(os.path.join(DISTPATH, "dossier", "update-channel"), "w", encoding="utf-8") as channel:
+        channel.write("windows-zip\n")

@@ -2,13 +2,16 @@
 ; own programs folder, with a Start menu entry. The one-folder build starts in about a second; the one-file dossier.exe unpacks itself at
 ; every start and takes over three (comparison review 2026-11-05, card 2), so it stays the portable download only.
 ;
-; Build:   iscc /DAppRelease=0.5 /DAppBuild=2026-11-05#01 installer\dossier.iss      (or build_installer.bat, which builds the folder too)
+; Build:   build_installer.bat (it builds the folder too and passes /DUpdateContract), or by hand:
+;          iscc /DAppRelease=0.8 /DAppBuild=2026-11-07#01 /DUpdateContract=<python -m redactor_common.release contract-path> installer\dossier.iss
 ; Output:  dist\dossier-setup.exe
 ;
-; Per user, no administrator rights: %LOCALAPPDATA%\Programs\Dossier. Updating: Help > Check for Updates sees unins000.exe beside the
-; program (redactor_common selfupdate.is_installed), downloads the new dossier-setup.exe, checks it, closes Dossier and runs it with
-; /VERYSILENT /CLOSEAPPLICATIONS /RESTARTAPP=1; RESTARTAPP starts Dossier again at the end. Settings are not here but in the user's
-; AppData (dossier.ini), so uninstalling leaves them, and a new install finds them again.
+; Per user, no administrator rights: %LOCALAPPDATA%\Programs\Dossier. Updating goes through the family's update framework
+; (redactor_common docs/update-framework.md): its installer contract, included at the end, writes {app}\update-channel =
+; windows-installer, so Help > Check for Updates runs the new dossier-setup.exe the release's update-manifest.json names, silently with
+; /relaunch=yes, and the contract starts Dossier again. Copies from before the contract (0.7 and older) pass /RESTARTAPP=1, which the
+; contract honours too. Settings are not here but in the user's AppData (dossier.ini), so uninstalling leaves them, and a new install
+; finds them again.
 
 #ifndef AppRelease
   #define AppRelease "0.0"
@@ -16,6 +19,13 @@
 #ifndef AppBuild
   #define AppBuild "0000-00-00#00"
 #endif
+#ifndef UpdateContract
+  #error Pass /DUpdateContract (build_installer.bat does: python -m redactor_common.release contract-path)
+#endif
+
+; The family's installer contract (included at the end): starting Dossier again after an update, update-channel, and waiting until a
+; running Dossier has let go of its exe before files are replaced (Dossier has no --quit: Windows' close request ends it, saving first).
+#define UpdateExe "dossier.exe"
 
 [Setup]
 AppId={{C61A77AD-D4A2-44EB-8CFB-B15A58A735F3}
@@ -64,8 +74,6 @@ Name: "{autodesktop}\Dossier"; Filename: "{app}\dossier.exe"; Tasks: desktopicon
 
 [Run]
 Filename: "{app}\dossier.exe"; Description: "Start Dossier"; Flags: nowait postinstall skipifsilent
-; an update started by Check for Updates is silent: it starts Dossier again itself
-Filename: "{app}\dossier.exe"; Flags: nowait; Check: RestartAfterUpdate
 
 [InstallDelete]
 ; a copy installed before the one-folder build had the one-file exe; its leftovers of an update go
@@ -82,11 +90,6 @@ Type: files; Name: "{app}\dossier.exe.new.part"
 const
   PathKeyRoot = HKEY_CURRENT_USER;
   PathKeyName = 'Environment';
-
-function RestartAfterUpdate: Boolean;
-begin
-  Result := ExpandConstant('{param:RESTARTAPP|0}') = '1';
-end;
 
 function PathHasApp(const Path, Dir: String): Boolean;
 begin
@@ -140,3 +143,5 @@ begin
   if CurUninstallStep = usPostUninstall then
     RemoveAppFromPath;
 end;
+
+#include UpdateContract

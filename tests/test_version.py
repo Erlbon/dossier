@@ -27,7 +27,6 @@ def test_a_release_is_named_by_its_number_and_tagged_by_its_build():
 def test_the_updater_reads_the_release_tag_as_this_build():
     from redactor_common.core import selfupdate
     assert selfupdate.parse_version(version.release_tag()) == selfupdate.parse_version(version.APP_VERSION)
-    assert selfupdate.asset_name("dossier", "win32") == "dossier.exe"                # the file the release workflow uploads
 
 
 def test_the_same_day_counts_up_and_a_new_day_starts_again_at_one():
@@ -137,18 +136,77 @@ def test_the_daily_check_is_off_by_default_and_the_switch_is_kept_beside_the_set
     assert not win.updates.settings.enabled
 
 
+def github(tag, files=None):
+    """A fake GitHub: release `tag` with `files` (name -> bytes) as assets, digests included, as the update framework reads them."""
+    import hashlib
+    import json
+    files = files or {}
+    assets = [{"name": name, "browser_download_url": f"https://github.com/Erlbon/dossier/releases/download/{tag}/{name}",
+               "size": len(data), "digest": "sha256:" + hashlib.sha256(data).hexdigest()} for name, data in files.items()]
+    answer = json.dumps({"tag_name": tag, "body": "", "html_url": f"https://github.com/Erlbon/dossier/releases/tag/{tag}",
+                         "assets": assets}).encode()
+
+    def fetch(request):
+        url = getattr(request, "full_url", request)
+        return answer if url.startswith("https://api.github.com/") else files[url.rsplit("/", 1)[1]]
+    return fetch
+
+
 def test_check_for_updates_asks_github_and_says_when_this_is_the_newest(world, monkeypatch):
-    from redactor_common.core import selfupdate
     from redactor_common.gui import update_controller
     win, *_ = world
-    asked, told = [], []
-    newest = selfupdate.Release(version.release_tag(), selfupdate.parse_version(version.APP_VERSION), "", "")
-    monkeypatch.setattr(win.updates, "_latest", lambda: asked.append(1) or newest)
+    told = []
+    monkeypatch.setattr(win.updates, "_fetch", github(version.release_tag()))
     monkeypatch.setattr(update_controller, "run_busy", lambda parent, label, fn, **kw: fn())
     monkeypatch.setattr(update_controller.QMessageBox, "information", lambda *a: told.append(a[2]))
     menus = {a.text().replace("&", ""): a.menu() for a in win.menuBar().actions()}
     next(a for a in menus["Help"].actions() if a.text() == "Check for Updates...").trigger()
-    assert asked == [1] and "newest version of Dossier" in told[-1]
+    assert "newest version of Dossier" in told[-1]
+
+
+@pytest.mark.parametrize("channel, file", [("windows-installer", "dossier-setup.exe"), ("windows-exe", "dossier.exe")])
+def test_an_installed_copy_and_the_portable_exe_each_take_their_file_from_the_manifest(world, monkeypatch, tmp_path, channel, file):
+    """What the release tool publishes (pyproject.toml [tool.redactor-release]), read the way a copy reads it: the installed copy
+    runs the installer, the portable exe swaps itself, each by the file the manifest names for its channel."""
+    from redactor_common import release
+    from redactor_common.core import update_manifest
+    win, *_ = world
+    cfg = release.load_config(ROOT)
+    newer = "v2099-01-01-01"
+    built = {name: name.encode() * 10 for name in ("dossier-setup.exe", "dossier.exe")}
+    for name, data in built.items():
+        (tmp_path / name).write_bytes(data)
+    manifest = update_manifest.build(cfg.app, newer, "2099-01-01#01", {c: tmp_path / p.name for c, p in cfg.package_paths().items()})
+    built[update_manifest.MANIFEST_NAME] = json_bytes(manifest)
+    monkeypatch.setattr(win.updates, "_fetch", github(newer, built))
+    monkeypatch.setattr(win.updates, "channel", channel)
+    monkeypatch.setattr(win.updates, "_exe", tmp_path / "dossier.exe")
+    decision = win.updates.decide()
+    assert (decision.action, decision.release.asset_name, decision.reason) == ("install", file, "")
+
+
+def json_bytes(data) -> bytes:
+    import json
+    return json.dumps(data).encode()
+
+
+def test_the_update_command_line_answers_before_anything_else_and_plain_version_stays_the_command_lines(tmp_path, capsys):
+    """The release gate asks an installed copy ``--version --result-file`` and ``--check-update``; a plain ``--version`` is still
+    "Dossier 0.8 (build ...)"."""
+    from dossier.gui import app as app_module
+    answer = tmp_path / "v.txt"
+    assert app_module.main(["dossier", "--version", "--result-file", str(answer)]) == 0
+    assert answer.read_text(encoding="utf-8").strip() == version.APP_VERSION
+    assert app_module.update_command(["--check-update", "--release-tag", "v2099-01-01-01"])
+    assert app_module.update_command(["--update"])
+    assert not app_module.update_command(["--version"]) and not app_module.update_command(["ls", "--version-x"])
+
+
+def test_the_gates_scratch_profile_keeps_the_settings_away_from_yours(tmp_path, monkeypatch):
+    from dossier.gui.app_settings import open_settings
+    monkeypatch.setenv("REDACTOR_CONFIG_DIR", str(tmp_path / "profile"))
+    settings = open_settings()
+    assert os.path.normpath(settings.fileName()) == os.path.normpath(str(tmp_path / "profile" / "dossier.ini"))
 
 
 def test_an_update_left_behind_is_cleaned_up_at_start(tmp_path, monkeypatch):

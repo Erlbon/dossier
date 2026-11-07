@@ -34,11 +34,23 @@ def clean_up_after_update() -> None:
     remove_leftovers()
 
 
+def update_command(args: list) -> bool:
+    """Whether the family's update command line (redactor_common.core.update_cli) answers these arguments: --check-update and
+    --update, and --version when it is asked for a --result-file (the release gate reads the bare build number from there). A plain
+    ``dossier --version`` stays the command line's "Dossier 0.8 (build ...)"."""
+    return "--check-update" in args or "--update" in args or ("--version" in args and "--result-file" in args)
+
+
 def main(argv=None) -> int:
     args = list(sys.argv[1:] if argv is None else argv[1:])
     if args[:1] == ["--askpass"]:                   # ssh asking for a password: answered at once, with no window and no checks
         from ..core.askpass import main as askpass_main
         return askpass_main(args[1:])
+    if update_command(args):                        # the update framework: what this copy would do with a release, or do it
+        from redactor_common.core import update_cli
+
+        from ..core.version import APP_NAME, APP_REPO_URL, APP_VERSION
+        return update_cli.handle(args, APP_NAME, APP_VERSION, APP_REPO_URL)
     from ..cli import cli_requested
     if cli_requested(["dossier"] + args):          # a command: run it, never start the window (one program, window and command line)
         try:

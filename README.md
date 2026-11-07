@@ -39,7 +39,7 @@ python -m dossier
 
 `python -m dossier --check` only checks that everything is installed and says what is missing. RAR and the other formats besides zip and 7z need 7-Zip or NanaZip. Windows 10 or 11, or Debian/Ubuntu, with Python 3.10 or newer. If you install with `pip install .` the same packages come with it, and `dossier` starts the program. Updating: `git pull` and the pip line again, since the shared Redactor package is pinned to a tag that moves. The Windows program updates itself: Help > Check for Updates (or switch on Help > Check for Updates Once a Day) downloads the new version, checks it against the checksum GitHub lists, and puts it in place (a bare `dossier.exe` swaps the file; an installed copy runs the new installer silently and starts again).
 
-To build the exe yourself: `build_exe.bat` (or `python -m PyInstaller dossier.spec`); the installer: `build_installer.bat` (Inno Setup 6). A release is made by pushing the build's tag (`version.release_tag()`, such as `v2026-11-02-01`; `RELEASE` in `dossier/core/version.py` names the release and its notes); the workflow tests, builds and publishes it.
+To build the exe yourself: `build_exe.bat` (or `python -m PyInstaller dossier.spec`); the installer: `build_installer.bat` (Inno Setup 6). A release is made with the Redactor family's release tool, `python -m redactor_common.release publish` (`RELEASE` in `dossier/core/version.py` names the release and its notes): it builds both with `build_release.bat`, publishes a pre-release with an `update-manifest.json`, checks that the previous release really updates itself to it, and only then makes it the latest.
 
 ## More
 

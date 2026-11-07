@@ -2,6 +2,26 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-07#01 -- Updates through the family's update framework
+
+- **Dossier updates the way every Erlbon app now does** (redactor_common 2026-11-07-06, `docs/update-framework.md`). Each release
+  carries an `update-manifest.json` naming the exact file, size and checksum for each kind of copy, and each copy says how it was put
+  on the PC in an `update-channel` file: the portable `dossier.exe` carries "windows-exe" inside and swaps itself; the installer
+  writes "windows-installer" and updates by running the new `dossier-setup.exe`. No file name is guessed any more, and when a copy
+  cannot update, Check for Updates says why (with Copy Details) instead of only offering the download page.
+- The installer includes the family's shared installer contract: it starts Dossier again after a silent update (`/relaunch=yes`, and
+  0.7's `/RESTARTAPP=1`), and waits until a running Dossier has let go of its exe before files are replaced. Dossier's own restart
+  entry is gone.
+- `dossier --check-update` and `--update` (with `--result-file`) say or do what this copy would with a release, without a window;
+  `REDACTOR_CONFIG_DIR` puts `dossier.ini` in another folder. A plain `dossier --version` is unchanged.
+- **Releases are made on this PC with `python -m redactor_common.release publish`**, which builds both files (`build_release.bat`),
+  publishes a pre-release, checks every file, installs the previous release in a scratch folder and has it update itself to the new
+  one, uninstalls it, and only then makes the release the latest. The GitHub release workflow is gone (a tag push would have
+  published a second build over the checked one). The release keeps its title ("Dossier 0.8 (build ...)") and its notes file, and a
+  RELEASE number already released is still refused (`tools/release_check.py`).
+- The file names stay `dossier.exe` and `dossier-setup.exe`, the ones 0.7's updater looks for, so 0.7 copies update to the next
+  release as before and are on the framework from then on.
+
 ## 2026-11-06#09 -- SVG in the viewer
 
 - **F3 shows an SVG as a picture**, drawn from the vector (`QGraphicsSvgItem`) so it stays sharp at any zoom, and Fit enlarges a

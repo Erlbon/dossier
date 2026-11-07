@@ -6,12 +6,13 @@ check-in as the code change and a matching CHANGELOG.md entry.
 
 A **release** has a name of its own, ``RELEASE`` (``0.5``): the owner decides the main numbers. The release *tag* is the build's tag
 (``v2026-11-02-01``), as in the Redactor apps, because Help > Check for Updates (``redactor_common`` ``selfupdate``) compares that tag
-with ``APP_VERSION``. The release workflow refuses a tag that is not this build's, and the notes are ``docs/releases/v<RELEASE>.md``.
+with ``APP_VERSION``. The release tool (``python -m redactor_common.release publish``) tags this build, titles the release
+"Dossier <RELEASE> (build ...)" and takes its notes from ``docs/releases/v<RELEASE>.md`` (pyproject.toml ``[tool.redactor-release]``).
 """
 from __future__ import annotations
 
 APP_NAME = "Dossier"
-APP_VERSION = "2026-11-06#09"
+APP_VERSION = "2026-11-07#01"
 RELEASE = "0.7"
 APP_REPO_URL = "https://github.com/Erlbon/dossier"
 
