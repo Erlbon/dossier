@@ -92,6 +92,31 @@ def test_the_count_gives_way_to_the_folder_names(world):
     assert not (not win.left.counts.isHidden() and win.left.address_bar.width() < win.left.address_bar.wanted_width())
 
 
+def test_the_count_settles_at_every_width(world):
+    """At one width the count used to show, take the bar's gap from the address, hide, give it back and show again, for ever:
+    the top bar blinked and a CPU core ran flat out (seen 2026-11-08 on a long Tailscale share path)."""
+    win, _d, left, *_ = world
+    deep = left / "a fairly long folder name" / "another long folder name" / "and a third one"
+    deep.mkdir(parents=True)
+    win.left.set_folder(str(deep))
+    pump(win, lambda: win.left.path == str(deep))
+    win.left.address_bar.wanted_width = lambda: 150      # the test folder's own path is too long for the count to fit at any width
+    flips = []
+    shown = win.left.counts.setVisible
+    win.left.counts.setVisible = lambda on: (flips.append(on), shown(on))
+    restless = []
+    for width in range(1600, 1900, 2):                  # the count comes and goes near 1750 here
+        win.resize(width, 500)
+        for _ in range(6):
+            QApplication.processEvents()
+        flips.clear()
+        for _ in range(10):
+            QApplication.processEvents()
+        if flips:
+            restless.append(width)
+    assert not restless, f"the count kept blinking at window widths {restless}"
+
+
 # 17 ----------------------------------------------------------------------------------------------------------------------------
 def test_ctrl_j_puts_the_name_and_ctrl_shift_j_the_path_into_the_command_line(world):
     win, _d, left, *_ = world

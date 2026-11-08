@@ -2,6 +2,13 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-08#01 -- The panel's top bar no longer blinks at some window widths
+
+- **Fix: the count beside the free space ("3 folders, 12 files, 4 MB") could come and go for ever**: at one band of widths it was
+  shown, the address got narrower by the count and the bar's gap, which left too little room, so it was hidden, which made room
+  again. The top bar blinked and Dossier used a whole CPU core (the owner saw it on a Tailscale share, 2026-11-08). The room is now
+  worked out the same way whether the count is shown or not, so it settles. A test sweeps the window width and fails on any flip.
+
 ## 2026-11-07#07 -- Git awareness: the branch and what changed, read-only
 
 The parts of `docs/git-awareness-plan-2026-11-07.md` the owner said yes to (cards 1-4 and 8; 5-7 later). Dossier never writes to a

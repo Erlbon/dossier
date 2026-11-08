@@ -769,6 +769,7 @@ class Panel(QFrame):
         self.model.layoutChanged.connect(self._update_counts)    # a sort, folder sizes added up
         bar = QHBoxLayout()
         bar.setContentsMargins(4, 2, 4, 2)
+        self._top_bar = bar
         self.home_button = QToolButton()
         self.home_button.setObjectName("homebtn")
         self.home_button.setAutoRaise(True)
@@ -1896,9 +1897,10 @@ class Panel(QFrame):
 
     def _fit_counts(self) -> None:
         text = self.counts.text()
-        need = self.counts.fontMetrics().horizontalAdvance(text) + 14
-        spare = self.address_bar.width() - self.address_bar.wanted_width() + (0 if self.counts.isHidden() else self.counts.width())
-        show = bool(text) and spare >= need
+        gap = max(0, self._top_bar.spacing())               # a shown count costs the bar's gap too: leaving it out made the count come and go for ever
+        need = self.counts.fontMetrics().horizontalAdvance(text) + 14 + gap
+        room = self.address_bar.width() + (0 if self.counts.isHidden() else self.counts.width() + gap)    # the same whether shown or not
+        show = bool(text) and room - self.address_bar.wanted_width() >= need
         if show == self.counts.isHidden():
             self.counts.setVisible(show)
 
