@@ -4,7 +4,7 @@ The picture is decoded on a thread by the window (``read_image``); this file onl
 the window, the wheel steps to the next or previous picture and so do Right, Page Down and Space (forward) and Left, Page Up and
 Backspace (back) unless a zoomed picture needs them to scroll, ``1`` shows every pixel, double-click toggles between the two; ``L`` and ``R`` turn the picture a quarter (the file is
 never changed); dragging moves a zoomed picture. A photo taken upright but stored sideways is turned by its EXIF orientation when it is
-read. Ctrl+C copies the picture as it is shown (turned too) and its file.
+read. Ctrl+C copies the picture as it is shown (turned too) and its file. A right-click gives the same as a menu.
 """
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from typing import Optional
 
 from PyQt6.QtCore import QRectF, Qt, pyqtSignal
 from PyQt6.QtGui import QColor, QImage, QImageReader, QKeySequence, QPainter, QPixmap, QTransform
-from PyQt6.QtWidgets import (QAbstractItemView, QGraphicsPixmapItem, QGraphicsScene, QGraphicsView, QHeaderView, QSplitter,
+from PyQt6.QtWidgets import (QAbstractItemView, QGraphicsPixmapItem, QGraphicsScene, QGraphicsView, QHeaderView, QMenu, QSplitter,
                              QTreeWidget, QTreeWidgetItem, QWidget)
 
 from ..core import viewmodes, wheel
@@ -235,6 +235,24 @@ class ImageView(QGraphicsView):
             self.turn(-1)
         else:
             super().keyPressEvent(event)
+
+    def context_menu(self) -> QMenu:
+        """The right-click menu: what the keys do, with the key beside each (greyed while there is no picture)."""
+        menu = QMenu(self)
+        items = (("Copy Picture", "Ctrl+C", self.copy), None, ("Fit to Window", "0", self.fit), ("Actual Size", "1", self.actual_size),
+                 None, ("Turn Left", "L", lambda: self.turn(-1)), ("Turn Right", "R", lambda: self.turn(1)))
+        for item in items:
+            if item is None:
+                menu.addSeparator()
+                continue
+            label, keys, slot = item
+            action = menu.addAction(label + chr(9) + keys)
+            action.setEnabled(self.has_image())
+            action.triggered.connect(lambda _c=False, s=slot: s())
+        return menu
+
+    def contextMenuEvent(self, event) -> None:
+        self.context_menu().exec(event.globalPos())
 
 
 class InfoPanel(QTreeWidget):

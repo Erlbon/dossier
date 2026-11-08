@@ -2,6 +2,11 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-08#03 -- A right-click menu on the picture
+
+- **Right-click on a picture** in the F3 viewer or the glass viewer: Copy Picture (the picture as it is shown, and its file, as
+  Ctrl+C), Fit to Window, Actual Size, Turn Left and Turn Right, each with its key beside it. Greyed while no picture is shown.
+
 ## 2026-11-08#02 -- An error log (opt-in)
 
 - **Help > Error Log > Record Errors** (off by default, remembered) writes what went wrong to `errors.log` beside dossier.ini:

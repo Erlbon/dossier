@@ -112,6 +112,52 @@ def test_ctrl_c_and_the_copy_button_in_the_glass_viewer(windows, tmp_path):
     assert clipboard_picture().height() == 30
 
 
+def menu_texts(menu):
+    return [a.text().split(chr(9))[0] for a in menu.actions() if not a.isSeparator()]
+
+
+def test_right_click_on_the_picture_has_copy_in_both_viewers(windows, tmp_path):
+    path = make_picture(tmp_path)
+    f3 = open_f3(windows, path)
+    glassy = GlassViewer([path], 0, glass.SOLID, capabilities=Capabilities(False, False))
+    glassy.show()
+    windows.append(glassy)
+    wait_for(lambda: glassy.view.has_image())
+    for view, said in ((f3.image_page.view, lambda: f3.status.text()), (glassy.view, lambda: glassy.caption.text())):
+        menu = view.context_menu()
+        assert menu_texts(menu) == ["Copy Picture", "Fit to Window", "Actual Size", "Turn Left", "Turn Right"]
+        assert menu.actions()[0].text().endswith(chr(9) + "Ctrl+C")         # the menu teaches the key
+        QGuiApplication.clipboard().clear()
+        menu.actions()[0].trigger()
+        assert clipboard_picture().width() == 40 and clipboard_files() == [os.path.normcase(path)]
+        assert "Copied" in said()
+
+
+def test_a_right_click_on_the_picture_opens_the_menu(windows, tmp_path, monkeypatch):
+    from PyQt6.QtCore import QPoint
+    from PyQt6.QtGui import QContextMenuEvent
+    from PyQt6.QtWidgets import QMenu
+    win = open_f3(windows, make_picture(tmp_path))
+    shown = []
+    monkeypatch.setattr(QMenu, "exec", lambda self, *a: shown.append(menu_texts(self)))
+    viewport = win.image_page.view.viewport()
+    QApplication.sendEvent(viewport, QContextMenuEvent(QContextMenuEvent.Reason.Mouse, QPoint(5, 5), viewport.mapToGlobal(QPoint(5, 5))))
+    assert shown and shown[0][0] == "Copy Picture"
+
+
+def test_right_click_turns_the_picture_as_the_keys_do(windows, tmp_path):
+    win = open_f3(windows, make_picture(tmp_path))
+    view = win.image_page.view
+    [a for a in view.context_menu().actions() if a.text().startswith("Turn Right")][0].trigger()
+    assert view.shown_image().width() == 30
+
+
+def test_with_no_picture_the_menu_items_are_greyed(app):
+    from dossier.gui.image_view import ImageView
+    view = ImageView()
+    assert not any(a.isEnabled() for a in view.context_menu().actions() if not a.isSeparator())
+
+
 def open_text(windows, tmp_path, name, data):
     p = tmp_path / name
     p.write_bytes(data.encode("utf-8"))
