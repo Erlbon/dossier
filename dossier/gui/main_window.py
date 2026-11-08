@@ -85,6 +85,7 @@ from .search_command import SearchCommandMixin
 from .folder_sizes import FolderSizesMixin
 from .going_places import GoingPlacesMixin
 from .ops_queue import OperationQueueMixin
+from .error_log import ErrorLogMixin
 from .stall_log import StallLogMixin
 from ..core.drive_identity import DriveMemory
 from .unpack import UnpackMixin
@@ -112,7 +113,7 @@ def about_html() -> str:
             "The full credits are in CREDITS.md.</p>")
 
 
-class MainWindow(FolderTreeMixin, FileColorsMixin, TransferMixin, RemoteEditMixin, FrostMixin, GlassViewMixin, KeysMixin, AutoRefreshMixin, GitAwarenessMixin, MetadataEditMixin, HealthMixin, QuarantineMixin, NewFromContentMixin, TabSetsMixin, CommandCompletionMixin, DatesLinksMixin, ViewModesMixin, ToolsBarMixin, ContextMenuMixin, DragDropMixin, LookMixin, ZipEditMixin, ArchiveCommandsMixin, CopySettingsMixin, AssistantMixin, OpenFilesMixin, MenusMixin, WheelMixin, ToolsBarPlaceMixin, TailnetMixin, CompareFoldersMixin, ServersMixin, DuplicatesMixin, FolderLayoutsMixin, QueueResumeMixin, ColumnsMixin, PropertiesMixin, SharingMixin, MountMixin, ChecksumMixin, MarksAndNotesMixin, SearchCommandMixin, BatchRenameMixin, OperationQueueMixin, StallLogMixin, GoingPlacesMixin, FolderSizesMixin, UnpackMixin, QMainWindow):
+class MainWindow(FolderTreeMixin, FileColorsMixin, TransferMixin, RemoteEditMixin, FrostMixin, GlassViewMixin, KeysMixin, AutoRefreshMixin, GitAwarenessMixin, MetadataEditMixin, HealthMixin, QuarantineMixin, NewFromContentMixin, TabSetsMixin, CommandCompletionMixin, DatesLinksMixin, ViewModesMixin, ToolsBarMixin, ContextMenuMixin, DragDropMixin, LookMixin, ZipEditMixin, ArchiveCommandsMixin, CopySettingsMixin, AssistantMixin, OpenFilesMixin, MenusMixin, WheelMixin, ToolsBarPlaceMixin, TailnetMixin, CompareFoldersMixin, ServersMixin, DuplicatesMixin, FolderLayoutsMixin, QueueResumeMixin, ColumnsMixin, PropertiesMixin, SharingMixin, MountMixin, ChecksumMixin, MarksAndNotesMixin, SearchCommandMixin, BatchRenameMixin, OperationQueueMixin, StallLogMixin, ErrorLogMixin,GoingPlacesMixin, FolderSizesMixin, UnpackMixin, QMainWindow):
     def __init__(self, fs: Optional[FileSystem] = None, *, settings_path: Optional[str] = None, start=(None, None),
                  dialogs=None, trasher=None, terminal_launcher=None, which=None) -> None:
         super().__init__()
@@ -256,6 +257,8 @@ class MainWindow(FolderTreeMixin, FileColorsMixin, TransferMixin, RemoteEditMixi
         self._restore(start)
         if self.act_stall_log.isChecked():
             self.set_stall_log(True)
+        if self.act_error_log.isChecked():
+            self.set_error_log(True)
         self.set_drive_style(str(self.settings.value("view/drive_selector", "menu")))
         self.set_notes_visible(self.act_notes.isChecked())
         self._set_active(self.left)
@@ -1219,7 +1222,8 @@ class MainWindow(FolderTreeMixin, FileColorsMixin, TransferMixin, RemoteEditMixi
                 event.ignore()
                 return
         self._closing = True
-        stage.clean_up(everything=True)               # what a drag out of an archive or a server copied for another program
+        self.error_log.stop()                         # the hooks go back to Python's own: they must not outlive the window
+        stage.clean_up(everything=True)              # what a drag out of an archive or a server copied for another program
         for job in list(self._jobs) + list(self._size_jobs) + list(self._plans):
             job.cancel()
         self.disconnect_all_servers()                # the ssh processes end with the program

@@ -2,6 +2,18 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-08#02 -- An error log (opt-in)
+
+- **Help > Error Log > Record Errors** (off by default, remembered) writes what went wrong to `errors.log` beside dossier.ini:
+  each item of a copy, move or delete that failed (from, to and the error), each try again after the network went away, an
+  operation that failed as a whole (with its traceback), Dossier's own warnings and errors, errors nobody caught and crashes
+  inside Qt (faulthandler). Unlike the slowness log it holds file names and folders. Capped at 2 MB, oldest entries first out.
+- **While it is on, an error nobody caught no longer ends Dossier**: it is written down and the status line says so. While it is
+  off nothing changes.
+- **Open the Error Log** and **Delete the Error Log** beside it, like the slowness log (whose items are now called Open the
+  Slowness Log and Delete the Slowness Log: every command has one name in one place). Both logs share one way of opening and
+  deleting (`gui/log_files.py`).
+
 ## 2026-11-08#01 -- The panel's top bar no longer blinks at some window widths
 
 - **Fix: the count beside the free space ("3 folders, 12 files, 4 MB") could come and go for ever**: at one band of widths it was

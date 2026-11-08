@@ -109,7 +109,7 @@ def test_the_help_menu_has_about(world):
     assert [a.text() for a in menus["Help"].actions() if not a.isSeparator()] == ["Keyboard Shortcuts...", "Command Palette...",
                                                                                    "Documentation (Online)", "What's New (Online)",
                                                                                    "Check for Updates...", "Check for Updates Once a Day",
-                                                                                   "Slowness Log", "About Dossier..."]
+                                                                                   "Slowness Log", "Error Log", "About Dossier..."]
     assert menus["Help"].actions()[-1].text() == "About Dossier..."                     # About comes last, as in every other program
 
 

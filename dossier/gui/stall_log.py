@@ -9,6 +9,7 @@ from PyQt6.QtWidgets import QApplication
 
 from ..core.stallwatch import StallWatch
 from ..core.worker import JobState
+from .log_files import delete_log, open_log
 
 
 class _LastInput(QObject):
@@ -69,22 +70,8 @@ class StallLogMixin:
             self._heartbeat.start()
 
     def open_stall_log(self) -> None:
-        if not os.path.isfile(self.stall_log_path):
-            self.dialogs.info("Slowness Log", "Nothing has been recorded yet. Switch on Record Slow Moments, use "
-                                              "the program, and the moments it stalls for more than 200 ms are written here.")
-            return
-        self.edit_file(self.stall_log_path)
+        open_log(self, self.stall_log_path, "Slowness Log", "Nothing has been recorded yet. Switch on Record Slow Moments, use "
+                                                            "the program, and the moments it stalls for more than 200 ms are written here.")
 
     def delete_stall_log(self) -> None:
-        if not os.path.isfile(self.stall_log_path):
-            self._say("There is no slowness log")
-            return
-        if self.dialogs.confirm("Delete the Slowness Log", "Delete the record of slow moments?", "Delete"):
-            for editor in list(self.editors):
-                if os.path.normcase(editor.doc.path) == os.path.normcase(self.stall_log_path):
-                    editor.close()
-            try:
-                os.remove(self.stall_log_path)
-                self._say("Slowness log deleted")
-            except OSError as e:
-                self.dialogs.info("Slowness Log", f"Could not delete it: {e.strerror or e}")
+        delete_log(self, self.stall_log_path, "Slowness Log", "Delete the record of slow moments?")

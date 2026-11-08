@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import threading
 import time
+import traceback
 from datetime import datetime
 from dataclasses import replace
 from typing import Optional
@@ -12,6 +13,7 @@ from typing import Optional
 from PyQt6.QtGui import QGuiApplication
 
 from ..core import joblog
+from ..core.error_log import failed_items
 from ..core.ops import ExecOptions, Kind, Plan, selection_effects
 from ..core.progress import check
 from ..core.platform import home_dir, taskbar_button
@@ -75,6 +77,8 @@ class OperationQueueMixin:
         def on_wait(op, attempt: int, of: int, seconds: float, error: str) -> None:     # a worker thread, as above
             current["text"] = (f"The network is away ({error}). Trying {self.fs.basename(op.src or op.dst)} again in {seconds:.0f} s "
                                f"({attempt} of {of})")
+            self.error_log.write(f"{plan.title}: the network went away, try {attempt} of {of} in {seconds:.0f} s",
+                                 f"  {op.src or ''} -> {op.dst or ''}: {error}")
 
         def progress(done: int, total: int) -> None:
             shown.setdefault("started", time.time())               # when it really began (a queued plan waits its turn)
@@ -275,11 +279,13 @@ class OperationQueueMixin:
 
     def _report(self, job: Job, unmark: Optional[list]) -> None:
         if job.state is JobState.FAILED:
+            self.error_log.write(f"{job.label}: failed", "".join(traceback.format_exception(job.error)))
             self.dialogs.info("Operation failed", str(job.error))
             return
         result = job.result
         lost = len(getattr(result, "tags_lost", []) or [])
         if result.failed:
+            self.error_log.write(f"{job.label}: {len(result.failed)} of {len(result.results)} steps failed", failed_items(result))
             failed = [r.op.src for r in result.failed]
             if unmark:                           # what went well is unmarked; what failed stays marked for a retry
                 self.selection.remove([u for u in unmark if not any(f.startswith(u) for f in failed)])
