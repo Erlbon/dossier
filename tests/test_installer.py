@@ -78,6 +78,18 @@ def test_the_app_id_never_changes_and_the_release_tool_knows_it():
     assert release_config().installer_app_id == app_id[1:]                     # "{{" is Inno Setup's escaped "{"
 
 
+def test_every_shortcut_carries_the_taskbar_id_the_window_sets():
+    """Dossier gives its windows an explicit taskbar id (set_app_id in gui/app.py). Windows then looks for a shortcut with the same id
+    to find the button's icon; a shortcut without it left the taskbar showing a blank program icon (2026-11-10)."""
+    app = read("dossier", "gui", "app.py")
+    window_id = re.search(r'set_app_id\("([^"]+)"\)', app).group(1)
+    icons = read("installer", "dossier.iss").split("[Icons]", 1)[1].split("\n[", 1)[0]
+    shortcuts = [line for line in icons.splitlines() if line.startswith("Name:")]
+    assert len(shortcuts) == 2
+    for line in shortcuts:
+        assert f'AppUserModelID: "{window_id}"' in line, line
+
+
 def test_the_release_publishes_the_exe_and_the_installer_under_the_names_0_7_looks_for():
     from dossier.core import version
     cfg = release_config()

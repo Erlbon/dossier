@@ -2,6 +2,12 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-10#01 -- Dossier's own icon on the taskbar again
+
+- **The installer's shortcuts carry Dossier's taskbar id** (`Erlbon.Dossier`, the id its windows set). Without it Windows
+  could not tie the taskbar button to the shortcut and showed a blank program icon for an installed copy. Takes effect with
+  the next installer.
+
 ## 2026-11-08#03 -- A right-click menu on the picture
 
 - **Right-click on a picture** in the F3 viewer or the glass viewer: Copy Picture (the picture as it is shown, and its file, as

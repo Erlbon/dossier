@@ -69,8 +69,10 @@ Source: "..\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\CREDITS.md"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-Name: "{autoprograms}\Dossier"; Filename: "{app}\dossier.exe"
-Name: "{autodesktop}\Dossier"; Filename: "{app}\dossier.exe"; Tasks: desktopicon
+; AppUserModelID: the taskbar id Dossier gives its windows (set_app_id in gui/app.py). Without it on the shortcut, Windows cannot tie the
+; taskbar button to the shortcut and shows a blank program icon instead of Dossier's.
+Name: "{autoprograms}\Dossier"; Filename: "{app}\dossier.exe"; AppUserModelID: "Erlbon.Dossier"
+Name: "{autodesktop}\Dossier"; Filename: "{app}\dossier.exe"; Tasks: desktopicon; AppUserModelID: "Erlbon.Dossier"
 
 [Run]
 Filename: "{app}\dossier.exe"; Description: "Start Dossier"; Flags: nowait postinstall skipifsilent
