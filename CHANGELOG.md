@@ -2,6 +2,19 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-11#06 -- Old archives named and listed; old DOS zips unpack through 7-Zip
+
+The owner's choice A for old compressed files (2026-11-11): name them all, list the simple ones, unpack none.
+
+- **Listed from their headers** in the grid (Files and Info tabs): ARC and PAK (DOS, subfolders of ARC 7 too), ZOO (long
+  names, folders, and entries marked deleted but still in the file), ACE (1 and 2, password flag), HA, and CP/M LBR libraries
+  (deleted entries too). Name, size, packed size, method, date, CRC.
+- **Named by their first bytes**, with the program that would open them: StuffIt, Amiga DMS and LZX, SQZ, CP/M squeezed,
+  crunched and LZH-crunched files, Unix pack and compact. Weak two-byte signatures count only with the usual name.
+- **Old DOS zips** (PKZIP 1.x: Shrink, Reduce, Implode) listed fine but a member could not be opened. Such a member now goes
+  to 7-Zip or NanaZip when one is installed, and the message says so when neither is.
+- Unpacking the old formats is left to `unar` (later, if wanted). 7-Zip still opens ARJ, LZH, CAB and `.Z` as folders.
+
 ## 2026-11-11#05 -- Forensic listings: shortcuts, Recycle Bin records, plists, and document properties
 
 Cards 14, 15, 17 and 18 of `docs/reader-review-2026-11-11.md`. Read only, standard library only, times in UTC.

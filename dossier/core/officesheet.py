@@ -60,7 +60,8 @@ def sheet_kind(head: bytes, path: str) -> str:
     if name.endswith(".torrent") and head.startswith(b"d"):
         return "torrent"
     from .forensic import kind_of
-    special = kind_of(head, path)
+    from .oldarchives import kind_of as old_kind
+    special = kind_of(head, path) or ("oldarchive" if old_kind(head, path) else "")
     if special:
         return special
     if name.endswith(CSV_EXTENSIONS) and not looks_binary(head[:SAMPLE], detect_encoding(head[:SAMPLE])):
@@ -79,6 +80,10 @@ def read_workbook(path: str) -> Workbook:
         return Workbook("Recycle Bin record", forensic.recycle_sheets(path))
     if special == "plist":
         return Workbook("Property list", forensic.plist_sheets(path))
+    from . import oldarchives
+    old = oldarchives.kind_of(head, path)
+    if old:
+        return Workbook(oldarchives.FORMATS[old][0], oldarchives.old_archive_sheets(path))
     if head.startswith(OLE_MAGIC):
         return Workbook("Excel 97 workbook", xls_sheets(path))
     if head.startswith(datatables.SQLITE_MAGIC):

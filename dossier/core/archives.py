@@ -120,7 +120,17 @@ class ZipBackend:
         zf = zipfile.ZipFile(archive)
         try:
             return _Stream(zf.open(member.ref), zf.close)
-        except (NotImplementedError, RuntimeError) as e:
+        except NotImplementedError as e:
+            # an old DOS zip (PKZIP 1.x: Shrink, Reduce, Implode) or another method Python lacks: 7-Zip reads most of them
+            zf.close()
+            exe = find_seven_zip()
+            if exe:
+                ref = member.ref.filename if isinstance(member.ref, zipfile.ZipInfo) else str(member.ref)
+                return ExternalBackend(exe).open(archive, Member(member.name, member.is_dir, member.size, member.mtime,
+                                                                  member.encrypted, ref.replace("/", os.sep)))
+            raise ArchiveError(f"cannot read {os.path.basename(member.name)}: {e}. 7-Zip or NanaZip would read it; "
+                               "neither was found") from e
+        except RuntimeError as e:
             zf.close()
             raise ArchiveError(f"cannot read {os.path.basename(member.name)}: {e}") from e
         except BaseException:
