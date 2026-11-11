@@ -206,6 +206,8 @@ class PlannedWindow(OwnedDialog):
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.table.verticalHeader().hide()
         header = self.table.horizontalHeader()
+        # Resizable but not sortable, on purpose (the owner, 2026-11-11): the row order is the running order of Run All.
+        self.table.setSortingEnabled(False)
         header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
         header.setStretchLastSection(True)
         for c, width in enumerate((60, 230, 230, 180, 170, 140)):
