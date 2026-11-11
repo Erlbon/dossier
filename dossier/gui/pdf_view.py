@@ -67,19 +67,29 @@ class PdfPage(QWidget):
     def page_count(self) -> int:
         return self.document.pageCount()
 
-    def facts(self) -> str:
-        """Title, author, the making program and the dates, for whoever wants to know where a PDF came from."""
+    def properties(self) -> list:
+        """What the PDF says of itself, for the Info panel: ``[(label, value)]``."""
         field = QPdfDocument.MetaDataField
-        parts = []
-        for label, key in (("Title", field.Title), ("Author", field.Author), ("Made with", field.Creator),
-                           ("PDF by", field.Producer)):
+        rows = []
+        for label, key in (("Title", field.Title), ("Subject", field.Subject), ("Author", field.Author),
+                           ("Keywords", field.Keywords), ("Made with", field.Creator), ("PDF by", field.Producer)):
             value = str(self.document.metaData(key) or "").strip()
-            if value and not any(p.endswith(": " + value) for p in parts):      # Word writes the same program twice
-                parts.append(f"{label}: {value}")
-        for label, key in (("created", field.CreationDate), ("changed", field.ModificationDate)):
+            if value:
+                rows.append((label, value))
+        for label, key in (("Created", field.CreationDate), ("Modified", field.ModificationDate)):
             value = self.document.metaData(key)
             if value is not None and hasattr(value, "isValid") and value.isValid():
-                parts.append(f"{label} {value.toString('yyyy-MM-dd HH:mm')}")
+                rows.append((label, value.toString("yyyy-MM-dd HH:mm:ss t")))
+        rows.append(("Pages", f"{self.page_count():,}"))
+        return rows
+
+    def facts(self) -> str:
+        """The short form for the status line: the making program and the dates."""
+        props = dict(self.properties())
+        parts = [f"Made with: {props['Made with']}"] if "Made with" in props else []
+        if "PDF by" in props and props["PDF by"] != props.get("Made with"):     # Word writes the same program twice
+            parts.append(f"PDF by: {props['PDF by']}")
+        parts += [f"{k.lower()} {props[k][:16]}" for k in ("Created", "Modified") if k in props]
         return ", ".join(parts)
 
     def place(self) -> str:

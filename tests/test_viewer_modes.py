@@ -404,6 +404,31 @@ def test_a_pdf_shows_its_pages_with_zoom_and_find(viewer, tmp_path):
     assert bad.mode == "pdf" and "Hex shows" in bad.status.text()
 
 
+def test_the_info_panel_shows_a_documents_own_facts_and_follows_the_mode(viewer, tmp_path):
+    import zipfile
+    path = tmp_path / "a.docx"
+    with zipfile.ZipFile(path, "w") as z:
+        z.writestr("word/document.xml", "<w:document xmlns:w='http://schemas.openxmlformats.org/wordprocessingml/2006/main'>"
+                   "<w:body><w:p><w:r><w:t>Hello</w:t></w:r></w:p></w:body></w:document>")
+        z.writestr("docProps/core.xml", '<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/'
+                   'core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:creator>Ola Nordmann</dc:creator>'
+                   "</cp:coreProperties>")
+    win = viewer([str(path)])
+    wait(lambda: "Word document" in win.status.text())
+    assert win.floating.buttons["info"].isVisibleTo(win) and not win.doc_info.isVisibleTo(win)
+    win._toggle_info()                                                    # I
+    assert win.doc_info.isVisibleTo(win)
+    tree = {win.doc_info.topLevelItem(i).text(0): {win.doc_info.topLevelItem(i).child(j).text(0):
+                                                   win.doc_info.topLevelItem(i).child(j).text(1)
+                                                   for j in range(win.doc_info.topLevelItem(i).childCount())}
+            for i in range(win.doc_info.topLevelItem(0).treeWidget().topLevelItemCount())}
+    assert tree["File"]["Name"] == "a.docx" and tree["Document"]["Author"] == "Ola Nordmann"
+    win.enter_mode("hex")                                                 # not a mode with a panel: it goes away
+    assert not win.doc_info.isVisibleTo(win)
+    win.enter_mode("document")
+    wait(lambda: win.doc_info.isVisibleTo(win))                           # and comes back: the switch stayed on
+
+
 def test_a_csv_opens_in_the_grid_with_its_source_one_choice_away(viewer, tmp_path):
     path = tmp_path / "a.csv"
     path.write_text("Ship;Year\nHaabet;1910\n", encoding="utf-8")

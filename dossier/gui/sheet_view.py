@@ -65,8 +65,8 @@ class SheetModel(QAbstractTableModel):
 
 def _numeric(text: str) -> bool:
     """Numbers, dates and percentages line up on the right, as in Excel."""
-    if not text or not (text[0].isdigit() or text[0] in "-+."):
-        return False
+    if not text or not (text[0].isdigit() or text[0] in "-+.") or text.count(":") > 2:
+        return False                               # more than a time's two colons: a MAC address, an id
     return all(ch.isdigit() or ch in "-+.:%e " for ch in text)
 
 

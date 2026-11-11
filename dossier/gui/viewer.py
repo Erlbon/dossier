@@ -9,14 +9,15 @@ changeable, find with match case, go to line, follow mode for logs, line numbers
 from __future__ import annotations
 
 import os
+import time
 from typing import Optional
 
 from PyQt6.QtCore import QPoint, Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QAction, QKeySequence, QTextDocument
 from PyQt6.QtWidgets import (QCheckBox, QComboBox, QHBoxLayout, QInputDialog, QLabel, QLineEdit, QMainWindow, QMenu,
-                             QPushButton, QStackedWidget, QVBoxLayout, QWidget)
+                             QPushButton, QSplitter, QStackedWidget, QVBoxLayout, QWidget)
 
-from ..core import markdownsafe, officedoc, officesheet, viewmodes
+from ..core import docprops, markdownsafe, officedoc, officesheet, viewmodes
 from ..core.exif import read_exif
 from ..core.hexview import HexFile, inspect, parse_hex
 from ..core.textview import AUTO, ENCODINGS, TextSource, TextTooLarge, detect_encoding
@@ -26,12 +27,15 @@ from .dialogs import ProgressBox
 from .floating_bar import FloatingBar, Toast
 from .frost_window import FrostSurface
 from .hex_view import HexView
-from .image_view import ImagePage, read_image
+from .image_view import ImagePage, InfoPanel, read_image
 from .line_view import LineView
 from .markdown_view import MarkdownView
 from .models import human_size
 from .qt_bridge import QtDispatcher
 from .sheet_view import SheetPage
+
+
+INFO_MODES = ("image", "document", "sheet", "pdf")       # the modes the Info switch (I, ⓘ) shows a panel for
 
 
 class TextViewerWindow(FrostSurface, QMainWindow):
@@ -68,7 +72,14 @@ class TextViewerWindow(FrostSurface, QMainWindow):
         self._central_layout = QVBoxLayout(central)
         self._central_layout.setContentsMargins(0, 0, 0, 0)
         self._central_layout.setSpacing(0)
-        self._central_layout.addWidget(self.stack, 1)
+        self.doc_info = InfoPanel()              # beside a document, a table or a PDF: its own facts (I, the ⓘ button)
+        self.doc_info.hide()
+        self._info: tuple = ([], [], "Document")
+        self.main_split = QSplitter(Qt.Orientation.Horizontal)
+        self.main_split.addWidget(self.stack)
+        self.main_split.addWidget(self.doc_info)
+        self.main_split.setStretchFactor(0, 1)
+        self._central_layout.addWidget(self.main_split, 1)
         self.setCentralWidget(central)
         self.view.changed.connect(self._update_status)
         self.hex.changed.connect(self._update_status)
@@ -97,6 +108,7 @@ class TextViewerWindow(FrostSurface, QMainWindow):
         self.follow.toggled.connect(self._follow_toggled)
         self.image_info = QCheckBox("Info (I)")
         self.image_info.toggled.connect(self.image_page.show_info)
+        self.image_info.toggled.connect(lambda _on: self._show_doc_info())
         self.file_buttons_visible = len(self.paths) > 1
         self._build_find_strip()
         self.status = Toast(self.stack)
@@ -202,7 +214,7 @@ class TextViewerWindow(FrostSurface, QMainWindow):
                                       ("left", "↶", "Turn left (L)", lambda: view.turn(-1)),
                                       ("right", "↷", "Turn right (R)", lambda: view.turn(1))):
             bar.add_button(key, glyph, tip, slot)
-        self.info_button = bar.add_button("info", "ⓘ", "The file's facts and, for a photo, its EXIF (I)", lambda: None, checkable=True)
+        self.info_button = bar.add_button("info", "ⓘ", "The file's facts: a photo's EXIF, a document's author and dates (I)", lambda: None, checkable=True)
         self.info_button.clicked.connect(self.image_info.setChecked)
         self.image_info.toggled.connect(self.info_button.setChecked)
         self.follow_button = bar.add_button("follow", "Follow", self.follow.toolTip(), lambda: None, checkable=True,
@@ -216,7 +228,8 @@ class TextViewerWindow(FrostSurface, QMainWindow):
             bar.watch(page)
 
     PILL_KEYS = {"text": ("edit", "find", "goto", "copy", "follow"), "hex": ("find", "goto", "copy"), "markdown": ("edit", "find", "copy"),
-                 "document": ("find", "copy"), "sheet": ("find", "copy"), "pdf": ("find", "out", "in", "fit", "actual"), "image": ("copy", "out", "in", "fit", "actual", "left", "right", "info")}
+                 "document": ("find", "copy", "info"), "sheet": ("find", "copy", "info"),
+                 "pdf": ("find", "out", "in", "fit", "actual", "info"), "image": ("copy", "out", "in", "fit", "actual", "left", "right", "info")}
 
     def copy_selection(self) -> None:
         """The Copy button: what is selected in the text, the hex bytes or the Markdown, or the picture and its file."""
@@ -323,6 +336,8 @@ class TextViewerWindow(FrostSurface, QMainWindow):
         self._pinned = ""
         self.status.setText("")
         self.position.setText("")
+        self._info = ([], [], "Document")                  # filled when the file has been read; hidden for other modes
+        self._show_doc_info()
         blocked = self.mode_box.blockSignals(True)
         self.mode_box.setCurrentIndex(max(0, self.mode_box.findData(mode)))
         self.mode_box.blockSignals(blocked)
@@ -393,18 +408,25 @@ class TextViewerWindow(FrostSurface, QMainWindow):
 
         def work(progress, cancel):
             progress(0, 0)
-            return officedoc.read_document(path), os.path.getsize(path), not viewmodes.text_underneath(path)
+            props = docprops.properties(path)              # first: a locked document may still say who wrote it
+            try:
+                doc = officedoc.read_document(path)
+            except officedoc.DocumentError as e:
+                doc = e
+            return doc, os.path.getsize(path), not viewmodes.text_underneath(path), props
 
         def finished(job: Job) -> None:
             if path != self.paths[self.index] or self.mode != "document":
                 return
-            if job.state is not JobState.DONE or job.result is None:
-                reason = str(job.error) if isinstance(job.error, officedoc.DocumentError) else "It cannot be read here"
+            doc = job.result[0] if job.state is JobState.DONE and job.result is not None else job.error
+            self._set_info(path, job.result[3] if job.state is JobState.DONE and job.result is not None else [])
+            if not isinstance(doc, officedoc.Document):
+                reason = str(doc) if isinstance(doc, officedoc.DocumentError) else "It cannot be read here"
                 self.markdown.show_notice("")
                 self._pinned = f"{reason}. View as: Hex shows what is in the file"
                 self.status.setText(self._pinned)
                 return
-            doc, size, binary = job.result
+            doc, size, binary, _props = job.result
             self._chapters, self._chapter = doc.chapters, 0
             self._show_text(doc.markdown, doc.plain, path)
             count = f", {len(doc.chapters)} chapters" if len(doc.chapters) > 1 else ""
@@ -467,6 +489,7 @@ class TextViewerWindow(FrostSurface, QMainWindow):
             facts = self.pdf_page.facts()
             self._pinned = (f"PDF, {human_size(size)}, {self.pdf_page.page_count():,} pages" + (f". {facts}" if facts else "")
                             + ". Enter in the panel opens it in its own program")
+        self._set_info(path, [] if problem else self.pdf_page.properties(), "PDF")
         self.status.setText(self._pinned)
         self._update_status()
 
@@ -478,17 +501,24 @@ class TextViewerWindow(FrostSurface, QMainWindow):
 
         def work(progress, cancel):
             progress(0, 0)
-            return officesheet.read_workbook(path), os.path.getsize(path), not viewmodes.text_underneath(path)
+            props = docprops.properties(path)              # first: a locked workbook may still say who wrote it
+            try:
+                book = officesheet.read_workbook(path)
+            except officedoc.DocumentError as e:
+                book = e
+            return book, os.path.getsize(path), not viewmodes.text_underneath(path), props
 
         def finished(job: Job) -> None:
             if path != self.paths[self.index] or self.mode != "sheet":
                 return
-            if job.state is not JobState.DONE or job.result is None:
-                reason = str(job.error) if isinstance(job.error, officedoc.DocumentError) else "It cannot be read here"
+            book = job.result[0] if job.state is JobState.DONE and job.result is not None else job.error
+            self._set_info(path, job.result[3] if job.state is JobState.DONE and job.result is not None else [], "Workbook")
+            if not isinstance(book, officesheet.Workbook):
+                reason = str(book) if isinstance(book, officedoc.DocumentError) else "It cannot be read here"
                 self._pinned = f"{reason}. View as: Hex shows what is in the file"
                 self.status.setText(self._pinned)
                 return
-            book, size, binary = job.result
+            book, size, binary, _props = job.result
             self.sheet_page.set_workbook(book.sheets)
             cut = [s.name for s in book.sheets if s.cut]
             sheets = f", {len(book.sheets)} sheets" if len(book.sheets) > 1 else ""
@@ -545,8 +575,31 @@ class TextViewerWindow(FrostSurface, QMainWindow):
             self.follow.setChecked(not self.follow.isChecked())
 
     def _toggle_info(self) -> None:
-        if self.mode == "image":
+        if self.mode in INFO_MODES:
             self.image_info.setChecked(not self.image_info.isChecked())
+
+    def _show_doc_info(self) -> None:
+        """The Info panel beside a document, a table or a PDF: the file's facts and what the file says of itself (author, dates,
+        the program...). One switch (I, the ⓘ button) for pictures and these, so it stays on while you step through files."""
+        on = self.image_info.isChecked() and self.mode in INFO_MODES and self.mode != "image"
+        if on:
+            facts, props, heading = self._info
+            self.doc_info.show_groups([("File", facts), (heading, props)])
+        self.doc_info.setVisible(on)
+        if on and self.doc_info.width() < 200:
+            total = self.main_split.width()
+            self.main_split.setSizes([max(200, total - 340), 340])
+
+    def _set_info(self, path: str, props: list, heading: str = "Document") -> None:
+        try:
+            st = os.stat(path)
+            facts = [("Name", os.path.basename(path)), ("Folder", os.path.dirname(path)),
+                     ("Size", f"{human_size(st.st_size)} ({st.st_size:,} bytes)"),
+                     ("Modified", time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(st.st_mtime)))]
+        except OSError:
+            facts = [("Name", os.path.basename(path))]
+        self._info = (facts, props, heading)
+        self._show_doc_info()
 
     def set_wheel_map(self, wheel_map: dict) -> None:
         self.image_page.view.wheel_map = dict(wheel_map)

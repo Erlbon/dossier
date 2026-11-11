@@ -2,6 +2,25 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-11#05 -- Forensic listings: shortcuts, Recycle Bin records, plists, and document properties
+
+Cards 14, 15, 17 and 18 of `docs/reader-review-2026-11-11.md`. Read only, standard library only, times in UTC.
+
+- **Windows shortcuts (.lnk)** in the grid: target (from the link info, and from the shell item list when that says
+  otherwise or there is no link info), arguments, working folder, description, icon, the target's created/modified/accessed
+  times, size and attributes when the link was made, the drive's type, serial number and label, the network share, and from
+  the tracker block the NetBIOS name of the machine it was made on and the MAC address and time inside the object ids.
+  Enter still runs the target; F3 shows the listing.
+- **Recycle Bin records ($I files)**, both versions: the original path and name, size, deletion time, and whether the $R copy
+  is still beside the record.
+- **Property lists (.plist)**, XML and binary (binary ones under any name): Key path / Type / Value rows, dates in UTC, data as
+  its length and first bytes. An XML plist stays in the viewer on Enter.
+- **Document properties** in an Info panel (I, or the ⓘ button) beside documents, tables and PDFs: author, last saved by,
+  created/modified/printed, revision, total editing time, company, template, program, page and word counts. From docProps
+  (.docx, .xlsx, .pptx), meta.xml (OpenDocument), the SummaryInformation property sets (Office 97), RTF's info group, an
+  EPUB's package metadata, and the PDF's own fields. Read before the text, so a locked document still shows who wrote it.
+  One switch for pictures and documents: it stays on while you step through files.
+
 ## 2026-11-11#04 -- F3 reads PDF, OpenDocument, RTF, PowerPoint, EPUB, CSV, SQLite and torrents
 
 The Yes cards of `docs/reader-review-2026-11-11.md`, and torrent listings asked for the same day. All read only, all standard

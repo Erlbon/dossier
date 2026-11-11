@@ -5,7 +5,8 @@
 ``document`` a document (Word, OpenDocument text, RTF, PowerPoint, EPUB; by name, confirmed by its first bytes): its text, read by
              ``core/officedoc.py`` and ``core/textdocs.py``;
 ``sheet``    a table (Excel, OpenDocument spreadsheet, CSV/TSV, a SQLite database by its first bytes, a torrent's listing): its
-             values in a grid, read by ``core/officesheet.py``, ``core/datatables.py`` and ``core/torrent.py``;
+             values in a grid, read by ``core/officesheet.py``, ``core/datatables.py`` and ``core/torrent.py``; and the
+             forensic listings of ``core/forensic.py`` (Windows shortcuts, Recycle Bin records, property lists);
 ``pdf``      a PDF (by its first bytes): its pages, drawn by Qt's PDF module;
 ``markdown`` a text file that is Markdown (by its extension: nothing in the content tells it from plain text);
 ``text``     any other text;
@@ -122,7 +123,8 @@ def text_underneath(path: str, head: Optional[bytes] = None) -> bool:
     may happen to hold no zero byte, and must still not count as text)."""
     if head is None:
         head = read_head(path)
-    return document_kind(head, path) == "rtf" or sheet_kind(head, path) == "csv"
+    return document_kind(head, path) == "rtf" or sheet_kind(head, path) == "csv" or (
+        sheet_kind(head, path) == "plist" and not head.startswith(b"bplist"))     # an XML plist is text too
 
 
 OPEN_CHOICES = (("viewer", "Pictures, text and Markdown in the viewer, the rest in the Windows program"),

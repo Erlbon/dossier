@@ -267,6 +267,18 @@ class InfoPanel(QTreeWidget):
         self.header().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
         self.setMinimumWidth(260)
 
+    def show_groups(self, groups: list) -> None:
+        """``[(heading, [(label, text)])]``: the same panel for a document's, a table's or a PDF's own facts."""
+        self.clear()
+        for heading, rows in groups:
+            if not rows:
+                continue
+            node = QTreeWidgetItem(self, [heading])
+            for label, text in rows:
+                item = QTreeWidgetItem(node, [label, text])
+                item.setToolTip(1, text)
+            node.setExpanded(True)
+
     def show_info(self, facts: list, exif: Optional[Exif]) -> None:
         """``facts`` are ``(label, text)`` pairs (name, size, dimensions...); ``exif`` is what the photo itself says (or None)."""
         self.clear()

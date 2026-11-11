@@ -61,7 +61,7 @@ def test_a_presentation_gives_each_slide_with_title_bullets_tables_and_notes():
     assert not vm.opens_in_viewer(data("deck.pptx"), "viewer")
 
 
-def make_epub(path, encrypted=False, ncx=False):
+def make_epub(path, encrypted=False, ncx=False, metadata=""):
     nav = ('<html xmlns="http://www.w3.org/1999/xhtml"><body><nav><ol><li><a href="text/one.xhtml">The Wreck</a></li>'
            '<li><a href="text/two.xhtml#x">The Sea</a></li></ol></nav></body></html>')
     one = ('<?xml version="1.0"?><!DOCTYPE html><html xmlns="http://www.w3.org/1999/xhtml"><head><title>T</title>'
@@ -71,7 +71,7 @@ def make_epub(path, encrypted=False, ncx=False):
     two = '<html><body><h2 id="x">Two</h2><pre>  code\n  kept</pre><table><tr><td>a</td><td>b</td></tr></table></body></html>'
     manifest = ('<item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>' if not ncx else
                 '<item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>')
-    opf = ('<?xml version="1.0"?><package xmlns="http://www.idpf.org/2007/opf" version="3.0"><manifest>' + manifest +
+    opf = ('<?xml version="1.0"?><package xmlns="http://www.idpf.org/2007/opf" version="3.0">' + metadata + '<manifest>' + manifest +
            '<item id="cover" href="text/cover.xhtml" media-type="application/xhtml+xml"/>'
            '<item id="one" href="text/one.xhtml" media-type="application/xhtml+xml"/>'
            '<item id="two" href="text/two.xhtml" media-type="application/xhtml+xml"/></manifest>'

@@ -59,15 +59,26 @@ def sheet_kind(head: bytes, path: str) -> str:
         return "sqlite"
     if name.endswith(".torrent") and head.startswith(b"d"):
         return "torrent"
+    from .forensic import kind_of
+    special = kind_of(head, path)
+    if special:
+        return special
     if name.endswith(CSV_EXTENSIONS) and not looks_binary(head[:SAMPLE], detect_encoding(head[:SAMPLE])):
         return "csv"                                   # UTF-16 text (Excel's "Unicode text") counts as text
     return ""
 
 
 def read_workbook(path: str) -> Workbook:
-    from . import datatables
+    from . import datatables, forensic
     with open(path, "rb") as f:
-        head = f.read(16)
+        head = f.read(4096)
+    special = forensic.kind_of(head, path)
+    if special == "lnk":
+        return Workbook("Windows shortcut", forensic.lnk_sheets(path))
+    if special == "recycle":
+        return Workbook("Recycle Bin record", forensic.recycle_sheets(path))
+    if special == "plist":
+        return Workbook("Property list", forensic.plist_sheets(path))
     if head.startswith(OLE_MAGIC):
         return Workbook("Excel 97 workbook", xls_sheets(path))
     if head.startswith(datatables.SQLITE_MAGIC):
