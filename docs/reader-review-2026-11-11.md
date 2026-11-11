@@ -96,9 +96,58 @@ A look for file kinds the F3 viewer could show cheaply, after the Word (Document
 - **Fix:** the chapters in the order the book's package file lists them (`core/covers.py:259` already finds that file), each chapter's XHTML turned into Markdown (headings, paragraphs, emphasis, lists, quotes) by Python's HTML parser, one chapter at a time on the Document page with previous and next chapter in the pill and the chapter list in Settings. Pictures, styling and links inside the book are left out.
 - **Effort:** medium. **Recommendation:** Yes (the owner's choice: text only, with chapters).
 
-## 3. Considered and not proposed
+## 3. Forensic listings (asked for by the owner, 2026-11-11)
+
+The owner: "Dossier is almost a forensic tool". Torrent listings were built at once (build 2026-11-11#04: files, the info-hash from the file's own bytes, trackers, dates). These are the other structured files worth listing the same way, in the grid as Field / Value rows or tables. All read only, standard library only.
+
+### 14. Windows shortcuts (.lnk)
+- **What:** a shortcut opens as hex in F3, and Enter runs its target. Nothing in Dossier reads one (`core/startmenu.py` only lists them).
+- **Why:** a shortcut is a classic trace: it records the target's path, arguments and working folder, the target's own created, modified and accessed times and size at the moment the link was made, the drive's type, label and serial number, the network share, and the name of the machine it was made on. That shows what was opened, from where, and on which computer, even after the target is gone.
+- **Fix:** read the Shell Link format (Microsoft's MS-SHLLINK, fixed structures) with `struct`; an Info tab of Field / Value rows. F3 shows it; Enter still opens the target.
+- **Effort:** medium. **Recommendation:** Yes.
+
+### 15. Document properties: who wrote it, when, how long
+- **What:** the readers of today show a document's text, not its properties. Only the PDF status line gives its program and dates.
+- **Why:** author, last saved by, created, modified and printed dates, revision number, total editing time, company and template are where a document's history sits. Office keeps them in `docProps/core.xml` and `app.xml` (.docx, .xlsx, .pptx), OpenDocument in `meta.xml`, Office 97 in its SummaryInformation streams (which the container reader of today can reach).
+- **Fix:** an Info view on the Document, Spreadsheet and PDF pages, on the ⓘ button (I) the picture viewer already has, as Field / Value rows.
+- **Effort:** medium. **Recommendation:** Yes.
+
+### 16. Programs (.exe, .dll; ELF on Linux)
+- **What:** a program opens as hex in F3.
+- **Why:** the compile time stamp, the machine it is built for, the imported libraries and functions, the version resource (company, product, original file name) and whether a signature is attached tell what a program claims to be and when it was made. An original file name that differs from the file's name is a classic tell.
+- **Fix:** PE headers, sections, imports, version resource and the signature's presence (not its validity) with `struct`, as tabs; ELF header, needed libraries and sections the same way on Linux.
+- **Effort:** large. **Recommendation:** Later (the most code on this list; worth it once the smaller ones are in use).
+
+### 17. Recycle Bin records ($I files)
+- **What:** each deleted file in `$Recycle.Bin` has a small `$I` record beside its `$R` copy. Dossier shows the `$I` as hex.
+- **Why:** the record holds the file's original path, its size and the time it was deleted.
+- **Fix:** the two record versions are a few fixed fields; F3 shows them as Field / Value rows. A later step could list a whole `$Recycle.Bin` folder as one table.
+- **Effort:** small. **Recommendation:** Yes.
+
+### 18. Property lists (.plist, XML or binary)
+- **What:** Apple's settings and app files. A binary plist opens as hex, an XML one as text.
+- **Why:** macOS and iOS keep settings, recent items and app state in them; a backup or a disk image from a Mac is full of them.
+- **Fix:** Python's `plistlib` reads both kinds; the grid shows Key path / Type / Value, dates as ISO, data as its length and first bytes.
+- **Effort:** medium. **Recommendation:** Yes.
+
+### 19. Readable times in browser and app databases
+- **What:** the SQLite grid of today shows times as the raw numbers the databases store.
+- **Why:** Chrome counts microseconds since 1601, Firefox microseconds since 1970, Apple seconds since 2001. A visit time is only evidence when it can be read.
+- **Fix:** for known databases (Chrome History, Cookies; Firefox places.sqlite), show those columns as dates; elsewhere a "Show numbers as dates" choice per column.
+- **Effort:** medium. **Recommendation:** Later.
+
+### 20. Thumbs.db
+- **What:** Windows XP to 7 kept a Thumbs.db in each folder of pictures: an Office 97 container with the file names and small JPEG copies.
+- **Why:** it shows pictures of files that may be long gone, with their names.
+- **Fix:** the container reader of today, its catalog stream for names and times, and the thumbnails as pictures beside the list.
+- **Effort:** medium. **Recommendation:** Later.
+
+## 4. Considered and not proposed
 
 - **EPUB text:** moved up to card 13 at the owner's request.
+- **Windows Prefetch (.pf):** compressed since Windows 10 with an algorithm Python does not have; only Windows' own API unpacks it, so not on Linux.
+- **Event logs (.evtx) and registry hives:** binary XML and a whole database format respectively; a large job each, and a tree browser rather than a listing.
+- **Internet shortcuts (.url):** already readable as text.
 - **Word 6/95 fast-saved files and Excel 5/95 workbooks:** rare now, and they need their own record formats. They say so and point to Hex.
 - **HEIC, AVIF and camera RAW pictures:** they need codecs that are not in the build, so not cheap.
 - **Torrent files:** the format is easy to read, but rare in a file manager.
