@@ -1,7 +1,7 @@
 """The F3 viewer: one window per call, stepping through the files that were marked (V3), in the mode that fits each file.
 
-The mode is chosen by content (``core/viewmodes.py``): text, a picture (fit, zoom, turn, EXIF), a binary file as hex, or Markdown
-rendered; the View as box switches a file to any other sensible mode (Markdown as its source, any file as hex).
+The mode is chosen by content (``core/viewmodes.py``): text, a picture (fit, zoom, turn, EXIF), a binary file as hex, Markdown
+rendered, or the text of a Word document (``core/officedoc.py``); the View as box switches a file to any other sensible mode (Markdown as its source, any file as hex).
 
 Read-only. Text: any size (the file is indexed in the background with progress and cancel), encoding auto-detected and
 changeable, find with match case, go to line, follow mode for logs, line numbers, vertical (column) selection and copy."""
@@ -15,7 +15,7 @@ from PyQt6.QtGui import QAction, QKeySequence, QTextDocument
 from PyQt6.QtWidgets import (QCheckBox, QComboBox, QHBoxLayout, QInputDialog, QLabel, QLineEdit, QMainWindow, QMenu,
                              QPushButton, QStackedWidget, QVBoxLayout, QWidget)
 
-from ..core import markdownsafe, viewmodes
+from ..core import markdownsafe, officedoc, viewmodes
 from ..core.exif import read_exif
 from ..core.hexview import HexFile, inspect, parse_hex
 from ..core.textview import AUTO, ENCODINGS, TextSource, TextTooLarge, detect_encoding
@@ -113,8 +113,8 @@ class TextViewerWindow(FrostSurface, QMainWindow):
     def _edit(self, replace: bool) -> None:
         """The viewer reads; the notepad changes. Hand this file over (Ctrl+H opens its replace bar). Pictures and binary files are not
         text and are not edited."""
-        if self.mode in ("image", "hex"):
-            self.status.setText("A picture or a binary file is not edited as text")
+        if self.mode in ("image", "hex", "document"):
+            self.status.setText("A picture, a document or a binary file is not edited as text")
             return
         if self.paths:
             self.edit_requested.emit(self.paths[self.index], replace)
@@ -205,7 +205,7 @@ class TextViewerWindow(FrostSurface, QMainWindow):
             bar.watch(page)
 
     PILL_KEYS = {"text": ("edit", "find", "goto", "copy", "follow"), "hex": ("find", "goto", "copy"), "markdown": ("edit", "find", "copy"),
-                 "image": ("copy", "out", "in", "fit", "actual", "left", "right", "info")}
+                 "document": ("find", "copy"), "image": ("copy", "out", "in", "fit", "actual", "left", "right", "info")}
 
     def copy_selection(self) -> None:
         """The Copy button: what is selected in the text, the hex bytes or the Markdown, or the picture and its file."""
@@ -214,7 +214,7 @@ class TextViewerWindow(FrostSurface, QMainWindow):
         elif self.mode == "hex":
             self.hex.copy_hex()
             self.status.setText(f"Copied {self.hex.selection()[1]:,} bytes as hex (Ctrl+Shift+C copies them as text)")
-        elif self.mode == "markdown" and self.markdown.textCursor().hasSelection():
+        elif self.mode in ("markdown", "document") and self.markdown.textCursor().hasSelection():
             self.markdown.copy()
             self.status.setText("Copied the selected text")
         elif self.mode == "text" and self.view.has_selection():
@@ -234,7 +234,7 @@ class TextViewerWindow(FrostSurface, QMainWindow):
         bar.buttons["prev"].setVisible(stepping)
         bar.buttons["next"].setVisible(stepping)
         self._pill["sep_files"].setVisible(stepping)
-        self.position.setVisible(self.mode != "markdown")
+        self.position.setVisible(self.mode not in ("markdown", "document"))
         bar.set_enabled(True)
         bar.bar.adjustSize()
         bar.place()
@@ -288,7 +288,7 @@ class TextViewerWindow(FrostSurface, QMainWindow):
         self.busy = False
 
     def enter_mode(self, mode: str) -> None:
-        """Show the current file in ``mode`` (text, hex, image or markdown)."""
+        """Show the current file in ``mode`` (text, hex, image, markdown or document)."""
         self._close_current()
         self.mode = mode
         self._pinned = ""
@@ -300,11 +300,12 @@ class TextViewerWindow(FrostSurface, QMainWindow):
         if mode == "image":
             self.find_strip.hide()
         self.hex_find_kind.setVisible(mode == "hex")
-        self.case.setVisible(mode in ("text", "hex", "markdown"))
+        self.case.setVisible(mode in ("text", "hex", "markdown", "document"))
         self.file_buttons_visible = len(self.paths) > 1
         self._arrange_pill()
         path = self.paths[self.index]
-        {"text": self._open_text, "hex": self._open_hex, "image": self._open_image, "markdown": self._open_markdown}[mode](path)
+        {"text": self._open_text, "hex": self._open_hex, "image": self._open_image, "markdown": self._open_markdown,
+         "document": self._open_document}[mode](path)
         self._focus_page()
 
     def _focus_page(self) -> None:
@@ -353,6 +354,38 @@ class TextViewerWindow(FrostSurface, QMainWindow):
         self.stack.setCurrentWidget(self.markdown)
         self.markdown.set_markdown(data.decode(encoding, "replace").lstrip("\ufeff"), os.path.dirname(path))
         self.status.setText(f"Markdown, {human_size(size)}. Links open only to the web, mail and files on this computer")
+
+    def _open_document(self, path: str) -> None:
+        """The text of a Word document, read on a thread (a big .doc on a network drive takes a moment). Markdown when the format
+        carries headings and tables and it is small enough to render, else plain text."""
+        self.stack.setCurrentWidget(self.markdown)
+        self.markdown.show_notice("")
+        self.status.setText("Reading the document...")
+
+        def work(progress, cancel):
+            progress(0, 0)
+            return officedoc.read_document(path), os.path.getsize(path)
+
+        def finished(job: Job) -> None:
+            if path != self.paths[self.index] or self.mode != "document":
+                return
+            if job.state is not JobState.DONE or job.result is None:
+                reason = str(job.error) if isinstance(job.error, officedoc.DocumentError) else "It cannot be read here"
+                self.markdown.show_notice("")
+                self._pinned = f"{reason}. View as: Hex shows what is in the file"
+                self.status.setText(self._pinned)
+                return
+            doc, size = job.result
+            if doc.markdown is not None and not markdownsafe.too_big(len(doc.markdown.encode("utf-8"))):
+                self.markdown.set_markdown(doc.markdown, os.path.dirname(path))
+            else:
+                self.markdown.show_notice(doc.plain)
+            self.markdown.moveCursor(self.markdown.textCursor().MoveOperation.Start)
+            self._pinned = (f"{doc.kind}, {human_size(size)}: the text only, without pictures or layout. "
+                            "Enter in the panel opens it in its own program")
+            self.status.setText(self._pinned)
+
+        self._job = self._runner.submit("Document", work, on_done=finished)
 
     def _open_image(self, path: str) -> None:
         self.stack.setCurrentWidget(self.image_page)
@@ -461,7 +494,7 @@ class TextViewerWindow(FrostSurface, QMainWindow):
     def find(self, forward: bool = True, _wrapped: bool = False, _from: Optional[tuple] = None) -> None:
         if self.mode == "hex":
             return self._find_hex(forward)
-        if self.mode == "markdown":
+        if self.mode in ("markdown", "document"):
             return self._find_markdown(forward)
         if self.mode == "image":
             return
@@ -620,7 +653,7 @@ class TextViewerWindow(FrostSurface, QMainWindow):
             if view.has_image() and self.status.text().startswith("Reading"):
                 self.status.setText("")
             return
-        if self.mode == "markdown":
+        if self.mode in ("markdown", "document"):
             return
         s = self.source
         if s is None:

@@ -289,6 +289,29 @@ def test_links_open_only_the_web_mail_and_files_on_this_computer(viewer, tmp_pat
     assert "No such file" in win.status.text()
 
 
+def test_a_word_document_shows_its_text_and_a_damaged_one_points_to_hex(viewer, tmp_path):
+    import os
+    import shutil
+    word = str(tmp_path / "1910.doc")
+    shutil.copy(os.path.join(os.path.dirname(__file__), "data", "word97.doc"), word)
+    win = viewer([word])
+    wait(lambda: "Word 97 document" in win.status.text())
+    assert win.mode == "document" and win.stack.currentWidget() is win.markdown
+    assert win.markdown.toPlainText().startswith("Vrakkart 1910")
+    assert [win.mode_box.itemText(i) for i in range(win.mode_box.count())] == ["Document", "Hex"]
+    assert not win.floating.buttons["edit"].isVisibleTo(win) and win.floating.buttons["find"].isVisibleTo(win)
+    win.find_edit.setText("blåbær")
+    win.find(forward=True)
+    assert win.markdown.textCursor().selectedText() == "Blåbær"
+    win._edit(False)
+    assert "not edited as text" in win.status.text()
+    damaged = tmp_path / "bad.doc"
+    damaged.write_bytes(open(word, "rb").read()[:3000])
+    bad = viewer([str(damaged)])
+    wait(lambda: "Hex shows" in bad.status.text())
+    assert bad.mode == "document" and "damaged" in bad.status.text()
+
+
 def test_a_big_markdown_file_is_shown_as_text_and_find_works_in_the_rendered_view(viewer, tmp_path):
     big = md(tmp_path, "word " * 60000, "big.md")
     win = viewer([big])

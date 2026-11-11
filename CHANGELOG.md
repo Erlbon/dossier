@@ -2,6 +2,16 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-11#02 -- F3 shows the text of a Word document
+
+- **A new viewer mode, Document**, for `.doc`/`.dot` (Word 97 and later, and simple Word 6/95 files) and
+  `.docx`/`.docm`/`.dotx`/`.dotm`. A `.docx` is shown with its headings, bold, italic, lists and tables; a `.doc` as plain
+  text (a field shows its result, a table row its cells by tabs). Pictures, layout, headers, footnotes and comments are
+  left out. Find and Copy work; View as: Hex is one choice away. A locked or damaged file says why and points to Hex.
+- Enter still opens a Word document in Word (or whatever program the system has for it); F3 and Ctrl+Enter show the text.
+- Only the standard library, so it works the same on Linux: Dossier reads the Office 97 container itself
+  (`core/officedoc.py`), and an Excel 97 reader can use the same code. Nothing new in the build.
+
 ## 2026-11-11#01 -- Word .doc files open in Word, not as hex
 
 - **Enter on an old Word `.doc` opens it in Word again.** Word 97 keeps a document's text as UTF-16, and when that text sat

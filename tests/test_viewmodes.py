@@ -39,17 +39,23 @@ def test_text_markdown_and_binary_files_get_their_own_modes(tmp_path):
     assert vm.mode_for(write(tmp_path / "bin.md", b"\x00\x01\x02" * 50)) == "hex"                   # content wins over the name
 
 
-def test_a_word_97_doc_with_utf16_text_near_the_start_goes_to_word_not_the_viewer(tmp_path):
-    # OLE2 header, one FAT sector, then the document's text as UTF-16: the zero bytes alone read as wide text
+def test_an_office_97_file_with_utf16_text_near_the_start_goes_to_its_program_not_the_viewer(tmp_path):
+    # OLE2 header, one FAT sector, then text as UTF-16: the zero bytes alone read as wide text
     header = bytes.fromhex("D0CF11E0A1B11AE1") + bytes(16) + bytes.fromhex("3E000300FEFF0900060000000000000000000000"
                                                                            "010000000100000000000000001000000200000001000000FEFFFFFF")
     header += b"\xff" * (512 - len(header))
     fat = struct.pack("<I", 0xFFFFFFFD) + b"\xff" * 508
-    doc = write(tmp_path / "1910.doc", header + fat + ("Vrakkart 1910 " * 200).encode("utf-16-le"))
-    assert vm.mode_for(doc) == "hex"
+    body = header + fat + ("Vrakkart 1910 " * 200).encode("utf-16-le")
+    sheet = write(tmp_path / "1910.xls", body)
+    assert vm.mode_for(sheet) == "hex"
+    assert not vm.opens_in_viewer(sheet, "viewer")                     # Enter hands it to Excel
+    assert vm.opens_in_viewer(sheet, "viewer", alternate=True)         # Ctrl+Enter still shows it
+    doc = write(tmp_path / "1910.doc", body)
+    assert vm.modes_for(doc) == ["document", "hex"]                    # F3 shows a Word document's text
     assert not vm.opens_in_viewer(doc, "viewer")                       # Enter hands it to Word
-    assert vm.opens_in_viewer(doc, "viewer", alternate=True)           # Ctrl+Enter still shows it
-    assert vm.mode_for(write(tmp_path / "a.docx", b"PK\x03\x04" + "wide".encode("utf-16-le") * 600)) == "hex"
+    assert vm.mode_for(write(tmp_path / "a.zip", b"PK\x03\x04" + "wide".encode("utf-16-le") * 600)) == "hex"
+    assert vm.mode_for(write(tmp_path / "a.docx", b"PK\x03\x04" + "wide".encode("utf-16-le") * 600)) == "document"
+    assert vm.mode_for(write(tmp_path / "fake.doc", "{\\rtf1 plain}")) == "text"   # an RTF named .doc is text
 
 
 def test_every_file_can_be_seen_in_the_other_sensible_modes(tmp_path):
