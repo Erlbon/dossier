@@ -45,6 +45,8 @@ Grouped by kind; Total Commander's history does not count ("TC is unwieldy for n
 ## Planned operations (the owner, 2026-11-11; being decided point by point)
 Shift+F5/F6 put a copy or move on a list to review and launch later, together with planned operations from other folders.
 - A planned operation remembers the **intention** (which items, from which folder, to which folder), not a frozen file list: the plan is made again at launch from what is on disk then (option A, as the resume list in `core/queue_journal.py` does).
+- The list is **kept on disk** (the settings folder) until an operation is run or removed; not opt-in, because the owner builds it on purpose (option A). A "Clear the list" button is the privacy switch.
+- Raised by the owner the same day: **reusable copies**, an operation that stays to be run again (open, see the next point).
 
 ## Menus (the owner, 2026-11-05, after the menu review)
 Each menu answers one question; a new command goes in the menu whose question it answers, at the end of the group it belongs to, never just at the bottom of Tools.
