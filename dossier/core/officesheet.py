@@ -19,10 +19,12 @@ from dataclasses import dataclass, field
 from typing import Optional
 from xml.etree import ElementTree as ET
 
-from .officedoc import MAX_XML, OLE_MAGIC, ZIP_MAGIC, Compound, DocumentError, _xml
+from .officedoc import MAX_XML, OLE_MAGIC, PROLOG, ZIP_MAGIC, Compound, DocumentError, _xml, unsafe_xml
+from .textview import SAMPLE, detect_encoding, looks_binary
 
 XLS_EXTENSIONS = (".xls", ".xlt")
 XLSX_EXTENSIONS = (".xlsx", ".xlsm", ".xltx", ".xltm")
+ODS_EXTENSIONS = (".ods", ".ots")
 MAX_ROWS = 20000
 MAX_COLS = 256
 MAX_CELLS = 1_000_000
@@ -43,23 +45,48 @@ class Workbook:
 
 
 def sheet_kind(head: bytes, path: str) -> str:
-    """``xls`` or ``xlsx`` when the name and the first bytes agree, else an empty string."""
+    """``xls``, ``xlsx``, ``ods``, ``sqlite``, ``torrent`` or ``csv`` when the name and the first bytes agree, else an empty string. A SQLite
+    database is known by its first bytes alone (browsers and apps keep them under any name); a CSV by its name, when it is text."""
+    from .datatables import CSV_EXTENSIONS, SQLITE_MAGIC
     name = path.lower()
     if name.endswith(XLS_EXTENSIONS) and head.startswith(OLE_MAGIC):
         return "xls"
     if name.endswith(XLSX_EXTENSIONS) and head.startswith(ZIP_MAGIC):
         return "xlsx"
+    if name.endswith(ODS_EXTENSIONS) and head.startswith(ZIP_MAGIC):
+        return "ods"
+    if head.startswith(SQLITE_MAGIC):
+        return "sqlite"
+    if name.endswith(".torrent") and head.startswith(b"d"):
+        return "torrent"
+    if name.endswith(CSV_EXTENSIONS) and not looks_binary(head[:SAMPLE], detect_encoding(head[:SAMPLE])):
+        return "csv"                                   # UTF-16 text (Excel's "Unicode text") counts as text
     return ""
 
 
 def read_workbook(path: str) -> Workbook:
+    from . import datatables
     with open(path, "rb") as f:
-        head = f.read(8)
+        head = f.read(16)
     if head.startswith(OLE_MAGIC):
         return Workbook("Excel 97 workbook", xls_sheets(path))
+    if head.startswith(datatables.SQLITE_MAGIC):
+        return Workbook("SQLite database", datatables.sqlite_sheets(path))
     if head.startswith(ZIP_MAGIC):
+        try:
+            with zipfile.ZipFile(path) as z:
+                names = set(z.namelist())
+        except zipfile.BadZipFile as e:
+            raise DocumentError("The workbook is damaged") from e
+        if "content.xml" in names and "xl/workbook.xml" not in names:
+            return Workbook("OpenDocument spreadsheet", ods_sheets(path))
         return Workbook("Excel workbook", xlsx_sheets(path))
-    raise DocumentError("This is not an Excel workbook inside, whatever its name says")
+    if path.lower().endswith(".torrent") and head.startswith(b"d"):
+        from .torrent import torrent_sheets
+        return Workbook("Torrent file", torrent_sheets(path))
+    if path.lower().endswith(datatables.CSV_EXTENSIONS):
+        return Workbook("TSV file" if path.lower().endswith((".tsv", ".tab")) else "CSV file", datatables.csv_sheets(path))
+    raise DocumentError("This is not a workbook inside, whatever its name says")
 
 
 # values as text --------------------------------------------------------------------------------------------------------------------
@@ -127,10 +154,10 @@ class _Grid:
         self.budget = budget                       # [cells left for the whole workbook], shared by its sheets
 
     def put(self, row: int, col: int, text: str) -> None:
+        if text == "":
+            return                                 # an empty cell past the limits cuts nothing (LibreOffice repeats them by the thousand)
         if row >= MAX_ROWS or col >= MAX_COLS or self.budget[0] <= 0:
             self.cut = True
-            return
-        if text == "":
             return
         if (row, col) not in self.cells:
             self.budget[0] -= 1
@@ -247,7 +274,7 @@ def _xlsx_cells(z: zipfile.ZipFile, name: str, strings: list, kinds: list, date1
         grid.cut = True
         return
     with z.open(info) as f:
-        if b"<!DOCTYPE" in f.read(4096):
+        if unsafe_xml(f.read(PROLOG)):
             raise DocumentError("The workbook has a construct Excel does not write; not read")
     next_row = 0
     with z.open(info) as f:
@@ -511,3 +538,127 @@ def _biff8_cells(data: bytes, start: int, sst: list, kinds: list, date1904: bool
         elif rid in (0x0204, 0x00D6) and len(b) >= 9:      # LABEL, RSTRING (older writers)
             row, col = struct.unpack_from("<HH", b, 0)
             grid.put(row, col, _unicode(b, 6))
+
+
+# .ods (OpenDocument) ---------------------------------------------------------------------------------------------------------------
+OFFICE = "{urn:oasis:names:tc:opendocument:xmlns:office:1.0}"
+TABLE = "{urn:oasis:names:tc:opendocument:xmlns:table:1.0}"
+TEXT = "{urn:oasis:names:tc:opendocument:xmlns:text:1.0}"
+_DURATION = re.compile(r"PT(\d+)H(\d+)M(\d+(?:\.\d+)?)S")
+
+
+def _repeat(el: ET.Element, attr: str) -> int:
+    value = el.get(TABLE + attr, "1")
+    return int(value) if value.isdigit() else 1
+
+
+STYLE = "{urn:oasis:names:tc:opendocument:xmlns:style:1.0}"
+NUMBER = "{urn:oasis:names:tc:opendocument:xmlns:datastyle:1.0}"
+_DATA_STYLE_KINDS = {NUMBER + "date-style": "date", NUMBER + "time-style": "date", NUMBER + "percentage-style": "percent"}
+
+
+class _Lookup:
+    """Cell style name -> date / percent, through its data style, looked up when a cell is read (the styles may come in any order)."""
+
+    def __init__(self, cell_data: dict, data_kinds: dict) -> None:
+        self.cell_data, self.data_kinds = cell_data, data_kinds
+
+    def get(self, name: str, default: str = "") -> str:
+        return self.data_kinds.get(self.cell_data.get(name, ""), default)
+
+
+def _ods_value(cell: ET.Element, cell_kinds: "_Lookup") -> str:
+    """The cell's typed value as text, the same way an Excel cell is shown (ISO dates, percent, TRUE/FALSE); a string as its text.
+    A number whose cell style shows it as a date, a time or a percentage is shown that way (Excel's own .ods export does that)."""
+    kind = cell.get(OFFICE + "value-type", "")
+    if kind in ("float", "currency", "percentage"):
+        try:
+            value = float(cell.get(OFFICE + "value", ""))
+        except ValueError:
+            value = None
+        if value is not None:
+            styled = cell_kinds.get(cell.get(TABLE + "style-name", ""), "")
+            return value_text(value, "percent" if kind == "percentage" else styled, False)
+    elif kind == "date":
+        day, _, clock = cell.get(OFFICE + "date-value", "").partition("T")
+        if not clock or clock.startswith("00:00:00"):
+            return day
+        return f"{day} {clock[:5] if clock[6:8] == '00' else clock[:8]}"
+    elif kind == "time":
+        m = _DURATION.match(cell.get(OFFICE + "time-value", ""))
+        if m:
+            h, mi, s = int(m.group(1)), int(m.group(2)), round(float(m.group(3)))
+            return f"{h:02d}:{mi:02d}" + (f":{s:02d}" if s else "")
+    elif kind == "boolean":
+        return "TRUE" if cell.get(OFFICE + "boolean-value", "") == "true" else "FALSE"
+    return " ".join("".join(p.itertext()) for p in cell.findall(TEXT + "p"))
+
+
+def ods_sheets(path: str) -> list:
+    try:
+        with zipfile.ZipFile(path) as z:
+            try:
+                info = z.getinfo("content.xml")
+            except KeyError:
+                raise DocumentError("This zip file is not a spreadsheet") from None
+            if info.file_size > MAX_XML * 4:
+                raise DocumentError("The spreadsheet is too big to show")
+            with z.open(info) as f:
+                if unsafe_xml(f.read(PROLOG)):
+                    raise DocumentError("The spreadsheet has a construct LibreOffice does not write; not read")
+            budget = [MAX_CELLS]
+            sheets: list = []
+            grid: Optional[_Grid] = None
+            row = 0
+            data_kinds: dict = {}                          # data style name -> date / percent (styles.xml and content.xml)
+            cell_data: dict = {}                           # cell style name -> its data style name
+            hidden_tables: set = set()                     # table style names with table:display="false"
+            styles = _xml(z, "styles.xml")
+            for el in (styles.iter() if styles is not None else ()):
+                if el.tag in _DATA_STYLE_KINDS:
+                    data_kinds[el.get(STYLE + "name", "")] = _DATA_STYLE_KINDS[el.tag]
+                elif el.tag == STYLE + "style" and el.get(STYLE + "data-style-name"):
+                    cell_data[el.get(STYLE + "name", "")] = el.get(STYLE + "data-style-name")
+            cell_kinds = _Lookup(cell_data, data_kinds)
+            with z.open(info) as f:
+                for event, el in ET.iterparse(f, events=("start", "end")):
+                    if event == "start":
+                        if el.tag == TABLE + "table":
+                            sheets.append(Sheet(el.get(TABLE + "name", "?"),
+                                                hidden=el.get(TABLE + "style-name", "") in hidden_tables))
+                            grid, row = _Grid(budget), 0
+                        continue
+                    if el.tag in _DATA_STYLE_KINDS:
+                        data_kinds[el.get(STYLE + "name", "")] = _DATA_STYLE_KINDS[el.tag]
+                    elif el.tag == STYLE + "style":
+                        name, family = el.get(STYLE + "name", ""), el.get(STYLE + "family", "")
+                        if family == "table-cell" and el.get(STYLE + "data-style-name"):
+                            cell_data[name] = el.get(STYLE + "data-style-name")
+                        elif family == "table":
+                            props = el.find(STYLE + "table-properties")
+                            if props is not None and props.get(TABLE + "display", "true") == "false":
+                                hidden_tables.add(name)
+                    if el.tag == TABLE + "table-row" and grid is not None:
+                        rows = _repeat(el, "number-rows-repeated")
+                        values = []
+                        for cell in el:
+                            if cell.tag in (TABLE + "table-cell", TABLE + "covered-table-cell"):
+                                values.append((_ods_value(cell, cell_kinds), _repeat(cell, "number-columns-repeated")))
+                        if any(v for v, _ in values):
+                            for r in range(min(rows, MAX_ROWS + 1)):
+                                col = 0
+                                for text, times in values:
+                                    for _ in range(min(times, MAX_COLS + 1)):
+                                        grid.put(row + r, col, text)
+                                        col += 1
+                        row += rows
+                        el.clear()
+                    elif el.tag == TABLE + "table" and grid is not None:
+                        sheets[-1].rows, sheets[-1].cut = grid.rows(), grid.cut
+                        grid = None
+                        el.clear()
+            return sheets
+    except zipfile.BadZipFile as e:
+        raise DocumentError("The spreadsheet is damaged") from e
+    except ET.ParseError as e:
+        raise DocumentError("The spreadsheet is damaged") from e

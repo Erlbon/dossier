@@ -137,9 +137,18 @@ class SheetPage(QWidget):
     def _show_sheet(self, i: int) -> None:
         sheet = self.sheets[i] if 0 <= i < len(self.sheets) else None
         self.model.set_rows(sheet.rows if sheet else [])
+        self._fit_columns()
         if sheet and sheet.rows:
             self.table.setCurrentIndex(self.model.index(0, 0))
         self.changed.emit()
+
+    def _fit_columns(self) -> None:
+        """Each column as wide as its text in the first rows (a path, a URL), within limits; measuring every row would take long."""
+        fm = self.table.fontMetrics()
+        rows = self.model.rows[:200]
+        for c in range(self.model.width):
+            widest = max((fm.horizontalAdvance(r[c]) for r in rows if c < len(r) and r[c]), default=0)
+            self.table.setColumnWidth(c, max(60, min(widest + 18, 480)))
 
     def place(self) -> str:
         """``C2`` and the sheet's size, for the window's place label."""

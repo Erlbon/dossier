@@ -213,6 +213,7 @@ class Toast(QLabel):
         fg = QColor(theme.current()["fg"])
         self.setStyleSheet(f"background: rgba({fg.red()}, {fg.green()}, {fg.blue()}, 38); color: {fg.name()}; border-radius: 10px; padding: 3px 12px;")
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.setWordWrap(True)                     # a long message wraps inside the window instead of being cut at both ends
         self._timer = QTimer(self)
         self._timer.setSingleShot(True)
         self._timer.setInterval(self.SHOW_MS)
@@ -225,8 +226,12 @@ class Toast(QLabel):
         if not text:
             self.hide()
             return
-        self.setMaximumWidth(max(120, self.host.width() - 40))
-        self.adjustSize()
+        room = max(120, self.host.width() - 40)
+        self.setMaximumWidth(room)
+        margins = self.contentsMargins()
+        natural = self.fontMetrics().horizontalAdvance(text) + margins.left() + margins.right() + 26   # 26: the 12 px padding twice
+        width = min(natural, room)                 # one line when it fits; wrapped (Qt alone would wrap it narrow) when it does not
+        self.resize(width, self.heightForWidth(width))
         self._place()
         self.show()
         self.raise_()

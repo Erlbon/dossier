@@ -1,4 +1,5 @@
 """The F3 viewer in its modes: a picture, a binary file as hex, Markdown rendered; chosen by content, switchable, safe."""
+import os
 import struct
 import time
 
@@ -355,6 +356,62 @@ def test_an_excel_workbook_shows_its_values_in_a_grid_with_a_tab_per_sheet(viewe
     bad = viewer([str(damaged)])
     wait(lambda: "Hex shows" in bad.status.text())
     assert bad.mode == "sheet" and bad.sheet_page.model.rowCount() == 0
+
+
+def test_an_epub_shows_one_chapter_at_a_time_with_steps_and_a_chapter_menu(viewer, tmp_path):
+    from tests.test_readers import make_epub
+    win = viewer([make_epub(tmp_path / "book.epub")])
+    wait(lambda: "EPUB book" in win.status.text())
+    assert win.mode == "document" and "2 chapters" in win.status.text()
+    assert win.markdown.toPlainText().startswith("One") and win.position.text() == "Chapter 1 of 2"
+    assert win.floating.buttons["chap_next"].isVisibleTo(win) and win.position.isVisibleTo(win)
+    win.step_chapter(1)
+    assert win.markdown.toPlainText().startswith("Two") and win.position.text() == "Chapter 2 of 2"
+    assert win.status.text() == "The Sea"
+    win.step_chapter(1)                                                  # stays on the last one
+    assert win.position.text() == "Chapter 2 of 2"
+    menu = win._settings_menu()
+    chapters = next(a.menu() for a in menu.actions() if a.text() == "Chapter")
+    assert [a.text() for a in chapters.actions()] == ["1. The Wreck", "2. The Sea"]
+    chapters.actions()[0].trigger()
+    assert win.markdown.toPlainText().startswith("One")
+    word = viewer([os.path.join(os.path.dirname(__file__), "data", "word97.doc")])   # one text: no chapter buttons
+    wait(lambda: "Word 97 document" in word.status.text())
+    assert not word.floating.buttons["chap_next"].isVisibleTo(word) and not word.position.isVisibleTo(word)
+
+
+def test_a_pdf_shows_its_pages_with_zoom_and_find(viewer, tmp_path):
+    pdf = os.path.join(os.path.dirname(__file__), "data", "two-pages.pdf")
+    win = viewer([pdf])
+    assert win.mode == "pdf" and win.stack.currentWidget() is win.pdf_page
+    assert "2 pages" in win.status.text() and win.position.text().startswith("Page 1 of 2")
+    assert [win.mode_box.itemText(i) for i in range(win.mode_box.count())] == ["PDF", "Hex"]
+    assert win.floating.buttons["in"].isVisibleTo(win) and not win.floating.buttons["edit"].isVisibleTo(win)
+    win._zoom("actual_size")
+    assert win.position.text().endswith("100%")
+    win._zoom("zoom_by", 1.25)
+    assert win.position.text().endswith("125%")
+    win.find_edit.setText("needle")
+    win.find(forward=True)
+    wait(lambda: win.status.text() == "Found")
+    assert win.pdf_page.view.pageNavigator().currentPage() == 1 and win.position.text().startswith("Page 2 of 2")
+    win.find_edit.setText("nowhere at all")
+    win.find(forward=True)
+    wait(lambda: win.status.text().startswith("Not found"), timeout=8)
+    locked = tmp_path / "bad.pdf"
+    locked.write_bytes(b"%PDF-1.7\n" + b"\x00" * 200)
+    bad = viewer([str(locked)])
+    assert bad.mode == "pdf" and "Hex shows" in bad.status.text()
+
+
+def test_a_csv_opens_in_the_grid_with_its_source_one_choice_away(viewer, tmp_path):
+    path = tmp_path / "a.csv"
+    path.write_text("Ship;Year\nHaabet;1910\n", encoding="utf-8")
+    win = viewer([str(path)])
+    wait(lambda: "CSV file" in win.status.text())
+    assert win.sheet_page.model.data(win.sheet_page.model.index(1, 1)) == "1910"
+    assert [win.mode_box.itemText(i) for i in range(win.mode_box.count())] == ["Spreadsheet", "Text", "Hex"]
+    assert "Enter" not in win.status.text()                              # a CSV stays in the viewer on Enter
 
 
 def test_a_big_markdown_file_is_shown_as_text_and_find_works_in_the_rendered_view(viewer, tmp_path):

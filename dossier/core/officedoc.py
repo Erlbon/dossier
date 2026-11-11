@@ -6,7 +6,7 @@ container file, in pieces a table lists: it comes out as plain text. A simple (n
 and is read too. Pictures, layout, headers, footnotes and comments are left out.
 
 Only the standard library: the container reader (``Compound``) is here too, and an Excel 97 reader can use it the same way.
-Qt-free; the viewer draws the result.
+Qt-free; the viewer draws the result. OpenDocument text, RTF, PowerPoint and EPUB are read in ``textdocs.py`` with the helpers here.
 """
 from __future__ import annotations
 
@@ -33,31 +33,66 @@ class DocumentError(Exception):
 
 
 @dataclass(frozen=True)
+class Chapter:
+    title: str
+    plain: str
+    markdown: str
+
+
+@dataclass(frozen=True)
 class Document:
-    kind: str                         # "Word document" or "Word 97 document"
-    plain: str                        # the text, always there
+    kind: str                         # "Word document", "Word 97 document", "EPUB book"...
+    plain: str                        # the text, always there (for a book: the first chapter's)
     markdown: Optional[str] = None    # the text with headings, emphasis, lists and tables, when the format carries them
+    chapters: tuple = ()              # a book: its chapters in reading order, shown one at a time
+
+
+ODT_EXTENSIONS = (".odt", ".ott")
+RTF_EXTENSIONS = (".rtf", ".doc")     # many old files called .doc are RTF inside
+PPTX_EXTENSIONS = (".pptx", ".pptm", ".ppsx", ".ppsm", ".potx", ".potm")
+EPUB_EXTENSIONS = (".epub",)
 
 
 def document_kind(head: bytes, path: str) -> str:
-    """``doc`` or ``docx`` when the name and the first bytes agree, else an empty string. Nothing more is read to decide."""
+    """``doc``, ``docx``, ``odt``, ``rtf``, ``pptx`` or ``epub`` when the name and the first bytes agree, else an empty string.
+    Nothing more is read to decide."""
     name = path.lower()
     if name.endswith(DOC_EXTENSIONS) and head.startswith(OLE_MAGIC):
         return "doc"
-    if name.endswith(DOCX_EXTENSIONS) and head.startswith(ZIP_MAGIC):
-        return "docx"
+    if head.startswith(b"{\\rtf") and name.endswith(RTF_EXTENSIONS):
+        return "rtf"
+    if head.startswith(ZIP_MAGIC):
+        for kind, extensions in (("docx", DOCX_EXTENSIONS), ("odt", ODT_EXTENSIONS), ("pptx", PPTX_EXTENSIONS),
+                                 ("epub", EPUB_EXTENSIONS)):
+            if name.endswith(extensions):
+                return kind
     return ""
 
 
 def read_document(path: str) -> Document:
+    from . import textdocs
     with open(path, "rb") as f:
         head = f.read(8)
     if head.startswith(OLE_MAGIC):
         return Document("Word 97 document", doc_text(path))
+    if head.startswith(b"{\\rtf"):
+        return textdocs.rtf_document(path)
     if head.startswith(ZIP_MAGIC):
-        markdown, plain = docx_text(path)
-        return Document("Word document", plain, markdown)
-    raise DocumentError("This is not a Word document inside, whatever its name says")
+        try:
+            with zipfile.ZipFile(path) as z:
+                names = set(z.namelist())
+        except zipfile.BadZipFile as e:
+            raise DocumentError("The document is damaged") from e
+        if "word/document.xml" in names:
+            markdown, plain = docx_text(path)
+            return Document("Word document", plain, markdown)
+        if "ppt/presentation.xml" in names:
+            return textdocs.pptx_document(path)
+        if "META-INF/container.xml" in names:
+            return textdocs.epub_document(path)
+        if "content.xml" in names:
+            return textdocs.odt_document(path)
+    raise DocumentError("This is not a document Dossier can read inside, whatever its name says")
 
 
 # The Office 97 container (Compound File Binary) ---------------------------------------------------------------------------------
@@ -300,6 +335,16 @@ _MD_SPECIAL = re.compile(r"([\\`*_\[\]~|&#])")
 _LINE_START = re.compile(r"^(\s*)([-+=>]|\d+[.)])")
 
 
+PROLOG = 64 * 1024
+_INTERNAL_SUBSET = re.compile(rb"<!DOCTYPE[^>\[]*\[")
+
+
+def unsafe_xml(head: bytes) -> bool:
+    """XML that defines entities (an internal DOCTYPE subset): the way to a 'billion laughs' bomb. A plain DOCTYPE line, as an
+    epub's table of contents has, defines nothing and is fine; expat never fetches an external DTD."""
+    return b"<!ENTITY" in head or bool(_INTERNAL_SUBSET.search(head))
+
+
 def _xml(z: zipfile.ZipFile, name: str) -> Optional[ET.Element]:
     try:
         info = z.getinfo(name)
@@ -308,8 +353,8 @@ def _xml(z: zipfile.ZipFile, name: str) -> Optional[ET.Element]:
     if info.file_size > MAX_XML:
         raise DocumentError("The document is too big to show")
     data = z.read(info)
-    if b"<!DOCTYPE" in data[:4096] or b"<!ENTITY" in data[:4096]:
-        raise DocumentError("The document has a construct Word does not write; not read")
+    if unsafe_xml(data[:PROLOG]):
+        raise DocumentError("The document defines its own XML entities, which no office program writes; not read")
     try:
         return ET.fromstring(data)
     except ET.ParseError as e:
@@ -382,6 +427,41 @@ def _runs(p: ET.Element) -> list:
                 segments.append(("\n", False, False))
             elif child.tag == W + "noBreakHyphen":
                 segments.append(("-", bold, italic))
+    return segments
+
+
+def block(text_md: str, level: int = 0, listed: bool = False, quoted: bool = False) -> str:
+    """One rendered paragraph as a Markdown block: a heading of ``level``, a list item, a quote, or a paragraph whose first
+    character would otherwise start a list or a quote."""
+    if level:
+        return "#" * min(level, 6) + " " + text_md.replace("\\\n", " ")
+    if listed:
+        return "- " + text_md
+    text = _LINE_START.sub(lambda m: m.group(1) + "\\" + m.group(2), text_md, count=1)
+    return "> " + text.replace("\\\n", "\\\n> ") if quoted else text
+
+
+def md_table(rows_md: list) -> str:
+    """Rows of rendered cells as a Markdown table, the first row as its header."""
+    if not rows_md:
+        return ""
+    width = max(len(r) for r in rows_md) or 1
+    lines = []
+    for i, row in enumerate(rows_md):
+        row = [c.replace("\\\n", " ").replace("\n", " ") for c in row] + [""] * (width - len(row))
+        lines.append("| " + " | ".join(row) + " |")
+        if i == 0:
+            lines.append("|" + " --- |" * width)
+    return "\n".join(lines)
+
+
+def _paragraph(p: ET.Element) -> tuple:
+    """The paragraph as (markdown, plain), without the heading or list mark."""
+    return render_segments(_runs(p))
+
+
+def merge_segments(segments: list) -> list:
+    """Neighbouring (text, bold, italic) pieces with the same emphasis joined, so ``**a****b**`` becomes ``**ab**``."""
     merged: list = []
     for text, bold, italic in segments:
         if merged and merged[-1][1:] == (bold, italic) and "\n" not in text and "\n" not in merged[-1][0]:
@@ -391,10 +471,10 @@ def _runs(p: ET.Element) -> list:
     return merged
 
 
-def _paragraph(p: ET.Element) -> tuple:
-    """The paragraph as (markdown, plain), without the heading or list mark."""
+def render_segments(segments: list) -> tuple:
+    """(text, bold, italic) pieces of one paragraph as (markdown, plain). ``"\\n"`` alone is a line break inside the paragraph."""
     md, plain = [], []
-    for text, bold, italic in _runs(p):
+    for text, bold, italic in merge_segments(segments):
         plain.append(text)
         if text == "\n":
             md.append("\\\n")
@@ -419,16 +499,7 @@ def _table(tbl: ET.Element) -> tuple:
             cells_plain.append(" ".join(t for _, t in parts if t).replace("\n", " "))
         rows_md.append(cells_md)
         rows_plain.append(cells_plain)
-    if not rows_md:
-        return "", ""
-    width = max(len(r) for r in rows_md) or 1
-    lines = []
-    for i, row in enumerate(rows_md):
-        row = row + [""] * (width - len(row))
-        lines.append("| " + " | ".join(row) + " |")
-        if i == 0:
-            lines.append("|" + " --- |" * width)
-    return "\n".join(lines), "\n".join("\t".join(r) for r in rows_plain)
+    return md_table(rows_md), "\n".join("\t".join(r) for r in rows_plain)
 
 
 def _blocks(parent: ET.Element, styles: tuple, md: list, plain: list) -> None:
@@ -448,12 +519,7 @@ def _blocks(parent: ET.Element, styles: tuple, md: list, plain: list) -> None:
                 if not level and ol is not None and ol.get(W + "val", "9").isdigit() and int(ol.get(W + "val")) < 6:
                     level = int(ol.get(W + "val")) + 1
                 listed = ppr.find(W + "numPr") is not None or style in list_styles
-            if level:
-                md.append("#" * level + " " + text_md.replace("\\\n", " "))
-            elif listed:
-                md.append("- " + text_md)
-            else:
-                md.append(_LINE_START.sub(lambda m: m.group(1) + "\\" + m.group(2), text_md, count=1))
+            md.append(block(text_md, level, listed))
             plain.append(text_plain)
         elif el.tag == W + "tbl":
             t_md, t_plain = _table(el)
@@ -464,7 +530,7 @@ def _blocks(parent: ET.Element, styles: tuple, md: list, plain: list) -> None:
             _blocks(el, styles, md, plain)
 
 
-def _join_markdown(blocks: list) -> str:
+def join_markdown(blocks: list) -> str:
     """Blank lines between blocks, but list items of one list stay together."""
     out = []
     for i, b in enumerate(blocks):
@@ -489,4 +555,4 @@ def docx_text(path: str) -> tuple:
     plain: list = []
     if body is not None:
         _blocks(body, styles, md, plain)
-    return _join_markdown(md), "\n\n".join(plain)
+    return join_markdown(md), "\n\n".join(plain)

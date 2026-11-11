@@ -2,6 +2,28 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-11#04 -- F3 reads PDF, OpenDocument, RTF, PowerPoint, EPUB, CSV, SQLite and torrents
+
+The Yes cards of `docs/reader-review-2026-11-11.md`, and torrent listings asked for the same day. All read only, all standard
+library or Qt modules already in the build, so they work the same on Linux.
+
+- **PDF**: a new viewer mode with the pages one after another (Qt's PDF module, already used for thumbnails), fit width,
+  zoom, 100%, find with next and previous, and the page in the pill. The status line gives the PDF's own facts: the program
+  that made it and its dates. A locked or damaged PDF says so.
+- **Document page**: OpenDocument text (.odt), RTF (each font's code page followed, so Greek and Cyrillic come out right;
+  fields show their result), PowerPoint (.pptx: slide by slide with title, bullets, tables and speaker notes, hidden slides
+  marked), and **EPUB** books: text only, one chapter at a time in reading order, titles from the book's table of contents,
+  previous/next chapter in the pill (Alt+Page Up/Down) and the chapter list in Settings. A DRM-locked book says so.
+- **Spreadsheet grid**: OpenDocument spreadsheets (.ods, hidden sheets and date/time styles kept), CSV/TSV (delimiter sniffed,
+  UTF-16 "Unicode text" too), SQLite databases (known by their first bytes under any name; opened read-only, a tab per table
+  and view, a query over 5 seconds is stopped), and **torrent files**: a Files tab (path, size, bytes, padding) and an Info tab
+  (name, the info-hash computed from the file's own bytes, v2 hash, magnet link, trackers, web seeds, creator, date, comment,
+  piece size and count, private).
+- Enter keeps a text file in the viewer (CSV, RTF), and hands binary formats (Office, PDF, databases, torrents) to their
+  program as before; F3 and Ctrl+Enter show them.
+- The grid's columns fit their text (paths, URLs). A long floating message wraps instead of being cut at both ends.
+- XML that defines its own entities is refused everywhere; a plain DOCTYPE line (as an epub's table of contents has) is fine.
+
 ## 2026-11-11#03 -- F3 shows the values of an Excel workbook
 
 - **A new viewer mode, Spreadsheet**, for `.xls`/`.xlt` (Excel 97 and later) and `.xlsx`/`.xlsm`/`.xltx`/`.xltm`: the

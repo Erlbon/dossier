@@ -57,7 +57,9 @@ def test_an_office_97_file_with_utf16_text_near_the_start_goes_to_its_program_no
     assert vm.mode_for(write(tmp_path / "a.xlsx", b"PK\x03\x04" + b"\x00" * 40)) == "sheet"
     assert vm.mode_for(write(tmp_path / "a.zip", b"PK\x03\x04" + "wide".encode("utf-16-le") * 600)) == "hex"
     assert vm.mode_for(write(tmp_path / "a.docx", b"PK\x03\x04" + "wide".encode("utf-16-le") * 600)) == "document"
-    assert vm.mode_for(write(tmp_path / "fake.doc", "{\\rtf1 plain}")) == "text"   # an RTF named .doc is text
+    rtf_doc = write(tmp_path / "fake.doc", "{\\rtf1 plain}")
+    assert vm.modes_for(rtf_doc) == ["document", "text", "hex"]        # an RTF named .doc: its text, and its source one away
+    assert vm.opens_in_viewer(rtf_doc, "viewer")                       # text underneath: Enter keeps it in the viewer
 
 
 def test_every_file_can_be_seen_in_the_other_sensible_modes(tmp_path):

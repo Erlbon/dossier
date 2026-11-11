@@ -103,7 +103,7 @@ def test_a_line_that_would_start_a_list_or_quote_stays_a_line(tmp_path):
 def test_a_zip_that_is_no_docx_and_a_hostile_one_are_errors(tmp_path):
     with zipfile.ZipFile(tmp_path / "x.docx", "w") as z:
         z.writestr("hello.txt", "hi")
-    with pytest.raises(od.DocumentError, match="not a Word document"):
+    with pytest.raises(od.DocumentError, match="not a document Dossier can read"):
         od.read_document(str(tmp_path / "x.docx"))
     with zipfile.ZipFile(tmp_path / "bomb.docx", "w") as z:
         z.writestr("word/document.xml", '<?xml version="1.0"?><!DOCTYPE x [<!ENTITY a "aaaa">]><x>&a;</x>')

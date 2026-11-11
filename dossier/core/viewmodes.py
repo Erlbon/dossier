@@ -2,8 +2,11 @@
 
 ``image``    a picture (judged by its first bytes, so a photo called ``.dat`` is still shown as a photo; an SVG by its first element
              and its name);
-``document`` a Word document (.doc or .docx by name, confirmed by its first bytes): its text, read by ``core/officedoc.py``;
-``sheet``    an Excel workbook (.xls or .xlsx by name, confirmed by its first bytes): its values, read by ``core/officesheet.py``;
+``document`` a document (Word, OpenDocument text, RTF, PowerPoint, EPUB; by name, confirmed by its first bytes): its text, read by
+             ``core/officedoc.py`` and ``core/textdocs.py``;
+``sheet``    a table (Excel, OpenDocument spreadsheet, CSV/TSV, a SQLite database by its first bytes, a torrent's listing): its
+             values in a grid, read by ``core/officesheet.py``, ``core/datatables.py`` and ``core/torrent.py``;
+``pdf``      a PDF (by its first bytes): its pages, drawn by Qt's PDF module;
 ``markdown`` a text file that is Markdown (by its extension: nothing in the content tells it from plain text);
 ``text``     any other text;
 ``hex``      a binary file (zero bytes in text that is not wide), where text would only be noise.
@@ -25,7 +28,7 @@ IMAGE_EXTENSIONS = (".png", ".jpg", ".jpeg", ".jpe", ".jfif", ".gif", ".bmp", ".
 SVG_EXTENSIONS = (".svg", ".svgz")
 MARKDOWN_EXTENSIONS = (".md", ".markdown", ".mdown", ".mkd", ".mkdn")
 HEAD = 8192
-LABELS = {"image": "Image", "document": "Document", "sheet": "Spreadsheet","markdown": "Markdown", "text": "Text", "hex": "Hex"}
+LABELS = {"image": "Image", "document": "Document", "sheet": "Spreadsheet", "pdf": "PDF", "markdown": "Markdown", "text": "Text", "hex": "Hex"}
 MAGIC = ((b"\x89PNG\r\n\x1a\n", "png"), (b"\xff\xd8\xff", "jpeg"), (b"GIF87a", "gif"), (b"GIF89a", "gif"),
          (b"II*\x00", "tiff"), (b"MM\x00*", "tiff"), (b"\x00\x00\x01\x00", "ico"))
 
@@ -93,6 +96,8 @@ def mode_for(path: str, head: Optional[bytes] = None) -> str:
         return "document"
     if sheet_kind(head, path):
         return "sheet"
+    if head.startswith(b"%PDF-"):
+        return "pdf"
     if is_binary(head):
         return "hex"
     if path.lower().endswith(MARKDOWN_EXTENSIONS):
@@ -103,10 +108,21 @@ def mode_for(path: str, head: Optional[bytes] = None) -> str:
 def modes_for(path: str, head: Optional[bytes] = None) -> list:
     """The modes that make sense for ``path``, the one F3 opens first."""
     first = mode_for(path, head)
-    others = {"image": ["hex"], "document": ["hex"], "sheet": ["hex"], "markdown": ["text", "hex"], "text": ["hex"], "hex": ["text"]}[first]
+    others = {"image": ["hex"], "document": ["hex"], "sheet": ["hex"], "pdf": ["hex"], "markdown": ["text", "hex"], "text": ["hex"],
+              "hex": ["text"]}[first]
     if first == "image" and path.lower().endswith(".svg"):
         others = ["text", "hex"]                    # an SVG is also its XML
+    elif first in ("document", "sheet") and text_underneath(path, head):
+        others = ["text", "hex"]
     return [first] + others
+
+
+def text_underneath(path: str, head: Optional[bytes] = None) -> bool:
+    """RTF and CSV are text files shown as a document or a table; every other document or table format is binary (a small torrent
+    may happen to hold no zero byte, and must still not count as text)."""
+    if head is None:
+        head = read_head(path)
+    return document_kind(head, path) == "rtf" or sheet_kind(head, path) == "csv"
 
 
 OPEN_CHOICES = (("viewer", "Pictures, text and Markdown in the viewer, the rest in the Windows program"),
@@ -125,15 +141,20 @@ def opens_in_viewer(path: str, choice: str, alternate: bool = False, local: bool
     """Whether Enter or a double-click on ``path`` shows it in the viewer (True) or hands it to the program Windows has for it (False).
 
     ``choice`` is the setting (``viewer``, ``system`` or ``all``); ``alternate`` (Ctrl+Enter) does the other thing. Under ``viewer`` a
-    binary file goes to the system program, so a program is not shown as hex by accident, and so do a Word document and an Excel
-    workbook: their programs show the layout, the viewer only the text and values (F3 or Ctrl+Enter shows those).
+    binary file goes to the system program, so a program is not shown as hex by accident, and so do Office files, PDFs, databases
+    and torrents: their programs show the layout or act on them, the viewer only the text and values (F3 or Ctrl+Enter shows those).
+    A text file stays in the viewer, also when it is shown as a table (CSV) or a document (RTF).
     """
     if choice == "system":
         wanted = False
     elif choice == "all":
         wanted = True
+    elif local:
+        head = read_head(path)
+        mode = mode_for(path, head)
+        wanted = mode in ("image", "markdown", "text") or (mode in ("document", "sheet") and text_underneath(path, head))
     else:
-        wanted = mode_for(path) not in ("hex", "document", "sheet") if local else viewable_by_name(path)
+        wanted = viewable_by_name(path)
     return wanted != alternate
 
 

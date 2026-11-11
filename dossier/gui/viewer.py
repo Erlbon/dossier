@@ -49,6 +49,9 @@ class TextViewerWindow(FrostSurface, QMainWindow):
         self._pinned = ""                        # a note that the status line keeps until another file or mode is shown
         self.busy = False
         self._job: Optional[Job] = None
+        self.pdf_page = None                     # made on the first PDF (Qt's PDF module loads only then)
+        self._chapters: tuple = ()               # a book's chapters (officedoc.Chapter), shown one at a time
+        self._chapter = 0
         self._dispatch = dispatch or QtDispatcher(self)      # callbacks must reach the GUI thread
         self._runner = JobRunner(self._dispatch)
         self.resize(960, 620)
@@ -107,7 +110,8 @@ class TextViewerWindow(FrostSurface, QMainWindow):
                            (["Esc"], self._escape), (["F3"], self.close), (["Ctrl+F"], self._focus_find),
                            (["Ctrl+G"], self.ask_goto), (["Ctrl+PgDown"], lambda: self.step(1)),
                            (["Ctrl+PgUp"], lambda: self.step(-1)), (["Shift+Return"], lambda: self.find(forward=False)),
-                           (["I"], self._toggle_info), (["F"], self._toggle_follow)):
+                           (["I"], self._toggle_info), (["F"], self._toggle_follow),
+                           (["Alt+PgUp"], lambda: self.step_chapter(-1)), (["Alt+PgDown"], lambda: self.step_chapter(1))):
             act = QAction(self)
             act.setShortcuts([QKeySequence(k) for k in keys])
             act.triggered.connect(lambda _c=False, s=slot: s())
@@ -118,8 +122,8 @@ class TextViewerWindow(FrostSurface, QMainWindow):
     def _edit(self, replace: bool) -> None:
         """The viewer reads; the notepad changes. Hand this file over (Ctrl+H opens its replace bar). Pictures and binary files are not
         text and are not edited."""
-        if self.mode in ("image", "hex", "document", "sheet"):
-            self.status.setText("A picture, a document, a workbook or a binary file is not edited as text")
+        if self.mode in ("image", "hex", "document", "sheet", "pdf"):
+            self.status.setText("A picture, a document, a table, a PDF or a binary file is not edited as text")
             return
         if self.paths:
             self.edit_requested.emit(self.paths[self.index], replace)
@@ -189,10 +193,12 @@ class TextViewerWindow(FrostSurface, QMainWindow):
         bar.add_button("find", "Find", "Find (Ctrl+F)", self._focus_find, icon="search")
         bar.add_button("goto", "Go to", "Go to a line or an offset (Ctrl+G)", self.ask_goto, icon="hash")
         bar.add_button("copy", "Copy", "Copy what is selected, or the picture and its file (Ctrl+C)", self.copy_selection, icon="copy")
-        for key, glyph, tip, slot in (("out", "−", "Zoom out (-)", lambda: view.zoom_by(0.8)),
-                                      ("in", "+", "Zoom in (+)", lambda: view.zoom_by(1.25)),
-                                      ("fit", "▢", "Fit to the window (0)", lambda: view.fit()),
-                                      ("actual", "1:1", "Every pixel (1)", lambda: view.actual_size()),
+        bar.add_button("chap_prev", "‹", "Previous chapter (Alt+Page Up)", lambda: self.step_chapter(-1))
+        bar.add_button("chap_next", "›", "Next chapter (Alt+Page Down)", lambda: self.step_chapter(1))
+        for key, glyph, tip, slot in (("out", "−", "Zoom out (-)", lambda: self._zoom("zoom_by", 0.8)),
+                                      ("in", "+", "Zoom in (+)", lambda: self._zoom("zoom_by", 1.25)),
+                                      ("fit", "▢", "Fit to the window (0)", lambda: self._zoom("fit")),
+                                      ("actual", "1:1", "Every pixel (1)", lambda: self._zoom("actual_size")),
                                       ("left", "↶", "Turn left (L)", lambda: view.turn(-1)),
                                       ("right", "↷", "Turn right (R)", lambda: view.turn(1))):
             bar.add_button(key, glyph, tip, slot)
@@ -210,7 +216,7 @@ class TextViewerWindow(FrostSurface, QMainWindow):
             bar.watch(page)
 
     PILL_KEYS = {"text": ("edit", "find", "goto", "copy", "follow"), "hex": ("find", "goto", "copy"), "markdown": ("edit", "find", "copy"),
-                 "document": ("find", "copy"), "sheet": ("find", "copy"), "image": ("copy", "out", "in", "fit", "actual", "left", "right", "info")}
+                 "document": ("find", "copy"), "sheet": ("find", "copy"), "pdf": ("find", "out", "in", "fit", "actual"), "image": ("copy", "out", "in", "fit", "actual", "left", "right", "info")}
 
     def copy_selection(self) -> None:
         """The Copy button: what is selected in the text, the hex bytes or the Markdown, or the picture and its file."""
@@ -235,15 +241,17 @@ class TextViewerWindow(FrostSurface, QMainWindow):
     def _arrange_pill(self) -> None:
         """Show the buttons that belong to this kind of file and the file buttons only when there is more than one file."""
         bar = self.floating
-        every = {key for keys in self.PILL_KEYS.values() for key in keys}
+        every = {key for keys in self.PILL_KEYS.values() for key in keys} | {"chap_prev", "chap_next"}
         wanted = set(self.PILL_KEYS.get(self.mode, ()))
+        if self.mode == "document" and len(self._chapters) > 1:
+            wanted |= {"chap_prev", "chap_next"}
         for key in every:
             bar.buttons[key].setVisible(key in wanted)
         stepping = len(self.paths) > 1
         bar.buttons["prev"].setVisible(stepping)
         bar.buttons["next"].setVisible(stepping)
         self._pill["sep_files"].setVisible(stepping)
-        self.position.setVisible(self.mode not in ("markdown", "document"))
+        self.position.setVisible(self.mode != "markdown" and (self.mode != "document" or len(self._chapters) > 1))
         bar.set_enabled(True)
         bar.bar.adjustSize()
         bar.place()
@@ -257,6 +265,14 @@ class TextViewerWindow(FrostSurface, QMainWindow):
             act.setCheckable(True)
             act.setChecked(m == self.mode)
             act.triggered.connect(lambda _c=False, m=m: self.enter_mode(m) if m != self.mode else None)
+        if self.mode == "document" and len(self._chapters) > 1:
+            chapters = menu.addMenu("Chapter")
+            for i, ch in enumerate(self._chapters):
+                title = ch.title if len(ch.title) <= 60 else ch.title[:57] + "..."
+                act = chapters.addAction(f"{i + 1}. {title}")
+                act.setCheckable(True)
+                act.setChecked(i == self._chapter)
+                act.triggered.connect(lambda _c=False, i=i: self.show_chapter(i))
         if self.mode == "text":
             menu.addSeparator()
             encoding = menu.addMenu("Encoding")
@@ -295,6 +311,9 @@ class TextViewerWindow(FrostSurface, QMainWindow):
         self.image_page.view.set_image(None)
         self.image_page.info.clear()
         self.sheet_page.clear()
+        if self.pdf_page is not None:
+            self.pdf_page.close_file()
+        self._chapters, self._chapter = (), 0
         self.busy = False
 
     def enter_mode(self, mode: str) -> None:
@@ -315,7 +334,7 @@ class TextViewerWindow(FrostSurface, QMainWindow):
         self._arrange_pill()
         path = self.paths[self.index]
         {"text": self._open_text, "hex": self._open_hex, "image": self._open_image, "markdown": self._open_markdown,
-         "document": self._open_document, "sheet": self._open_sheet}[mode](path)
+         "document": self._open_document, "sheet": self._open_sheet, "pdf": self._open_pdf}[mode](path)
         self._focus_page()
 
     def _focus_page(self) -> None:
@@ -374,7 +393,7 @@ class TextViewerWindow(FrostSurface, QMainWindow):
 
         def work(progress, cancel):
             progress(0, 0)
-            return officedoc.read_document(path), os.path.getsize(path)
+            return officedoc.read_document(path), os.path.getsize(path), not viewmodes.text_underneath(path)
 
         def finished(job: Job) -> None:
             if path != self.paths[self.index] or self.mode != "document":
@@ -385,26 +404,81 @@ class TextViewerWindow(FrostSurface, QMainWindow):
                 self._pinned = f"{reason}. View as: Hex shows what is in the file"
                 self.status.setText(self._pinned)
                 return
-            doc, size = job.result
-            if doc.markdown is not None and not markdownsafe.too_big(len(doc.markdown.encode("utf-8"))):
-                self.markdown.set_markdown(doc.markdown, os.path.dirname(path))
-            else:
-                self.markdown.show_notice(doc.plain)
-            self.markdown.moveCursor(self.markdown.textCursor().MoveOperation.Start)
-            self._pinned = (f"{doc.kind}, {human_size(size)}: the text only, without pictures or layout. "
-                            "Enter in the panel opens it in its own program")
+            doc, size, binary = job.result
+            self._chapters, self._chapter = doc.chapters, 0
+            self._show_text(doc.markdown, doc.plain, path)
+            count = f", {len(doc.chapters)} chapters" if len(doc.chapters) > 1 else ""
+            self._pinned = (f"{doc.kind}, {human_size(size)}{count}: the text only, without pictures or layout"
+                            + (". Enter in the panel opens it in its own program" if binary else ""))
             self.status.setText(self._pinned)
+            self._arrange_pill()
+            self._update_status()
 
         self._job = self._runner.submit("Document", work, on_done=finished)
 
+    def _show_text(self, markdown: Optional[str], plain: str, path: str) -> None:
+        """A document's (or a chapter's) text on the Markdown page: rendered when it is small enough, else as plain text."""
+        if markdown is not None and not markdownsafe.too_big(len(markdown.encode("utf-8"))):
+            self.markdown.set_markdown(markdown, os.path.dirname(path))
+        else:
+            self.markdown.show_notice(plain)
+        self.markdown.moveCursor(self.markdown.textCursor().MoveOperation.Start)
+
+    def show_chapter(self, i: int) -> None:
+        if self.mode != "document" or not 0 <= i < len(self._chapters):
+            return
+        self._chapter = i
+        ch = self._chapters[i]
+        self._show_text(ch.markdown, ch.plain, self.paths[self.index])
+        self.status.setText(ch.title)
+        self._update_status()
+
+    def step_chapter(self, delta: int) -> None:
+        if self.mode == "document" and len(self._chapters) > 1:
+            self.show_chapter(max(0, min(len(self._chapters) - 1, self._chapter + delta)))
+
+    def _zoom(self, action: str, *args) -> None:
+        """The pill's zoom buttons act on the picture or the PDF, whichever is shown."""
+        if self.mode == "pdf" and self.pdf_page is not None:
+            getattr(self.pdf_page, action)(*args)
+        elif self.mode == "image":
+            getattr(self.image_page.view, action)(*args)
+
+    def _open_pdf(self, path: str) -> None:
+        if self.pdf_page is None:
+            from .pdf_view import PdfPage
+            self.pdf_page = PdfPage()
+            self.stack.addWidget(self.pdf_page)
+            self.pdf_page.changed.connect(self._update_status)
+            self.pdf_page.found.connect(lambda what: self.status.setText(
+                "Found" if what == "found" else f"Not found: {self.find_edit.text()}"))
+            self.floating.watch(self.pdf_page.view.viewport())
+            self.floating.bar.raise_()
+            self.status.raise_()
+        self.stack.setCurrentWidget(self.pdf_page)
+        problem = self.pdf_page.open(path)
+        try:
+            size = os.path.getsize(path)
+        except OSError:
+            size = 0
+        if problem:
+            self._pinned = f"{problem}. View as: Hex shows what is in the file"
+        else:
+            facts = self.pdf_page.facts()
+            self._pinned = (f"PDF, {human_size(size)}, {self.pdf_page.page_count():,} pages" + (f". {facts}" if facts else "")
+                            + ". Enter in the panel opens it in its own program")
+        self.status.setText(self._pinned)
+        self._update_status()
+
     def _open_sheet(self, path: str) -> None:
-        """The values of an Excel workbook, read on a thread, in the grid with a tab per sheet."""
+        """A table's values (a workbook, a CSV file, a database, a torrent's listing), read on a thread, in the grid with a tab per
+        sheet."""
         self.stack.setCurrentWidget(self.sheet_page)
-        self.status.setText("Reading the workbook...")
+        self.status.setText("Reading...")
 
         def work(progress, cancel):
             progress(0, 0)
-            return officesheet.read_workbook(path), os.path.getsize(path)
+            return officesheet.read_workbook(path), os.path.getsize(path), not viewmodes.text_underneath(path)
 
         def finished(job: Job) -> None:
             if path != self.paths[self.index] or self.mode != "sheet":
@@ -414,12 +488,13 @@ class TextViewerWindow(FrostSurface, QMainWindow):
                 self._pinned = f"{reason}. View as: Hex shows what is in the file"
                 self.status.setText(self._pinned)
                 return
-            book, size = job.result
+            book, size, binary = job.result
             self.sheet_page.set_workbook(book.sheets)
             cut = [s.name for s in book.sheets if s.cut]
-            self._pinned = (f"{book.kind}, {human_size(size)}, {len(book.sheets)} sheet(s): the values only. "
-                            + (f"Cut at {officesheet.MAX_ROWS:,} rows and {officesheet.MAX_COLS} columns: {', '.join(cut)}. " if cut else "")
-                            + "Enter in the panel opens it in its own program")
+            sheets = f", {len(book.sheets)} sheets" if len(book.sheets) > 1 else ""
+            self._pinned = (f"{book.kind}, {human_size(size)}{sheets}: the values only"
+                            + (f". Cut at {officesheet.MAX_ROWS:,} rows and {officesheet.MAX_COLS} columns: {', '.join(cut)}" if cut else "")
+                            + (". Enter in the panel opens it in its own program" if binary else ""))
             self.status.setText(self._pinned)
             self._update_status()
             self.sheet_page.table.setFocus()
@@ -535,6 +610,12 @@ class TextViewerWindow(FrostSurface, QMainWindow):
             return self._find_hex(forward)
         if self.mode in ("markdown", "document"):
             return self._find_markdown(forward)
+        if self.mode == "pdf" and self.pdf_page is not None:
+            needle = self.find_edit.text()
+            found = self.pdf_page.find(needle, forward)
+            self.status.setText({"found": "Found", "wrapped": "Found after wrapping around", "searching": "Searching..."}
+                                .get(found, f"Not found: {needle}") if needle else "")
+            return
         if self.mode == "sheet":
             needle = self.find_edit.text()
             found = self.sheet_page.find(needle, forward, self.case.isChecked())
@@ -705,10 +786,16 @@ class TextViewerWindow(FrostSurface, QMainWindow):
             if view.has_image() and self.status.text().startswith("Reading"):
                 self.status.setText("")
             return
+        if self.mode == "document" and len(self._chapters) > 1:
+            self.position.setText(f"Chapter {self._chapter + 1} of {len(self._chapters)}")
+            return
         if self.mode in ("markdown", "document"):
             return
         if self.mode == "sheet":
             self.position.setText(self.sheet_page.place())
+            return
+        if self.mode == "pdf":
+            self.position.setText(self.pdf_page.place() if self.pdf_page is not None else "")
             return
         s = self.source
         if s is None:
