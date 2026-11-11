@@ -2,6 +2,15 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-11#11 -- Built with redactor_common 2026-11-11-01: releasing no longer needs Dossier uninstalled
+
+- **The release gate uses the Dossier installed on this PC** (the owner's option D, 2026-11-11). Before, it refused to run
+  while Dossier was installed and wanted it uninstalled for every release. Now the installed copy updates itself to the new
+  release with its own settings, and stays installed. The one-file exe is still tried in a scratch folder.
+- Also from redactor_common since 2026-11-07-06: the gate asks a one-file exe for the update channel it carries inside (0.9's
+  gate failed on that and was run again by hand), Help > Check for Updates falls back to GitHub's API when a release download
+  fails, and a failed gate stops the programs it started.
+
 ## 2026-11-11#10 -- Release 0.9 prepared
 
 - `RELEASE` is 0.9 (the owner's number, 2026-11-11) and its notes are in `docs/releases/v0.9.md`: the F3 readers, system-file
