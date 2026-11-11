@@ -312,6 +312,51 @@ def test_a_word_document_shows_its_text_and_a_damaged_one_points_to_hex(viewer, 
     assert bad.mode == "document" and "damaged" in bad.status.text()
 
 
+def test_an_excel_workbook_shows_its_values_in_a_grid_with_a_tab_per_sheet(viewer, tmp_path):
+    import os
+    import shutil
+    book = str(tmp_path / "vrak.xls")
+    shutil.copy(os.path.join(os.path.dirname(__file__), "data", "book.xls"), book)
+    win = viewer([book])
+    wait(lambda: "Excel 97 workbook" in win.status.text())
+    page = win.sheet_page
+    assert win.mode == "sheet" and win.stack.currentWidget() is page
+    assert [win.mode_box.itemText(i) for i in range(win.mode_box.count())] == ["Spreadsheet", "Hex"]
+    assert [page.tabs.tabText(i) for i in range(page.tabs.count())] == ["Vrak", "Andre (hidden)"]
+    assert page.model.headerData(2, Qt.Orientation.Horizontal) == "C" and page.model.headerData(1, Qt.Orientation.Vertical) == "2"
+    assert page.model.data(page.model.index(1, 2)) == "1910-03-14"
+    assert win.position.text().startswith("A1") and "6 rows x 7 columns" in win.position.text()
+    assert win.position.width() >= win.position.sizeHint().width()          # the bar grew to fit the readout
+    win.find_edit.setText("blåbær")
+    win.find(forward=True)
+    assert win.status.text() == "Found" and page.table.currentIndex().row() == 2 and win.position.text().startswith("A3")
+    win.find(forward=True)
+    assert win.status.text() == "Found" and page.table.currentIndex().row() == 3        # A4 holds it too
+    win.find(forward=True)
+    assert win.status.text() == "Found after wrapping around"
+    win.find_edit.setText("nowhere")
+    win.find(forward=True)
+    assert win.status.text() == "Not found: nowhere"
+    page.table.selectionModel().clearSelection()
+    sel = page.table.selectionModel()
+    from PyQt6.QtCore import QItemSelection, QItemSelectionModel
+    sel.select(QItemSelection(page.model.index(0, 0), page.model.index(1, 2)), QItemSelectionModel.SelectionFlag.ClearAndSelect)
+    QApplication.clipboard().clear()
+    page.table.setFocus()
+    QTest.keyClick(page.table, Qt.Key.Key_C, Qt.KeyboardModifier.ControlModifier)
+    assert QApplication.clipboard().text() == "Ship\tYear\tLost\nHaabet\t1910\t1910-03-14"
+    assert win.status.text() == "Copied 6 cells"
+    page.tabs.setCurrentIndex(1)
+    assert page.model.data(page.model.index(0, 0)) == "second sheet" and "1 rows x 1 columns" in win.position.text()
+    win._edit(False)
+    assert "not edited as text" in win.status.text()
+    damaged = tmp_path / "bad.xls"
+    damaged.write_bytes(open(book, "rb").read()[:3000])
+    bad = viewer([str(damaged)])
+    wait(lambda: "Hex shows" in bad.status.text())
+    assert bad.mode == "sheet" and bad.sheet_page.model.rowCount() == 0
+
+
 def test_a_big_markdown_file_is_shown_as_text_and_find_works_in_the_rendered_view(viewer, tmp_path):
     big = md(tmp_path, "word " * 60000, "big.md")
     win = viewer([big])

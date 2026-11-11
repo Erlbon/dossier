@@ -3,6 +3,7 @@
 ``image``    a picture (judged by its first bytes, so a photo called ``.dat`` is still shown as a photo; an SVG by its first element
              and its name);
 ``document`` a Word document (.doc or .docx by name, confirmed by its first bytes): its text, read by ``core/officedoc.py``;
+``sheet``    an Excel workbook (.xls or .xlsx by name, confirmed by its first bytes): its values, read by ``core/officesheet.py``;
 ``markdown`` a text file that is Markdown (by its extension: nothing in the content tells it from plain text);
 ``text``     any other text;
 ``hex``      a binary file (zero bytes in text that is not wide), where text would only be noise.
@@ -16,6 +17,7 @@ import os
 from typing import Callable, Optional
 
 from .officedoc import document_kind
+from .officesheet import sheet_kind
 from .textview import SAMPLE, detect_encoding, looks_binary
 from .vfs import natural_key
 
@@ -23,7 +25,7 @@ IMAGE_EXTENSIONS = (".png", ".jpg", ".jpeg", ".jpe", ".jfif", ".gif", ".bmp", ".
 SVG_EXTENSIONS = (".svg", ".svgz")
 MARKDOWN_EXTENSIONS = (".md", ".markdown", ".mdown", ".mkd", ".mkdn")
 HEAD = 8192
-LABELS = {"image": "Image", "document": "Document", "markdown": "Markdown", "text": "Text", "hex": "Hex"}
+LABELS = {"image": "Image", "document": "Document", "sheet": "Spreadsheet","markdown": "Markdown", "text": "Text", "hex": "Hex"}
 MAGIC = ((b"\x89PNG\r\n\x1a\n", "png"), (b"\xff\xd8\xff", "jpeg"), (b"GIF87a", "gif"), (b"GIF89a", "gif"),
          (b"II*\x00", "tiff"), (b"MM\x00*", "tiff"), (b"\x00\x00\x01\x00", "ico"))
 
@@ -89,6 +91,8 @@ def mode_for(path: str, head: Optional[bytes] = None) -> str:
         return "image"
     if document_kind(head, path):
         return "document"
+    if sheet_kind(head, path):
+        return "sheet"
     if is_binary(head):
         return "hex"
     if path.lower().endswith(MARKDOWN_EXTENSIONS):
@@ -99,7 +103,7 @@ def mode_for(path: str, head: Optional[bytes] = None) -> str:
 def modes_for(path: str, head: Optional[bytes] = None) -> list:
     """The modes that make sense for ``path``, the one F3 opens first."""
     first = mode_for(path, head)
-    others = {"image": ["hex"], "document": ["hex"], "markdown": ["text", "hex"], "text": ["hex"], "hex": ["text"]}[first]
+    others = {"image": ["hex"], "document": ["hex"], "sheet": ["hex"], "markdown": ["text", "hex"], "text": ["hex"], "hex": ["text"]}[first]
     if first == "image" and path.lower().endswith(".svg"):
         others = ["text", "hex"]                    # an SVG is also its XML
     return [first] + others
@@ -121,15 +125,15 @@ def opens_in_viewer(path: str, choice: str, alternate: bool = False, local: bool
     """Whether Enter or a double-click on ``path`` shows it in the viewer (True) or hands it to the program Windows has for it (False).
 
     ``choice`` is the setting (``viewer``, ``system`` or ``all``); ``alternate`` (Ctrl+Enter) does the other thing. Under ``viewer`` a
-    binary file goes to the system program, so a program is not shown as hex by accident, and so does a Word document: its program
-    shows the layout, the viewer only the text (F3 or Ctrl+Enter shows that).
+    binary file goes to the system program, so a program is not shown as hex by accident, and so do a Word document and an Excel
+    workbook: their programs show the layout, the viewer only the text and values (F3 or Ctrl+Enter shows those).
     """
     if choice == "system":
         wanted = False
     elif choice == "all":
         wanted = True
     else:
-        wanted = mode_for(path) not in ("hex", "document") if local else viewable_by_name(path)
+        wanted = mode_for(path) not in ("hex", "document", "sheet") if local else viewable_by_name(path)
     return wanted != alternate
 
 

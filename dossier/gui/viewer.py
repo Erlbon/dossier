@@ -1,7 +1,8 @@
 """The F3 viewer: one window per call, stepping through the files that were marked (V3), in the mode that fits each file.
 
 The mode is chosen by content (``core/viewmodes.py``): text, a picture (fit, zoom, turn, EXIF), a binary file as hex, Markdown
-rendered, or the text of a Word document (``core/officedoc.py``); the View as box switches a file to any other sensible mode (Markdown as its source, any file as hex).
+rendered, the text of a Word document (``core/officedoc.py``), or the values of an Excel workbook in a grid (``core/officesheet.py``,
+``sheet_view.py``); the View as box switches a file to any other sensible mode (Markdown as its source, any file as hex).
 
 Read-only. Text: any size (the file is indexed in the background with progress and cancel), encoding auto-detected and
 changeable, find with match case, go to line, follow mode for logs, line numbers, vertical (column) selection and copy."""
@@ -15,7 +16,7 @@ from PyQt6.QtGui import QAction, QKeySequence, QTextDocument
 from PyQt6.QtWidgets import (QCheckBox, QComboBox, QHBoxLayout, QInputDialog, QLabel, QLineEdit, QMainWindow, QMenu,
                              QPushButton, QStackedWidget, QVBoxLayout, QWidget)
 
-from ..core import markdownsafe, officedoc, viewmodes
+from ..core import markdownsafe, officedoc, officesheet, viewmodes
 from ..core.exif import read_exif
 from ..core.hexview import HexFile, inspect, parse_hex
 from ..core.textview import AUTO, ENCODINGS, TextSource, TextTooLarge, detect_encoding
@@ -30,6 +31,7 @@ from .line_view import LineView
 from .markdown_view import MarkdownView
 from .models import human_size
 from .qt_bridge import QtDispatcher
+from .sheet_view import SheetPage
 
 
 class TextViewerWindow(FrostSurface, QMainWindow):
@@ -55,8 +57,9 @@ class TextViewerWindow(FrostSurface, QMainWindow):
         self.hex = HexView()
         self.image_page = ImagePage()
         self.markdown = MarkdownView()
+        self.sheet_page = SheetPage()
         self.stack = QStackedWidget()
-        for page in (self.view, self.image_page, self.hex, self.markdown):
+        for page in (self.view, self.image_page, self.hex, self.markdown, self.sheet_page):
             self.stack.addWidget(page)
         central = QWidget()
         self._central_layout = QVBoxLayout(central)
@@ -66,6 +69,8 @@ class TextViewerWindow(FrostSurface, QMainWindow):
         self.setCentralWidget(central)
         self.view.changed.connect(self._update_status)
         self.hex.changed.connect(self._update_status)
+        self.sheet_page.changed.connect(self._update_status)
+        self.sheet_page.copied.connect(lambda n: self.status.setText(f"Copied {n:,} cells" if n else "No cells are selected"))
         self.image_page.view.changed.connect(self._update_status)
         self.image_page.view.step_requested.connect(self.step)        # the wheel turns the pages of a folder of pictures
         self.image_page.view.copied.connect(lambda text: self.status.setText(text))
@@ -113,8 +118,8 @@ class TextViewerWindow(FrostSurface, QMainWindow):
     def _edit(self, replace: bool) -> None:
         """The viewer reads; the notepad changes. Hand this file over (Ctrl+H opens its replace bar). Pictures and binary files are not
         text and are not edited."""
-        if self.mode in ("image", "hex", "document"):
-            self.status.setText("A picture, a document or a binary file is not edited as text")
+        if self.mode in ("image", "hex", "document", "sheet"):
+            self.status.setText("A picture, a document, a workbook or a binary file is not edited as text")
             return
         if self.paths:
             self.edit_requested.emit(self.paths[self.index], replace)
@@ -201,11 +206,11 @@ class TextViewerWindow(FrostSurface, QMainWindow):
         self._pill["sep_tools"] = bar.add_separator()
         self.position = bar.add_label()
         bar.add_button("settings", "Settings", "View as, encoding, follow", self._popup_settings, icon="settings")
-        for page in (self.view, self.hex, self.markdown, view):
+        for page in (self.view, self.hex, self.markdown, self.sheet_page.table.viewport(), view):
             bar.watch(page)
 
     PILL_KEYS = {"text": ("edit", "find", "goto", "copy", "follow"), "hex": ("find", "goto", "copy"), "markdown": ("edit", "find", "copy"),
-                 "document": ("find", "copy"), "image": ("copy", "out", "in", "fit", "actual", "left", "right", "info")}
+                 "document": ("find", "copy"), "sheet": ("find", "copy"), "image": ("copy", "out", "in", "fit", "actual", "left", "right", "info")}
 
     def copy_selection(self) -> None:
         """The Copy button: what is selected in the text, the hex bytes or the Markdown, or the picture and its file."""
@@ -214,6 +219,10 @@ class TextViewerWindow(FrostSurface, QMainWindow):
         elif self.mode == "hex":
             self.hex.copy_hex()
             self.status.setText(f"Copied {self.hex.selection()[1]:,} bytes as hex (Ctrl+Shift+C copies them as text)")
+        elif self.mode == "sheet":
+            n = self.sheet_page.copy()
+            self.status.setText(f"Copied {n:,} cells: they paste into a spreadsheet as cells" if n else
+                                "No cells are selected: click one, or drag over several")
         elif self.mode in ("markdown", "document") and self.markdown.textCursor().hasSelection():
             self.markdown.copy()
             self.status.setText("Copied the selected text")
@@ -285,10 +294,11 @@ class TextViewerWindow(FrostSurface, QMainWindow):
             self.hexfile = None
         self.image_page.view.set_image(None)
         self.image_page.info.clear()
+        self.sheet_page.clear()
         self.busy = False
 
     def enter_mode(self, mode: str) -> None:
-        """Show the current file in ``mode`` (text, hex, image, markdown or document)."""
+        """Show the current file in ``mode`` (text, hex, image, markdown, document or sheet)."""
         self._close_current()
         self.mode = mode
         self._pinned = ""
@@ -300,12 +310,12 @@ class TextViewerWindow(FrostSurface, QMainWindow):
         if mode == "image":
             self.find_strip.hide()
         self.hex_find_kind.setVisible(mode == "hex")
-        self.case.setVisible(mode in ("text", "hex", "markdown", "document"))
+        self.case.setVisible(mode in ("text", "hex", "markdown", "document", "sheet"))
         self.file_buttons_visible = len(self.paths) > 1
         self._arrange_pill()
         path = self.paths[self.index]
         {"text": self._open_text, "hex": self._open_hex, "image": self._open_image, "markdown": self._open_markdown,
-         "document": self._open_document}[mode](path)
+         "document": self._open_document, "sheet": self._open_sheet}[mode](path)
         self._focus_page()
 
     def _focus_page(self) -> None:
@@ -386,6 +396,35 @@ class TextViewerWindow(FrostSurface, QMainWindow):
             self.status.setText(self._pinned)
 
         self._job = self._runner.submit("Document", work, on_done=finished)
+
+    def _open_sheet(self, path: str) -> None:
+        """The values of an Excel workbook, read on a thread, in the grid with a tab per sheet."""
+        self.stack.setCurrentWidget(self.sheet_page)
+        self.status.setText("Reading the workbook...")
+
+        def work(progress, cancel):
+            progress(0, 0)
+            return officesheet.read_workbook(path), os.path.getsize(path)
+
+        def finished(job: Job) -> None:
+            if path != self.paths[self.index] or self.mode != "sheet":
+                return
+            if job.state is not JobState.DONE or job.result is None:
+                reason = str(job.error) if isinstance(job.error, officedoc.DocumentError) else "It cannot be read here"
+                self._pinned = f"{reason}. View as: Hex shows what is in the file"
+                self.status.setText(self._pinned)
+                return
+            book, size = job.result
+            self.sheet_page.set_workbook(book.sheets)
+            cut = [s.name for s in book.sheets if s.cut]
+            self._pinned = (f"{book.kind}, {human_size(size)}, {len(book.sheets)} sheet(s): the values only. "
+                            + (f"Cut at {officesheet.MAX_ROWS:,} rows and {officesheet.MAX_COLS} columns: {', '.join(cut)}. " if cut else "")
+                            + "Enter in the panel opens it in its own program")
+            self.status.setText(self._pinned)
+            self._update_status()
+            self.sheet_page.table.setFocus()
+
+        self._job = self._runner.submit("Workbook", work, on_done=finished)
 
     def _open_image(self, path: str) -> None:
         self.stack.setCurrentWidget(self.image_page)
@@ -496,6 +535,12 @@ class TextViewerWindow(FrostSurface, QMainWindow):
             return self._find_hex(forward)
         if self.mode in ("markdown", "document"):
             return self._find_markdown(forward)
+        if self.mode == "sheet":
+            needle = self.find_edit.text()
+            found = self.sheet_page.find(needle, forward, self.case.isChecked())
+            self.status.setText({"found": "Found", "wrapped": "Found after wrapping around"}.get(found, f"Not found: {needle}")
+                                if needle else "")
+            return
         if self.mode == "image":
             return
         needle = self.find_edit.text()
@@ -644,6 +689,13 @@ class TextViewerWindow(FrostSurface, QMainWindow):
 
     # status ----------------------------------------------------------------------------------
     def _update_status(self) -> None:
+        self._status_now()
+        label = self.position                    # the bar does not grow by itself when the readout gets longer
+        if label.isVisibleTo(self.floating.bar) and label.width() < label.sizeHint().width():
+            self.floating.bar.adjustSize()
+            self.floating.place()
+
+    def _status_now(self) -> None:
         if self.mode == "hex":
             return self._hex_status()
         if self.mode == "image":
@@ -654,6 +706,9 @@ class TextViewerWindow(FrostSurface, QMainWindow):
                 self.status.setText("")
             return
         if self.mode in ("markdown", "document"):
+            return
+        if self.mode == "sheet":
+            self.position.setText(self.sheet_page.place())
             return
         s = self.source
         if s is None:

@@ -2,6 +2,19 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-11#03 -- F3 shows the values of an Excel workbook
+
+- **A new viewer mode, Spreadsheet**, for `.xls`/`.xlt` (Excel 97 and later) and `.xlsx`/`.xlsm`/`.xltx`/`.xltm`: the
+  values in a read-only grid with column letters and row numbers, and a tab per sheet under it (a hidden sheet says so).
+  Numbers, dates and times by their format, percentages, TRUE/FALSE, error codes and a formula's last result; no
+  formulas, formatting, charts or pictures. Find goes cell by cell; select cells and Ctrl+C (or Copy) gives tab-separated
+  text that pastes into a spreadsheet as cells. The pill shows the cell (`C2`) and the sheet's size.
+- A sheet stops at 20,000 rows and 256 columns, the whole workbook at a million cells, and says where it was cut.
+  An Excel 5/95 workbook, a locked one or a damaged one says why and points to Hex.
+- Enter still opens a workbook in Excel (or the system's program for it); F3 and Ctrl+Enter show the values.
+- The viewer's pill grows when its readout gets longer (the line, offset or cell readout was cut short).
+- Standard library only, as for Word: `core/officesheet.py` uses the same Office 97 container reader.
+
 ## 2026-11-11#02 -- F3 shows the text of a Word document
 
 - **A new viewer mode, Document**, for `.doc`/`.dot` (Word 97 and later, and simple Word 6/95 files) and

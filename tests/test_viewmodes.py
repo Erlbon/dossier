@@ -46,13 +46,15 @@ def test_an_office_97_file_with_utf16_text_near_the_start_goes_to_its_program_no
     header += b"\xff" * (512 - len(header))
     fat = struct.pack("<I", 0xFFFFFFFD) + b"\xff" * 508
     body = header + fat + ("Vrakkart 1910 " * 200).encode("utf-16-le")
-    sheet = write(tmp_path / "1910.xls", body)
-    assert vm.mode_for(sheet) == "hex"
-    assert not vm.opens_in_viewer(sheet, "viewer")                     # Enter hands it to Excel
-    assert vm.opens_in_viewer(sheet, "viewer", alternate=True)         # Ctrl+Enter still shows it
-    doc = write(tmp_path / "1910.doc", body)
-    assert vm.modes_for(doc) == ["document", "hex"]                    # F3 shows a Word document's text
-    assert not vm.opens_in_viewer(doc, "viewer")                       # Enter hands it to Word
+    slides = write(tmp_path / "1910.ppt", body)
+    assert vm.mode_for(slides) == "hex"
+    assert not vm.opens_in_viewer(slides, "viewer")                    # Enter hands it to PowerPoint
+    assert vm.opens_in_viewer(slides, "viewer", alternate=True)        # Ctrl+Enter still shows it
+    for name, mode in (("1910.doc", "document"), ("1910.xls", "sheet")):
+        office = write(tmp_path / name, body)
+        assert vm.modes_for(office) == [mode, "hex"]                   # F3 shows the text or the values
+        assert not vm.opens_in_viewer(office, "viewer")                # Enter hands it to Word or Excel
+    assert vm.mode_for(write(tmp_path / "a.xlsx", b"PK\x03\x04" + b"\x00" * 40)) == "sheet"
     assert vm.mode_for(write(tmp_path / "a.zip", b"PK\x03\x04" + "wide".encode("utf-16-le") * 600)) == "hex"
     assert vm.mode_for(write(tmp_path / "a.docx", b"PK\x03\x04" + "wide".encode("utf-16-le") * 600)) == "document"
     assert vm.mode_for(write(tmp_path / "fake.doc", "{\\rtf1 plain}")) == "text"   # an RTF named .doc is text
