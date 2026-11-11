@@ -2,6 +2,12 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-11#10 -- Release 0.9 prepared
+
+- `RELEASE` is 0.9 (the owner's number, 2026-11-11) and its notes are in `docs/releases/v0.9.md`: the F3 readers, system-file
+  listings, F5/F6 at once, planned operations and kept copies, git awareness, and the fixes for the blinking top bar and the
+  blank taskbar icon.
+
 ## 2026-11-11#09 -- Planned operations: Shift+F5/F6 to plan, Ctrl+F3 to review and run, kept copies to reuse
 
 The owner's decisions of 2026-11-11 (CLAUDE.md, "Planned operations").
