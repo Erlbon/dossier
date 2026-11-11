@@ -49,7 +49,8 @@ class OperationQueueMixin:
                           detail=lambda: f"{count['n']:,} items found so far", indeterminate=True, on_end=self._update_taskbar)
         self._update_taskbar()
 
-    def _run(self, plan: Plan, *, unmark: Optional[list] = None, select: str = "", remember=None, on_done=None) -> None:
+    def _run(self, plan: Plan, *, unmark: Optional[list] = None, select: str = "", remember=None, on_done=None,
+             verify: Optional[bool] = None) -> None:
         """Queue a plan. Plans run one after the other (one disk is never fought over); the progress box of a
         plan appears when it starts, and a queued plan waits until the ones before it are done. ``remember`` (an
         ``Entry``) is kept in the journal while the operation is unfinished, when the owner switched that on."""
@@ -119,8 +120,11 @@ class OperationQueueMixin:
             if on_done is not None:                      # whoever asked for the run (the assistant's request) is told how it ended
                 on_done(job)
 
+        options = self._exec_options(on_item, on_wait, on_file_bytes)
+        if verify is not None:                           # a planned operation carries its own Verify choice
+            options = replace(options, verify=verify)
         job = run_plan_job(self.runner, plan, self.fs, selection=self.selection, undo_log=self.undo_log,
-                           on_progress=progress, on_done=finished, options=self._exec_options(on_item, on_wait, on_file_bytes),
+                           on_progress=progress, on_done=finished, options=options,
                            **({} if self.trasher is None else {"trasher": self.trasher}))
         holder["job"] = job
         if self.paused:

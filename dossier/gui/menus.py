@@ -273,6 +273,10 @@ class MenusMixin:
         quarantine.addAction(self._action("Show the Quarantine Folder", None, self.show_quarantine_folder))
         tools.addSeparator()
         operations = tools.addMenu("Operations")
+        operations.addAction(self._action("Plan a Copy", None, self.plan_copy))                 # Shift+F5: onto the planned list
+        operations.addAction(self._action("Plan a Move", None, self.plan_move))
+        operations.addAction(self._action("Planned Operations...", None, self.show_planned))
+        operations.addSeparator()
         operations.addAction(self._action("Pause or Resume Operations", "Ctrl+Shift+P", self.toggle_pause))
         operations.addAction(self._action("Cancel Waiting Operations", None, self.cancel_waiting))
         operations.addAction(self._action("Unfinished Operations...", None, lambda: self.offer_resume(manual=True)))

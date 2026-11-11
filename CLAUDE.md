@@ -40,15 +40,16 @@ The function list follows The Next Tool (Ebdac Software GmbH, discontinued 2007)
 - **The window's thread never touches the disk.** Listing, notes, sizes, planning, unpacking and the status line's sizes all run on threads.
 
 ## Function keys (the owner, 2026-11-11, layout A)
-Grouped by kind; Total Commander's history does not count ("TC is unwieldy for new users"). F5/F6 copy and move at once into the other panel; Ctrl+F5/F6 show the box first; Shift+F5/F6 plan a copy or a move for later; Ctrl+F3 opens the planned list; Ctrl+F7/F8 compare files and folders; Ctrl+F9-F12 sort by name, type, date, size. The planned operations (Shift+F5/F6, Ctrl+F3) are not built yet. Defaults in `core/fkey_config.py`.
+Grouped by kind; Total Commander's history does not count ("TC is unwieldy for new users"). F5/F6 copy and move at once into the other panel; Ctrl+F5/F6 show the box first; Shift+F5/F6 plan a copy or a move for later; Ctrl+F3 opens the planned list; Ctrl+F7/F8 compare files and folders; Ctrl+F9-F12 sort by name, type, date, size. Defaults in `core/fkey_config.py`.
 
-## Planned operations (the owner, 2026-11-11; being decided point by point)
+## Planned operations (the owner, 2026-11-11; built in build 2026-11-11#09: `core/planned.py`, `gui/planned_ops.py`)
 Shift+F5/F6 put a copy or move on a list to review and launch later, together with planned operations from other folders.
 - A planned operation remembers the **intention** (which items, from which folder, to which folder), not a frozen file list: the plan is made again at launch from what is on disk then (option A, as the resume list in `core/queue_journal.py` does).
 - The list is **kept on disk** (the settings folder) until an operation is run or removed; not opt-in, because the owner builds it on purpose (option A). A "Clear the list" button is the privacy switch.
 - **Reusable copies** (raised by the owner the same day), option A: one list. A planned operation can be marked "keep after running"; it stays on the list, shows when it last ran and how it went, and runs again on request (re-planned, as every planned operation is). Kept entries have a name, so a command-line run (`dossier run <name>`) can come later without a second list.
 - A rerun of a kept copy by default **copies only what is missing or changed, without questions** (the copy box's "skip what is already there and the same"; by content with Verify); "newer only" and "ask each time" are choices per entry (option A). Files deleted from the source stay in the destination: that is Compare and Synchronize's job.
 - The list is **its own window** (Ctrl+F3), like the Health window (option A): What, From, To, Items, Kept, Last run; Run Selected, Run All (top to bottom through the queue), Keep / Don't Keep, Remove, Clear the List; the selected entry's files and size counted from disk when selected. Entries not kept leave the list once run. No strip under the panels; the status line may show "3 planned" as a link to the window.
+- **Shift+F5/F6 add straight to the list** (the marked items, into the other panel's folder) with a short message; no box (option A). The window's **Edit...** opens the Ctrl+F5 box for the selected entry: destination, options, and for a kept copy its rerun rule.
 
 ## Menus (the owner, 2026-11-05, after the menu review)
 Each menu answers one question; a new command goes in the menu whose question it answers, at the end of the group it belongs to, never just at the bottom of Tools.

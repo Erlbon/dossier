@@ -53,11 +53,12 @@ class FakeDialogs:
             return None
         return self.verify_answer if self.verify_answer is not None else verify
 
-    def ask_transfer(self, title, text, ok_label, dest, verify, move, local=True):
+    def ask_transfer(self, title, text, ok_label, dest, verify, move, local=True, options=None):
         """As confirm_transfer; ``transfer_answer`` (a dict of TransferAnswer fields) changes the destination or the options."""
         from dossier.gui.transfer_dialog import TransferAnswer
         self.confirms.append((title, text))
         self.transfer_offered_verify = verify
+        self.transfer_offered_options = options
         if not self.confirm_answer:
             return None
         chosen = self.verify_answer if self.verify_answer is not None else verify

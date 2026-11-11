@@ -8,6 +8,7 @@ and plans again when it differs from the plan the box was shown for.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Optional
 
 from PyQt6.QtCore import QDir
 from PyQt6.QtGui import QFileSystemModel
@@ -31,7 +32,7 @@ class TransferAnswer:
 
 class TransferDialog(OwnedDialog):
     def __init__(self, parent, title: str, summary: str, ok_label: str, dest: str, verify: bool, move: bool,
-                 local_completion: bool = True) -> None:
+                 local_completion: bool = True, options: Optional[dict] = None) -> None:
         super().__init__(parent)
         self.setWindowTitle(title)
         self.setMinimumWidth(620)
@@ -74,6 +75,11 @@ class TransferDialog(OwnedDialog):
         f.addRow("", self.newer)
         f.addRow("", self.verify)
         layout.addWidget(how)
+        if options:                                               # choices made before (a planned operation's Edit...)
+            self.only.setText(str(options.get("only", "")))
+            self.flatten.setChecked(bool(options.get("flatten")))
+            self.newer.setChecked(bool(options.get("newer")))
+            self.skip_same.setChecked(bool(options.get("skip_same")))
         self.problem = QLabel()
         self.problem.setWordWrap(True)
         layout.addWidget(self.problem)

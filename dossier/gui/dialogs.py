@@ -233,10 +233,12 @@ class Dialogs:
         box.deleteLater()                                      # freed once the answer has been read, not kept by the window for good
         return check.isChecked() if box.clickedButton() is ok else None
 
-    def ask_transfer(self, title: str, text: str, ok_label: str, dest: str, verify: bool, move: bool, local: bool = True):
-        """The Ctrl+F5 / Ctrl+F6 box: a ``TransferAnswer`` (where to, verify, the options), or None when cancelled."""
+    def ask_transfer(self, title: str, text: str, ok_label: str, dest: str, verify: bool, move: bool, local: bool = True,
+                     options: Optional[dict] = None):
+        """The Ctrl+F5 / Ctrl+F6 box: a ``TransferAnswer`` (where to, verify, the options), or None when cancelled. ``options`` fills in
+        the choices made before (a planned operation's Edit...): ``only``, ``flatten``, ``newer``, ``skip_same``."""
         from .transfer_dialog import TransferDialog
-        dlg = TransferDialog(self.parent, title, text, ok_label, dest, verify, move, local_completion=local)
+        dlg = TransferDialog(self.parent, title, text, ok_label, dest, verify, move, local_completion=local, options=options)
         return dlg.answer() if dlg.exec() == QDialog.DialogCode.Accepted else None
 
     def ask_resume(self, lines: list) -> str:

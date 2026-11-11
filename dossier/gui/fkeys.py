@@ -38,6 +38,9 @@ COMMANDS: dict = {
     "move": Command("Move", "arrows-right-left"),
     "copy_with_box": Command("Copy...", "copy"),                 # the box: where to, only some files, verify...
     "move_with_box": Command("Move...", "arrows-right-left"),
+    "plan_copy": Command("Plan copy", "copy"),                    # onto the planned list, to run later (Ctrl+F3)
+    "plan_move": Command("Plan move", "arrows-right-left"),
+    "show_planned": Command("Planned", "book"),
     "new_folder": Command("Folder", "folder-plus"),
     "new_file": Command("New file", "file"),
     "delete": Command("Delete", "trash"),

@@ -2,6 +2,22 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-11#09 -- Planned operations: Shift+F5/F6 to plan, Ctrl+F3 to review and run, kept copies to reuse
+
+The owner's decisions of 2026-11-11 (CLAUDE.md, "Planned operations").
+
+- **Shift+F5 / Shift+F6** put a copy or move of the marked items (into the other panel's folder) on the planned list, with a
+  short message and no box. Collect from as many folders as you like; nothing is copied yet.
+- **Ctrl+F3** (and Tools > Operations > Planned Operations...) opens the list: what, from, to, the items, kept, the rerun rule,
+  the last run. Selecting an entry counts what it would copy now. **Run Selected**, **Run All** (top to bottom, each planned
+  when the one before it has finished, through the normal queue), **Edit...** (the Ctrl+F5 box with the entry's choices),
+  **Keep / Don't Keep** (asks a name), Up, Down, Remove, Clear the List.
+- An entry remembers the intention, not a file list: it is planned again when it runs, from what is on disk then. A one-off
+  leaves the list when it ran without failures; one that failed or could not run stays, with a note.
+- **Kept copies** stay to be run again. By default a rerun copies only what is missing or changed, with no questions (changed
+  files are replaced; files deleted from the source stay in the destination). Edit... can make it "newer only" or "ask".
+- The list is kept in the settings folder (`planned.json`) until entries are run or removed; Clear the List empties it.
+
 ## 2026-11-11#08 -- F5/F6 copy and move at once; Ctrl+F5/F6 show the box; function keys grouped by kind
 
 The owner's layout A (2026-11-11), grouped by kind, not by Total Commander's history.
