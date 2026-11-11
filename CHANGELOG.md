@@ -2,6 +2,13 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-11#01 -- Word .doc files open in Word, not as hex
+
+- **Enter on an old Word `.doc` opens it in Word again.** Word 97 keeps a document's text as UTF-16, and when that text sat
+  near the start of the file its zero bytes looked like wide text, so Dossier sent the file to its viewer, which showed hex.
+  The file's signature now decides first: Office 97 files (`.doc`, `.xls`, `.ppt`, `.msg`), zip-based files (`.docx`,
+  `.epub`, `.cbz`...), PDF, RAR, 7z, gzip, SQLite and Matroska are always binary. Ctrl+Enter still shows them in the viewer.
+
 ## 2026-11-10#01 -- Dossier's own icon on the taskbar again
 
 - **The installer's shortcuts carry Dossier's taskbar id** (`Erlbon.Dossier`, the id its windows set). Without it Windows

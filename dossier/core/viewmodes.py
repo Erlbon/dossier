@@ -58,7 +58,16 @@ def is_svg(head: bytes) -> bool:
         return text.startswith("<svg") or text.startswith("<svg:svg")
 
 
+# Containers that are never text, whatever their zero bytes suggest: a Word 97 .doc keeps its text as UTF-16, and when that text is near
+# the start the zero-byte count reads as wide text, so the .doc went to the viewer (and showed as hex) instead of to Word.
+BINARY_MAGIC = (b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1",   # OLE2: .doc .xls .ppt .msg
+                b"PK\x03\x04", b"PK\x05\x06",          # zip and everything built on it: .docx .xlsx .odt .epub .cbz
+                b"%PDF-", b"Rar!\x1a\x07", b"7z\xbc\xaf\x27\x1c", b"\x1f\x8b", b"SQLite format 3\x00", b"\x1aE\xdf\xa3")
+
+
 def is_binary(head: bytes) -> bool:
+    if head.startswith(BINARY_MAGIC):
+        return True
     return bool(head) and looks_binary(head[:SAMPLE], detect_encoding(head[:SAMPLE]))
 
 
