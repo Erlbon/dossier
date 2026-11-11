@@ -42,6 +42,10 @@ The function list follows The Next Tool (Ebdac Software GmbH, discontinued 2007)
 ## Function keys (the owner, 2026-11-11, layout A)
 Grouped by kind; Total Commander's history does not count ("TC is unwieldy for new users"). F5/F6 copy and move at once into the other panel; Ctrl+F5/F6 show the box first; Shift+F5/F6 plan a copy or a move for later; Ctrl+F3 opens the planned list; Ctrl+F7/F8 compare files and folders; Ctrl+F9-F12 sort by name, type, date, size. The planned operations (Shift+F5/F6, Ctrl+F3) are not built yet. Defaults in `core/fkey_config.py`.
 
+## Planned operations (the owner, 2026-11-11; being decided point by point)
+Shift+F5/F6 put a copy or move on a list to review and launch later, together with planned operations from other folders.
+- A planned operation remembers the **intention** (which items, from which folder, to which folder), not a frozen file list: the plan is made again at launch from what is on disk then (option A, as the resume list in `core/queue_journal.py` does).
+
 ## Menus (the owner, 2026-11-05, after the menu review)
 Each menu answers one question; a new command goes in the menu whose question it answers, at the end of the group it belongs to, never just at the bottom of Tools.
 - **File**: what can I do to the files under the cursor (open, view, edit, rename, copy, move, new, dates, links, delete, properties).
