@@ -22,11 +22,22 @@ def primary_style(t: dict) -> str:
 
 
 def style_dialog(dialog: QDialog) -> None:
+    """The accept button gold and the one Enter presses. Setting it as the default is not enough on its own: Qt then still made the first
+    button that may be a default (Cancel, which a button box puts first on Windows) the default, so Enter cancelled Copy, Pack, Search
+    and the rest (2026-11-11). So the other buttons stop being candidates. A dialog that took that role off its accept button on
+    purpose (the server-trust questions, where Enter must mean Cancel) keeps its own choice."""
     for box in dialog.findChildren(QDialogButtonBox):
-        for button in box.buttons():
-            if box.buttonRole(button) == QDialogButtonBox.ButtonRole.AcceptRole and isinstance(button, QPushButton):
-                button.setStyleSheet(primary_style(theme.current()))
-                button.setDefault(True)
+        buttons = [b for b in box.buttons() if isinstance(b, QPushButton)]
+        accept = [b for b in buttons if box.buttonRole(b) == QDialogButtonBox.ButtonRole.AcceptRole]
+        for button in accept:
+            button.setStyleSheet(primary_style(theme.current()))
+        main = next((b for b in accept if b.autoDefault()), None)
+        if main is None:
+            continue
+        for button in buttons:
+            if button is not main:
+                button.setAutoDefault(False)
+        main.setDefault(True)
 
 
 class PrimaryButtons(QObject):

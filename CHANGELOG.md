@@ -2,6 +2,14 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-11#07 -- Enter presses a dialog's main button, not Cancel
+
+- **The first Enter in the F5/F6 box cancelled the copy**, so copying took two presses of F5. The Copy button was made the
+  default before the buttons were placed in the box; Qt dropped that and made the first button, Cancel, the default. The same
+  happened in the other dialogs whose Cancel button comes first (Pack, Search, Compare, Find duplicates, the settings boxes...).
+- Fixed once for every dialog in the filter that styles the main button: the main button is the default and the other buttons
+  stop being candidates. The two server-trust questions keep Enter on Cancel on purpose, as before.
+
 ## 2026-11-11#06 -- Old archives named and listed; old DOS zips unpack through 7-Zip
 
 The owner's choice A for old compressed files (2026-11-11): name them all, list the simple ones, unpack none.

@@ -79,10 +79,13 @@ class TransferDialog(OwnedDialog):
         layout.addWidget(self.problem)
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Cancel)
         ok = buttons.addButton(ok_label, QDialogButtonBox.ButtonRole.AcceptRole)
-        ok.setDefault(True)
         buttons.accepted.connect(self._accept)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
+        # Enter means Copy (or Move). Set only once the box is in the dialog: a default set before that is lost, and Qt then made
+        # Cancel (the first button) the default, so the first Enter cancelled and F5 had to be pressed again (2026-11-11).
+        buttons.button(QDialogButtonBox.StandardButton.Cancel).setAutoDefault(False)
+        ok.setDefault(True)
         self.dest.setFocus()
         self.dest.selectAll()
 
