@@ -47,7 +47,7 @@ Shift+F5/F6 put a copy or move on a list to review and launch later, together wi
 - A planned operation remembers the **intention** (which items, from which folder, to which folder), not a frozen file list: the plan is made again at launch from what is on disk then (option A, as the resume list in `core/queue_journal.py` does).
 - The list is **kept on disk** (the settings folder) until an operation is run or removed; not opt-in, because the owner builds it on purpose (option A). A "Clear the list" button is the privacy switch.
 - **Reusable copies** (raised by the owner the same day), option A: one list. A planned operation can be marked "keep after running"; it stays on the list, shows when it last ran and how it went, and runs again on request (re-planned, as every planned operation is). Kept entries have a name, so a command-line run (`dossier run <name>`) can come later without a second list.
-- Open: what a rerun does with files already there (skip the same, newer only, or ask).
+- A rerun of a kept copy by default **copies only what is missing or changed, without questions** (the copy box's "skip what is already there and the same"; by content with Verify); "newer only" and "ask each time" are choices per entry (option A). Files deleted from the source stay in the destination: that is Compare and Synchronize's job.
 
 ## Menus (the owner, 2026-11-05, after the menu review)
 Each menu answers one question; a new command goes in the menu whose question it answers, at the end of the group it belongs to, never just at the bottom of Tools.
