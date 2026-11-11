@@ -257,7 +257,7 @@ def test_the_commands_work_on_the_files_of_a_flat_list(world):
     pump(win, lambda: win.left.path.startswith(FLAT_PREFIX))
     win.left.table.setCurrentIndex(win.left.model.index(2, 0))                              # sub/b.txt (row 0 is "..", row 1 a.txt)
     key(win, Qt.Key.Key_Space)
-    win.copy()
+    win.copy_with_box()
     wait_planned(win)
     assert f"from {left}" in dialogs.confirms[-1][1] and "flat://" not in dialogs.confirms[-1][1]
     pump(win, lambda: (right / "b.txt").exists())                                         # copied by its real path

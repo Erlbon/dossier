@@ -364,9 +364,11 @@ def test_menus_view_has_modes_and_notes_while_settings_has_the_choices(commander
     assert titles == ["File", "Edit", "Mark", "View", "Go", "Tools", "Network", "Settings", "Help"]
     menus = {a.text().replace("&", ""): a.menu() for a in win.menuBar().actions()}
     texts = lambda name: [a.text().split("\t")[0] for a in menus[name].actions() if not a.isSeparator() and a.isVisible()]       # noqa: E731
-    assert texts("File") == ["Open", "View", "View as Glass", "Edit", "Rename", "Copy to the Other Panel", "Move to the Other Panel", "New Folder",
-                             "New File...", "Change Dates and Attributes...", "New Link...", "Delete", "Delete Permanently", "Properties",
-                             "Show in Explorer", "Quit"]
+    assert texts("File") == ["Open", "View", "View as Glass", "Edit", "Rename", "Copy to the Other Panel", "Copy...",
+                             "Move to the Other Panel", "Move...", "New", "Change Dates and Attributes...", "Delete", "Delete Permanently",
+                             "Properties", "Show in Explorer", "Quit"]
+    new = next(a.menu() for a in menus["File"].actions() if a.text() == "New")
+    assert [a.text().split("\t")[0] for a in new.actions()] == ["New Folder", "New File...", "New Link..."]
     assert texts("Edit") == ["Undo", "Copy", "Cut", "Paste", "Paste as New File...", "Copy Paths as Text", "Copy Names as Text",
                              "Copy This Folder's Path"]
     assert texts("Mark") == ["Mark All", "Unmark All", "Invert Marks", "Mark by Pattern...", "Unmark by Pattern...", "Mark by Tag...",

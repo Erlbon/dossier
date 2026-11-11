@@ -15,7 +15,7 @@ From the [releases page](https://github.com/Erlbon/dossier/releases): **`dossier
 
 ## What it does
 
-- **Two panels, tabs, one selection.** Mark files in either panel; commands work on the marks of the panel you start them from. F3 view, F4 edit, F5 copy, F6 move, F7 new folder, F8 delete; drag and drop; the clipboard.
+- **Two panels, tabs, one selection.** Mark files in either panel; commands work on the marks of the panel you start them from. F3 view, F4 edit, F5 copy, F6 move (Ctrl+F5/F6 first show a box to copy elsewhere or only some files), F7 new folder, F8 delete; drag and drop; the clipboard.
 - **Safe changes.** Every copy, move, rename and delete is planned, shown, then done; renames and same-drive moves can be undone; a name that is taken is asked about; copies can be read back and compared.
 - **A Home page** with your drives (with lights that say whether they answer), places, pinned folders, network shares and servers.
 - **Servers as folders:** SFTP, SCP, WebDAV, FTP and FTPS, Google Drive, and read-only OPDS book catalogues and Subsonic music servers. Devices of your Tailscale network are listed on the Home page, with their shared folders. Network drives can be mounted on a drive letter.

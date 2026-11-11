@@ -2,9 +2,11 @@
 from dossier.core import fkey_config as cfg
 
 
-def test_the_plain_and_shift_rows_have_all_twelve_keys_and_ctrl_sorts():
-    assert sorted(cfg.DEFAULTS[cfg.PLAIN]) == list(range(1, 13)) and sorted(cfg.DEFAULTS[cfg.SHIFT]) == list(range(1, 13))
-    assert cfg.DEFAULTS[cfg.CTRL] == {3: "sort_by_name", 4: "sort_by_type", 5: "sort_by_date", 6: "sort_by_size"}   # as in TC and Far
+def test_the_owners_layout_a_plain_row_full_shift_f5_f6_kept_free_ctrl_grouped_by_kind():
+    assert sorted(cfg.DEFAULTS[cfg.PLAIN]) == list(range(1, 13))
+    assert sorted(cfg.DEFAULTS[cfg.SHIFT]) == [1, 2, 3, 4, 7, 8, 9, 10, 11, 12]          # Shift+F5/F6: planned copies and moves, later
+    assert cfg.DEFAULTS[cfg.CTRL] == {5: "copy_with_box", 6: "move_with_box", 7: "compare_files", 8: "compare_folders",
+                                      9: "sort_by_name", 10: "sort_by_type", 11: "sort_by_date", 12: "sort_by_size"}
     assert cfg.DEFAULTS[cfg.PLAIN][8] == "delete" and cfg.DEFAULTS[cfg.SHIFT][8] == "delete_permanently"
 
 

@@ -1,5 +1,6 @@
-"""F5 and F6: the summary of a copy or move, the box that asks where to (``transfer_dialog.py``), what a typed destination means, and the
-run. The plans themselves are ``core/ops.py``'s ``plan_copy`` and ``plan_move``."""
+"""F5 and F6 run at once into the other panel; Ctrl+F5 and Ctrl+F6 first show the box that asks where to (``transfer_dialog.py``). Also the
+summary of a copy or move, what a typed destination means, and the run. The plans themselves are ``core/ops.py``'s ``plan_copy`` and
+``plan_move``."""
 from __future__ import annotations
 
 import os
@@ -50,7 +51,9 @@ class TransferMixin:
             text += chr(10) * 2 + chr(10).join(plan.warnings[:8])
         return text
 
-    def _transfer(self, move: bool) -> None:
+    def _transfer(self, move: bool, ask: bool = False) -> None:
+        """F5/F6 (``ask`` False): straight into the other panel, conflicts still asked about. Ctrl+F5/F6 (``ask``): the box first, to
+        choose another destination, only some files, flatten, skip the same, newer only or verify (the owner's choice, 2026-11-11)."""
         if self._home_blocked("Move" if move else "Copy"):
             return
         sources = self.active.targets()
@@ -68,8 +71,16 @@ class TransferMixin:
         def build(watch):
             return (plan_move if move else plan_copy)(self.fs, sources, dest, watch=watch)
 
-        self._plan_in_background(f"Preparing the {'move' if move else 'copy'}", build,
-                                 lambda plan: self._confirm_and_run(plan, sources, dest, origin, move))
+        if ask:
+            then = lambda plan: self._confirm_and_run(plan, sources, dest, origin, move)          # noqa: E731
+        else:
+            then = lambda plan: self._settle_and_run(plan, self._plain_answer(dest), sources, dest, origin, move)   # noqa: E731
+        self._plan_in_background(f"Preparing the {'move' if move else 'copy'}", build, then)
+
+    def _plain_answer(self, dest: str):
+        """What the box would answer when nothing in it is changed: the other panel, Verify as last chosen, no other options."""
+        from .transfer_dialog import TransferAnswer
+        return TransferAnswer(dest, self.act_verify.isChecked(), "", False, False, False)
 
     def _confirm_and_run(self, plan: Plan, sources: list, dest: str, origin: str, move: bool = False) -> None:
         """The plan is ready: the F5 / F6 box (where to, verify, options), a new plan when the answer changed where or what, the
@@ -145,4 +156,10 @@ class TransferMixin:
 
     def move(self) -> None:
         self._transfer(move=True)
+
+    def copy_with_box(self) -> None:
+        self._transfer(move=False, ask=True)
+
+    def move_with_box(self) -> None:
+        self._transfer(move=True, ask=True)
 

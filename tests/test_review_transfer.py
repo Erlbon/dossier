@@ -24,7 +24,7 @@ def cursor_on(panel, name):
 
 def copy_with(win, dialogs, **answer):
     dialogs.transfer_answer = answer
-    win.copy()
+    win.copy_with_box()
 
 
 # 22 ----------------------------------------------------------------------------------------------------------------------------
@@ -63,7 +63,7 @@ def test_f6_with_a_new_name_moves_as(world):
     listed(win, win.left, 2)
     cursor_on(win.left, "a.txt")
     dialogs.transfer_answer = {"dest": str(right / "b.txt")}
-    win.move()
+    win.move_with_box()
     pump(win, lambda: (right / "b.txt").exists() and not (left / "a.txt").exists())
 
 
@@ -84,7 +84,7 @@ def test_an_unchanged_destination_runs_the_plan_already_made(world):
     (left / "a.txt").write_text("a")
     listed(win, win.left, 2)
     cursor_on(win.left, "a.txt")
-    win.copy()
+    win.copy_with_box()
     pump(win, lambda: (right / "a.txt").exists())
 
 

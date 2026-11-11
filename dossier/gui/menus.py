@@ -107,6 +107,8 @@ class MenusMixin:
         self.act_rename = self._action("Rename", None, self.rename)
         self.act_copy = self._action("Copy to the Other Panel", None, self.copy)
         self.act_move = self._action("Move to the Other Panel", None, self.move)
+        self.act_copy_box = self._action("Copy...", None, self.copy_with_box)          # the box: elsewhere, only some files, verify
+        self.act_move_box = self._action("Move...", None, self.move_with_box)
         self.act_mkdir = self._action("New Folder", None, self.new_folder)
         self.act_new_file = self._action("New File...", None, self.new_file)
         self.act_change_dates = self._action("Change Dates and Attributes...", None, self.change_dates)
@@ -115,10 +117,15 @@ class MenusMixin:
         self.act_delete_perm = self._action("Delete Permanently", None, self.delete_permanently)
         self.act_properties = self._action("Properties", "Alt+Return", self.show_properties)
         self.act_show_in_fm = self._action(f"Show in {FILE_MANAGER_NAME}", None, self.show_in_file_manager)
+        # File keeps to 16 entries (tests/test_menu_rules.py): with Copy... and Move... (2026-11-11) the three New commands share a
+        # submenu, as in Explorer. Their own labels stay, so the right-click menu reads the same.
+        new_menu = QMenu("New", self)
+        for act in (self.act_mkdir, self.act_new_file, self.act_new_link):
+            new_menu.addAction(act)
         self._add_all(file_menu,
                       (self.act_open, self.act_view, self.act_glass_view, self.act_edit),
-                      (self.act_rename, self.act_copy, self.act_move, self.act_mkdir, self.act_new_file),
-                      (self.act_change_dates, self.act_new_link),
+                      (self.act_rename, self.act_copy, self.act_copy_box, self.act_move, self.act_move_box, new_menu.menuAction()),
+                      (self.act_change_dates,),
                       (self.act_delete, self.act_delete_perm),
                       (self.act_properties, self.act_show_in_fm),
                       (self._action("Quit", "Ctrl+Q", self.close),))

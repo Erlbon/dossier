@@ -36,6 +36,8 @@ COMMANDS: dict = {
     "glass_view": Command("Glass view", "photo"),
     "copy": Command("Copy", "copy"),
     "move": Command("Move", "arrows-right-left"),
+    "copy_with_box": Command("Copy...", "copy"),                 # the box: where to, only some files, verify...
+    "move_with_box": Command("Move...", "arrows-right-left"),
     "new_folder": Command("Folder", "folder-plus"),
     "new_file": Command("New file", "file"),
     "delete": Command("Delete", "trash"),

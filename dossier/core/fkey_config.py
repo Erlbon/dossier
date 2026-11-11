@@ -21,10 +21,14 @@ Table = Dict[str, Dict[int, str]]
 DEFAULTS: Table = {
     PLAIN: {1: "show_keys", 2: "rename", 3: "view_file", 4: "edit_file", 5: "copy", 6: "move", 7: "new_folder", 8: "delete",
             9: "show_properties", 10: "search_files", 11: "toggle_full_screen", 12: "open_terminal"},
-    SHIFT: {1: "check_folder_health", 2: "change_dates", 3: "new_link", 4: "new_file", 5: "compare_files", 6: "compare_folders",
+    # The owner's layout A (2026-11-11), grouped by kind and not by Total Commander's history: plain F5/F6 copy and move at once,
+    # Ctrl+F5/F6 with the box, the compares together on Ctrl+F7/F8, the four sorts side by side on Ctrl+F9..F12. Shift+F5/F6 (plan a
+    # copy or a move) and Ctrl+F3 (the planned list) are kept free for the planned operations.
+    SHIFT: {1: "check_folder_health", 2: "change_dates", 3: "new_link", 4: "new_file",
             7: "move_to_quarantine", 8: "delete_permanently", 9: "show_checksums", 10: "find_duplicate_files",
             11: "calculate_folder_sizes", 12: "open_admin_terminal"},
-    CTRL: {3: "sort_by_name", 4: "sort_by_type", 5: "sort_by_date", 6: "sort_by_size"},     # as in Total Commander and Far
+    CTRL: {5: "copy_with_box", 6: "move_with_box", 7: "compare_files", 8: "compare_folders",
+           9: "sort_by_name", 10: "sort_by_type", 11: "sort_by_date", 12: "sort_by_size"},
 }
 
 _ASSIGNABLE = re.compile(r"^(Shift\+|Ctrl\+)?F([1-9]|1[0-2])$")

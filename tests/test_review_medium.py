@@ -217,16 +217,16 @@ def test_the_tab_menu_closes_others_and_locks(world):
 
 
 # 14 ----------------------------------------------------------------------------------------------------------------------------
-def test_ctrl_f6_sorts_by_size_and_again_reverses(world):
+def test_ctrl_f12_sorts_by_size_and_again_reverses(world):
     win, _d, left, *_ = world
     (left / "big.txt").write_bytes(b"x" * 5000)
     (left / "small.txt").write_bytes(b"x")
     listed(win, win.left, 3)
     win.active.table.setFocus()
-    key(win, Qt.Key.Key_F6, Qt.KeyboardModifier.ControlModifier)
+    key(win, Qt.Key.Key_F12, Qt.KeyboardModifier.ControlModifier)
     files = lambda: [win.left.model.entry_at(r).name for r in range(1, win.left.model.entry_count())]  # noqa: E731
     assert files() == ["small.txt", "big.txt"]
-    key(win, Qt.Key.Key_F6, Qt.KeyboardModifier.ControlModifier)
+    key(win, Qt.Key.Key_F12, Qt.KeyboardModifier.ControlModifier)
     assert files() == ["big.txt", "small.txt"]
 
 

@@ -251,9 +251,26 @@ def test_declined_confirmation_changes_nothing(world):
     win.left.refresh()
     win.left.table.setCurrentIndex(win.left.model.index(1, 0))
     dialogs.confirm_answer = False
+    key(win, Qt.Key.Key_F5, Qt.KeyboardModifier.ControlModifier)             # Ctrl+F5: the box, cancelled
+    pump(win)
+    assert dialogs.confirms and not (right / "a.txt").exists()
+
+
+def test_plain_f5_and_f6_run_at_once_without_the_box(world):
+    win, dialogs, left, right, _t = world
+    (left / "a.txt").write_text("A")
+    (left / "b.txt").write_text("B")
+    win.left.refresh()
+    win.left.table.setCurrentIndex(win.left.model.index(1, 0))
+    dialogs.confirm_answer = False                                          # would cancel, if anything asked
     key(win, Qt.Key.Key_F5)
     pump(win)
-    assert not (right / "a.txt").exists()
+    assert (right / "a.txt").read_text() == "A" and (left / "a.txt").exists() and not dialogs.confirms
+    win.left.refresh()
+    win.left.table.setCurrentIndex(win.left.model.index(2, 0))
+    key(win, Qt.Key.Key_F6)
+    pump(win)
+    assert (right / "b.txt").read_text() == "B" and not (left / "b.txt").exists() and not dialogs.confirms
 
 
 def test_f8_deletes_to_the_bin(world):

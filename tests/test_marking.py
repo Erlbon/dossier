@@ -211,7 +211,7 @@ def test_commands_use_only_the_marks_of_the_panel_they_start_from(world):
     assert [p.rsplit("\\", 1)[-1].rsplit("/", 1)[-1] for p in win.left.targets()] == ["l0.txt"]
     assert "2 marked" in win.status.text() and "in this panel" in win.status.text()
     assert "1 more in the other panel" in win.status.text()
-    win.copy()                                                      # right to left: only r0 and r1
+    win.copy_with_box()                                                      # right to left: only r0 and r1
     wait_planned(win)
     assert "r0.txt" in dialogs.confirms[-1][1] or "2 items" in dialogs.confirms[-1][1]
     assert "3 items" not in dialogs.confirms[-1][1]
@@ -246,7 +246,7 @@ def test_the_confirmation_lists_the_items_of_this_panel_with_sizes_and_folders_w
     win.right.table.setCurrentIndex(win.right.model.index(1, 0))
     key(win, Qt.Key.Key_Space)
     key(win, Qt.Key.Key_Tab)
-    win.copy()
+    win.copy_with_box()
     wait_planned(win)
     text = dialogs.confirms[-1][1]
     assert text.startswith("Copy 2 items") and "3 files" in text
@@ -262,7 +262,7 @@ def test_a_long_list_stops_at_twelve_and_says_how_many_more(world):
     win.left.refresh()
     win.left.table.setCurrentIndex(win.left.model.index(1, 0))
     win.select_all()
-    win.copy()
+    win.copy_with_box()
     wait_planned(win)
     text = dialogs.confirms[-1][1]
     assert "f11.txt" in text and "f12.txt" not in text and "and 8 more" in text and text.startswith("Copy 20 items")

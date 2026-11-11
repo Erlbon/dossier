@@ -99,7 +99,7 @@ class ViewModesMixin:
         self.arrange_actions = {}
         commands = {"name": self.sort_by_name, "type": self.sort_by_type, "modified": self.sort_by_date, "size": self.sort_by_size}
         for label, key in ARRANGE:
-            if key in commands:                  # a command of the function-key table (Ctrl+F3..F6): again = the other way round
+            if key in commands:                  # a command of the function-key table (Ctrl+F9..F12): again = the other way round
                 act = self._action(label, None, commands[key])
             else:
                 act = QAction(label, self)
@@ -153,7 +153,7 @@ class ViewModesMixin:
             self.sync_mode_actions()
 
     def _sort_toggle(self, key: str) -> None:
-        """Sort by ``key``; when the list is sorted by it already, the other way round (Ctrl+F3..F6, as in Total Commander)."""
+        """Sort by ``key``; when the list is sorted by it already, the other way round (Ctrl+F9..F12)."""
         header = self.active.table.horizontalHeader()
         again = header.sortIndicatorSection() == index_of(key)
         descending = again and header.sortIndicatorOrder() == Qt.SortOrder.AscendingOrder

@@ -294,7 +294,7 @@ def test_the_transfer_dialog_offers_verify_off_at_first_and_runs_the_copy_with_t
     monkeypatch.setattr(ops_module, "verify_copy", lambda *a, **k: seen.append(a[1]) or real(*a, **k))
     try:
         dialogs.verify_answer = True
-        win.copy()
+        win.copy_with_box()
         wait_planned(win)
         assert dialogs.transfer_offered_verify is False             # off until the user asks for it
         wait_idle(win)
@@ -307,7 +307,7 @@ def test_the_choice_is_remembered_and_shown_in_settings_and_offered_next_time(tm
     win, dialogs, left, right = commander(tmp_path)
     try:
         dialogs.verify_answer = True
-        win.copy()
+        win.copy_with_box()
         wait_planned(win)
         wait_idle(win)
         assert win.act_verify.isChecked() and str(win.settings.value("copy/verify")).lower() == "true"
@@ -315,7 +315,7 @@ def test_the_choice_is_remembered_and_shown_in_settings_and_offered_next_time(tm
         win.left.refresh()
         win.left.table.setCurrentIndex(win.left.model.index(2, 0))
         dialogs.verify_answer = None
-        win.copy()
+        win.copy_with_box()
         wait_planned(win)
         assert dialogs.transfer_offered_verify is True               # offered as last chosen
     finally:
@@ -327,7 +327,7 @@ def test_cancelling_the_transfer_dialog_changes_nothing_and_keeps_the_setting(tm
     try:
         dialogs.confirm_answer = False
         dialogs.verify_answer = True
-        win.copy()
+        win.copy_with_box()
         wait_planned(win)
         assert not win.busy and list(right.iterdir()) == [] and not win.act_verify.isChecked()
     finally:

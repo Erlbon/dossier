@@ -1,4 +1,4 @@
-"""The F5 / F6 box: what is copied or moved, to where (the other panel's folder, which can be changed), and how.
+"""The Ctrl+F5 / Ctrl+F6 box: what is copied or moved, to where (the other panel's folder, which can be changed), and how.
 
 The destination can be a folder below it (``backup`` means ``backup`` inside the other panel's folder), a typed path (made when it is
 missing), or for one item a new name (copy as). The options are those of the spec's F3: only files whose names match a pattern,

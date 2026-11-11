@@ -234,7 +234,7 @@ class Dialogs:
         return check.isChecked() if box.clickedButton() is ok else None
 
     def ask_transfer(self, title: str, text: str, ok_label: str, dest: str, verify: bool, move: bool, local: bool = True):
-        """The F5 / F6 box: a ``TransferAnswer`` (where to, verify, the options), or None when cancelled."""
+        """The Ctrl+F5 / Ctrl+F6 box: a ``TransferAnswer`` (where to, verify, the options), or None when cancelled."""
         from .transfer_dialog import TransferDialog
         dlg = TransferDialog(self.parent, title, text, ok_label, dest, verify, move, local_completion=local)
         return dlg.answer() if dlg.exec() == QDialog.DialogCode.Accepted else None

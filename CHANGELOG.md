@@ -2,6 +2,18 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-11#08 -- F5/F6 copy and move at once; Ctrl+F5/F6 show the box; function keys grouped by kind
+
+The owner's layout A (2026-11-11), grouped by kind, not by Total Commander's history.
+
+- **F5 and F6 copy and move at once** into the other panel. Collisions are still asked about, and the progress box shows the
+  plan as it runs. **Ctrl+F5 and Ctrl+F6 show the box first**: another destination, only some files, flatten, skip what is
+  there, newer only, verify. The File menu has both: "Copy to the Other Panel" and "Copy...", the same for Move.
+- **Ctrl row:** F5/F6 copy and move with the box, F7/F8 compare files and folders, F9-F12 sort by name, type, date, size.
+  **Shift+F5/F6** (was compare) and **Ctrl+F3** (was sort by name) are left free for planned copies and moves, which come next.
+  Every key can still be changed in Settings; a changed table is kept.
+- **File > New** is a submenu (New Folder, New File, New Link), to keep File at 16 entries with the two new commands.
+
 ## 2026-11-11#07 -- Enter presses a dialog's main button, not Cancel
 
 - **The first Enter in the F5/F6 box cancelled the copy**, so copying took two presses of F5. The Copy button was made the

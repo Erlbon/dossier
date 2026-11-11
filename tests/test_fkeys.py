@@ -50,7 +50,7 @@ def test_every_key_of_the_table_is_bound_once_to_the_action_of_its_command(world
     win, *_ = world
     expected = {cfg.key_text(layer, n): command for layer, row in win._fkey_table.items() for n, command in row.items()}
     bound = bound_keys(win)
-    assert set(bound) == set(expected) and len(expected) == 28
+    assert set(bound) == set(expected) and len(expected) == 30        # 12 plain, 10 Shift (F5/F6 kept for planned operations), 8 Ctrl
     for key, command in expected.items():
         assert bound[key] is win._command_actions[command][0], key
 
@@ -61,16 +61,20 @@ def test_the_bar_shows_the_plain_row_and_the_shift_row_while_shift_is_held(world
                                                                     "F8 Delete", "F9 Properties", "F10 Search", "F11 Full screen", "F12 Terminal"]
     win.show_modifier_row(True, False)
     assert [b.property("full_text") for b in win._fkey_buttons][:4] == ["F1 Health", "F2 Dates", "F3 Link", "F4 New file"]
-    assert win._fkey_buttons[7].property("full_text") == "F8 Erase" and all(b.isEnabled() for b in win._fkey_buttons)
+    assert win._fkey_buttons[7].property("full_text") == "F8 Erase"
+    assert [b.property("full_text") for b in win._fkey_buttons][4:6] == ["", ""]      # Shift+F5/F6: kept for planned copies and moves
+    assert all(b.isEnabled() for i, b in enumerate(win._fkey_buttons) if i not in (4, 5))
     win.show_modifier_row(False, False)
     win.show_modifier_row(False, True)                                    # Ctrl held: the bar waits, so Ctrl+C never makes it flicker
     assert win._fkey_buttons[0].property("full_text") == "F1 Keys"
     win.show_modifier_row(False, False)                                   # let go in time: nothing changed
     wait_ms(win.CTRL_ROW_DELAY_MS + 200)
     assert win._fkey_layer == cfg.PLAIN
-    win.show_modifier_row(False, True)                                    # held alone: the Ctrl row (the sort keys) shows
+    win.show_modifier_row(False, True)                                    # held alone: the Ctrl row shows (layout A, 2026-11-11)
     wait_ms(win.CTRL_ROW_DELAY_MS + 200)
-    assert win._fkey_buttons[2].property("full_text") == "F3 By name"
+    assert [b.property("full_text") for b in win._fkey_buttons][4:12] == ["F5 Copy...", "F6 Move...", "F7 Compare files",
+                                                                          "F8 Compare folders", "F9 By name", "F10 By type",
+                                                                          "F11 By date", "F12 By size"]
     win.show_modifier_row(False, False)
     assert win._fkey_layer == cfg.PLAIN
 
@@ -117,7 +121,7 @@ def test_changing_the_keys_rebinds_the_keyboard_redraws_the_bar_and_is_saved(wor
     saved = cfg.load(str(win.settings.value("fkeys/config")))
     assert saved == {cfg.CTRL: {5: "pack_to_zip"}, cfg.PLAIN: {2: "refresh", 9: ""}}
     win.set_fkey_table(cfg.resolve())                                     # back to the built-in table: nothing is saved
-    assert win.settings.value("fkeys/config") == "{}" and bound_keys(win)["Ctrl+F5"] is win._command_actions["sort_by_date"][0]
+    assert win.settings.value("fkeys/config") == "{}" and bound_keys(win)["Ctrl+F5"] is win._command_actions["copy_with_box"][0]
 
 
 def test_the_settings_page_shows_the_table_and_hands_back_the_choice(world):

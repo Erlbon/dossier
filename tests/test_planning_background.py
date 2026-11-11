@@ -33,7 +33,7 @@ def start_copy(win, left):
     win.left.refresh()
     win.left.table.setCurrentIndex(win.left.model.index(win.left.model.row_of("tree"), 0))
     start = time.time()
-    win.copy()
+    win.copy_with_box()
     return time.time() - start
 
 
@@ -77,7 +77,7 @@ def test_a_quick_plan_goes_straight_to_the_confirmation(world):
     (left / "a.txt").write_text("A")
     win.left.refresh()
     win.left.table.setCurrentIndex(win.left.model.index(1, 0))
-    win.copy()
+    win.copy_with_box()
     wait_planned(win)
     assert dialogs.confirms and len(dialogs.confirms) == 1
 
@@ -88,7 +88,7 @@ def test_paste_and_move_are_planned_in_the_background_too(world, monkeypatch):
     slow_planning(monkeypatch, delay=0.01)
     win.left.refresh()
     win.left.table.setCurrentIndex(win.left.model.index(win.left.model.row_of("tree"), 0))
-    win.move()
+    win.move_with_box()
     assert win.busy and not dialogs.confirms                    # still being planned: the call did not wait for it
     wait_planned(win)
     assert dialogs.confirms
