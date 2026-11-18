@@ -2,6 +2,7 @@
 not in the Start menu, such as System, Network, Windows Security, Device Manager and Services, one click away on the tools bar, each
 with its own icon."""
 import os
+import sys
 
 import pytest
 
@@ -103,8 +104,10 @@ def test_the_real_icons_of_windows_are_read_and_are_not_the_blank_page_of_a_cons
         assert icon.pixmap(32, 32).toImage() != blank, name
 
 
+@pytest.mark.skipif(sys.platform != "win32", reason="the Windows group is offered on Windows only")
 def test_add_a_program_offers_the_windows_group_first(world, tmp_path, monkeypatch):
     win, *_ = world
+    monkeypatch.setattr(type(win), "_ask_tool", lambda self, dlg: False)   # never a modal dialog nobody closes (it hung CI on Linux)
     monkeypatch.setattr(SM, "roots", lambda environ=None: [])
     monkeypatch.setattr(W, "windows_group", lambda **kw: SM.Node("Windows", "", [SM.Node("Services", "services.msc")]))
     got = []
