@@ -97,9 +97,9 @@ PICK_TEXT = ("Choose a program from the Start menu, or a part of Windows (System
 class StartMenuDialog(OwnedDialog):
     """The programs of the Windows Start menu as a tree with a search box; choose one, or go on to type the program in by hand."""
 
-    def __init__(self, parent, tree: list) -> None:
+    def __init__(self, parent, tree: list, title: str = "Add a Program", ok_text: str = "Add", manual: bool = True) -> None:
         super().__init__(parent)
-        self.setWindowTitle("Add a Program")
+        self.setWindowTitle(title)
         self.setMinimumSize(480, 520)
         self.tree_data = tree
         self.other = False
@@ -117,11 +117,12 @@ class StartMenuDialog(OwnedDialog):
         self.tree.itemSelectionChanged.connect(self._selection)
         layout.addWidget(self.tree, 1)
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Cancel)
-        self.ok = buttons.addButton("Add", QDialogButtonBox.ButtonRole.AcceptRole)
+        self.ok = buttons.addButton(ok_text, QDialogButtonBox.ButtonRole.AcceptRole)
         self.ok.setEnabled(False)
-        manual = buttons.addButton("Other program...", QDialogButtonBox.ButtonRole.ActionRole)
-        manual.setAutoDefault(False)
-        manual.clicked.connect(self._manual)
+        if manual:
+            other = buttons.addButton("Other program...", QDialogButtonBox.ButtonRole.ActionRole)
+            other.setAutoDefault(False)
+            other.clicked.connect(self._manual)
         buttons.accepted.connect(lambda: self._choose(self.tree.currentItem()))
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
@@ -587,15 +588,44 @@ class ToolsBarMixin:
     def run_tool(self, tool: T.Tool) -> None:
         panel = self.active
         files = [] if panel.is_home else panel.targets()
+        self._launch_tool(tool, files, panel.real_folder() if not panel.is_home else "",
+                          self.other.real_folder() if not self.other.is_home else "")
+
+    def _launch_tool(self, tool: T.Tool, files: list, here: str, there: str = "") -> None:
         try:
-            T.launch(tool, files, panel.real_folder() if not panel.is_home else "", self.other.real_folder() if not self.other.is_home else "",
-                     starter=self.tool_starter)
+            T.launch(tool, files, here, there, starter=self.tool_starter)
         except T.BadTool as e:
             self.dialogs.info(tool.name, f"This tool cannot run: {e}.")
         except OSError as e:
             self.dialogs.info(tool.name, f"Could not start {tool.command}: {e.strerror or e}")
         else:
             self._say(f"Started {tool.name}")
+
+    def open_with_program(self, name: str, program: str) -> None:
+        """Open With a program the system names for the type (a ``.desktop`` launcher or a Mac ``.app``), on what was clicked."""
+        self.run_tool(T.Tool(name, program, "{files}"))
+
+    def open_with_other_program(self) -> None:
+        """Open With > Other Program... on the Mac and Linux: choose any installed program (the same list as Add a Program) and
+        open what was clicked with it. The files are taken now: the list is read on a thread."""
+        panel = self.active
+        files = [] if panel.is_home else panel.targets()
+        here = panel.real_folder() if not panel.is_home else ""
+
+        def work(progress, cancel):
+            progress(0, 0)
+            return SM.program_tree(cancel.check)
+
+        def found(tree) -> None:
+            if not tree:
+                self.dialogs.info("Open With", "No programs were found.")
+                return
+            dlg = StartMenuDialog(self, tree, "Open With", "Open", manual=False)
+            if self._ask_start_menu(dlg) and dlg.picked is not None:
+                self._launch_tool(T.Tool(dlg.picked.name, dlg.picked.path, "{files}"), files, here)
+
+        run_in_background(self, self.cmd_runner, "Looking for programs", work, on_result=found,
+                          tracked=self._size_jobs, indeterminate=True, failed_title="Open With")
 
     # the bar's own menu ------------------------------------------------------------------------------------------------------
     def show_tools_menu(self, global_pos, path) -> None:

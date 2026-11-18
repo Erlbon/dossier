@@ -16,6 +16,7 @@ from PyQt6.QtGui import QAction, QActionGroup, QKeySequence
 from PyQt6.QtWidgets import (QApplication, QHBoxLayout, QLabel, QMainWindow, QMenu, QPushButton, QSplitter,
                              QToolButton, QVBoxLayout, QWidget)
 
+from ..core.open_with import SystemPrograms
 from ..core.ops import (Plan, check_name, conflict_rows, plan_copy, plan_delete, plan_move, plan_rename)
 from ..core.home import ADD_NETWORK, HomeFileSystem, HomeProvider, RouterFileSystem, removable_from_home
 from ..core.commandline import Placeholders, expand, run_command
@@ -159,6 +160,8 @@ class MainWindow(EjectTrashMixin, FolderTreeMixin, FileColorsMixin, TransferMixi
         self.paused = False
         self._closing = False                      # the program is being closed: unfinished jobs stay in the journal
         threading.Thread(target=stage.clean_up, daemon=True, name="dossier-stage-clean").start()   # temporary copies a crash left behind
+        self.system_programs = SystemPrograms()    # Open With's programs from the system (read on a thread on Linux)
+        self.system_programs.start()
         self._jobs: list = []                      # running first, then the ones waiting
         self._init_taskbar()                       # the queue's progress on the taskbar button
         self._links: dict = {}                     # the ssh process of each connected server

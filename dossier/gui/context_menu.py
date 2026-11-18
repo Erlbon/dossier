@@ -180,7 +180,7 @@ class ContextMenuMixin:
         else:
             cmd("view_file", enabled=not many)
             cmd("edit_file", enabled=not many)
-        self._add_open_with(menu, panel, paths, row, single_file=not entry.is_dir and not many)
+        self._add_open_with(menu, panel, paths, row, single_file=not entry.is_dir and not many, files=not entry.is_dir)
         menu.addSeparator()
         cmd("copy")
         cmd("move")
@@ -212,13 +212,23 @@ class ContextMenuMixin:
             add("More Options (Windows Menu)...", lambda: self._windows_menu(panel, paths, False))
         return menu
 
-    def _add_open_with(self, menu: QMenu, panel, paths, row: int, single_file: bool) -> None:
-        """Open With: the tools bar's programs (its folders as submenus), run on what was clicked, then the system's own chooser
-        for one file on this computer. Not there when there is nothing to offer."""
-        chooser = open_with_command(paths[0]) if single_file and not has_scheme(paths[0]) else None
-        if not self.tools and chooser is None:
+    def _add_open_with(self, menu: QMenu, panel, paths, row: int, single_file: bool, files: bool = True) -> None:
+        """Open With: the programs the system names for the type, the default first (the Mac and Linux, card 49A), then the tools
+        bar's programs (its folders as submenus), run on what was clicked, then a way to pick any other program: the system's own
+        chooser for one file on Windows, Other Program... on the Mac and Linux. Not there when there is nothing to offer."""
+        local = bool(paths) and not any(has_scheme(p) for p in paths)
+        chooser = open_with_command(paths[0]) if single_file and local else None
+        programs = getattr(self, "system_programs", None)
+        system = programs.for_file(paths[0]) if programs is not None and files and local else []
+        other = chooser is None and programs is not None and programs.system in ("mac", "linux") and files and local
+        if not self.tools and chooser is None and not system and not other:
             return
         sub = menu.addMenu("Open With")
+        for p in system:
+            self._entry_action(sub, p.name + (" (default)" if p.default else ""),
+                               lambda p=p: self.open_with_program(p.name, p.path), panel, paths, row=row)
+        if system and self.tools:
+            sub.addSeparator()
 
         def fill(target: QMenu, items: list) -> None:
             for item in items:
@@ -229,10 +239,13 @@ class ContextMenuMixin:
                 else:
                     self._entry_action(target, item.name, lambda t=item: self.run_tool(t), panel, paths, row=row)
         fill(sub, self.tools)
-        if chooser is not None:
-            if self.tools:
+        if chooser is not None or other:
+            if self.tools or system:
                 sub.addSeparator()
-            self._entry_action(sub, "Choose Another Program...", lambda: self._start_command(chooser), panel, paths, row=row)
+            if chooser is not None:
+                self._entry_action(sub, "Choose Another Program...", lambda: self._start_command(chooser), panel, paths, row=row)
+            else:
+                self._entry_action(sub, "Other Program...", self.open_with_other_program, panel, paths, row=row)
 
     def _machine_share_menu(self, panel, entry, row: int = -1) -> QMenu:
         """A share in another computer's list (``\\\\machine``): open it, keep it on the Home page or mount it. Nothing that would

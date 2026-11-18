@@ -2,6 +2,18 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-18#14 -- Open With lists the system's programs on the Mac and Linux (card 49A)
+
+- **Open With on Linux** lists the programs the desktop names for the file's type, read straight from the XDG standard (the
+  `.desktop` launchers, `mimeapps.list` and the shared MIME table, parent types included), the default first and marked
+  "(default)". The desktop's data is read once on a thread when Dossier starts; until it is in, the menu shows the tools bar
+  only. A launcher is started by its own command, in a terminal when it asks for one.
+- **Open With on the Mac** asks Launch Services (through the system library) for the apps that open the file, the default
+  first, and starts the chosen one with `open -a`.
+- Then the tools bar's programs, then **Other Program...** on the Mac and Linux: the Add a Program list (the apps, or the
+  desktop's launchers) to open the file with any program. Windows keeps Choose Another Program....
+- Not run on a real Mac or Linux desktop.
+
 ## 2026-11-18#13 -- Eject on all three systems (card 47A) and the Trash as a place (card 46B)
 
 - **Eject.** Removable drives, discs and shares can be ejected from the drive menu (Alt+F1/F2, an Eject submenu), the Home
