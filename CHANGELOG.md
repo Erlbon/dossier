@@ -2,6 +2,18 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-19#03 -- A launcher for the Linux tarball, and Dossier as the folder program (card 52A)
+
+- **The Linux tarball offers, once, to add Dossier to the application menu** on its first start: a launcher and its icon in
+  your own folders (`~/.local/share/applications`, `~/.local/share/icons`), nothing system-wide. A "no" is remembered;
+  Settings > Linux Desktop > Add Dossier to the Application Menu offers it again.
+- **Settings > Linux Desktop > Open Folders with Dossier** (off by default) makes Dossier the program that opens folders, so a
+  browser's or an editor's "Show in folder" opens it. Only the one line in your own `~/.config/mimeapps.list` changes; switching
+  it off puts back the program that was set before (unless you have chosen another one since).
+- **`dossier <folder>`** (and a launcher's list of files) opens that folder in the left panel, a second one in the right; a file
+  opens its folder.
+- Not run on a real Linux desktop.
+
 ## 2026-11-19#02 -- Permissions in Properties on the Mac and Linux (card 53A)
 
 - **Properties has a Permissions tab** on the Mac and Linux: the owner and group, and read, write and run for owner, group and

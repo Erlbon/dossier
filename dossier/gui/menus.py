@@ -392,6 +392,7 @@ class MenusMixin:
         self.act_allow_sharing.setChecked(self.sharing_allowed())
         self.act_allow_sharing.toggled.connect(self.set_sharing_allowed)
         drives_menu.addAction(self.act_allow_sharing)
+        self.build_linux_desktop_menu(settings)                  # Linux only: the launcher and "Open Folders with Dossier" (card 52A)
         settings.addSeparator()
         settings.addAction(self._action("Quarantine...", None, self.open_quarantine_settings))
         settings.addAction(self._action("Assistant Access...", None, self.open_assistant_settings))

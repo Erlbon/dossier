@@ -1,5 +1,6 @@
 """The F3 text viewer and its line view, driven offscreen."""
 import os
+import sys
 import time
 
 import pytest
@@ -387,7 +388,8 @@ def test_menus_view_has_modes_and_notes_while_settings_has_the_choices(commander
                                 "Show Tailnet Devices on the Home Page"]
     assert texts("Settings") == ["Appearance", "Copy and Move...", "Opening Files", "Mouse Wheel...", "Function Keys...", "Auto Refresh",
                                  "Keep Cursor Position After Moving or Deleting", "Git Status on Network Drives (can be slow)",
-                                 "Drives and Sharing", "Quarantine...", "Assistant Access..."]
+                                 "Drives and Sharing"] + (["Linux Desktop"] if sys.platform.startswith("linux") else []) + [
+                                 "Quarantine...", "Assistant Access..."]
     look = [a for a in menus["Settings"].actions() if a.text() == "Appearance"][0].menu()
     assert [a.text() for a in look.actions()] == ["Color Scheme", "Icon Set", "Fonts and Bold...", "File Colours...", "Thumbnails...", "Picture Viewer Glass...", "Frosted Background...", "Drive Selector"]
     win.set_sharing_allowed(True)

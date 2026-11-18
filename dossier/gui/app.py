@@ -100,7 +100,11 @@ def main(argv=None) -> int:
     app.setOrganizationName("Erlbon")
     app.setWindowIcon(app_icon())                 # every window of the program, the viewer and notepad too
     probe_folder = os.environ.get("DOSSIER_STARTUP_PROBE", "")
-    window = MainWindow(settings_path=os.path.join(probe_folder, "dossier.ini") if probe_folder else None)    # a probe never uses yours
+    from ..core.linux_desktop import folders_from_arguments
+    asked = folders_from_arguments(args)                   # `dossier ~/Music`, or a launcher's %F: the folders to show (none: as last time)
+    start = (asked + [None, None])[:2] if asked else (None, None)
+    window = MainWindow(settings_path=os.path.join(probe_folder, "dossier.ini") if probe_folder else None,    # a probe never uses yours
+                        start=tuple(start))
     window.show()
     if probe_folder:                               # tools/time_startup.py: say when the window is up and can be typed in, then close
         from PyQt6.QtCore import QTimer
@@ -109,10 +113,13 @@ def main(argv=None) -> int:
         probe.timeout.connect(lambda: (print("dossier-ready", flush=True), window.close()))
         probe.start(0)
     else:
-        from ..core.platform import IS_MACOS
+        from ..core.platform import IS_LINUX, IS_MACOS
         if IS_MACOS:
             from PyQt6.QtCore import QTimer
             QTimer.singleShot(400, lambda: mac_first_start(window))
+        elif IS_LINUX:                                 # the tarball's first start: offer the application-menu launcher, once (card 52A)
+            from PyQt6.QtCore import QTimer
+            QTimer.singleShot(600, window.linux_first_start)
     return leave(app.exec())
 
 
