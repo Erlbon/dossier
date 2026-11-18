@@ -28,6 +28,15 @@ MAGIC = ((b"PK\x03\x04", "zip"), (b"PK\x05\x06", "zip"), (b"Rar!\x1a\x07", "rar"
          (b"%PDF-", "pdf"), (b"\xff\xd8\xff", "jpeg"), (b"\x89PNG\r\n\x1a\n", "png"), (b"GIF8", "gif"))
 EXPECTED = {".zip": "zip", ".cbz": "zip", ".epub": "zip", ".docx": "zip", ".xlsx": "zip", ".pptx": "zip", ".jar": "zip",
             ".cbr": "rar", ".rar": "rar", ".7z": "7z", ".cb7": "7z", ".pdf": "pdf", ".jpg": "jpeg", ".jpeg": "jpeg", ".png": "png", ".gif": "gif"}
+
+
+def is_junk_name(name: str) -> bool:
+    """A temporary or system leftover by its name: Thumbs.db, .DS_Store, a half-finished download, Office's ``~$`` lock file, and the Mac's
+    AppleDouble ``._name`` files (written beside every file a Mac copies onto a stick or share that cannot hold its metadata)."""
+    low = name.lower()
+    return low in JUNK_NAMES or low.endswith(JUNK_SUFFIXES) or low.startswith(("~$", "._"))
+
+
 SIDECARS = (".srt", ".sub", ".nfo")
 MEDIA = (".mkv", ".mp4", ".avi", ".mov", ".m4v", ".wmv", ".mpg", ".mpeg", ".ts")
 
@@ -46,8 +55,7 @@ def zero_byte(ctx, entry):
 
 
 def junk(ctx, entry):
-    low = entry.name.lower()
-    if low in JUNK_NAMES or low.endswith(JUNK_SUFFIXES) or low.startswith("~$"):
+    if is_junk_name(entry.name):
         yield finding(entry.path, "junk", "junk-file", INFO, "A temporary or system leftover file", fix=Fix("delete", "Delete to the recycle bin"))
 
 
@@ -175,7 +183,7 @@ def empty_folder(ctx, folder, entries):
         return
     if any(part.lower() in VCS_FOLDERS for part in re.split(r"[\\/]", folder)):
         return
-    if all((e.name.lower() in JUNK_NAMES) and not e.is_dir for e in entries):
+    if all((e.name.lower() in JUNK_NAMES or e.name.startswith("._")) and not e.is_dir for e in entries):
         yield finding(folder, "empty", "empty-folder", INFO, "The folder is empty" if not entries else "The folder holds only junk files",
                       fix=Fix("delete", "Delete the folder to the recycle bin"))
 

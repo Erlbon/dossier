@@ -18,7 +18,7 @@ from typing import Callable, Optional
 
 from .drive_identity import DriveMemory
 from .lights import LIT_KINDS, OK, UNCHECKED, LightBoard, describe
-from .platform import home_dir, list_volumes
+from .platform import home_dir, list_volumes, system_cloud_folders, user_folders
 from .vfs import Entry, FileSystem, NotWritable
 from .listings import FlatFileSystem, FoundFileSystem
 from .sftpfs import SftpFileSystem
@@ -36,8 +36,6 @@ SECTIONS = ("drives", "places", "pins", "network", "servers", "tailnet")
 SECTION_TITLES = {"drives": "Local drives", "places": "Places", "pins": "Pinned folders", "network": "Network", "servers": "Servers",
                   "tailnet": "Tailnet"}
 
-# the user's folders, by their usual name under the home folder
-KNOWN_FOLDERS = ("Desktop", "Documents", "Downloads", "Pictures", "Music", "Videos")
 
 
 def is_home(path: str) -> bool:
@@ -74,6 +72,8 @@ class HomeProvider:
     pins: Callable[[], list] = lambda: []
     network: Callable[[], list] = lambda: []
     servers: Callable[[], list] = lambda: []      # ServerItem objects: the saved servers (nothing is contacted to list them)
+    folders: Callable[[str], list] = user_folders    # (title, path) of the user's own folders, by the desktop's own names
+    clouds: Callable[[str], list] = system_cloud_folders   # (title, path) of the system's own cloud folders (iCloud Drive)
     tailnet: Callable[[], list] = lambda: []      # TailnetItem objects, read earlier from the local Tailscale (empty: no section)
     board: LightBoard = None                      # what the panels found out about places (set in __post_init__)
     memory: DriveMemory = None                    # which drive each letter held
@@ -98,10 +98,10 @@ def place_folders(p: HomeProvider) -> list:
     """``(title, path)`` of the user's own folders that exist, then the cloud sync folders that exist."""
     home = p.home()
     out = [(user_folder_name(home), home)]
-    out += [(name, os.path.join(home, name)) for name in KNOWN_FOLDERS]
+    out += list(p.folders(home))
     for title, path in (("OneDrive", p.env("OneDrive") or p.env("OneDriveConsumer") or os.path.join(home, "OneDrive")),
                         ("Dropbox", os.path.join(home, "Dropbox")),
-                        ("Google Drive", os.path.join(home, "Google Drive"))):
+                        ("Google Drive", os.path.join(home, "Google Drive")), *p.clouds(home)):
         out.append((title, path))
     seen, result = set(), []
     for title, path in out:

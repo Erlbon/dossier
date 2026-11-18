@@ -12,7 +12,7 @@ from dataclasses import dataclass, field, replace
 from typing import Optional
 
 from .listings import relative
-from .platform import IS_WINDOWS
+from .platform import HIDDEN_FLAG, IS_WINDOWS, is_hidden_name
 from .progress import CancelToken, check
 from .vfs import Entry, FileSystem
 
@@ -123,8 +123,10 @@ def attribute_letters(e: Entry) -> str:
     """The attribute letters an item has (``HR``...). On Windows from its attributes; elsewhere a dot name is hidden and an item
     without its owner's write bit is read-only (no system or archive there)."""
     if IS_WINDOWS:
-        return "".join(letter for letter, _name, bit in ATTRIBUTES if e.attrs & bit)
-    return ("H" if e.name.startswith(".") else "") + ("R" if e.attrs and not e.attrs & 0o200 else "")
+        letters = "".join(letter for letter, _name, bit in ATTRIBUTES if e.attrs & bit)
+        return letters if "H" in letters or not is_hidden_name(e.name) else "H" + letters
+    hidden = is_hidden_name(e.name) or e.attrs & HIDDEN_FLAG
+    return ("H" if hidden else "") + ("R" if e.attrs and not e.attrs & 0o200 else "")
 
 
 def fits(e: Entry, c: Criteria) -> bool:

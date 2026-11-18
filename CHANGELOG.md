@@ -2,6 +2,20 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-18#11 -- The desktop's own folders, the Mac's hidden flag, AppleDouble files, attributes kept on a copy
+
+The fixes without a card of the Mac and Linux review (`docs/comparison-review-mac-linux-2026-11-18.md`, section 1.9).
+- **The Home page finds the desktop's own folders on Linux.** Their names come from `~/.config/user-dirs.dirs` (a Norwegian
+  Ubuntu's `Skrivebord`, `Nedlastinger`) and are shown by those names; English names remain the fallback
+  (`platform.user_folders`).
+- **iCloud Drive and Applications on the Mac's Home page**, beside OneDrive, Dropbox and Google Drive.
+- **The Mac's hidden flag counts as hidden.** Finder hides `~/Library` by a file flag, not a dot; View > Show Hidden and
+  System Files off now hides those too (`platform.mode_and_flags`, read from `st_flags`).
+- **AppleDouble `._name` files** count as hidden on all three systems and as junk in Health, beside `.DS_Store`.
+- **A copy on the Mac or Linux keeps every extended attribute** (Finder's tags with their colours, "where from", the desktop's
+  tags): neither copy path carried them before, so Finder tags made outside Dossier lost their colour. The system's own
+  attributes (access lists, SELinux labels) are left to the system. Not yet run on a real Mac.
+
 ## 2026-11-18#10 -- The modern 7-Zip is preferred off Windows
 
 - **Dossier now looks for `7zz` before `7z`.** Off Windows, `7z` is often the old p7zip 16.02, which shows a tar's PAX headers

@@ -119,6 +119,20 @@ def decode_name(name: str | bytes) -> str:
 
 
 _REPARSE_POINT = 0x400  # FILE_ATTRIBUTE_REPARSE_POINT
+_UF_HIDDEN = 0x8000     # the Mac's (and BSD's) "hidden" file flag, which Finder uses for ~/Library and the like
+HIDDEN_FLAG = 1 << 24   # carried in an Entry's mode bits off Windows when the item has that flag (above every mode bit)
+
+
+def mode_and_flags(st) -> int:
+    """An item's mode bits off Windows, with ``HIDDEN_FLAG`` added when the system's own hidden flag is set (the Mac's ``UF_HIDDEN``,
+    read from ``st_flags``; Linux has no such flag, so there it is the mode alone)."""
+    flags = getattr(st, "st_flags", 0) or 0
+    return int(st.st_mode) | (HIDDEN_FLAG if flags & _UF_HIDDEN else 0)
+
+
+def is_hidden_name(name: str) -> bool:
+    """Hidden by its name: a dot name off Windows, and on every system the Mac's AppleDouble ``._name`` leftovers."""
+    return name.startswith("._") or (not IS_WINDOWS and name.startswith("."))
 
 
 def is_link_like(st_mode_is_link: bool, attributes: int | None = None) -> bool:
@@ -496,4 +510,62 @@ def console_encoding() -> str:
 
 def home_dir() -> str:
     return os.path.expanduser("~")
+
+
+# the user's own folders: Home page places ----------------------------------------------------------------------------------------
+KNOWN_FOLDERS = (("DESKTOP", "Desktop"), ("DOCUMENTS", "Documents"), ("DOWNLOAD", "Downloads"), ("PICTURES", "Pictures"),
+                 ("MUSIC", "Music"), ("VIDEOS", "Videos"))
+_USER_DIR_LINE = re.compile(r'\s*XDG_([A-Z]+)_DIR\s*=\s*"(.*)"\s*$')
+
+
+def parse_user_dirs(text: str, home: str) -> dict:
+    """The desktop's own folder names from the freedesktop ``user-dirs.dirs`` file: ``{"DESKTOP": "/home/a/Skrivebord", ...}``. A
+    line names ``$HOME/...`` or a full path; one that names the home folder itself turns that folder off (left out)."""
+    found = {}
+    for line in text.splitlines():
+        m = _USER_DIR_LINE.match(line)
+        if not m:
+            continue
+        value = m.group(2).replace(chr(92) + '"', '"')
+        if value.startswith("$HOME"):
+            value = home.rstrip("/") + value[5:]
+        elif not value.startswith("/"):
+            continue
+        value = value.rstrip("/")
+        if value and value != home.rstrip("/"):
+            found[m.group(1)] = value
+    return found
+
+
+def user_folders(home: str, read=None) -> list:
+    """``(title, path)`` of the user's own folders, whether they exist or not (the caller checks). On Linux the desktop's own names from
+    ``~/.config/user-dirs.dirs`` (a Norwegian Ubuntu says ``Skrivebord``, ``Nedlastinger``), shown by those names; elsewhere, or when
+    the file has no line for one, the English name. On the Mac Applications follows. ``read`` reads a file's text (for tests)."""
+    named: dict = {}
+    if IS_LINUX:
+        config = os.environ.get("XDG_CONFIG_HOME") or os.path.join(home, ".config")
+        file = os.path.join(config, "user-dirs.dirs")
+        try:
+            if read is None:
+                with open(file, encoding="utf-8") as f:
+                    text = f.read()
+            else:
+                text = read(file)
+        except (OSError, UnicodeDecodeError):
+            text = ""
+        named = parse_user_dirs(text, home)
+    out = []
+    for key, english in KNOWN_FOLDERS:
+        path = named.get(key) or os.path.join(home, english)
+        out.append((os.path.basename(path) if key in named else english, path))
+    if IS_MACOS:
+        out.append(("Applications", "/Applications"))
+    return out
+
+
+def system_cloud_folders(home: str) -> list:
+    """``(title, path)`` of cloud folders the system itself keeps: iCloud Drive on the Mac. None elsewhere."""
+    if IS_MACOS:
+        return [("iCloud Drive", os.path.join(home, "Library", "Mobile Documents", "com~apple~CloudDocs"))]
+    return []
 

@@ -355,10 +355,39 @@ def edit_tags(path: str, add=(), remove=(), backend=None) -> Tags:
     return current
 
 
+_SYSTEM_ATTRIBUTES = ("system.", "security.", "trusted.", "com.apple.rootless")
+
+
+def copy_attributes(src: str, dst: str, backend) -> bool:
+    """Copy every extended attribute of ``src`` onto ``dst`` as it is (the system's own, such as access lists and SELinux labels,
+    are left to the system). True when each one was copied, False when one could not be (the destination cannot hold them)."""
+    try:
+        names = backend._list(src)
+    except OSError:
+        return False
+    whole = True
+    for name in names:
+        if name.startswith(_SYSTEM_ATTRIBUTES):
+            continue
+        try:
+            backend._set(dst, name, backend._get(src, name))
+        except OSError:
+            whole = False
+    return whole
+
+
 def copy_tags(src: str, dst: str, source_backend=None, target_backend=None) -> str:
     """Carry the tags of ``src`` over to the copy ``dst`` (each side in the form its own drive holds). Returns ``"none"`` when
     the source has no tags, ``"copied"``, or ``"lost"`` when the destination cannot hold them or refuses. Never raises: a
-    copy must not fail because its tags could not follow."""
+    copy must not fail because its tags could not follow.
+
+    Off Windows, with the system's own backend, every extended attribute of the file is copied as it is first (the copy itself
+    carries none on the Mac or Linux): Finder's tags with their colours, "where from", the desktop's own tags. Only when that
+    fails is the record rewritten from what was read."""
+    if source_backend is None and target_backend is None:
+        backend = default_backend()
+        if isinstance(backend, XattrBackend) and copy_attributes(src, dst, backend):
+            return "copied" if not read_tags(src, backend).is_empty() else "none"
     t = read_tags(src, source_backend)
     if t.is_empty():
         return "none"

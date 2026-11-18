@@ -12,7 +12,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import BinaryIO, Iterator, Optional
 
-from .platform import IS_WINDOWS, decode_name, has_scheme, is_case_only_change, is_link_like, longpath, path_key, strip_longpath
+from .platform import IS_WINDOWS, decode_name, has_scheme, is_case_only_change, is_link_like, longpath, mode_and_flags, path_key, strip_longpath
 from . import sharing
 
 
@@ -295,7 +295,7 @@ class LocalFileSystem(FileSystem):
 def _attr_bits(st) -> int:
     """Windows file attributes, elsewhere the mode: the two are shown by ``core.columns.attributes_text``."""
     found = getattr(st, "st_file_attributes", None)
-    return int(found) if found is not None else int(st.st_mode)
+    return int(found) if found is not None else mode_and_flags(st)
 
 
 _DIGITS = re.compile(r"(\d+)")
