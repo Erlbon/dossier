@@ -83,10 +83,16 @@ class FrostSurface:
         painter.drawPixmap(QRect(-origin.x(), -origin.y(), geometry.width(), geometry.height()), picture)
         card = QColor(theme.current()["card"])
         # keep the glass within reach of the scheme: no bright patch under dark-scheme text, no dark patch under light-scheme text
-        painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_Darken if theme.is_dark()
-                                   else QPainter.CompositionMode.CompositionMode_Lighten)
-        painter.fillRect(self.rect(), card.lighter(CEILING) if theme.is_dark() else card.darker(FLOOR))
-        painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceOver)
+        if theme.is_dark():
+            painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_Darken)
+            painter.fillRect(self.rect(), card.lighter(CEILING))
+            painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceOver)
+        else:
+            # Light: a veil of the card colour lifts the whole picture evenly, so black comes out no darker than the floor. A
+            # per-channel Lighten (the dark scheme's way, mirrored) raised every colour's low channels to grey and left no colour.
+            veil = QColor(card)
+            veil.setAlphaF(min(1.0, card.darker(FLOOR).valueF() / max(card.valueF(), 0.01)))
+            painter.fillRect(self.rect(), veil)
         tint = QColor(card)
         tint.setAlpha(frost.tint_alpha(level))
         painter.fillRect(self.rect(), tint)

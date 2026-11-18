@@ -191,3 +191,20 @@ def test_a_bright_picture_does_not_make_a_bright_patch_in_the_dark_scheme(world,
     ceiling = QColor(theme.current()["card"]).lighter(frost_window.CEILING)
     assert frame.lightness() <= ceiling.lightness() + 2
     win.set_frost(False)
+
+
+def test_the_light_scheme_keeps_the_colour_of_a_dark_wallpaper_and_no_dark_patch(world, monkeypatch):
+    """The owner (2026-11-18): the glass only worked in the dark scheme. The light scheme lifted each colour channel to a grey
+    floor, so a dark blue wallpaper came out plain grey. Now it stays blue, and still no darker than the floor."""
+    from dossier.gui import frost_window, theme
+    win, *_ = world
+    monkeypatch.setattr(theme, "_current", dict(theme.LIGHT))
+    blue = {win.screen().name(): (win.screen().geometry(), QPixmap(win.screen().geometry().size()))}
+    blue[win.screen().name()][1].fill(QColor("#1e3a8a"))
+    win.set_frost(True, 90, grabber=lambda: blue, wait_ms=0)
+    QApplication.processEvents()
+    frame, _ = frame_pixel(win)
+    assert frame.blue() - frame.red() > 25                          # blue shows through, not grey
+    floor = QColor(theme.current()["card"]).darker(frost_window.FLOOR)
+    assert frame.lightness() >= floor.lightness() - 2
+    win.set_frost(False)

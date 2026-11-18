@@ -2,6 +2,14 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-18#04 -- The frosted background shows the screen in the light scheme too
+
+- **Light-scheme glass keeps the colours behind it.** To keep dark patches from showing under the text, the light scheme lifted each colour
+  channel of the screen picture to a grey floor. Every colour has a low channel, so the whole picture came out flat grey and
+  the glass looked like a plain background. Now a veil of the scheme's card colour lifts the picture evenly: black still
+  comes out no darker than the same floor, and a blue wallpaper stays blue. The dark scheme is unchanged. Test:
+  `test_the_light_scheme_keeps_the_colour_of_a_dark_wallpaper_and_no_dark_patch`.
+
 ## 2026-11-18#03 -- Dragging a file onto a folder in the same panel works
 
 - **A drag within one panel can land on a folder row again.** A drag starts over the item being dragged, where it cannot
