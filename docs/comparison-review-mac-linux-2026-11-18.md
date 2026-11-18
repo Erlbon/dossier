@@ -359,6 +359,8 @@ The page offered one notepad window for everything. In chat the owner pointed ou
 - **Files opened from Explorer** go to a standalone notepad, a program of its own with its own tabs. A second double-click adds a tab to the running one, and closing Dossier never touches it. The picture viewer that Explorer starts is its own program in the same way, as `dossier view` already is.
 - **Both notepads** notice when the file changed on disk and say so before saving over it, since the same file can be open in each.
 
+**Later (the owner, 2026-11-18):** both viewers, the notepad and the picture viewer, may need more polish before they serve as Windows' defaults ("some more spitshine"). That is a pass of its own, after 69 and 70 are built.
+
 ## Sources (web, checked 2026-11-18)
 - Commander One: Quick Look on another key than Space, Finder tags since 3.2, servers and MTP in Pro: https://www.macworld.com/article/3409155/commander-one-2-1-review-mac-file-manager-now-works-with-ios-devices.html, https://pcweenies.com/?p=16369, https://wiki.eltima.com/user-guides/commander/commander-one-from-the-mac-app-store.html, https://en.wikipedia.org/wiki/Commander_One
 - ForkLift 4: preview pane and info, sync, Share from the right-click menu: https://blog.binarynights.com/2023/04/04/forklift-4-beta-is-finally-here/, https://alternativeto.net/news/2024/11/forklift-4-2-introduces-improved-color-tags-remote-pane-control-and-sftp-updates/
