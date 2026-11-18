@@ -253,6 +253,26 @@ def test_after_a_move_the_cursor_stays_in_place_on_the_next_item(world):
     assert win.left.current_name() == "b.txt"
 
 
+def test_keep_cursor_position_switched_off_goes_to_the_top_and_is_remembered(world):
+    win, _d, left, right, tmp_path = world
+    for n in ("a", "b", "c"):
+        (left / f"{n}.txt").write_text(n)
+    assert win.act_keep_place.isChecked()                    # on by default
+    win.act_keep_place.setChecked(False)
+    assert win.left.keep_place is False and win.right.keep_place is False
+    win.left.refresh()
+    win.left.table.setCurrentIndex(win.left.model.index(win.left.model.row_of("b.txt"), 0))
+    key(win, Qt.Key.Key_F6)
+    pump(win, lambda: (right / "b.txt").exists() and win.left.model.row_of("b.txt") < 0)
+    assert win.left.current_name() == "a.txt"                # the first item, as before the setting
+    win.settings.sync()
+    again = MainWindow(settings_path=str(tmp_path / "s.ini"), start=(str(left), str(right)), dialogs=FakeDialogs())
+    try:
+        assert not again.act_keep_place.isChecked() and again.left.keep_place is False
+    finally:
+        again.close()
+
+
 def test_conflict_skip_leaves_the_target_untouched(world):
     win, dialogs, left, right, _t = world
     (left / "a.txt").write_text("NEW")

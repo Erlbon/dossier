@@ -716,6 +716,7 @@ class Panel(QFrame):
 
         self._pending = None            # (listing, path, select) of a slow folder being opened
         self._landing = None            # (path, names) on a reload: where the cursor goes if its item is gone
+        self.keep_place = True          # Settings: off sends the cursor to the top instead
         self._poll = QTimer(self)
         self._poll.setInterval(40)
         self._poll.timeout.connect(self._poll_pending)
@@ -1093,7 +1094,7 @@ class Panel(QFrame):
         pending. ``file_ok`` (a path typed into the address): a file shows its folder with the cursor on it, and
         ``file_entered`` asks the window to view it."""
         self._cancel_navigation()
-        same = select and path == self.model.path and select == self.current_name()
+        same = self.keep_place and select and path == self.model.path and select == self.current_name()
         self._landing = (path, self.model.neighbours(self.table.currentIndex().row())) if same else None
         listing = _Listing(self.fs, path, self.notes_enabled and not is_home(path), allow_file=file_ok)
         if listing.done.wait(NAV_BUDGET):

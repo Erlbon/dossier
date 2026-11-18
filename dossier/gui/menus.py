@@ -361,6 +361,13 @@ class MenusMixin:
         settings.addAction(self._action("Mouse Wheel...", None, self.open_wheel_settings))
         settings.addAction(self._action("Function Keys...", None, self.open_function_keys_settings))
         self.add_auto_refresh_actions(settings)
+        self.act_keep_place = QAction("Keep Cursor Position After Moving or Deleting", self)
+        self.act_keep_place.setToolTip("On: the cursor goes to the next item. Off: back to the top of the folder")
+        self.act_keep_place.setCheckable(True)
+        self.act_keep_place.setChecked(self.keep_place_on())
+        self.act_keep_place.toggled.connect(self.set_keep_place)
+        settings.addAction(self.act_keep_place)
+        self._apply_keep_place(self.keep_place_on())
         self.add_git_actions(settings)
         drives_menu = settings.addMenu("Drives and Sharing")
         self.act_remember_drives = QAction("Remember Drives Between Sessions", self)
@@ -388,6 +395,20 @@ class MenusMixin:
         self.act_ask_error.setCheckable(True)
         self.act_ask_error.setChecked(self.copy_settings()["ask_on_error"])
         self.act_ask_error.toggled.connect(lambda on: self.settings.setValue("copy/ask_on_error", "true" if on else "false"))
+
+    def keep_place_on(self) -> bool:
+        """Settings > Keep Cursor Position After Moving or Deleting (the owner's option A, 2026-11-18). On by default."""
+        return str(self.settings.value("panels/keep_place", "true")).lower() == "true"
+
+    def set_keep_place(self, on: bool) -> None:
+        self.settings.setValue("panels/keep_place", "true" if on else "false")
+        self._apply_keep_place(on)
+        self._say("After moving or deleting, the cursor goes to the next item" if on
+                  else "After moving or deleting, the cursor goes to the top of the folder")
+
+    def _apply_keep_place(self, on: bool) -> None:
+        for panel in (self.left, self.right):
+            panel.keep_place = on
 
     # Help -----------------------------------------------------------------------------------------------------------------------
     def open_web_page(self, url: str) -> None:

@@ -2,6 +2,12 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-18#02 -- Settings > Keep Cursor Position After Moving or Deleting
+
+- **The new cursor behaviour can be switched off** (the owner's option A, 2026-11-18). On (the default): after a move or a
+  delete the cursor goes to the next item. Off: back to the top of the folder, as before #01. Kept in the settings file as
+  `panels/keep_place`. Test: `test_keep_cursor_position_switched_off_goes_to_the_top_and_is_remembered`.
+
 ## 2026-11-18#01 -- After a move the cursor stays where you were
 
 - **Moving or deleting files no longer throws the cursor back to the top of the folder.** When the item under the cursor is
