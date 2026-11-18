@@ -279,7 +279,8 @@ Added the same day, when the owner asked whether any really clever function had 
 **Decisions (the owner, 2026-11-18): 63A, 64A, 65A, 66B, 67B, 68A.**
 - **63A:** Edit the Names as Text in Tools > Batch Rename, names only (no moves into subfolders), after massren, which the owner has used heavily. It extends a tool that exists, so card 3 does not hold it back.
 - **66B:** duplicates replaced with clones where the file system has them (APFS, btrfs, XFS, ReFS); no hard links. It extends the duplicates window, so card 3 does not hold it back either.
-- **New areas, built when card 3 allows:** 64A (Send to a tailnet device, and fetching what has arrived), 65A (What Changed Since..., by hand), 67B (earlier versions from the snapshots that are folders: NAS, btrfs, ZFS), 68A (rules per folder that propose a plan when the folder is opened).
+- **Card 3 ended the same day (the owner):** "I feel the core is solid. We want some new functionality to attract mac/linux users." Its condition was met anyway (every Yes card of the functionality review built, releases 0.7-0.10, daily use since 5 November). So nothing below waits any longer, and wherever this file says card 3 holds something back, that no longer applies.
+- **New areas, no longer waiting:** 64A (Send to a tailnet device, and fetching what has arrived), 65A (What Changed Since..., by hand), 67B (earlier versions from the snapshots that are folders: NAS, btrfs, ZFS), 68A (rules per folder that propose a plan when the folder is opened).
 
 The ideas below are not in Dossier and are done badly or not at all by the managers in this review. Each builds on something Dossier already has (the plan, the manifests, the tailnet list, the duplicates window), which is why they suit it. Questions 63-68. Except 63 and 66, which extend a tool that exists, they are new areas, so card 3 holds them back: an answer says what to build when card 3 allows it.
 

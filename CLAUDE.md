@@ -68,7 +68,7 @@ The right-click menu takes the label and the key hint of a menu-bar command from
 ## Decided (the owner, 2026-11-05, after the comparison review in `docs/comparison-review-2026-11-05.md`)
 - **The yardstick is usability, not Total Commander:** can an ordinary user do the job without learning a system. FreeCommander XE and Just Manager are the owner's daily references; TC is "technically strong, but the usability is low".
 - **No plugin system, ever** (neither Dossier's own nor TC's): plugins are "complicated and often outdated". A format or a source of files worth having is built in (`core/vfs.py`), with tests, in the normal menus. Spec A7 is dropped; V9 keeps only mapping a type to a program.
-- **Core before new areas:** no new feature area (protocols, checkers, viewers, kinds of tags) until the functionality review's Yes cards are built and a release has had a week of real use. Fixes and decided cards (including the assistant cards 33 and 34) go on as normal.
+- ~~**Core before new areas**~~ **Ended (the owner, 2026-11-18):** "I think that rule went a little bit over board. I have been using dossier steadily since 5th Nov, and I feel the core is solid. We want some new functionality to attract mac/linux users." Its condition was met anyway: every Yes card of the functionality review is built (24 was dropped), and releases 0.7-0.10 followed. New areas are open again; the next ones are the Mac and Linux cards 45-68 in `docs/comparison-review-mac-linux-2026-11-18.md`.
 - **No translation** (spec C10 not planned).
 - **The README leads with what is unique** (a plan before every change, servers and the tailnet as folders, folder notes, the assistant that only proposes), then "everything built in, no plugins". Done at the next release, not before.
 
