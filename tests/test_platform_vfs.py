@@ -44,7 +44,7 @@ def test_case_insensitive_identity_on_windows():
     assert len(s) == 1
 
 
-@pytest.mark.skipif(sys.platform == "win32", reason="byte names are a Linux thing")
+@pytest.mark.skipif(sys.platform in ("win32", "darwin"), reason="byte names are a Linux thing (macOS refuses a name that is not UTF-8)")
 def test_undecodable_name_does_not_break_listing(tmp_path):
     bad = os.path.join(os.fsencode(str(tmp_path)), b"caf\xe9.txt")
     with open(bad, "wb") as f:

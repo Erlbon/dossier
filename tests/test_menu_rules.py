@@ -134,11 +134,13 @@ def test_the_right_click_hint_follows_a_changed_function_key(world):
     def hint():
         menu = win.build_context_menu(win.left, win.left.model.row_of("a.txt"))
         return next(a for a in menu.actions() if a.text().startswith("Change Dates and Attributes...")).text().partition("\t")[2]
-    assert hint() == "Shift+F2"
+    from PyQt6.QtGui import QKeySequence
+    native = lambda s: QKeySequence(s).toString(QKeySequence.SequenceFormat.NativeText)   # noqa: E731  (the Mac writes ⇧F2)
+    assert hint() == native("Shift+F2")
     win._fkey_table = {layer: {n: c for n, c in keys.items() if c != "change_dates"} for layer, keys in win._fkey_table.items()}
     win._fkey_table.setdefault("ctrl", {})[2] = "change_dates"
     win.apply_fkey_shortcuts()
-    assert hint() == "Ctrl+F2"
+    assert hint() == native("Ctrl+F2")
 
 
 def test_claude_md_names_the_question_of_every_menu():

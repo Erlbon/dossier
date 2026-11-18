@@ -168,7 +168,9 @@ def test_the_keys_list_shows_the_shortcuts_of_the_menus_and_filters(world):
     win, *_ = world
     rows = shortcut_rows(win.menuBar())
     keys = {k.strip() for r in rows for k in r[0].split(",")}
-    assert {"F1", "F9", "F10", "F11", "F12", "Shift+F8", "Shift+F1", "F5", "Ctrl+Z", "Alt+Return"} <= keys
+    from PyQt6.QtGui import QKeySequence
+    native = lambda s: QKeySequence(s).toString(QKeySequence.SequenceFormat.NativeText)   # noqa: E731  (the Mac writes ⇧F8, ⌘Z)
+    assert {native(k) for k in ("F1", "F9", "F10", "F11", "F12", "Shift+F8", "Shift+F1", "F5", "Ctrl+Z", "Alt+Return")} <= keys
     dlg = KeysDialog(rows, win)
     assert dlg.table.rowCount() == len(rows)
     dlg.filter.setText("full screen")

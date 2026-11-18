@@ -1,5 +1,6 @@
 import base64
 import shutil
+import sys
 import subprocess
 
 import pytest
@@ -63,7 +64,7 @@ HOSTILE = ["plain.txt", "a&b.txt", "x;y", "it's.txt", "$(echo INJECTED)", "`echo
            "(paren)", "[bracket].txt", "x&echo INJECTED"]
 
 
-@pytest.mark.skipif(not shutil.which("powershell"), reason="needs Windows PowerShell")
+@pytest.mark.skipif(sys.platform != "win32" or not shutil.which("powershell"), reason="needs Windows PowerShell (macOS runners have pwsh only)")
 @pytest.mark.parametrize("name", HOSTILE)
 def test_powershell_really_receives_the_name_as_one_word(name):
     cmd = "Write-Output " + quote_for(PS, name)
