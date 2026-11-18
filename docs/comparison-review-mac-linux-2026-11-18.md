@@ -18,7 +18,29 @@ A comparison of Dossier (build 2026-11-18#09, the first build ready for a Mac an
 
 **Effort:** small = under 2 minutes of work, medium = up to 10, large = more than 10, as in the earlier reviews.
 
-**The decisions** go on the decision page as questions 45-56 (the last card was 44). This file holds the same proposals and the reasons.
+**The decisions** went on the decision page as questions 45-56 (the last card was 44). This file holds the same proposals and the reasons.
+
+**Decisions (the owner, 2026-11-18, on the decision page): 45A, 46B, 47A, 48A, 49A, 50A, 51A, 52A, 53A, 54 Keep as is, 55B, 56A.**
+- **To build, as core beside the colleague's Mac report (56A), not held back by card 3:**
+  - 45: Quick Look on Cmd+Y; on Linux the GNOME previewer when installed; Space keeps marking;
+  - 46: the Trash place, with Put Back and Empty, on Linux and Windows; on the Mac it opens the Trash in Finder;
+  - 47: Eject on all three systems;
+  - 48: GVfs and kio-fuse mounts shown, and Mount... on Linux (`gio mount`) and the Mac (`open smb://...`);
+  - 49: Open With lists the system's programs for the type;
+  - 50: Mac apps and packages as files, Linux launchers by name and icon, runnable files ask;
+  - 51: Finder's and the Linux desktops' keys as second keys (Root of the Drive moves to Cmd+Shift+Up on the Mac);
+  - 52: a launcher offered at first start from the Linux tarball, and "Open folders with Dossier" (off by default);
+  - 53: the full Permissions table in Properties, as a plan.
+- **Usability (section 4, answered the same day): 57B, 58B, 59A, 60B, 61A, 62A.** All core under 56A:
+  - 57: a setting, "Typing in a panel": jumps to a name by default on the Mac and Linux, goes to the command line by default on Windows; Ctrl+E puts the focus in the command line;
+  - 58: F2 renames in the row (name selected without its extension), and New Folder makes "New Folder" in place, ready to rename (`a/b/c` still makes nested folders);
+  - 59: on all three systems Ctrl+F (Cmd+F) opens Search in this folder; Mark by Pattern moves to `+`, Unmark by Pattern to `-` (Ctrl+Shift+F goes);
+  - 60: a sidebar of places (pinned folders, drives with Eject, servers, the Trash), hidden by default, in View;
+  - 61: right-click Compress to "name.zip" with no box, and Extract Here;
+  - 62: folders, tabs and Home page drives spring open after about a second while dragging, on by default.
+- **Not now:** 54 (the Share menu): Show in Finder covers it; ask again after the colleague's report.
+- **Later:** 55 (a terminal inside the window), after card 3's condition.
+- **Also built, without a card** (section 1.9): the desktop's own folder names on Linux, iCloud Drive and Applications on the Mac, the Mac's hidden flag, AppleDouble files as hidden and junk, and Finder tags kept on a copy if the colleague's check shows they are lost.
 
 ---
 
@@ -185,6 +207,65 @@ Against this group the four selling points of the November review hold, and thre
 - **A:** yes. Cards 45-53 are platform behaviour that makes the Mac and Linux builds do what their users take for granted; they go on beside the colleague's report as fixes do, not after the week of real use.
 - **B:** no. They wait like new areas, until the Yes cards are built and a release has had a week of use.
 - **Recommendation: A.** Card 35A already put "fix what the Mac breaks" first; most of these are what an ordinary user would report as broken.
+
+## 4. Usability: the everyday jobs, done the Mac and Linux way
+
+Added the same day at the owner's request: sections 1-3 are mostly platform plumbing, close to bug fixes. This part asks the usability question directly. **Take an ordinary Mac or Linux user, who knows Finder, Files (Nautilus), Dolphin or Thunar, and give them Dossier. Which everyday job trips them up?** Each job was walked through in Dossier's code; the others' ways are from their known behaviour. Questions 57-62 follow from it.
+
+| Everyday job | Finder, Files, Dolphin, Thunar (and ForkLift, Commander One) | Dossier today | Verdict |
+|---|---|---|---|
+| Find a file in a long folder | Type its first letters; the cursor jumps there (Files starts a search instead) | Typed letters go to the command line (`gui/panel.py:384`, the orthodox way, as in Midnight Commander); Ctrl+S opens the quick filter first | **Trips them up**, question 57 |
+| Rename a file | The name turns into a text field in the list (Return on the Mac, F2 on Linux) | F2 opens a box (`gui/main_window.py:1033`) | Works, but feels foreign, question 58 |
+| Make a new folder | Cmd+Shift+N / Ctrl+Shift+N makes "untitled folder" and puts it into rename at once | F7 opens a box (that also makes `a/b/c` in one go) | As above, question 58 |
+| Search | Cmd+F / Ctrl+F: a search field, results as you type, this folder or everywhere | Ctrl+F is Mark by Pattern; search is Alt+F7, a dialog; results open as a folder (good) | **Trips them up**: the most universal key means something else, question 59 |
+| Go to a favourite place | The sidebar, always there: favourites, drives, network, Trash, tags | The Home page (Alt+Home), the drive menu (Alt+F1/F2), the Hotlist (Ctrl+B), pinned folders | Works, one step further away, question 60 |
+| Zip some files to send, or unpack one received | Right-click > Compress (Finder: no questions); double-click a zip (Finder) or Extract Here (Files, Dolphin, Thunar) | Pack to Zip... and Unpack... both open a box; Enter opens the zip as a folder (good for looking inside) | Slower than they are used to, question 61 |
+| Drag a file into a folder that is not open | Hold it over the folder and it springs open (Finder, Dolphin, Files) | Drop on a folder in the list or the other panel; no springing open | Small, question 62 |
+| Preview a file | Space (Quick Look) | F3, the viewer | Decided, 45A |
+| Get back a deleted file | Open the Trash, Put Back | Not possible in Dossier | Decided, 46B |
+| Pull out a USB stick | The eject button | None | Decided, 47A |
+| Open in another program | Right-click > Open With, the system's list | The tools bar's programs | Decided, 49A |
+| Copy over existing files | Finder: Keep Both / Stop / Replace; Files: a box per file | A plan first, then a real per-file conflict box, verify, resume | **Dossier is better** |
+| Find a command whose key they do not know | Mac: Help > search the menus; KDE: a command search (Ctrl+Alt+I) | Ctrl+K, the command palette (Help menu); on the Mac the system's menu search comes free with the native menu bar | Fine |
+| Select with the mouse | Click, Cmd/Ctrl+click, Shift+click, rubber band | Click moves the cursor (commands act on it when nothing is marked), Ctrl+click marks, Shift+click marks a range | Fine: a click then a command does what they expect |
+
+**What follows.** The commander model itself (two panels, F-keys, marks apart from the cursor) is not the problem: Commander One and ForkLift prove Mac users take it. The problems are three habits with the strongest muscle memory: **typing to find, renaming in place, and Ctrl/Cmd+F**. Each meets a Dossier key that means something else. Then come three comforts: the sidebar, one-click zip and unzip, and folders that spring open.
+
+### 57. Typing letters in a panel
+- **A:** letters jump to the first name that starts with them, as in every desktop file manager: a small box shows what is typed, a pause starts over, and Esc clears it. The command line takes letters only when it has the focus (a click on it, or Ctrl+E). On all three systems.
+- **B:** a setting, "Typing in a panel" (beside the function keys in Settings): *jumps to a name* or *goes to the command line*. The default is the jump on the Mac and Linux and the command line on Windows (as card 39A lets the Mac follow the Mac).
+- **Keep as is:** letters go to the command line; the quick filter (Ctrl+S) finds a name.
+- **Recommendation: B.** It is the single habit a Finder or Files user hits in the first minute, and the setting keeps your own Windows habit as it is. Effort: medium.
+
+### 58. Rename and new folder in place
+- **A:** F2, on all three systems, turns the name in the list into a text field, with the name selected without its extension (card 10's rule). Enter keeps it, Esc cancels, and a name that is taken is asked about as today. New Folder still opens its box.
+- **B:** as A, and New Folder (F7, and Cmd+Shift+N or Ctrl+Shift+N from 51A) also works in place: it makes "New Folder" and puts it straight into rename. Typing `a/b/c` there still makes the nested folders (card 9).
+- **Keep as is:** both open a box.
+- **Recommendation: B.** Every file manager in this review renames in place, and Finder and Files make new folders that way too; card 9's nested folders keep working. Effort: medium.
+
+### 59. Ctrl+F (Cmd+F on the Mac) means Find
+- **A:** on all three systems, Ctrl+F opens Search for this folder with the cursor in the name field (Alt+F7 stays). Mark by Pattern moves to the plus key (`+`, the commanders' key for it, beside `*` for Invert) and Unmark by Pattern to `-`; both stay in the Mark menu. Both keys are free today.
+- **B:** as A, on the Mac and Linux only; Windows keeps Ctrl+F for Mark by Pattern.
+- **Keep as is.**
+- **Recommendation: A.** Ctrl+F is Find in Explorer, Finder, Files, Dolphin and every browser and editor; a second meaning in one program is a trap on any system. It changes one of your own keys, which is why it is a question. Effort: small.
+
+### 60. A sidebar of places
+- **A:** a narrow sidebar at the left of the window, shared by both panels (a click goes to the active panel): pinned folders, drives with their eject marks (47A), servers, and the Trash (46B). View > Sidebar shows or hides it; shown by default.
+- **B:** as A, but hidden by default on all three systems; a new user finds it in View.
+- **Keep as is:** the Home page, the drive menus, the Hotlist.
+- **Recommendation: B.** It is what every Mac and Linux user reaches for, but two panels already halve the width (your own worry in card 10), and the Home page already does the same job one key away. Effort: medium.
+
+### 61. Compress and Extract Here in one click
+- **A:** the right-click menu gets **Compress to "name.zip"** (no box; a plan as always, which asks only when that name is taken) and **Extract Here** (into a folder named after the archive when it holds more than one item at its top, as Files and Dolphin do). Pack to Zip... and Unpack... keep their boxes for everything else. Enter still opens a zip as a folder.
+- **B:** as A, and on the Mac a double-click on a zip unpacks it, as Finder does (Enter still opens it as a folder).
+- **Keep as is.**
+- **Recommendation: A.** It turns the commonest archive jobs into one click on all three systems; a double-click that means something different from Enter would be a second rule to learn. Effort: small.
+
+### 62. Folders that spring open while dragging
+- **A:** holding a dragged file over a folder, a tab or a drive on the Home page for about a second opens it in that panel; dropping or Esc ends it, and the panel goes back to where it was if nothing was dropped.
+- **B:** as A, but off by default (Settings > Copy and Move).
+- **Keep as is.**
+- **Recommendation: A.** Finder, Dolphin and Files all do it, and without it a drag into a folder two levels down needs the target opened first. Effort: medium.
 
 ## Sources (web, checked 2026-11-18)
 - Commander One: Quick Look on another key than Space, Finder tags since 3.2, servers and MTP in Pro: https://www.macworld.com/article/3409155/commander-one-2-1-review-mac-file-manager-now-works-with-ios-devices.html, https://pcweenies.com/?p=16369, https://wiki.eltima.com/user-guides/commander/commander-one-from-the-mac-app-store.html, https://en.wikipedia.org/wiki/Commander_One
