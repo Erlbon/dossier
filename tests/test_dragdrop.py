@@ -180,6 +180,31 @@ def test_dropping_inside_the_same_panel_needs_a_folder_row(world):
     pump(win, lambda: (left / "box" / "a.txt").exists() and not win.busy)
 
 
+def test_a_drag_that_starts_on_its_own_item_can_still_land_on_a_folder_in_the_same_list(world):
+    """As a real drag goes: it enters the list over the item being dragged (no place to land), then moves to a folder row.
+    Refusing the enter made Qt send the list nothing more of that drag, so a move within one panel never worked."""
+    from PyQt6.QtGui import QDragEnterEvent, QDragMoveEvent
+    win, d, left, right, tmp = world
+    filled(win, left, ("a.txt", "b.txt"))
+    (left / "box").mkdir()
+    win.left.refresh()
+    pump(win, lambda: win.left.model.row_of("box") >= 0)
+    mime = dragdrop.make_mime([str(left / "a.txt")], str(id(win.left)))
+    none = Qt.KeyboardModifier.NoModifier
+    enter = QDragEnterEvent(row_center(win.left, "a.txt"), Qt.DropAction.MoveAction, mime, Qt.MouseButton.LeftButton, none)
+    win.left.table.dragEnterEvent(enter)
+    assert enter.isAccepted() and win.left.model.drop_row == -1               # taken, but nothing is lit on its own row
+    on_file = QDragMoveEvent(row_center(win.left, "b.txt"), Qt.DropAction.MoveAction, mime, Qt.MouseButton.LeftButton, none)
+    win.left.table.dragMoveEvent(on_file)
+    assert not on_file.isAccepted()                                           # a file row of its own list is no place to land
+    on_box = QDragMoveEvent(row_center(win.left, "box"), Qt.DropAction.MoveAction, mime, Qt.MouseButton.LeftButton, none)
+    win.left.table.dragMoveEvent(on_box)
+    assert on_box.isAccepted() and win.left.model.drop_row == win.left.model.row_of("box")
+    drop(win.left, [str(left / "a.txt")], pos=row_center(win.left, "box"), source=str(id(win.left)))
+    pump(win, lambda: (left / "box" / "a.txt").exists() and not win.busy)
+    assert not (left / "a.txt").exists()
+
+
 def test_a_folder_cannot_be_dropped_into_itself(world):
     win, d, left, right, tmp = world
     (left / "box").mkdir()

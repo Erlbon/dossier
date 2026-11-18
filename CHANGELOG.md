@@ -2,6 +2,14 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-18#03 -- Dragging a file onto a folder in the same panel works
+
+- **A drag within one panel can land on a folder row again.** A drag starts over the item being dragged, where it cannot
+  land; the panel refused it there, and Qt then sent that panel nothing more of the drag, so a folder further down the same
+  list never lit up or took it. The panel now takes the drag on entering and decides at each spot under the pointer. Drops
+  on the other panel were not affected. The old test called the drop directly and skipped the enter step. New test:
+  `test_a_drag_that_starts_on_its_own_item_can_still_land_on_a_folder_in_the_same_list`.
+
 ## 2026-11-18#02 -- Settings > Keep Cursor Position After Moving or Deleting
 
 - **The new cursor behaviour can be switched off** (the owner's option A, 2026-11-18). On (the default): after a move or a

@@ -272,7 +272,12 @@ class _FileView:
 
     def dragEnterEvent(self, event) -> None:
         paths, source, row = self._drop_info(event)
-        if paths and self.drop_check is not None and self.drop_check(paths, source, row) is not None:
+        if paths and self.drop_check is not None:
+            # Taken on entering wherever it enters; each move then says whether the spot under the pointer takes it. A drag out of
+            # this list starts over the item itself, where it cannot land: refused there, Qt would send this list nothing more of
+            # that drag, and a folder further down the same list could never take it.
+            event.acceptProposedAction()
+            self.dragMoveEvent(event)
             event.acceptProposedAction()
         elif not paths and self._content_row(event) is not None:
             event.acceptProposedAction()
