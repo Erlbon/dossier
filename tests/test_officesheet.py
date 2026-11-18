@@ -54,9 +54,12 @@ S = 'xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"'
 R = 'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"'
 
 
+HIDDEN = ' state="hidden"'      # outside the f-string: Python 3.10 allows no backslash inside one
+
+
 def make_xlsx(path, sheets, strings=(), date1904=False, extra=None):
     with zipfile.ZipFile(path, "w") as z:
-        entries = "".join(f'<sheet name="{n}" sheetId="{i + 1}" r:id="rId{i + 1}"{" state=\"hidden\"" if n.startswith("_") else ""}/>'
+        entries = "".join(f'<sheet name="{n}" sheetId="{i + 1}" r:id="rId{i + 1}"{HIDDEN if n.startswith("_") else ""}/>'
                           for i, (n, _) in enumerate(sheets))
         z.writestr("xl/workbook.xml", f'<workbook {S} {R}><workbookPr date1904="{int(date1904)}"/><sheets>{entries}</sheets></workbook>')
         rels = "".join(f'<Relationship Id="rId{i + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/'

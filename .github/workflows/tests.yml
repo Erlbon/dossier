@@ -34,10 +34,12 @@ jobs:
             libxcb-cursor0 libxcb-xinerama0 libfontconfig1 fontconfig
 
       - name: Install dependencies
-        run: python -m pip install -r requirements.txt
+        run: python -m pip install -r requirements.txt pytest-timeout
 
       - name: Syntax check
         run: python -m compileall -q dossier tests
 
       - name: Run tests
-        run: pytest -q
+        # --timeout: a test that hangs fails on its own with a stack trace, instead of the job running into its time limit
+        # with no summary (Ubuntu, the first run on 2026-11-18). -rfE lists every failure and error by name at the end.
+        run: pytest -q -rfE --timeout=180

@@ -93,7 +93,11 @@ def test_the_real_icons_of_windows_are_read_and_are_not_the_blank_page_of_a_cons
     group = W.windows_group()
     by_name = {n.name: n for n in group.children}
     blank = program_icon(by_name["Device Manager"].path).pixmap(32, 32).toImage()
+    import platform
+    server = "server" in (platform.win32_edition() or "").lower()        # GitHub's runners: no Windows Security there
     for name, node in by_name.items():                                    # every part, not only the consoles
+        if server and name == "Windows Security":
+            continue
         icon = program_icon(node.path, node.icon)
         assert not icon.isNull(), name
         assert icon.pixmap(32, 32).toImage() != blank, name

@@ -1,6 +1,6 @@
 [project]
 name = "dossier"
-version = "2026.11.18.5"
+version = "2026.11.18.6"
 description = "Multi-window file manager with a shared selection, Markdown notes and file metadata"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -9,13 +9,13 @@ dependencies = [
     "send2trash>=1.8",
     "pywin32>=306; sys_platform == 'win32'",   # send2trash's modern recycle bin (requirements.txt says why)
     "keyring>=24",
-    "PyQt6>=6.6",
+    "PyQt6>=6.6,<6.12",
     "PyQt6-QScintilla>=2.14",
     "redactor_common @ git+https://github.com/Erlbon/redactor_common.git@2026-11-18-01",   # pin a tag, never @main
 ]
 
 [project.optional-dependencies]
-gui = ["PyQt6>=6.6", "PyQt6-QScintilla>=2.14"]
+gui = ["PyQt6>=6.6,<6.12", "PyQt6-QScintilla>=2.14"]
 archives = ["py7zr>=0.21"]          # 7z archives as folders; RAR and the rest use an installed 7-Zip
 
 [project.gui-scripts]

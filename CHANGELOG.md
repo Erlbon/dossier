@@ -2,6 +2,18 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-18#06 -- PyQt6 held below 6.12; the tests run on Python 3.10 and on GitHub's machines again
+
+The first run of the Tests workflow on Windows, Ubuntu and macOS found these.
+- **PyQt6 is held below 6.12** (`requirements.txt`, `pyproject.toml`). PyQt6 6.12 comes without the QtPdf module, so a new
+  install had no PDF viewer and no PDF thumbnails. Builds made on this PC had 6.11 and were not affected.
+- **Python 3.10:** a test file used a backslash inside an f-string, which only Python 3.12 allows; every 3.10 job stopped at
+  the syntax check (`tests/test_officesheet.py`).
+- **Windows Server has no Windows Security app**, so the test of the Windows parts' icons skips that one part on a server
+  (GitHub's runners).
+- **The workflow** gives each test at most 180 seconds (`pytest-timeout`) and lists every failure by name: on Ubuntu one
+  test hung until the job's 25-minute limit, with no summary of what had failed.
+
 ## 2026-11-18#05 -- View > Fit Columns to Panel
 
 - **The columns can share the panel's width (on by default).** The right-most columns were hard to resize: the last one
