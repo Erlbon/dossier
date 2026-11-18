@@ -336,6 +336,29 @@ The ideas below are not in Dossier and are done badly or not at all by the manag
 - **Keep as is.**
 - **Recommendation: A, after card 3.** It is the plan idea made automatic without giving up control; checking in the background can wait until rules prove useful. Effort: large.
 
+## 6. The notepad and the picture viewer outside Dossier
+
+Added the same day, when the owner asked how to make Dossier's notepad the default editor elsewhere, and for tabs in it. Today F4 opens one notepad window per file, inside the file manager's process, and nothing outside Dossier can open the notepad. The picture viewer can already run alone (`dossier view picture.jpg`, `gui/viewer_app.py`).
+
+**One fact about Windows decides how question 69 can work:** Windows 10 and 11 do not let a program, or its installer, make itself the default for a file type; that choice is protected. A program can only offer itself: then, the next time such a file is double-clicked, Windows asks "How do you want to open this?" with the program in the list, and one "Always" makes it the default.
+
+**First, whatever the answers:** `dossier edit file.txt`, the notepad alone with no file manager window, beside `dossier view`.
+
+### 69. Dossier's notepad and picture viewer as Windows' defaults
+- **A:** two ticks in the installer, on by default: "Offer Dossier's picture viewer for pictures" (jpg, png, gif, webp, bmp, tiff, heic, svg) and "Offer Dossier's notepad for text files" (txt, md, log, ini, cfg, json, xml, yaml, csv). The uninstaller takes them away; the one-file exe offers nothing.
+- **B:** two switches in Settings > Opening Files instead, for any copy, with the kinds of file as ticks and a button that opens Windows' Default apps at Dossier's entry. Off undoes it.
+- **C:** both: the installer's ticks set the same two switches.
+- **Keep as is.**
+- **Recommendation: C.** The installer is where you expect to be asked, and Settings is where you change your mind. The Mac and Linux get the same through the app's file list and the launcher of 52A.
+- **Decided (the owner, 2026-11-18): C.** The installer's two ticks and the two switches in Settings > Opening Files are one setting; the one-file exe has the switches too.
+
+### 70. Tabs in the notepad (decided in chat, the owner, 2026-11-18)
+The page offered one notepad window for everything. In chat the owner pointed out that programs Windows starts must live beside Dossier, not inside it. He also said that one shared notepad would break his own flow: "we always close the txt file when returning to dossier". Decided:
+- **F4 stays as it is:** one file, its own window, closed to go back to the panel.
+- **F4 with several files marked** opens them as tabs in one F4 window instead of several windows; closing it goes back as before, after one question if anything is unsaved.
+- **Files opened from Explorer** go to a standalone notepad, a program of its own with its own tabs. A second double-click adds a tab to the running one, and closing Dossier never touches it. The picture viewer that Explorer starts is its own program in the same way, as `dossier view` already is.
+- **Both notepads** notice when the file changed on disk and say so before saving over it, since the same file can be open in each.
+
 ## Sources (web, checked 2026-11-18)
 - Commander One: Quick Look on another key than Space, Finder tags since 3.2, servers and MTP in Pro: https://www.macworld.com/article/3409155/commander-one-2-1-review-mac-file-manager-now-works-with-ios-devices.html, https://pcweenies.com/?p=16369, https://wiki.eltima.com/user-guides/commander/commander-one-from-the-mac-app-store.html, https://en.wikipedia.org/wiki/Commander_One
 - ForkLift 4: preview pane and info, sync, Share from the right-click menu: https://blog.binarynights.com/2023/04/04/forklift-4-beta-is-finally-here/, https://alternativeto.net/news/2024/11/forklift-4-2-introduces-improved-color-tags-remote-pane-control-and-sftp-updates/
