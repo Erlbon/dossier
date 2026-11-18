@@ -2,6 +2,12 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-18#10 -- The modern 7-Zip is preferred off Windows
+
+- **Dossier now looks for `7zz` before `7z`.** Off Windows, `7z` is often the old p7zip 16.02, which shows a tar's PAX headers
+  as files and loses its non-ASCII names ("ræd" as "r?d"); the modern 7-Zip installs as `7zz`. The macOS test runner has only
+  p7zip, so the tar test says so and skips there instead of failing.
+
 ## 2026-11-18#09 -- Release 0.10 prepared; the last Mac test findings fixed
 
 - **Release 0.10** (the owner, 2026-11-18): `RELEASE = "0.10"`, notes in `docs/releases/v0.10.md`.

@@ -173,6 +173,9 @@ def test_7z_through_the_7zip_program(tmp_path, monkeypatch):
 
 @needs_7z
 def test_a_tar_is_a_folder_tree_through_7zip(tmp_path):
+    banner = subprocess.run([SEVEN], capture_output=True).stdout.decode("utf-8", "replace")
+    if "p7zip" in banner:
+        pytest.skip("p7zip 16.02 (the old Unix port) does not read a tar's PAX names: 'ræd' comes out as 'r?d'")
     path = make_tar(tmp_path)
     assert isinstance(archives.backend_for(path), archives.ExternalBackend)
     check_tree(ZipFileSystem(), path)

@@ -192,7 +192,8 @@ class SevenZipBackend:
 # everything else through 7-Zip's command line ------------------------------------------------------------
 # 7-Zip's own names, then NanaZip's (a 7-Zip fork from the Microsoft Store, 2026-11-06): its command line is NanaZipC.exe, K7C.exe
 # and 7z.exe, but the 7z.exe alias can be switched off (Settings > Apps > App execution aliases) and the portable edition has none.
-_SEVEN_ZIP_NAMES = ("7z", "7zz", "7za", "7zr", "NanaZipC", "K7C")
+# 7zz first: off Windows, "7z" is often the old p7zip 16.02, which shows a tar's PAX headers as files and loses its non-ASCII names.
+_SEVEN_ZIP_NAMES = ("7zz", "7z", "7za", "7zr", "NanaZipC", "K7C")
 _PROGRAM_FOLDERS = (r"C:\Program Files\7-Zip", r"C:\Program Files (x86)\7-Zip")
 
 
