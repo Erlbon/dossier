@@ -373,7 +373,7 @@ def test_menus_view_has_modes_and_notes_while_settings_has_the_choices(commander
                              "Copy This Folder's Path"]
     assert texts("Mark") == ["Mark All", "Unmark All", "Invert Marks", "Mark by Pattern...", "Unmark by Pattern...", "Mark by Tag...",
                              "Unmark by Tag...", "Saved Marks"]
-    assert texts("View") == ["Details", "Thumbnails", "Thumbnail Size", "Sort By", "Columns...", "Folder Layout", "Show Hidden and System Files",
+    assert texts("View") == ["Details", "Thumbnails", "Thumbnail Size", "Sort By", "Columns...", "Fit Columns to Panel", "Folder Layout", "Show Hidden and System Files",
                              "All Files Below This Folder",
                              "Quick Filter", "Folder Sizes", "Refresh", "Folder Notes", "Tools Bar", "Bar Positions", "Full Screen"]
     assert texts("Go") == ["Back", "Forward", "Folder History...", "Hotlist...", "Folder Tree...", "Home Page", "Root of the Drive", "Edit the Path",
@@ -384,7 +384,8 @@ def test_menus_view_has_modes_and_notes_while_settings_has_the_choices(commander
                               "Quarantine", "Operations", "Terminal Here", "Administrator Terminal Here", "SSH Terminal Here", "Command Line"]
     assert texts("Network") == ["Add Server...", "Disconnect This Panel's Server", "Add Network Share...", "Client for NFS",
                                 "Show Tailnet Devices on the Home Page"]
-    assert texts("Settings") == ["Appearance", "Copy and Move...", "Opening Files", "Mouse Wheel...", "Function Keys...", "Auto Refresh", "Git Status on Network Drives (can be slow)",
+    assert texts("Settings") == ["Appearance", "Copy and Move...", "Opening Files", "Mouse Wheel...", "Function Keys...", "Auto Refresh",
+                                 "Keep Cursor Position After Moving or Deleting", "Git Status on Network Drives (can be slow)",
                                  "Drives and Sharing", "Quarantine...", "Assistant Access..."]
     look = [a for a in menus["Settings"].actions() if a.text() == "Appearance"][0].menu()
     assert [a.text() for a in look.actions()] == ["Color Scheme", "Icon Set", "Fonts and Bold...", "File Colours...", "Thumbnails...", "Picture Viewer Glass...", "Frosted Background...", "Drive Selector"]
