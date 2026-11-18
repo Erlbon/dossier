@@ -39,7 +39,7 @@ A comparison of Dossier (build 2026-11-18#09, the first build ready for a Mac an
   - 61: right-click Compress to "name.zip" with no box, and Extract Here;
   - 62: folders, tabs and Home page drives spring open after about a second while dragging, on by default.
 - **Not now:** 54 (the Share menu): Show in Finder covers it; ask again after the colleague's report.
-- **Later:** 55 (a terminal inside the window), after card 3's condition.
+- **Later:** 55 (a terminal inside the window). After card 3 ended the owner kept it later: "I am not supersold on the terminal panels. I think I need a mockup to see it. But it can wait. We have enough features to implement." When it comes up again, start with a mockup.
 - **Also built, without a card** (section 1.9): the desktop's own folder names on Linux, iCloud Drive and Applications on the Mac, the Mac's hidden flag, AppleDouble files as hidden and junk, and Finder tags kept on a copy if the colleague's check shows they are lost.
 
 ---
