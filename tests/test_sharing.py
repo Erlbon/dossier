@@ -175,6 +175,7 @@ def test_every_script_is_valid_powershell(script, tmp_path):
     assert done.returncode == 0, done.stdout + done.stderr
 
 
+@pytest.mark.skipif(sys.platform != "win32", reason="the elevated PowerShell run is the Windows route; Linux uses Samba's usershares")
 def test_the_elevated_run_reports_a_refused_prompt_and_powershells_own_error(monkeypatch):
     seen = []
 

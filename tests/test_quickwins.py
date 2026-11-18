@@ -226,7 +226,7 @@ def test_marks_stay_on_filtered_out_items_and_commands_work_on_what_is_shown(wor
     win.left.start_filter()
     win.left.filter_edit.setText("txt")
     assert len(win.selection) == 2                                        # readme.md is hidden but still marked
-    assert [p.rsplit("\\", 1)[-1] for p in win.left.targets()] == ["notes.txt"]
+    assert [p.replace("\\", "/").rsplit("/", 1)[-1] for p in win.left.targets()] == ["notes.txt"]
     win.left.clear_filter()
     assert len(win.left.targets()) == 2
 

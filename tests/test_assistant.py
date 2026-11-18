@@ -84,7 +84,7 @@ def test_a_network_path_is_refused_by_its_name_before_anything_is_opened(home, m
     monkeypatch.setattr(scope_module.os.path, "realpath", lambda p, *a, **k: (opened.append(p), real(p, *a, **k))[1])
     two = chr(92) * 2
     for outside in (two + "attacker.example@80" + chr(92) + "x", "//attacker.example/share/x", str(tmp / "elsewhere")):
-        with pytest.raises(Denied, match="outside"):
+        with pytest.raises(Denied, match="outside|full path"):    # \\host is not a full path on Linux and macOS: refused all the same
             s.resolve(outside)
     assert opened == []
     assert s.resolve(str(allowed / "inside.txt")) and opened                    # inside, it is still resolved (links are followed)
@@ -339,7 +339,7 @@ def test_a_plan_is_a_preview_and_changes_nothing(home):
     assert delete["warnings"] and (allowed / "dest" / "a.txt").exists()
     rename = tools.call(ctx, "plan_rename", {"path": str(allowed / "dest" / "a.txt"), "new_name": "z.txt"})
     assert rename["steps"] == 1
-    for bad in ("", "a/b", "..", "x:y"):
+    for bad in ("", "a/b", "..") + (("x:y",) if sys.platform == "win32" else ()):     # a colon is allowed in a name on Linux and macOS
         with pytest.raises(tools.ToolError):
             tools.call(ctx, "plan_rename", {"path": str(allowed / "dest" / "a.txt"), "new_name": bad})
     sync = tools.call(ctx, "plan_sync", {"left": str(allowed / "src"), "right": str(allowed / "dest"), "mode": "update_right"})

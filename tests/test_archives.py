@@ -1,5 +1,6 @@
 """7z, RAR and the rest as read-only folders: py7zr and 7-Zip behind the same file system as zip."""
 import os
+import sys
 import subprocess
 import tarfile
 
@@ -285,6 +286,7 @@ def test_nanazip_is_found_by_its_own_command_names(monkeypatch):
         assert archives.find_seven_zip() == f"C:/Apps/{name}.exe"
 
 
+@pytest.mark.skipif(sys.platform != "win32", reason="the Store's app aliases exist on Windows only")
 def test_nanazip_is_found_in_the_store_alias_folder_even_off_the_path(monkeypatch, tmp_path):
     aliases = tmp_path / "Microsoft" / "WindowsApps"
     aliases.mkdir(parents=True)

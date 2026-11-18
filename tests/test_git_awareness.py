@@ -87,9 +87,12 @@ def test_a_refresh_asks_git_again(repo_world):
     assert cell(win, "kept.txt") == "Changed"
 
 
-def test_network_drives_only_when_switched_on(world):
+def test_network_drives_only_when_switched_on(world, monkeypatch):
     win, *_ = world
     share = chr(92) * 2 + "server" + chr(92) + "share" + chr(92) + "project"
+    if os.name != "nt":                         # a \\server path is a network path on Windows only; elsewhere the mount list says so
+        from dossier.gui import git_awareness
+        monkeypatch.setattr(git_awareness, "is_network_path", lambda p: p == share)
     win.settings.setValue("git/network", "false")
     assert not win.left.git_allowed(share) and win.left.git_allowed(os.path.expanduser("~"))
     assert not win.act_git_network.isChecked()

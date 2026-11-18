@@ -232,6 +232,7 @@ def test_markers_that_are_empty_on_purpose_are_not_reported(tmp_path):
     assert found == {("empty.dat", "empty-file")}
 
 
+@pytest.mark.skipif(os.name != "nt", reason="links to \\\\server shares and drive letters exist on Windows only")
 def test_a_link_to_a_drive_or_share_that_is_not_there_is_never_offered_for_deletion(monkeypatch):
     from dossier.core import health_rules
     b = chr(92)

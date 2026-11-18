@@ -173,8 +173,7 @@ def test_widening_a_column_narrows_name_and_name_keeps_a_minimum(world):
     name, size = columns.index_of("name"), columns.index_of("size")
     before = h.sectionSize(name)
     h.resizeSection(size, h.sectionSize(size) + 60)
-    pump(win, lambda: h.sectionSize(name) < before)
-    assert _fits(win.left)
+    pump(win, lambda: h.sectionSize(name) < before and _fits(win.left))   # Linux lays out in more steps: wait for the last one
     h.resizeSection(size, 2000)                          # far wider than the panel: Name stops at its minimum, scrollbar back
     pump(win, lambda: win.left._fit_squeezed)
     assert h.sectionSize(name) >= win.left.NAME_MIN

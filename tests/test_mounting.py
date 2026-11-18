@@ -91,7 +91,8 @@ def test_an_smb_share_without_mounting_is_just_saved_on_the_home_page(world, mon
     win.mount_runner = lambda *a, **k: pytest.fail("must not mount")
     answer(win, monkeypatch, SMB, "//nas/media", mount=False)
     win.add_network_share()
-    assert win._saved_list("home/network") == [B * 2 + "nas" + B + "media"] and "Saved" in win.status.text()
+    kept = B * 2 + "nas" + B + "media" if sys.platform == "win32" else "//nas/media"     # each system's own form of the address
+    assert win._saved_list("home/network") == [kept] and "Saved" in win.status.text()
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="the commands are built for Windows")

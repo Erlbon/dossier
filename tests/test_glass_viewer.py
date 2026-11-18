@@ -1,4 +1,6 @@
 """The glass picture viewer: the look it ends up with, stepping through pictures, the floating bar, ``dossier view``, and the settings."""
+import sys
+
 import pytest
 
 pytest.importorskip("PyQt6")
@@ -131,7 +133,8 @@ def test_pictures_around_lists_the_folder_in_natural_order_with_the_place_of_the
     paths, index = pictures_around(str(tmp_path / "img2.png"))
     assert [p.rsplit("\\", 1)[-1].rsplit("/", 1)[-1] for p in paths] == ["img1.png", "img2.png", "img10.png"] and index == 1
     assert pictures_around(str(tmp_path / "missing.png")) == ([str(tmp_path / "missing.png")], 0)
-    assert pictures_around(str(tmp_path / "IMG2.PNG"))[1] == 1                         # the case of the name does not matter
+    if sys.platform == "win32":                                    # names are never assumed case-insensitive elsewhere (CLAUDE.md)
+        assert pictures_around(str(tmp_path / "IMG2.PNG"))[1] == 1                     # the case of the name does not matter
 
 
 def test_the_folder_of_pictures_is_found_in_one_place_only():

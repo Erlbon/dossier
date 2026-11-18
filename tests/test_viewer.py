@@ -19,6 +19,7 @@ from dossier.gui.qt_bridge import QtDispatcher  # noqa: E402
 from tests.test_gui_commander import FakeDialogs, key  # noqa: E402,F401
 from tests.helpers import settle as settle_window  # noqa: E402  (this file has its own settle for viewers)
 from dossier.gui.main_window import MainWindow  # noqa: E402
+from dossier.core.platform import FILE_MANAGER_NAME  # noqa: E402
 
 
 @pytest.fixture(scope="module")
@@ -366,7 +367,7 @@ def test_menus_view_has_modes_and_notes_while_settings_has_the_choices(commander
     texts = lambda name: [a.text().split("\t")[0] for a in menus[name].actions() if not a.isSeparator() and a.isVisible()]       # noqa: E731
     assert texts("File") == ["Open", "View", "View as Glass", "Edit", "Rename", "Copy to the Other Panel", "Copy...",
                              "Move to the Other Panel", "Move...", "New", "Change Dates and Attributes...", "Delete", "Delete Permanently",
-                             "Properties", "Show in Explorer", "Quit"]
+                             "Properties", "Show in " + FILE_MANAGER_NAME, "Quit"]
     new = next(a.menu() for a in menus["File"].actions() if a.text() == "New")
     assert [a.text().split("\t")[0] for a in new.actions()] == ["New Folder", "New File...", "New Link..."]
     assert texts("Edit") == ["Undo", "Copy", "Cut", "Paste", "Paste as New File...", "Copy Paths as Text", "Copy Names as Text",
