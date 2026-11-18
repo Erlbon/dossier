@@ -2,6 +2,17 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-19#02 -- Permissions in Properties on the Mac and Linux (card 53A)
+
+- **Properties has a Permissions tab** on the Mac and Linux: the owner and group, and read, write and run for owner, group and
+  others as ticks (a filled square where the items differ; only the ticks you change are applied). "Also for everything inside"
+  for folders, where the folders inside keep their run bits so they stay openable. The group can be set to one of your own
+  groups; the owner is shown but not changed (that needs the administrator, and Dossier never uses sudo).
+- The change is planned on a thread and shown before anything is written (how many items change, old and new modes), then
+  written on a thread with progress and Cancel; items that fail are listed. Special bits (set-user-id, sticky) are never
+  touched. There is no undo, and the question says so. Windows is unchanged.
+- Not run on a real Mac or Linux desktop.
+
 ## 2026-11-19#01 -- Mac apps and packages as one file, Linux launchers and runnable files (card 50A)
 
 - **Mac apps and packages** (Mail.app, a Keynote file, a Photos library) show as one file, "App" or "Package" in the Type

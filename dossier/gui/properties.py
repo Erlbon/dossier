@@ -6,10 +6,10 @@ from __future__ import annotations
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont
-from PyQt6.QtWidgets import (QApplication, QComboBox, QDialog, QDialogButtonBox, QFormLayout, QHBoxLayout, QLabel, QLineEdit,
+from PyQt6.QtWidgets import (QApplication, QCheckBox, QGridLayout, QComboBox, QDialog, QDialogButtonBox, QFormLayout, QHBoxLayout, QLabel, QLineEdit,
                              QPlainTextEdit, QPushButton, QTabWidget, QToolButton, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget)
 
-from ..core import metawrite
+from ..core import metawrite, permissions
 from ..core.filetags import CannotHoldTags, TagChange, apply_change, clean_tags
 from ..core.properties import Gathered, gather
 from .owned_dialog import OwnedDialog
@@ -62,6 +62,11 @@ class PropertiesDialog(OwnedDialog):
         if data.tags or data.tags_reason:
             self.tags_tab = self._tags_tab(data)
             self.tabs.addTab(self.tags_tab, "Tags")
+        self.perm_tab = None
+        self.perm_request = None                           # set by Apply Permissions: a permissions request to plan
+        if data.perm is not None:
+            self.perm_tab = self._permissions_tab(data.perm)
+            self.tabs.addTab(self.perm_tab, "Permissions")
         self.sharing_tab = sharing_tab
         if sharing_tab is not None:
             self.tabs.addTab(sharing_tab, "Sharing")
@@ -74,6 +79,10 @@ class PropertiesDialog(OwnedDialog):
         self.meta_button.setAutoDefault(False)
         self.meta_button.clicked.connect(self._save_metadata)
         buttons.addButton(self.meta_button, QDialogButtonBox.ButtonRole.ActionRole)
+        self.perm_button = QPushButton("Apply Permissions")
+        self.perm_button.setAutoDefault(False)
+        self.perm_button.clicked.connect(self._save_permissions)
+        buttons.addButton(self.perm_button, QDialogButtonBox.ButtonRole.ActionRole)
         self.tabs.currentChanged.connect(self._tab_changed)
         self._tab_changed()                                                         # after addButton: adding re-shows a button
         self.copy_button = QPushButton("Copy All")
@@ -82,7 +91,7 @@ class PropertiesDialog(OwnedDialog):
         buttons.addButton(self.copy_button, QDialogButtonBox.ButtonRole.ActionRole)
         buttons.addButton(QDialogButtonBox.StandardButton.Close)
         buttons.rejected.connect(self.reject)
-        buttons.clicked.connect(lambda b: self.accept() if b not in (self.copy_button, self.save_button, self.meta_button) else None)
+        buttons.clicked.connect(lambda b: self.accept() if b not in (self.copy_button, self.save_button, self.meta_button, self.perm_button) else None)
         layout.addWidget(buttons)
 
     def _tab_changed(self, *_args) -> None:
@@ -90,6 +99,85 @@ class PropertiesDialog(OwnedDialog):
         current = self.tabs.currentWidget()
         self.save_button.setVisible(current is self.tags_tab and bool(self.data.tags) and self.data.tags_can_write)
         self.meta_button.setVisible(current is self.meta_tab and self.meta_tab is not None and not self.data.edit_reason)
+        self.perm_button.setVisible(current is self.perm_tab and self.perm_tab is not None)
+
+    # the Permissions tab (Mac and Linux) ---------------------------------------------------------------------------------
+    def _permissions_tab(self, info) -> QWidget:
+        """Read, write and run for owner, group and others as ticks. A filled square means the items differ (or, for one item, nothing);
+        only a tick that was changed is applied. The owner is shown, not changed (that needs the administrator); the group can be
+        set to one of the user's own groups. Nothing is written here: Apply Permissions asks the window to plan the change first."""
+        page = QWidget()
+        box = QVBoxLayout(page)
+        form = QFormLayout()
+        owner = QLabel(", ".join(info.owners) or "unknown")
+        owner.setToolTip("Only the administrator can give a file to someone else, so the owner is shown here and not changed")
+        form.addRow("Owner", owner)
+        self.group_box = QComboBox()
+        if len(info.groups) == 1:
+            self.group_box.addItem(info.groups[0][1] + "  (now)", -1)
+        else:
+            self.group_box.addItem("(different)  (leave as it is)", -1)
+        for gid, name in info.mine:
+            if not (len(info.groups) == 1 and info.groups[0][0] == gid):
+                self.group_box.addItem(name, gid)
+        self.group_box.setToolTip("You can give an item to a group you belong to")
+        form.addRow("Group", self.group_box)
+        box.addLayout(form)
+        grid = QGridLayout()
+        for col, who in enumerate(permissions.WHO, 1):
+            grid.addWidget(QLabel(who.capitalize()), 0, col)
+        self.perm_boxes: dict = {}
+        self.perm_initial: dict = {}
+        for row, what in enumerate(permissions.WHAT, 1):
+            grid.addWidget(QLabel(what.capitalize()), row, 0)
+            for col, who in enumerate(permissions.WHO, 1):
+                bit = permissions.bit_for(who, what)
+                cb = QCheckBox()
+                cb.setTristate(True)
+                state = {0: Qt.CheckState.Unchecked, 1: Qt.CheckState.PartiallyChecked, 2: Qt.CheckState.Checked}[info.state(bit)]
+                cb.setCheckState(state)
+                cb.setToolTip("Filled square: the items differ; leave as it is. Tick: allow. Empty: do not allow.")
+                cb.stateChanged.connect(self._perm_changed)
+                self.perm_boxes[bit] = cb
+                self.perm_initial[bit] = state
+                grid.addWidget(cb, row, col)
+        box.addLayout(grid)
+        self.perm_inside = QCheckBox("Also for everything inside")
+        self.perm_inside.setToolTip("Folders inside keep their run bit, so they stay openable")
+        self.perm_inside.setVisible(info.folders > 0)
+        box.addWidget(self.perm_inside)
+        self.perm_text = QLabel()
+        self.perm_text.setWordWrap(True)
+        box.addWidget(self.perm_text)
+        box.addStretch(1)
+        self._perm_changed()
+        return page
+
+    def permission_masks(self) -> tuple:
+        """``(on, off)``: the bits the ticks now ask to give and to take away; a tick left as it was asks for nothing."""
+        on = off = 0
+        for bit, cb in self.perm_boxes.items():
+            state = cb.checkState()
+            if state == self.perm_initial[bit]:
+                continue
+            if state == Qt.CheckState.Checked:
+                on |= bit
+            elif state == Qt.CheckState.Unchecked:
+                off |= bit
+        return on, off
+
+    def _perm_changed(self, *_args) -> None:
+        on, off = self.permission_masks()
+        self.perm_text.setText("Nothing changed." if not (on or off) and self.group_box.currentData() == -1
+                               else "Apply Permissions shows what will change before anything is written.")
+
+    def _save_permissions(self) -> None:
+        on, off = self.permission_masks()
+        gid = self.group_box.currentData()
+        if not (on or off) and gid == -1:
+            return
+        self.perm_request = (on, off, gid, self.perm_inside.isChecked() and not self.perm_inside.isHidden())
+        self.accept()
 
     # the tab for the tags inside the file --------------------------------------------------------------------------------
     def _edit_tab(self, data: Gathered) -> QWidget:
@@ -404,12 +492,64 @@ class PropertiesMixin:
                 self._write_tags(list(data.paths), dlg.change)
             if dlg.meta_edits:
                 self._change_metadata(list(data.edit_paths), dlg.meta_edits, data.edit_kind)
+            if dlg.perm_request is not None:
+                self._change_permissions(list(data.perm_paths), *dlg.perm_request)
 
         run_in_background(self, self.cmd_runner, "Reading properties", work, on_result=finished, tracked=self._size_jobs,
                           indeterminate=True, failed_title="Properties")
 
     def _show_properties_dialog(self, dlg) -> None:       # a seam for tests
         dlg.exec()
+
+    def _change_permissions(self, paths: list, on: int, off: int, gid: int, inside: bool) -> None:
+        """Plan the change on a thread, show the plan and ask, then write it on a thread (Mac and Linux)."""
+        def work(progress, cancel):
+            progress(0, 0)
+            return permissions.plan(paths, on, off, gid, recursive=inside, cancel=cancel)
+
+        def planned(plan: list) -> None:
+            will = [c for c in plan if c.changes]
+            problems = [c for c in plan if c.problem]
+            if not will:
+                self._say("Permissions: nothing would change" + (f"; {len(problems)} could not be read" if problems else ""))
+                return
+            lines = [f"{self.fs.basename(c.path) or c.path}: {permissions.format_mode(c.old_mode)} -> {permissions.format_mode(c.new_mode)}"
+                     + (" (group changes)" if c.group_changes else "") for c in will[:8]]
+            if len(will) > 8:
+                lines.append(f"and {len(will) - 8:,} more")
+            text = f"{len(will):,} item{'s' if len(will) != 1 else ''} will change"
+            if len(plan) - len(will) - len(problems):
+                text += f", {len(plan) - len(will) - len(problems):,} stay as they are"
+            if problems:
+                text += f", {len(problems):,} cannot be read"
+            if not self.dialogs.confirm("Change Permissions", text + ":" + chr(10) + chr(10) + chr(10).join(lines) + chr(10) + chr(10)
+                                        + "There is no undo for this.", "Change"):
+                return
+            self._apply_permissions(will)
+
+        run_in_background(self, self.cmd_runner, "Preparing the permissions plan", work, on_result=planned, tracked=self._size_jobs,
+                          indeterminate=True, failed_title="Change Permissions")
+
+    def _apply_permissions(self, plan: list) -> None:
+        def work(progress, cancel):
+            return permissions.apply(plan, cancel, progress)
+
+        def finished(result) -> None:
+            for panel in (self.left, self.right):
+                panel.refresh()
+            if result is None:
+                self._say("Stopped: what was already changed stays changed")
+                return
+            self._say(f"Permissions changed on {result.done:,} item{'s' if result.done != 1 else ''}"
+                      + (f", {len(result.failed)} failed" if result.failed else ""))
+            if result.failed:
+                lines = [f"{self.fs.basename(p)}: {why}" for p, why in result.failed[:8]]
+                if len(result.failed) > 8:
+                    lines.append(f"and {len(result.failed) - 8} more")
+                self.dialogs.info("Change Permissions", chr(10).join(lines))
+
+        run_in_background(self, self.cmd_runner, "Changing permissions", work, on_result=finished, tracked=self._size_jobs,
+                          partial_on_cancel=True, failed_title="Change Permissions")
 
     def _write_tags(self, paths: list, change) -> None:
         """Save the change on every item, on a thread; say what could not be done."""

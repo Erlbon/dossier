@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Optional
 
+from . import permissions
 from .foldersize import folder_sizes, tree_size
 from .platform import IS_WINDOWS, has_scheme
 from .progress import CancelToken
@@ -48,6 +49,8 @@ class Gathered:
     edit_problems: dict = field(default_factory=dict)  # path -> why it cannot be read or changed (the rest can)
     edit_reason: str = ""                           # why nothing can be edited, when that is so
     share_path: str = ""                            # one folder of this computer: the Sharing tab is about it
+    perm: Optional[object] = None                   # a permissions.PermInfo on Mac and Linux (the Permissions tab), else None
+    perm_paths: list = field(default_factory=list)  # the items a permission change is for
 
 
 def kind_of(path: str) -> str:
@@ -214,8 +217,12 @@ def _read_edit(out: Gathered, paths: list) -> None:
         out.edit_values = {}
 
 
-def gather(fs, paths: list, cancel: Optional[CancelToken] = None) -> Gathered:
+def gather(fs, paths: list, cancel: Optional[CancelToken] = None, posix: Optional[bool] = None) -> Gathered:
+    """``posix`` says whether this system has Unix permissions (None: ask the platform); a test sets it."""
     out = one_item(fs, paths[0], cancel) if len(paths) == 1 else many_items(fs, paths, cancel)
     _read_tags(out, paths)
     _read_edit(out, paths)
+    if permissions.is_posix(posix) and paths and len(paths) <= MAX_TAGGED and not any(has_scheme(p) for p in paths):
+        out.perm = permissions.read_info(paths)
+        out.perm_paths = list(paths)
     return out
