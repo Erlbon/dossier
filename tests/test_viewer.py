@@ -380,7 +380,7 @@ def test_menus_view_has_modes_and_notes_while_settings_has_the_choices(commander
     assert texts("Go") == ["Back", "Forward", "Folder History...", "Hotlist...", "Folder Tree...", "Home Page", "Root of the Drive", "Edit the Path",
                            "Pin Folder to Home Page",
                            "Open Cursor Folder in the Other Panel", "Same Folder in the Other Panel", "Swap Panels", "Tabs",
-                           "Drives of Left Panel", "Drives of Right Panel"]
+                           "Drives of Left Panel", "Drives of Right Panel", "Eject This Drive"]
     assert texts("Tools") == ["Search...", "Find Duplicate Files...", "Check Folder Health...", "Compare", "Batch Rename", "Archives", "Checksums",
                               "Quarantine", "Operations", "Terminal Here", "Administrator Terminal Here", "SSH Terminal Here", "Command Line"]
     assert texts("Network") == ["Add Server...", "Disconnect This Panel's Server", "Add Network Share...", "Client for NFS",
