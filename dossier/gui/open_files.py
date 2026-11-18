@@ -7,11 +7,12 @@ The same menu chooses the editor for F4: Dossier's notepad, or a program of the 
 """
 from __future__ import annotations
 
+import json
 import os
 
 from PyQt6.QtGui import QAction, QActionGroup
 
-from ..core import scripts, tools, viewmodes
+from ..core import bundles, scripts, terminals, tools, viewmodes
 from ..core.platform import has_scheme
 from .background import run_in_background
 
@@ -129,6 +130,89 @@ class OpenFilesMixin:
             else:
                 self.run_script(path)
             return True
+        if not alternate and not has_scheme(path):
+            name = os.path.basename(path)
+            if bundles.is_launcher(name, False):
+                self._open_launcher(path)
+                return True
+            if not bundles.WINDOWS and bundles.name_could_run(name):
+                # the run bit decides (Linux and Mac): looked at on a thread, then the usual way when it is no program
+                run_in_background(self, self.cmd_runner, "Opening", lambda progress, cancel: self._run_mode(path),
+                                  on_result=lambda mode: self._runnable_or_plain(path, mode), tracked=self._size_jobs,
+                                  indeterminate=True, failed_title="Open")
+                return True
+        return self._open_file_plain(path, alternate)
+
+    def _run_mode(self, path: str) -> int:
+        """The file's mode (0 when it cannot be read). Called on a thread."""
+        try:
+            return os.stat(path).st_mode
+        except OSError:
+            return 0
+
+    def _runnable_or_plain(self, path: str, mode: int) -> None:
+        if not bundles.is_runnable(os.path.basename(path), False, mode):
+            if not self._open_file_plain(path, False):
+                self._open_with_system(path)
+            return
+        name = os.path.basename(path)
+        answer = self.dialogs.ask_choice(
+            "Run", f"{name} is a program of no known type. What now?",
+            [("run", "Run"), ("terminal", "Run in a Terminal"), ("view", "View")])
+        folder = os.path.dirname(path)
+        if answer == "view":
+            self.view_file([path])
+        elif answer == "run":
+            self._start_program(name, path, folder)
+        elif answer == "terminal":
+            try:
+                self.launch_terminal(terminals.Launch([path], folder))
+            except OSError as e:
+                self.dialogs.info("Run", f"{name} could not be started: {e.strerror or e}")
+            else:
+                self._say(f"Started {name} in a terminal")
+
+    def _start_program(self, name: str, path: str, folder: str) -> None:
+        try:
+            tools.launch(tools.Tool(name, path, ""), [], folder, "", starter=self.tool_starter)
+        except (OSError, tools.BadTool) as e:
+            self.dialogs.info("Start", f"{name} could not be started: {getattr(e, 'strerror', None) or e}")
+        else:
+            self._say(f"Started {name}")
+
+    # launchers (Linux .desktop files): asked once each, as Files' "Trust and Launch" --------------------------------------------
+    def trusted_launchers(self) -> list:
+        try:
+            value = json.loads(str(self.settings.value("open/trusted_launchers", "") or "[]"))
+        except ValueError:
+            return []
+        return [v for v in value if isinstance(v, str)] if isinstance(value, list) else []
+
+    def _open_launcher(self, path: str) -> None:
+        from ..core import desktop_entries
+        run_in_background(self, self.cmd_runner, "Opening", lambda progress, cancel: desktop_entries.read_entry(path),
+                          on_result=lambda app: self._launcher_read(path, app), tracked=self._size_jobs, indeterminate=True,
+                          failed_title="Open")
+
+    def _launcher_read(self, path: str, app) -> None:
+        if app is None or not app.exec:
+            self.view_file([path])                              # not a launcher after all: it is a text file
+            return
+        trusted = self.trusted_launchers()
+        if path not in trusted:
+            answer = self.dialogs.ask_choice(
+                "Start Launcher", f"Start {app.name or os.path.basename(path)}?" + chr(10) + chr(10) + "It runs: " + app.exec
+                + chr(10) + chr(10) + "Only start launchers you trust. Dossier will not ask again for this one.",
+                [("start", "Start"), ("view", "View as Text")])
+            if answer == "view":
+                self.view_file([path])
+                return
+            if answer != "start":
+                return
+            self.settings.setValue("open/trusted_launchers", json.dumps(trusted + [path]))
+        self._start_program(app.name or os.path.basename(path), path, os.path.dirname(path))
+
+    def _open_file_plain(self, path: str, alternate: bool = False) -> bool:
         choice = self.open_choice()
         if choice == "viewer" and not has_scheme(path):
             # the file's first bytes decide (a binary one goes to the system program): read on a thread, then opened from here

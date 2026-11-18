@@ -13,7 +13,7 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QAction
 from PyQt6.QtWidgets import QApplication, QMenu
 
-from ..core import archives, sharing, shellmenu
+from ..core import archives, bundles, sharing, shellmenu
 from ..core.mounting import SMB
 from ..core.platform import FILE_MANAGER_NAME, has_scheme, open_with_command
 from ..core.eject import can_eject
@@ -170,6 +170,8 @@ class ContextMenuMixin:
         cmd = lambda slot, enabled=True: add(None, slot, enabled)   # noqa: E731  a menu-bar command, with its label and keys
         cmd("open_cursor_item")
         if entry.is_dir:
+            if not many and not has_scheme(entry.path) and bundles.is_package(entry.name, True):
+                add("Show Package Contents", lambda: panel.set_folder(entry.path))     # a Mac app is one file; this goes inside
             add("Open in a New Tab", lambda: panel.open_current(new_tab=True), keys="Ctrl+Enter")
             add("Open in the Other Panel", "open_in_other_panel")
             add("Terminal Here", lambda: self.open_terminal(folder=entry.path), enabled=not many, keys=self.keys_of("open_terminal"))

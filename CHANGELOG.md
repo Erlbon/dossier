@@ -2,6 +2,18 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-19#01 -- Mac apps and packages as one file, Linux launchers and runnable files (card 50A)
+
+- **Mac apps and packages** (Mail.app, a Keynote file, a Photos library) show as one file, "App" or "Package" in the Type
+  column: Enter starts or opens them through the system; Ctrl+Enter and the right-click **Show Package Contents** open them as
+  a folder. Copy, move and delete still treat them as the folders they are.
+- **Linux launchers** (`.desktop`) show their own name ("Firefox") and the type "Launcher". Enter starts one after asking once
+  per launcher (Start, View as Text), showing the command it runs; the answer is remembered.
+- **A runnable file of no known type** (the run bit set, a name that says nothing: `install`, `App.AppImage`) asks on Enter:
+  Run, Run in a Terminal or View. Known types keep their rule, so a stick where every file has the run bit asks nothing more.
+  Ctrl+Enter does what it did before.
+- Not run on a real Mac or Linux desktop: tested with the platform switched on in the tests and recorders for the programs.
+
 ## 2026-11-18#14 -- Open With lists the system's programs on the Mac and Linux (card 49A)
 
 - **Open With on Linux** lists the programs the desktop names for the file's type, read straight from the XDG standard (the

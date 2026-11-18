@@ -13,7 +13,7 @@ from PyQt6.QtWidgets import (QAbstractItemView, QApplication, QFrame, QListView,
                              QTabBar, QToolButton,
                              QTableView, QTextBrowser, QVBoxLayout, QWidget)
 
-from ..core import archives, gitinfo, pathparts, zipfs
+from ..core import archives, bundles, gitinfo, pathparts, zipfs
 from ..core.notes import compose_markdown, find_notes
 from ..core.selection import SelectionStore
 from ..core.vfs import Entry, FileSystem
@@ -494,6 +494,8 @@ class _Listing:
                 self.file, path = path, fs.dirname(path)
                 self.path = path
                 self.entries = fs.list(path)
+            if not has_scheme(path):
+                self.entries = bundles.name_launchers(self.entries)     # Linux: a launcher shows its own name (reads files: here)
             if with_notes:
                 self.notes = find_notes(fs, path, self.entries)
         except BaseException as e:           # reported to the panel, never raised in the thread
@@ -928,7 +930,8 @@ class Panel(QFrame):
         self.address_bar.navigate_new_tab.connect(lambda target: self.new_tab(target, activate=False))
         self.address_bar.escaped.connect(lambda: self.view.setFocus())
         self.enter_hook = None         # set by the window: Enter runs a command being written, if there is one
-        self.file_hook = None          # set by the window: Enter on a file (Ctrl+Enter: the other way) goes through the open setting
+        self.package_hook = None       # set by the window: Enter on a Mac package hands it to the system
+        self.file_hook = None        # set by the window: Enter on a file (Ctrl+Enter: the other way) goes through the open setting
         self.backspace_hook = None     # likewise Backspace edits that command instead of going up
         self.table.activate.connect(self._enter)
         self.table.go_up.connect(self._backspace)
@@ -1864,7 +1867,10 @@ class Panel(QFrame):
         entry = self.model.entry_at(row)
         if entry is None:
             return
-        if self._locked_here() and (entry.is_dir or self.model.is_up_row(row)) and entry.kind not in ("header", "action", "tailnet", "server"):
+        hands_off = (not new_tab and self.package_hook is not None and entry.is_dir and not has_scheme(entry.path)
+                     and bundles.is_package(entry.name, True))      # a Mac package goes to the system even in a locked tab
+        if (self._locked_here() and (entry.is_dir or self.model.is_up_row(row)) and not hands_off
+                and entry.kind not in ("header", "action", "tailnet", "server")):
             self.new_tab(entry.path)                 # a locked tab keeps its folder: the other one opens beside it
         elif self.model.is_up_row(row):
             self.go_up()
@@ -1876,6 +1882,8 @@ class Panel(QFrame):
             self.server_requested.emit(entry.path, new_tab)
         elif entry.is_dir and new_tab:
             self.new_tab(entry.path)
+        elif entry.is_dir and self.package_hook is not None and not has_scheme(entry.path) and bundles.is_package(entry.name, True):
+            self.package_hook(entry.path)            # a Mac app or package: the system starts or opens it (Show Package Contents goes in)
         elif entry.is_dir:
             self.set_folder(entry.path)
         elif not has_scheme(entry.path) and entry.path.lower().endswith(archives.FOLDER_EXTENSIONS) and self._dispatch is not None:

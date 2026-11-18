@@ -16,7 +16,7 @@ from PyQt6.QtWidgets import QApplication
 
 from ..core.columns import KEYS as column_keys, LABELS as column_labels, RIGHT_ALIGNED, attributes_text, location_text, type_text
 from ..core.columns import LABEL_COLORS, META_KEYS, label_text, rating_text, when
-from ..core import covers, gitinfo, sharing
+from ..core import bundles, covers, gitinfo, sharing
 from ..core.drives import is_remote_quick
 from ..core.filetypes import DRIVE_ICONS, icon_name
 from ..core.home import HOME_URL, TYPE_NAMES, USER_FOLDER_NOTE
@@ -477,7 +477,7 @@ class FolderModel(QAbstractTableModel):
             return QBrush(highlight)
         if role == Qt.ItemDataRole.DisplayRole:
             if col == 0:
-                return entry.name
+                return bundles.shown_name(entry)
             if self.is_up_row(index.row()):
                 return ""                                # the ".." row says what it is in its name
             if col == 1:
@@ -487,7 +487,7 @@ class FolderModel(QAbstractTableModel):
             if col == 2:
                 return datetime.fromtimestamp(entry.mtime).strftime("%Y-%m-%d %H:%M") if entry.mtime else ""
             if col == 3:
-                return type_text(entry.name, entry.is_dir)
+                return bundles.type_label(entry) or type_text(entry.name, entry.is_dir)
             if col == 4:
                 return when(entry.ctime)
             if col == 5:
@@ -641,6 +641,9 @@ class FolderModel(QAbstractTableModel):
         """Gold for marked items and folders, the quiet text colour for the rest."""
         t = theme.current()
         name = icon_name(entry.name, is_dir=entry.is_dir, is_link=entry.is_link, is_up=is_up)
+        if not is_up and not entry.is_link and (bundles.is_launcher(entry.name, entry.is_dir)
+                                                or (bundles.is_package(entry.name, entry.is_dir) and bundles.is_app(entry.name))):
+            name = "file-settings"                       # a program, as an .exe is
         color = t["marked"] if self.is_marked(entry) else (t["accent"] if entry.is_dir and not is_up else t["dim"])
         icon = icon_set.icon(name, color)
         return with_share_mark(icon) if entry.is_dir and not is_up and sharing.KNOWN.names_for(entry.path) else icon

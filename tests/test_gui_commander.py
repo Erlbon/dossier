@@ -86,6 +86,10 @@ class FakeDialogs:
     def ask_unpack_many(self, count, here):
         return getattr(self, "unpack_answer", "each")
 
+    def ask_choice(self, title, text, choices):
+        self.choices_asked = getattr(self, "choices_asked", []) + [(title, text, [k for k, _l in choices])]
+        return getattr(self, "choice_answer", None)
+
     def show_diff(self, title, header, rows):
         self.diffs = getattr(self, "diffs", []) + [(header, rows)]
 

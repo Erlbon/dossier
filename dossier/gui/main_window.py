@@ -226,6 +226,7 @@ class MainWindow(EjectTrashMixin, FolderTreeMixin, FileColorsMixin, TransferMixi
                 view.type_text.connect(self._type_to_command)
             panel.enter_hook = self._enter_runs_command
             panel.file_hook = self._open_file
+            panel.package_hook = lambda path: self._open_with_system(path)      # looked up when used: a test swaps the seam
             panel.backspace_hook = self._backspace_edits_command
             panel.folder_changed.connect(lambda _p: self._update_prompt())
             panel.folder_changed.connect(lambda _p: self._update_title())

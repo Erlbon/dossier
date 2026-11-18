@@ -327,6 +327,18 @@ class Dialogs:
         box.deleteLater()
         return "each" if box.clickedButton() is each else "here" if box.clickedButton() is into else None
 
+    def ask_choice(self, title: str, text: str, choices: list) -> Optional[str]:
+        """``choices`` is a list of (key, label); returns the key of the button clicked (the first is the default), or None on Cancel."""
+        box = QMessageBox(QMessageBox.Icon.Question, title, text, parent=self.parent)
+        buttons = [(key, box.addButton(label, QMessageBox.ButtonRole.ActionRole)) for key, label in choices]
+        box.addButton(QMessageBox.StandardButton.Cancel)
+        if buttons:
+            box.setDefaultButton(buttons[0][1])
+        box.exec()
+        box.deleteLater()
+        clicked = box.clickedButton()
+        return next((key for key, button in buttons if button is clicked), None)
+
     def ask_mark(self, title: str, pattern: str) -> Optional[tuple]:
         """Mark by Pattern: ``(pattern, criteria)`` (size, date, attributes), or None when cancelled."""
         from .mark_dialog import ask_mark
