@@ -15,6 +15,7 @@ from ..core.columns import DEFAULT_HIDDEN, DEFAULT_ORDER, KEYS, LABELS, LEGACY_K
 HIDDEN_KEY = "view/columns_hidden"
 ORDER_KEY = "view/columns_order"
 KNOWN_KEY = "view/columns_known"      # the columns that existed when the choice was saved
+FIT_KEY = "view/fit_columns"          # View > Fit Columns to Panel, "true"/"false"
 
 
 class ColumnsMixin:
@@ -86,7 +87,22 @@ class ColumnsMixin:
         show_column_header_context_menu(
             self, panel.table, pos, column_order=order, label_lookup=LABELS, protected_columns=PROTECTED,
             hidden_fields=hidden, is_visible=lambda k, h: is_column_visible(k, h, PROTECTED),
-            on_toggle=self._column_toggled, open_column_settings_dialog=self.open_column_settings)
+            on_toggle=self._column_toggled, open_column_settings_dialog=self.open_column_settings,
+            top_actions=[("Fit Columns to Panel", self.act_fit_columns.setChecked, True, self.fit_columns_on())])
+
+    # View > Fit Columns to Panel (the owner's option A, 2026-11-18): one choice for both panels, on by default ---------------
+    def fit_columns_on(self) -> bool:
+        return str(self.settings.value(FIT_KEY, "true")).lower() == "true"
+
+    def set_fit_columns(self, on: bool) -> None:
+        self.settings.setValue(FIT_KEY, "true" if on else "false")
+        self._apply_fit_columns(on)
+        self._say("The columns fit the panel; Name takes the slack" if on
+                  else "The columns keep their widths; the last one stretches")
+
+    def _apply_fit_columns(self, on: bool) -> None:
+        for panel in (self.left, self.right):
+            panel.apply_fit(on)
 
     def open_column_settings(self) -> None:
         """View > Columns...: the shared dialog, plus a Back to the Default Columns button (which closes it)."""

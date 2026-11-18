@@ -862,6 +862,9 @@ class Panel(QFrame):
         header.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)  # right-click: show or hide columns
         header.customContextMenuRequested.connect(self.column_menu_requested.emit)
         header.sectionMoved.connect(self._column_moved)
+        header.sectionResized.connect(self._fit_check_later)
+        self.fit_columns = False          # View > Fit Columns to Panel; the window switches it on (the default) with apply_fit
+        self._fit_squeezed = False        # fitting, but the other columns left Name less than NAME_MIN: Name is fixed, scrollbar
         self.table.setVerticalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
         self.table.setIconSize(QSize(16, 16))
 
@@ -1270,8 +1273,52 @@ class Panel(QFrame):
                 header.setSectionHidden(idx, off)
         finally:
             self._laying_out = False
+        self.apply_fit(self.fit_columns)                      # a layout never undoes the fit's resize modes
         self.refresh_tags()                                   # a tags column may just have been switched on
         self.refresh_meta()                                   # and so may a metadata column
+
+    # Fit Columns to Panel (the owner's option A, 2026-11-18; docs/fit-columns-plan.md) -----------------------------------
+    NAME_MIN = 120                    # Name is never squeezed narrower than this; the scrollbar comes back instead
+
+    def apply_fit(self, on: bool) -> None:
+        """On: the columns share the panel's width and Name takes the slack, so every edge stays on screen. Off: as before, the
+        last column stretches and a scrollbar shows when the columns are too wide."""
+        header = self.table.horizontalHeader()
+        name = column_index("name")
+        self.fit_columns = on
+        self._fit_squeezed = False
+        if on:
+            header.setStretchLastSection(False)
+            header.setSectionResizeMode(name, QHeaderView.ResizeMode.Stretch)
+        else:
+            width = header.sectionSize(name)
+            header.setSectionResizeMode(name, QHeaderView.ResizeMode.Interactive)
+            header.resizeSection(name, max(width, self.NAME_MIN))
+            header.setStretchLastSection(True)
+        self._fit_check_later()
+
+    def _fit_check_later(self, *_args) -> None:
+        if self.fit_columns and not getattr(self, "_fit_pending", False):
+            self._fit_pending = True
+            QTimer.singleShot(0, self._fit_check)
+
+    def _fit_check(self) -> None:
+        """Keep Name at least NAME_MIN wide: when the other columns leave it less, Name stops stretching and the scrollbar shows;
+        when there is room again, Name stretches again."""
+        self._fit_pending = False
+        if not self.fit_columns:
+            return
+        header = self.table.horizontalHeader()
+        name = column_index("name")
+        others = sum(header.sectionSize(i) for i in range(header.count()) if i != name and not header.isSectionHidden(i))
+        room = self.table.viewport().width() - others
+        if not self._fit_squeezed and room < self.NAME_MIN:
+            self._fit_squeezed = True
+            header.setSectionResizeMode(name, QHeaderView.ResizeMode.Interactive)
+            header.resizeSection(name, self.NAME_MIN)
+        elif self._fit_squeezed and room >= self.NAME_MIN:
+            self._fit_squeezed = False
+            header.setSectionResizeMode(name, QHeaderView.ResizeMode.Stretch)
 
     def column_keys_in_order(self) -> list:
         return visual_column_keys(self.table.horizontalHeader(), list(COLUMN_KEYS))
@@ -1991,6 +2038,7 @@ class Panel(QFrame):
         super().resizeEvent(event)
         self.outline.setGeometry(self.rect())
         self.outline.raise_()
+        self._fit_check_later()
         if self.model.note_row >= 0:
             self._place_note()
 

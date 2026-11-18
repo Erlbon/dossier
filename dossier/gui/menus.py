@@ -174,6 +174,14 @@ class MenusMixin:
         self.view_mode_actions["details"] = details
         self.add_view_mode_actions(view_menu, mode_group)              # Thumbnails, Thumbnail Size, Sort By
         view_menu.addAction(self._action("Columns...", None, self.open_column_settings))
+        self.act_fit_columns = QAction("Fit Columns to Panel", self)
+        self.act_fit_columns.setToolTip("On: the columns share the panel's width and Name takes the slack. "
+                                        "Off: the last column stretches, and a scrollbar shows when the columns are too wide")
+        self.act_fit_columns.setCheckable(True)
+        self.act_fit_columns.setChecked(self.fit_columns_on())
+        self.act_fit_columns.toggled.connect(self.set_fit_columns)
+        view_menu.addAction(self.act_fit_columns)
+        self._apply_fit_columns(self.fit_columns_on())
         self.add_layout_actions(view_menu)
         view_menu.aboutToShow.connect(self.sync_mode_actions)            # Thumbnail Size is greyed while the panel shows Details
         view_menu.addSeparator()

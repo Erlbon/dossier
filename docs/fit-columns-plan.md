@@ -1,6 +1,6 @@
-# Fit Columns to Panel (plan, not built)
+# Fit Columns to Panel (built 2026-11-18#05)
 
-Decided by the owner on 2026-11-18: option A, to be built in a fresh thread.
+Decided by the owner on 2026-11-18: option A. Built in build 2026-11-18#05, with the switch in the header menu too (his option A for step 3).
 
 ## The problem
 

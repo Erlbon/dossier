@@ -147,3 +147,68 @@ def test_on_the_home_page_the_columns_choice_is_kept_and_the_page_says_why_nothi
     win.left.set_folder(str(left))
     pump(win, lambda: not win.left.is_home)
     assert "created" in visible(win.left)                               # and the folder shows what was chosen
+
+
+# Fit Columns to Panel (the owner's option A, 2026-11-18) ------------------------------------------------------------------
+def _fits(panel):
+    h = panel.table.horizontalHeader()
+    return h.length() <= panel.table.viewport().width() and not panel.table.horizontalScrollBar().isVisible()
+
+
+def test_fit_columns_is_on_by_default_and_every_edge_stays_on_screen(world):
+    win, *_ = world
+    win.resize(900, 600)
+    pump(win, lambda: _fits(win.left))
+    assert win.fit_columns_on() and win.act_fit_columns.isChecked()
+    h = win.left.table.horizontalHeader()
+    name = columns.index_of("name")
+    assert not h.stretchLastSection() and h.sectionResizeMode(name) == h.ResizeMode.Stretch
+
+
+def test_widening_a_column_narrows_name_and_name_keeps_a_minimum(world):
+    win, *_ = world
+    win.resize(900, 600)
+    pump(win, lambda: _fits(win.left))
+    h = win.left.table.horizontalHeader()
+    name, size = columns.index_of("name"), columns.index_of("size")
+    before = h.sectionSize(name)
+    h.resizeSection(size, h.sectionSize(size) + 60)
+    pump(win, lambda: h.sectionSize(name) < before)
+    assert _fits(win.left)
+    h.resizeSection(size, 2000)                          # far wider than the panel: Name stops at its minimum, scrollbar back
+    pump(win, lambda: win.left._fit_squeezed)
+    assert h.sectionSize(name) >= win.left.NAME_MIN
+    h.resizeSection(size, 80)                            # room again: Name stretches again
+    pump(win, lambda: not win.left._fit_squeezed)
+    assert h.sectionResizeMode(name) == h.ResizeMode.Stretch
+
+
+def test_switching_fit_off_restores_stretch_last_and_is_remembered(world):
+    win, dialogs, left, right, tmp_path = world
+    win.act_fit_columns.setChecked(False)
+    for panel in (win.left, win.right):
+        h = panel.table.horizontalHeader()
+        assert h.stretchLastSection() and h.sectionResizeMode(columns.index_of("name")) == h.ResizeMode.Interactive
+    win._column_toggled("created", True)                 # a new layout keeps the choice
+    assert win.left.table.horizontalHeader().stretchLastSection()
+    from dossier.gui.main_window import MainWindow
+    from tests.test_gui_commander import FakeDialogs
+    again = MainWindow(settings_path=str(tmp_path / "s.ini"), start=(str(left), str(right)), dialogs=FakeDialogs())
+    try:
+        assert not again.fit_columns_on() and not again.act_fit_columns.isChecked()
+        assert again.left.table.horizontalHeader().stretchLastSection()
+    finally:
+        again.close()
+
+
+def test_the_header_menu_offers_the_switch_with_its_tick(world, monkeypatch):
+    from PyQt6.QtWidgets import QMenu
+    win, *_ = world
+    shown = {}
+    monkeypatch.setattr(QMenu, "exec", lambda self, *a: shown.setdefault("menu", self))
+    win._set_active(win.left)
+    win.show_column_menu(win.left, win.left.table.rect().center())
+    entry = next(a for a in shown["menu"].actions() if a.text() == "Fit Columns to Panel")
+    assert entry.isCheckable() and entry.isChecked()
+    entry.trigger()
+    assert not win.fit_columns_on() and not win.act_fit_columns.isChecked()

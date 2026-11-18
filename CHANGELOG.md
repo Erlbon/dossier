@@ -2,6 +2,20 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-18#05 -- View > Fit Columns to Panel
+
+- **The columns can share the panel's width (on by default).** The right-most columns were hard to resize: the last one
+  always filled the panel and had no edge to grab, and columns wider than the panel sat behind a scrollbar. With View > Fit
+  Columns to Panel on, Name takes the slack: widening another column takes the room from Name, so every edge stays on
+  screen. Name never gets narrower than 120 pixels; when the other columns leave less than that, the scrollbar comes back
+  until there is room again. Off: as before. One choice for both panels, kept in the settings (`view/fit_columns`). The
+  switch is also at the top of the column header's right-click menu, with its tick mark (the owner's option A,
+  2026-11-18; plan in `docs/fit-columns-plan.md`).
+- Built with redactor_common 2026-11-18-01, whose header menu can now hold an on/off entry.
+- Tests: `test_fit_columns_is_on_by_default_and_every_edge_stays_on_screen`,
+  `test_widening_a_column_narrows_name_and_name_keeps_a_minimum`,
+  `test_switching_fit_off_restores_stretch_last_and_is_remembered`, `test_the_header_menu_offers_the_switch_with_its_tick`.
+
 ## 2026-11-18#04 -- The frosted background shows the screen in the light scheme too
 
 - **Light-scheme glass keeps the colours behind it.** To keep dark patches from showing under the text, the light scheme lifted each colour
