@@ -8,10 +8,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest]
+        # macOS and Ubuntu added 2026-11-18 (the owner's option A): to see what breaks there before a Mac build is made.
+        # macos-latest is Apple Silicon.
+        os: [windows-latest, ubuntu-latest, macos-latest]
         python: ["3.10", "3.12"]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 8
+    timeout-minutes: 25          # the whole suite takes 4 to 10 minutes on Windows; a first run elsewhere may be slower
     env:
       QT_QPA_PLATFORM: offscreen
     steps:
