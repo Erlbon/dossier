@@ -40,6 +40,6 @@ jobs:
         run: python -m compileall -q dossier tests
 
       - name: Run tests
-        # --timeout: a test that hangs fails on its own with a stack trace, instead of the job running into its time limit
+        # --timeout: a test that hangs stops the run with every stack printed (thread method: a hang inside Qt ignores the signal one), instead of the job running into its time limit
         # with no summary (Ubuntu, the first run on 2026-11-18). -rfE lists every failure and error by name at the end.
-        run: pytest -q -rfE --timeout=180
+        run: pytest -q -rfE --timeout=180 --timeout-method=thread
