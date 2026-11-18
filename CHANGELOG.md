@@ -2,6 +2,25 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-18#12 -- The desktop's shares and phones (card 48A), and Add a Program on the Mac and Linux
+
+- **Shares, phones and cameras mounted by the Linux desktop now appear** on the Home page and in the drive menu (card 48A). GVfs
+  puts them under `/run/user/<id>/gvfs`, which Dossier skipped; each is now listed by a readable name ("media on nas", the
+  phone's name): shares as network drives, so a delete there says it is permanent, phones and cameras as removable. KDE's
+  network folders appear when KDE mounts them through `kio-fuse`.
+- **Network > Mount... works on the Mac and Linux.** The Mac mounts `smb://` and `nfs://` addresses with its own `open`, asking
+  for a login itself (Keychain); Linux hands them to the desktop with `gio mount`. A Linux share that wants a login and has none
+  in the desktop's keyring is offered in a terminal, where gio itself asks. No password passes through Dossier. The box takes
+  `smb://server/share` as well as the Windows form, and has no drive letter off Windows.
+- **Add a Program offers the Mac's apps and the Linux desktop's programs** (review section 5), as the Start menu on Windows:
+  Applications and its folders on the Mac, the application menu's launchers grouped as the menu groups them on Linux, with
+  their icons.
+- **A Mac app on the tools bar starts.** An app is a folder, so it is started through the system's `open -a` (with the files, or
+  `--args`); a Linux launcher (`.desktop`) is started by its own command, in a terminal when it asks for one.
+- New `core/desktop_entries.py` reads the freedesktop standards directly (launchers, `mimeapps.list`, the shared MIME types);
+  Open With (card 49) and the launchers (card 50) build on it.
+- Not run on a real Mac or Linux desktop yet.
+
 ## 2026-11-18#11 -- The desktop's own folders, the Mac's hidden flag, AppleDouble files, attributes kept on a copy
 
 The fixes without a card of the Mac and Linux review (`docs/comparison-review-mac-linux-2026-11-18.md`, section 1.9).

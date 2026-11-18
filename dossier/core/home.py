@@ -18,7 +18,7 @@ from typing import Callable, Optional
 
 from .drive_identity import DriveMemory
 from .lights import LIT_KINDS, OK, UNCHECKED, LightBoard, describe
-from .platform import home_dir, list_volumes, system_cloud_folders, user_folders
+from .platform import home_dir, is_desktop_mount, list_volumes, system_cloud_folders, user_folders
 from .vfs import Entry, FileSystem, NotWritable
 from .listings import FlatFileSystem, FoundFileSystem
 from .sftpfs import SftpFileSystem
@@ -135,6 +135,9 @@ def build_entries(p: HomeProvider) -> list:
         if kind == "network":
             continue
         name = root.rstrip("\\/") if os.sep == "\\" else root
+        if is_desktop_mount(root):                    # a phone or camera the desktop mounted: its name, not its long folder
+            entries.append(_lit(p, Entry(name=label, path=root, is_dir=True, kind=kind, detail=root)))
+            continue
         entries.append(_lit(p, Entry(name=f"{name}  {label}".strip() if label else name, path=root, is_dir=True, kind=kind)))
     entries.append(_header("places"))
     for title, path in place_folders(p):
@@ -148,8 +151,9 @@ def build_entries(p: HomeProvider) -> list:
                                  detail=path if p.exists(path) else f"{path}  (not found)"))
     entries.append(_header("network"))
     for root, label, _kind in network_volumes:
-        name = root.rstrip("\\/") if os.sep == "\\" else root
-        entries.append(_lit(p, Entry(name=name, path=root, is_dir=True, kind="network", detail=label)))
+        desktop = is_desktop_mount(root)              # a share the Linux desktop mounted: its name, with its folder as the detail
+        name = label if desktop else root.rstrip("\\/") if os.sep == "\\" else root
+        entries.append(_lit(p, Entry(name=name, path=root, is_dir=True, kind="network", detail=root if desktop else label)))
     for address in p.network():
         entries.append(_lit(p, Entry(name=address, path=address, is_dir=True, kind="netloc", detail="Saved network location")))
     entries.append(Entry(name="Add a network share...", path=ADD_NETWORK, is_dir=False, kind="action"))

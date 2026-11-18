@@ -186,20 +186,82 @@ def _windows_volumes() -> list:
         kernel32.SetErrorMode(old_mode)
 
 
+_GVFS_REMOVABLE = ("mtp", "gphoto2", "afc", "cdda")            # phones, cameras, iPhones, audio CDs
+_GVFS_NETWORK = ("smb-share", "smb-server", "sftp", "ftp", "ftps", "dav", "davs", "nfs", "afp-volume", "google-drive",
+                 "onedrive", "dns-sd", "network")
+
+
+def _gvfs_value(text: str) -> str:
+    from urllib.parse import unquote
+    return unquote(text)
+
+
+def gvfs_label(name: str) -> tuple:
+    """``(label, kind)`` for one mount in the desktop's GVfs folder, from its name: ``smb-share:server=nas,share=media`` is "media
+    on nas", network; ``mtp:host=SAMSUNG_Galaxy`` is "SAMSUNG Galaxy", removable."""
+    scheme, _, rest = name.partition(":")
+    fields = {}
+    for part in rest.split(","):
+        key, _, value = part.partition("=")
+        if key:
+            fields[key] = _gvfs_value(value)
+    kind = "removable" if scheme in _GVFS_REMOVABLE else "network"
+    if scheme == "smb-share" and "share" in fields:
+        label = f"{fields['share']} on {fields.get('server', '?')}"
+    elif scheme == "google-drive":
+        label = f"Google Drive ({fields.get('user', '')}@{fields.get('host', '')})".replace("(@)", "").strip()
+    elif scheme in _GVFS_REMOVABLE:
+        label = fields.get("host", rest).replace("_", " ")
+    else:
+        where = fields.get("host") or fields.get("server") or rest
+        label = f"{where}{' (' + fields['user'] + ')' if fields.get('user') else ''} ({scheme})"
+    return label, kind
+
+
+def is_desktop_mount(path: str) -> bool:
+    """A share or phone mounted by the Linux desktop (GVfs or KDE's kio-fuse), whose folder name says little: shown by its label."""
+    return "/gvfs/" in path or "/kio-fuse-" in path
+
+
+def gvfs_volumes(folder: str, listdir=os.listdir) -> list:
+    """``(root, label, kind)`` for each share, phone or camera the desktop mounted in its GVfs ``folder``. Reading that folder only
+    lists the mounts: no share is asked anything."""
+    try:
+        names = sorted(listdir(folder))
+    except OSError:
+        return []
+    return [(folder.rstrip("/") + "/" + n, *gvfs_label(n)) for n in names]
+
+
 def _posix_volumes() -> list:
-    out = []
-    seen = set()
     try:
         with open("/proc/mounts", encoding="utf-8", errors="replace") as f:
             lines = f.read().splitlines()
     except OSError:
         lines = []
+    return volumes_from_mounts(lines)
+
+
+def volumes_from_mounts(lines: list, listdir=os.listdir) -> list:
+    """``(root, label, kind)`` from the lines of Linux's mount table (``/proc/mounts``)."""
+    out = []
+    seen = set()
     for line in lines:
         parts = line.split()
         if len(parts) < 3:
             continue
         device, mount, fstype = parts[0], parts[1].replace("\\040", " "), parts[2]
-        if fstype in _PSEUDO_FS or mount in seen:
+        if mount in seen:
+            continue
+        if fstype == "fuse.gvfsd-fuse":                  # the desktop's own mounts: one folder per share, phone or camera
+            seen.add(mount)
+            out += gvfs_volumes(mount, listdir)
+            continue
+        if fstype == "fuse.kio-fuse":                    # KDE's network folders, when it mounts them through FUSE
+            seen.add(mount)
+            out.append((mount, "KDE network folders", "network"))
+            continue
+        if fstype in _PSEUDO_FS:
             continue
         network = fstype.startswith(_NETWORK_FS)
         if not (device.startswith("/dev/") or network) or (mount != "/" and mount.startswith(_SKIP_MOUNT_PREFIXES)):
@@ -209,7 +271,7 @@ def _posix_volumes() -> list:
         out.append((mount, "System" if mount == "/" else os.path.basename(mount), kind))
     if not out and IS_MACOS:
         out.append(("/", "System", "fixed"))
-        for name in sorted(os.listdir("/Volumes")) if os.path.isdir("/Volumes") else []:
+        for name in sorted(listdir("/Volumes")) if os.path.isdir("/Volumes") else []:
             if not os.path.islink(os.path.join("/Volumes", name)):         # the start-up disk's link back to /
                 out.append((os.path.join("/Volumes", name), name, "removable"))
     return out or [("/", "System", "fixed")]

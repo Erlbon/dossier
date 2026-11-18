@@ -14,7 +14,9 @@ import subprocess
 from dataclasses import dataclass
 from typing import Callable, Optional
 
-from .platform import IS_WINDOWS, no_window_flags
+from urllib.parse import quote, unquote
+
+from .platform import IS_MACOS, IS_WINDOWS, no_window_flags
 
 SMB = "smb"
 NFS = "nfs"
@@ -40,7 +42,9 @@ def nfs_client_installed() -> Optional[bool]:
     if IS_WINDOWS:
         root = os.environ.get("SystemRoot") or os.environ.get("windir") or ""
         return bool(root) and os.path.isfile(os.path.join(root, "System32", "mount.exe"))
-    return shutil.which("mount.nfs") is not None
+    if IS_MACOS:
+        return True                                    # the Mac mounts nfs:// itself
+    return shutil.which("gio") is not None or shutil.which("mount.nfs") is not None
 
 
 def free_letters(used: list) -> list:
@@ -54,6 +58,12 @@ def clean_address(protocol: str, text: str) -> str:
 
     SMB: ``\\\\server\\share`` (forward slashes are accepted). NFS: ``\\\\server\\export`` or ``server:/export``."""
     text = (text or "").strip().strip(chr(34))
+    if text.lower().startswith(("smb://", "nfs://")):         # the Mac's and the Linux desktop's form
+        rest = unquote(text.split("://", 1)[1]).strip("/")
+        if protocol == NFS and text.lower().startswith("nfs://"):
+            server, _, export = rest.partition("/")
+            return f"{server}:/{export}" if server else ""
+        text = chr(92) * 2 + rest
     if not text or "://" in text:
         return ""
     back = chr(92)
@@ -68,14 +78,31 @@ def clean_address(protocol: str, text: str) -> str:
     return back * 2 + back.join(parts)
 
 
+def share_url(protocol: str, address: str) -> str:
+    """``address`` (cleaned) as the URL the Mac and the Linux desktop mount by: ``smb://server/share``, ``nfs://server/export``."""
+    if protocol == NFS and not address.startswith(chr(92) * 2):
+        server, _, export = address.partition(":")
+        return f"nfs://{server}{export if export.startswith('/') else '/' + export}"
+    parts = [quote(p) for p in address[2:].split(chr(92)) if p]
+    return f"{protocol}://" + "/".join(parts)
+
+
 def build_command(protocol: str, address: str, letter: str = "") -> list:
-    """The argument list that mounts ``address`` (already cleaned) on ``letter`` ("" = let the system pick, SMB only)."""
+    """The argument list that mounts ``address`` (already cleaned) on ``letter`` ("" = let the system pick, SMB only). On the Mac
+    the system's own ``open smb://...`` mounts it under /Volumes, asking for a password itself (Keychain); on Linux ``gio mount``
+    hands it to the desktop's GVfs, which puts it under /run/user/<id>/gvfs. Neither takes a drive letter."""
     if not IS_WINDOWS:
-        raise OSError("Mounting from Dossier is only built for Windows; mount the share with your system's tools and it "
-                      "will appear here")
+        url = share_url(protocol, address)
+        return ["open", url] if IS_MACOS else ["gio", "mount", url]
     if protocol == NFS:
         return ["mount", "-o", "anon", address, letter or "*"]
     return ["net", "use", letter or "*", address, "/persistent:no"]
+
+
+def wants_login(output: str) -> bool:
+    """Whether a failed mount says the share wants a login (``gio mount`` asks on its own input, which is empty here)."""
+    low = (output or "").lower()
+    return any(word in low for word in ("password", "authentication", "user name", "username", "permission denied", "access denied"))
 
 
 def run_command(argv: list, timeout: int = TIMEOUT, runner: Optional[Callable] = None) -> MountResult:

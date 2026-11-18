@@ -19,7 +19,7 @@ from ..core import startmenu as SM
 from ..core import tools as T
 from ..core import windows_parts
 from ..core.drives import is_network_path
-from ..core.platform import IS_WINDOWS, is_full_path
+from ..core.platform import IS_MACOS, IS_WINDOWS, is_full_path
 from . import frost, icon_set, theme
 from .owned_dialog import OwnedDialog
 from .background import run_in_background
@@ -52,7 +52,9 @@ def _icon_from(spec: str) -> QIcon:
     path, index = windows_parts.icon_spec(spec)
     icon = QIcon()
     try:
-        if path and not is_network_path(path) and is_full_path(path):
+        if not IS_WINDOWS and not is_full_path(spec):              # a Linux launcher's icon: a name in the desktop's icon theme
+            icon = QIcon.fromTheme(spec)
+        elif path and not is_network_path(path) and is_full_path(path):
             if index is None:
                 icon = QFileIconProvider().icon(QFileInfo(path))
             elif IS_WINDOWS:
@@ -88,6 +90,10 @@ def folder_icon() -> QIcon:
     return icon_set.icon("folder", theme.current()["accent"])
 
 
+PICK_TEXT = ("Choose a program from the Start menu, or a part of Windows (System, Network, Security...):" if IS_WINDOWS else
+             "Choose one of your apps:" if IS_MACOS else "Choose a program from the application menu:")
+
+
 class StartMenuDialog(OwnedDialog):
     """The programs of the Windows Start menu as a tree with a search box; choose one, or go on to type the program in by hand."""
 
@@ -99,7 +105,7 @@ class StartMenuDialog(OwnedDialog):
         self.other = False
         self.picked: Optional[SM.Node] = None
         layout = QVBoxLayout(self)
-        layout.addWidget(QLabel("Choose a program from the Start menu, or a part of Windows (System, Network, Security...):"))
+        layout.addWidget(QLabel(PICK_TEXT))
         self.search = QLineEdit()
         self.search.setPlaceholderText("Search")
         self.search.setClearButtonEnabled(True)
@@ -634,7 +640,7 @@ class ToolsBarMixin:
         """Start from the programs of the Windows Start menu (when there is one); "Other program..." goes on to the plain dialog."""
         def work(progress, cancel):
             progress(0, 0)
-            tree = SM.scan(SM.roots(), cancel.check)
+            tree = SM.program_tree(cancel.check)
             if IS_WINDOWS:                                    # System, Network, Security, Device Manager...: not in the Start menu
                 group = windows_parts.windows_group()
                 tree = ([group] if group.children else []) + tree

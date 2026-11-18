@@ -195,8 +195,30 @@ def launch(tool: Tool, files: list, folder: str, other: str, starter: Optional[C
     if IS_WINDOWS:
         os.startfile(tool.command, arguments=subprocess.list2cmdline(argv), cwd=cwd)          # noqa: S606 -- the user's own tool
     else:
-        subprocess.Popen([tool.command, *argv], cwd=cwd, start_new_session=True, stdin=subprocess.DEVNULL)
+        for command in program_commands(tool.command, argv):
+            subprocess.Popen(command, cwd=cwd, start_new_session=True, stdin=subprocess.DEVNULL)
     return argv
+
+
+def program_commands(command: str, argv: list) -> list:
+    """The argument lists that start ``command`` with ``argv`` off Windows. A Mac app (``Mail.app``, a folder) cannot be run
+    directly: the system's ``open -a`` starts it, with the files to open, or ``--args`` when the arguments are not all files. A Linux
+    launcher (``.desktop``) is started by its own command, with ``argv`` as its files, in a terminal when it asks for one. Anything
+    else is run as it is."""
+    if command.rstrip("/").lower().endswith(".app"):
+        if argv and all(os.path.exists(a) for a in argv):
+            return [["open", "-a", command, *argv]]
+        return [["open", "-a", command, *(["--args", *argv] if argv else [])]]
+    if command.lower().endswith(".desktop"):
+        from . import desktop_entries, terminals
+        app = desktop_entries.read_entry(command)
+        if app is None or not app.exec:
+            raise BadTool(f"{os.path.basename(command)} is not a program launcher")
+        commands = desktop_entries.exec_commands(app, argv)
+        if app.terminal:
+            return [terminals.ssh_launch(c, os.path.expanduser("~")).argv for c in commands]
+        return commands
+    return [[command, *argv]]
 
 
 # what could be offered ---------------------------------------------------------------------------------------------------

@@ -8,7 +8,7 @@ import threading
 from dataclasses import dataclass
 from typing import Callable, Optional
 
-from .platform import IS_WINDOWS, has_scheme, home_dir, is_server_path, list_volumes, path_key, strip_longpath
+from .platform import IS_WINDOWS, has_scheme, is_desktop_mount, home_dir, is_server_path, list_volumes, path_key, strip_longpath
 
 
 @dataclass(frozen=True)
@@ -24,6 +24,8 @@ class Drive:
 
 
 def _short_name(root: str, label: str) -> str:
+    if is_desktop_mount(root) and label:
+        return label                                   # "media on nas", not "smb-share:server=nas,share=media"
     if IS_WINDOWS:
         return root.rstrip("\\/")                      # 'D:'
     return "/" if root == "/" else os.path.basename(root.rstrip("/")) or root
@@ -31,7 +33,7 @@ def _short_name(root: str, label: str) -> str:
 
 def list_drives(volumes: Optional[list] = None, home: Optional[str] = None) -> list:
     """Every drive, then the home folder. ``volumes`` and ``home`` are for tests."""
-    drives = [Drive(root, _short_name(root, label), label, kind)
+    drives = [Drive(root, _short_name(root, label), "" if is_desktop_mount(root) else label, kind)
               for root, label, kind in (list_volumes() if volumes is None else volumes)]
     folder = home or home_dir()
     drives.append(Drive(folder, os.path.basename(folder.rstrip("/" + chr(92))) or "Home", "(your folder)", "home"))

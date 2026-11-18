@@ -5,8 +5,14 @@ from PyQt6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, QF
 
 from ..core import mounting, netlogin
 from ..core.drives import list_drives
+from ..core.platform import IS_MACOS, IS_WINDOWS, home_dir
 from .owned_dialog import OwnedDialog
 from .background import run_in_background
+
+OFF_WINDOWS_NOTE = ("No password is typed here. " + (
+    "The Mac mounts the share under /Volumes and asks for a login itself (kept in your Keychain)." if IS_MACOS else
+    "The desktop mounts the share (GVfs) and it appears on the Home page. A share that needs a login and has none saved in the "
+    "desktop's keyring can be mounted in a terminal, where gio itself asks for it."))
 
 
 class MountDialog(OwnedDialog):
@@ -31,6 +37,13 @@ class MountDialog(OwnedDialog):
         form.addRow("", self.mount)
         form.addRow("Drive letter", self.letter)
         layout.addLayout(form)
+        if not IS_WINDOWS:                             # the Mac and Linux mount by address, with no drive letter
+            self.mount.setChecked(True)
+            for widget in (self.mount, self.letter):
+                widget.hide()
+                label = form.labelForField(widget)
+                if label is not None:
+                    label.hide()
         self.note = QLabel()
         self.note.setWordWrap(True)
         layout.addWidget(self.note)
@@ -46,6 +59,11 @@ class MountDialog(OwnedDialog):
 
     def _changed(self, *_args) -> None:
         nfs = self.protocol.currentData() == mounting.NFS
+        if not IS_WINDOWS:
+            self.ok.setText("Mount")
+            self.address.setPlaceholderText("nfs://server/export   or   server:/export" if nfs else "smb://server/share")
+            self.note.setText(OFF_WINDOWS_NOTE)
+            return
         if nfs:                                        # Windows cannot open an NFS share by its address: it must be mounted
             self.mount.setChecked(True)
         self.mount.setEnabled(not nfs)
@@ -86,11 +104,13 @@ class MountMixin:
     def mount_share_with(self, protocol: str, text: str, letter: str = "") -> None:
         address = mounting.clean_address(protocol, text)
         if not address:
-            self.dialogs.info("Mount a Network Share", "That is not a share address. Use the form \\\\server\\share"
+            self.dialogs.info("Mount a Network Share", "That is not a share address. Use the form "
+                              + ("\\\\server\\share" if IS_WINDOWS else "smb://server/share")
                               + (" or server:/export" if protocol == mounting.NFS else "") + ".")
             return
         if protocol == mounting.NFS and not mounting.nfs_client_installed():
-            self.dialogs.info("Mount a Network Share", mounting.NFS_OFF_TEXT)
+            self.dialogs.info("Mount a Network Share", mounting.NFS_OFF_TEXT if IS_WINDOWS else
+                              "This system has no way to mount an NFS share (gio was not found).")
             return
         try:
             argv = mounting.build_command(protocol, address, letter)
@@ -103,6 +123,11 @@ class MountMixin:
             return mounting.run_command(argv, runner=self.mount_runner)
 
         def finished(result) -> None:
+            if not result.ok and not IS_WINDOWS and not IS_MACOS and mounting.wants_login(result.output):
+                if self.dialogs.confirm("Mount a Network Share", f"{address} wants a login.\n\nMount it in a terminal, where gio "
+                                        "asks for the user name and password itself? Dossier never sees them.", "Open a Terminal"):
+                    self.mount_in_terminal(argv)
+                return
             if result.ok:
                 self._say(f"Mounted {address}")
                 for panel in (self.left, self.right):
@@ -113,6 +138,15 @@ class MountMixin:
         run_in_background(self, self.cmd_runner, "Mounting", work, on_result=finished, tracked=self._size_jobs,
                           indeterminate=True, failed_title="Mount a Network Share")
 
+    def mount_in_terminal(self, argv: list) -> None:
+        """Run the mount command in a terminal window, where the system's own tool asks for the login."""
+        from ..core.terminals import default_launcher, ssh_launch
+        try:
+            (self.mount_terminal or default_launcher)(ssh_launch(argv, home_dir()))
+        except (OSError, ValueError) as e:
+            self.dialogs.info("Mount a Network Share", f"No terminal could be opened: {e}")
+
+    mount_terminal = None                                     # tests put a fake terminal launcher here
     mount_runner = None                                       # tests put a fake subprocess.run here
     login_connector = None                                    # tests put a fake (share, hwnd) -> Windows result code here
 
