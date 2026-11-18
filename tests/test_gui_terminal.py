@@ -24,6 +24,13 @@ def app():
     return QApplication.instance() or QApplication([])
 
 
+def types_sudo(launch) -> bool:
+    """The terminal's first command is sudo -s: its own arguments on Linux, the line typed into Terminal or iTerm on the Mac."""
+    if launch.argv[0] == "osascript":
+        return launch.argv[-1].endswith(" && sudo -s")
+    return launch.argv[-2:] == ["sudo", "-s"]
+
+
 class Recorder:
     def __init__(self):
         self.launches = []
@@ -200,7 +207,7 @@ def test_the_administrator_terminal_asks_the_system_to_elevate_and_never_for_a_p
     if IS_WINDOWS:
         assert launch.elevate                      # the UAC prompt, shown by Windows
     else:
-        assert launch.argv[-2:] == ["sudo", "-s"]   # typed inside the terminal
+        assert types_sudo(launch)                   # typed inside the terminal
     assert "Administrator terminal" in win.status.text()
 
 
@@ -244,7 +251,7 @@ def test_right_click_offers_administrator_the_ssh_session_and_the_interpreter(wo
     if IS_WINDOWS:
         assert rec.launches[-1].elevate and rec.launches[-1].cwd == str(left)
     else:
-        assert rec.launches[-1].argv[-2:] == ["sudo", "-s"]
+        assert types_sudo(rec.launches[-1])
     commands = {a.text().replace("&", ""): a.menu() for a in win.menuBar().actions()}["Tools"]
     assert not any("Other Panel" in a.text() for a in commands.actions())
 
@@ -293,7 +300,8 @@ def test_an_interpreter_that_is_not_installed_is_listed_but_cannot_be_chosen(app
         win.close()
 
 
-def test_without_any_interpreter_the_command_line_explains(app, tmp_path):
+def test_without_any_interpreter_the_command_line_explains(app, tmp_path, monkeypatch):
+    monkeypatch.setattr("dossier.core.terminals.find_mac_app", lambda name: None)     # no Terminal.app either
     win = MainWindow(settings_path=str(tmp_path / "s.ini"), start=(str(tmp_path), str(tmp_path)),
                      dialogs=FakeDialogs(), terminal_launcher=Recorder(), which=lambda n: None)
     try:

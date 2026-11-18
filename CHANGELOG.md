@@ -2,6 +2,19 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-18#09 -- Release 0.10 prepared; the last Mac test findings fixed
+
+- **Release 0.10** (the owner, 2026-11-18): `RELEASE = "0.10"`, notes in `docs/releases/v0.10.md`.
+- **A respelled accent renames on the Mac too.** The Health window's fix that turns a decomposed "café" (an "e" and a
+  combining accent) into the composed one hit the same wall as the case renames: the Mac's disk treats both spellings as one
+  file. `platform.is_case_only_change` now also covers a change of Unicode normalization off Windows (NTFS keeps the two
+  spellings apart, so Windows is unchanged).
+- **7-Zip gets a UTF-8 locale** off Windows when the environment names none (an app started from the Mac's Finder): it reads a
+  tar's names by the locale, and "ræd" came out as "r?d".
+- `terminals.detect` looks up the Mac app finder at call time, so a test (or a caller) can replace it.
+- Tests made Mac-aware: the default glass look is dim there, and the administrator terminal on the Mac types `sudo -s` into
+  Terminal rather than taking it as arguments.
+
 ## 2026-11-18#08 -- Ready for a first Mac build (cards 36-44), and a Build workflow for the Mac and Linux
 
 The owner's Mac decisions of 2026-11-18 (cards 35-44, all option A; Linux option A), and what the macOS and Ubuntu test jobs found.

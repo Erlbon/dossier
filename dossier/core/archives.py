@@ -21,7 +21,7 @@ import zipfile
 from dataclasses import dataclass
 from typing import BinaryIO, Optional
 
-from .platform import IS_WINDOWS, no_window_flags
+from .platform import IS_MACOS, IS_WINDOWS, no_window_flags
 
 SEVEN_ZIP_MAGIC = b"7z\xbc\xaf\x27\x1c"
 RAR_MAGICS = (b"Rar!\x1a\x07\x00", b"Rar!\x1a\x07\x01\x00")
@@ -224,6 +224,12 @@ def _quiet() -> dict:
     kwargs: dict = {"stdin": subprocess.DEVNULL}
     if IS_WINDOWS:
         kwargs["creationflags"] = no_window_flags()
+    else:
+        locale = os.environ.get("LC_ALL") or os.environ.get("LC_CTYPE") or os.environ.get("LANG") or ""
+        if "utf-8" not in locale.lower() and "utf8" not in locale.lower():
+            # 7-Zip off Windows reads a tar's names by the locale; without a UTF-8 one (an app started from the Mac's Finder
+            # has none) "ræd" comes out as "r?d"
+            kwargs["env"] = dict(os.environ, LC_ALL="en_US.UTF-8" if IS_MACOS else "C.UTF-8")
     return kwargs
 
 

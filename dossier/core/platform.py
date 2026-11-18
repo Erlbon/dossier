@@ -83,7 +83,8 @@ def path_key(path: str) -> str:
 
 
 def is_case_only_change(old: str, new: str) -> bool:
-    """True when ``old`` and ``new`` differ only in the case of letters and the system sees them as one file, so
+    """True when ``old`` and ``new`` differ only in the case of letters (or, off Windows, in how an accented letter is written:
+    composed or decomposed) and the system sees them as one file, so
     renaming one to the other is a change of spelling, never a clash with another item. Always so on Windows; on
     other systems only where the volume ignores case (macOS's default APFS, a FAT or NTFS stick on Linux), which
     the system itself answers: both names reach the same file."""
@@ -91,7 +92,10 @@ def is_case_only_change(old: str, new: str) -> bool:
         return False
     if IS_WINDOWS:
         return os.path.normcase(old) == os.path.normcase(new)
-    if old.lower() != new.lower():
+    import unicodedata
+    # The Mac's disk also ignores how an accent is written ("e" plus a combining accent, or one "é"): a respelling of either kind
+    # is the same file there.
+    if unicodedata.normalize("NFC", old).lower() != unicodedata.normalize("NFC", new).lower():
         return False
     try:
         return os.path.samefile(old, new)

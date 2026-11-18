@@ -87,9 +87,10 @@ def find_mac_app(name: str) -> Optional[str]:
     return None
 
 
-def detect(profiles: list, which: Which = shutil.which, find_app: Callable[[str], Optional[str]] = find_mac_app) -> list:
+def detect(profiles: list, which: Which = shutil.which, find_app: Optional[Callable[[str], Optional[str]]] = None) -> list:
     """``[(profile, found_path_or_None)]``. A profile whose program is missing is listed, not hidden,
     so the settings can say why it is unavailable."""
+    find_app = find_app or find_mac_app
     return [(p, (find_app(p.program) if p.kind == "macapp" else which(p.program)) if p.program else "custom") for p in profiles]
 
 
