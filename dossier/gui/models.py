@@ -7,7 +7,7 @@ import fnmatch
 import os
 from dataclasses import replace as dc_replace
 from datetime import datetime
-from typing import Optional
+from typing import Callable, Optional
 
 from PyQt6.QtCore import QAbstractTableModel, QModelIndex, Qt
 from PyQt6.QtCore import QPointF, QSize
@@ -373,6 +373,27 @@ class FolderModel(QAbstractTableModel):
             if e and self.fs.basename(e.path) == name and not self.is_up_row(r):
                 return r
         return -1
+
+    def neighbours(self, row: int) -> Callable[[], list]:
+        """The names a cursor on ``row`` would move to if that item went away: the ones below it in order, then the ones above it
+        from the nearest up (so a cursor on the last item lands on the one before). Taken now, worked out when called: a reload
+        needs them only when the item has gone, and a folder of 100,000 names should not pay for it on every refresh."""
+        rows, at = self._rows, row - (1 if self._up else 0)      # a new listing or sort replaces the list; the names in it stay
+
+        def names() -> list:
+            if at < 0:                                           # on the up row: nothing to keep
+                return []
+            out = [self.fs.basename(e.path) for e in rows]
+            return out[at + 1:] + out[:at][::-1]
+        return names
+
+    def first_row_of(self, names: list) -> int:
+        """The row of the first of ``names`` that is shown, or -1."""
+        start = 1 if self._up else 0
+        rows = {}
+        for i, e in enumerate(self._rows):
+            rows.setdefault(self.fs.basename(e.path), i + start)
+        return next((rows[n] for n in names if n in rows), -1)
 
     # sorting -----------------------------------------------------------------------
     def sort(self, column: int, order: Qt.SortOrder = Qt.SortOrder.AscendingOrder) -> None:

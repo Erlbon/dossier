@@ -715,6 +715,7 @@ class Panel(QFrame):
         self.setObjectName("panel")
 
         self._pending = None            # (listing, path, select) of a slow folder being opened
+        self._landing = None            # (path, names) on a reload: where the cursor goes if its item is gone
         self._poll = QTimer(self)
         self._poll.setInterval(40)
         self._poll.timeout.connect(self._poll_pending)
@@ -1092,6 +1093,8 @@ class Panel(QFrame):
         pending. ``file_ok`` (a path typed into the address): a file shows its folder with the cursor on it, and
         ``file_entered`` asks the window to view it."""
         self._cancel_navigation()
+        same = select and path == self.model.path and select == self.current_name()
+        self._landing = (path, self.model.neighbours(self.table.currentIndex().row())) if same else None
         listing = _Listing(self.fs, path, self.notes_enabled and not is_home(path), allow_file=file_ok)
         if listing.done.wait(NAV_BUDGET):
             return self._finish_listing(listing, path, select)
@@ -1504,6 +1507,9 @@ class Panel(QFrame):
         self.note_paths = [n.path for n in listing.notes] if self.notes_enabled and not is_home(path) else []
         self._show_note(self._note_text)
         row = self.model.row_of(select) if select else -1
+        landing, self._landing = self._landing, None
+        if row < 0 and landing is not None and landing[0] == path:    # the item under the cursor went (moved, deleted): the next one
+            row = self.model.first_row_of(landing[1]())
         if row < 0 and self.is_home and select:                # coming up from a drive or a folder: land on it
             row = next((r for r in range(self.model.entry_count())
                         if self.model.entry_at(r).path.rstrip("\\/") == select.rstrip("\\/")), -1)

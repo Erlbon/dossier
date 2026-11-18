@@ -234,6 +234,25 @@ def test_f6_moves_the_item_under_the_cursor_when_nothing_is_marked(world):
     assert names(win.left) == [".."]
 
 
+def test_after_a_move_the_cursor_stays_in_place_on_the_next_item(world):
+    """The owner works down a folder moving files: the cursor must not jump back to the top."""
+    win, _d, left, right, _t = world
+    for n in ("a", "b", "c", "d", "e"):
+        (left / f"{n}.txt").write_text(n)
+    win.left.refresh()
+    win.left.table.setCurrentIndex(win.left.model.index(win.left.model.row_of("c.txt"), 0))
+    key(win, Qt.Key.Key_Insert)                              # mark c.txt and d.txt
+    key(win, Qt.Key.Key_Insert)
+    win.left.table.setCurrentIndex(win.left.model.index(win.left.model.row_of("c.txt"), 0))
+    key(win, Qt.Key.Key_F6)
+    pump(win, lambda: (right / "d.txt").exists() and win.left.model.row_of("d.txt") < 0)
+    assert win.left.current_name() == "e.txt"
+    win.left.table.setCurrentIndex(win.left.model.index(win.left.model.row_of("e.txt"), 0))
+    key(win, Qt.Key.Key_F6)                                  # the last item: the one before it
+    pump(win, lambda: (right / "e.txt").exists() and win.left.model.row_of("e.txt") < 0)
+    assert win.left.current_name() == "b.txt"
+
+
 def test_conflict_skip_leaves_the_target_untouched(world):
     win, dialogs, left, right, _t = world
     (left / "a.txt").write_text("NEW")

@@ -2,6 +2,12 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-18#01 -- After a move the cursor stays where you were
+
+- **Moving or deleting files no longer throws the cursor back to the top of the folder.** When the item under the cursor is
+  gone after a reload of the same folder, the cursor goes to the next item still there, or to the one before when the last
+  items went. This covers F6, F8, cut and paste, and the automatic refresh. Test: `test_after_a_move_the_cursor_stays_in_place_on_the_next_item`.
+
 ## 2026-11-11#11 -- Built with redactor_common 2026-11-11-01: releasing no longer needs Dossier uninstalled
 
 - **The release gate uses the Dossier installed on this PC** (the owner's option D, 2026-11-11). Before, it refused to run
