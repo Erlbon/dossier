@@ -117,6 +117,7 @@ class OperationQueueMixin:
             keep = select or self.active.current_name()
             self.active.set_folder(self.active.path, select=keep)
             self.other.refresh()
+            self.eject_pending()
             if on_done is not None:                      # whoever asked for the run (the assistant's request) is told how it ended
                 on_done(job)
 
@@ -127,6 +128,7 @@ class OperationQueueMixin:
                            on_progress=progress, on_done=finished, options=options,
                            **({} if self.trasher is None else {"trasher": self.trasher}))
         holder["job"] = job
+        job.paths = tuple(p for op in plan.ops for p in (op.src, op.dst) if p)      # Eject waits for the jobs on its drive
         if self.paused:
             job.token.pause()
         self._jobs.append(job)

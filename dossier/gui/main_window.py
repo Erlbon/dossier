@@ -77,6 +77,7 @@ from .compare_folders import CompareFoldersMixin
 from .servers import ServersMixin
 from .copy_settings import CopySettingsMixin
 from .duplicates import DuplicatesMixin
+from .eject_trash import EjectTrashMixin
 from .folder_layouts import FolderLayoutsMixin
 from .planned_ops import PlannedMixin
 from .queue_resume import QueueResumeMixin
@@ -114,7 +115,7 @@ def about_html() -> str:
             "The full credits are in CREDITS.md.</p>")
 
 
-class MainWindow(FolderTreeMixin, FileColorsMixin, TransferMixin, RemoteEditMixin, FrostMixin, GlassViewMixin, KeysMixin, AutoRefreshMixin, GitAwarenessMixin, MetadataEditMixin, HealthMixin, QuarantineMixin, NewFromContentMixin, TabSetsMixin, CommandCompletionMixin, DatesLinksMixin, ViewModesMixin, ToolsBarMixin, ContextMenuMixin, DragDropMixin, LookMixin, ZipEditMixin, ArchiveCommandsMixin, CopySettingsMixin, AssistantMixin, OpenFilesMixin, MenusMixin, WheelMixin, ToolsBarPlaceMixin, TailnetMixin, CompareFoldersMixin, ServersMixin, DuplicatesMixin, FolderLayoutsMixin, QueueResumeMixin, PlannedMixin, ColumnsMixin, PropertiesMixin, SharingMixin, MountMixin, ChecksumMixin, MarksAndNotesMixin, SearchCommandMixin, BatchRenameMixin, OperationQueueMixin, StallLogMixin, ErrorLogMixin,GoingPlacesMixin, FolderSizesMixin, UnpackMixin, QMainWindow):
+class MainWindow(EjectTrashMixin, FolderTreeMixin, FileColorsMixin, TransferMixin, RemoteEditMixin, FrostMixin, GlassViewMixin, KeysMixin, AutoRefreshMixin, GitAwarenessMixin, MetadataEditMixin, HealthMixin, QuarantineMixin, NewFromContentMixin, TabSetsMixin, CommandCompletionMixin, DatesLinksMixin, ViewModesMixin, ToolsBarMixin, ContextMenuMixin, DragDropMixin, LookMixin, ZipEditMixin, ArchiveCommandsMixin, CopySettingsMixin, AssistantMixin, OpenFilesMixin, MenusMixin, WheelMixin, ToolsBarPlaceMixin, TailnetMixin, CompareFoldersMixin, ServersMixin, DuplicatesMixin, FolderLayoutsMixin, QueueResumeMixin, PlannedMixin, ColumnsMixin, PropertiesMixin, SharingMixin, MountMixin, ChecksumMixin, MarksAndNotesMixin, SearchCommandMixin, BatchRenameMixin, OperationQueueMixin, StallLogMixin, ErrorLogMixin,GoingPlacesMixin, FolderSizesMixin, UnpackMixin, QMainWindow):
     def __init__(self, fs: Optional[FileSystem] = None, *, settings_path: Optional[str] = None, start=(None, None),
                  dialogs=None, trasher=None, terminal_launcher=None, which=None) -> None:
         super().__init__()
@@ -133,7 +134,7 @@ class MainWindow(FolderTreeMixin, FileColorsMixin, TransferMixin, RemoteEditMixi
         self.home_provider = HomeProvider(pins=lambda: self._saved_list("home/pins"),
                                           network=lambda: self._saved_list("home/network"),
                                           servers=lambda: self.server_items(),
-                                          tailnet=lambda: self.tailnet_items(),
+                                          tailnet=lambda: self.tailnet_items(), trash=True,
                                           memory=DriveMemory(load=self._load_seen_drives, save=self._save_seen_drives,
                                                              persist=lambda: self._remember_drives()))
         self.fs = RouterFileSystem(self.fs, HomeFileSystem(self.home_provider))     # home:// and the disk as one
@@ -228,6 +229,7 @@ class MainWindow(FolderTreeMixin, FileColorsMixin, TransferMixin, RemoteEditMixi
             panel.folder_changed.connect(self._remember_sizes)
             panel.message.connect(self._say)
             panel.home_action.connect(self._home_action)
+            panel.drive_bar.eject_requested.connect(lambda d: self.eject_drive(d.path, d.kind, d.title))
             panel.server_requested.connect(lambda path, new_tab, p=panel: self.open_server(path, new_tab, p))
             panel.file_entered.connect(lambda path: self.view_file([path]))      # a file typed into the address: F3 on it
             panel.connect_needed.connect(lambda path, p=panel: self._connect_needed(path, p))
@@ -788,7 +790,9 @@ class MainWindow(FolderTreeMixin, FileColorsMixin, TransferMixin, RemoteEditMixi
         return False
 
     def _home_action(self, path: str) -> None:
-        if path == ADD_NETWORK:
+        if path.startswith("trash:"):
+            self.open_trash()
+        elif path == ADD_NETWORK:
             self.add_network_share()
         elif self._home_server_action(path):
             return
@@ -1115,6 +1119,9 @@ class MainWindow(FolderTreeMixin, FileColorsMixin, TransferMixin, RemoteEditMixi
                           failed_title="New Folder")
 
     def delete(self, permanent: bool = False) -> None:
+        if self.active.path.startswith("trash:"):
+            self.delete_in_trash()                   # what is in the Trash can only go for good
+            return
         if self.active.is_home:
             self.remove_from_home()                  # only shortcuts can go, and only from the page, never the folder
             return

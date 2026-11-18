@@ -16,7 +16,10 @@ from PyQt6.QtWidgets import QApplication, QMenu
 from ..core import archives, sharing, shellmenu
 from ..core.mounting import SMB
 from ..core.platform import FILE_MANAGER_NAME, has_scheme, open_with_command
+from ..core.eject import can_eject
 from ..core.home import is_home
+from ..core.platform import IS_MACOS
+from ..core.trash import TITLE as TRASH_TITLE
 from . import file_clipboard
 from .menus import command_keys, command_label
 from .tailnet import KINDS as TAILNET_KINDS
@@ -64,6 +67,8 @@ class ContextMenuMixin:
         entry = panel.model.entry_at(row) if row >= 0 else None
         if panel.is_home or is_home(panel.path):
             return self._home_menu(panel, entry, row)
+        if panel.path.startswith("trash:"):
+            return self._trash_menu(panel, entry, row)
         if entry is not None and entry.name != ".." and entry.kind not in ("header", "action"):
             return self._item_menu(panel, entry, row)
         return self._empty_menu(panel)
@@ -270,6 +275,24 @@ class ContextMenuMixin:
             add("More Options (Windows Menu)...", lambda: self._windows_menu(panel, here, True))
         return menu
 
+    def _trash_menu(self, panel, entry, row: int = -1) -> QMenu:
+        """Inside the Trash: what was deleted can be looked at, put back, copied out or deleted for good."""
+        menu = QMenu(self)
+        paths = None
+        if entry is not None and entry.name != "..":
+            marked = panel.marked_here()
+            paths = marked if entry.path in marked else [entry.path]
+        add = lambda text, slot, enabled=True: self._entry_action(menu, text, slot, panel, paths, enabled, "", row)  # noqa: E731
+        if paths:
+            add(None, "view_file")
+            add("Put Back", lambda: self.put_back())
+            add(None, "copy")
+            menu.addSeparator()
+            add("Delete for Good...", lambda: self.delete_in_trash())
+            menu.addSeparator()
+        add(f"Empty the {TRASH_TITLE}...", lambda: self.empty_trash())
+        return menu
+
     def _home_menu(self, panel, entry, row: int = -1) -> QMenu:
         menu = QMenu(self)
         add = lambda text, slot, enabled=True: self._entry_action(menu, text, slot, panel, None, enabled, "", row)  # noqa: E731
@@ -295,9 +318,18 @@ class ContextMenuMixin:
                     add("Disconnect", lambda: self.disconnect_server(conn), enabled=live)
                     add("Edit...", lambda: self.edit_server(conn))
                     add("Remove from the Home Page", lambda: self.remove_server(conn))
+            elif entry.kind == "trash":
+                add("Open", panel.open_current)
+                if not IS_MACOS:
+                    add("Open in a New Tab", lambda: panel.open_current(new_tab=True))
+                    menu.addSeparator()
+                    add(f"Empty the {TRASH_TITLE}...", lambda: self.empty_trash())
             else:
                 add("Open", panel.open_current)
                 add("Open in a New Tab", lambda: panel.open_current(new_tab=True))
+                if can_eject(entry.path, entry.kind):
+                    menu.addSeparator()
+                    add("Eject", lambda e=entry: self.eject_drive(e.path, e.kind, e.name.split("  ")[0]))
                 if entry.kind in ("pin", "netloc"):
                     menu.addSeparator()
                     add("Remove from the Home Page", self.remove_from_home)

@@ -25,7 +25,7 @@ from redactor_common.gui.column_order import apply_column_order, visual_column_k
 from ..core.drives import drive_of, is_network_path, probe_async, usage_async
 from ..core.lights import FAILED, OK, describe
 from ..core.home import HOME_URL, is_home
-from ..core.platform import has_scheme, path_key
+from ..core.platform import IS_MACOS, has_scheme, path_key
 from ..core import netlogin
 from ..core.sftpfs import NotConnected
 from . import icon_set, look, theme
@@ -1260,10 +1260,11 @@ class Panel(QFrame):
 
     def _apply_columns(self) -> None:
         """The Home page has its own three columns (name, type, details); folders have the chosen columns."""
-        home = self.is_home
+        home = (self.is_home, self.path.startswith("trash:"))
         if home == getattr(self, "_columns_for_home", None):
             return
         self._columns_for_home = home
+        home = home[0]
         if home:
             for i, w in enumerate((300, 130, 260)):
                 self.table.setColumnWidth(i, w)
@@ -1285,6 +1286,9 @@ class Panel(QFrame):
             apply_column_order(header, list(COLUMN_KEYS[:3]) if self.is_home else order, logical_of)
             for key, idx in logical_of.items():
                 off = (idx > 2) if self.is_home else not is_column_visible(key, hidden, PROTECTED_COLUMNS)
+                if key == "location" and self.path.startswith("trash:"):
+                    off = False                               # the Trash: where each item came from
+
                 header.setSectionHidden(idx, off)
         finally:
             self._laying_out = False
@@ -1866,7 +1870,7 @@ class Panel(QFrame):
             self.go_up()
         elif entry.kind == "header":
             return
-        elif entry.kind in ("action", "tailnet"):
+        elif entry.kind in ("action", "tailnet") or (entry.kind == "trash" and IS_MACOS):
             self.home_action.emit(entry.path)
         elif entry.kind == "server":
             self.server_requested.emit(entry.path, new_tab)

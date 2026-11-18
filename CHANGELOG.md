@@ -2,6 +2,22 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-18#13 -- Eject on all three systems (card 47A) and the Trash as a place (card 46B)
+
+- **Eject.** Removable drives, discs and shares can be ejected from the drive menu (Alt+F1/F2, an Eject submenu), the Home
+  page's right-click menu and Go > Eject This Drive. The Mac uses `diskutil eject` (`unmount` for a share), Linux the desktop's
+  `gio mount --eject`/`--unmount` (`umount` without gio), Windows locks and ejects the volume itself (the documented
+  `DeviceIoControl` steps) or lets go of a mapped drive (`net use X: /delete`). Dossier's own copies to the drive finish first
+  (it says so and ejects when they are done), and a panel showing the drive goes to the Home page so Dossier holds nothing
+  open there. When another program has a file open, the system's reason is shown.
+- **The Trash (the Recycle Bin on Windows) is a place on the Home page.** On Windows and Linux it opens as a read-only folder:
+  each item by its original name, the folder it came from in the Location column and the deletion time as its date, read from
+  the bins' own records (the freedesktop `.trashinfo` files, home and per drive; Windows' `$I` records in the user's own
+  `$Recycle.Bin` folder). Right-click: Put Back (a plan of moves, so a place that is taken now is asked about, and a missing
+  folder is made again), Delete for Good, and Empty the Trash (one question with the count and size; permanent). F8 inside it
+  deletes for good. On the Mac the place opens Finder's Trash, where Put Back works for everything (option B).
+- Not run on a real Mac or Linux desktop; Eject on Windows not tried on a real USB stick yet.
+
 ## 2026-11-18#12 -- The desktop's shares and phones (card 48A), and Add a Program on the Mac and Linux
 
 - **Shares, phones and cameras mounted by the Linux desktop now appear** on the Home page and in the drive menu (card 48A). GVfs

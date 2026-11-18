@@ -18,12 +18,14 @@ from ..core.drives import Drive, drive_of, list_drives, usage_async
 from ..core.filetypes import DRIVE_ICONS
 from . import icon_set, look, theme
 from .models import human_size
+from ..core.eject import can_eject
 
 STYLES = ("menu", "strip")
 
 
 class DriveBar(QObject):
     chosen = pyqtSignal(object)    # a Drive
+    eject_requested = pyqtSignal(object)    # a Drive to eject (card 47A)
 
     def __init__(self, dispatch: Optional[Callable] = None, parent=None) -> None:
         super().__init__(parent)
@@ -99,6 +101,13 @@ class DriveBar(QObject):
                                       self._menu_text(d))
             act.triggered.connect(lambda _c=False, drive=d: self.chosen.emit(drive))
             self._menu_actions[d.path] = act
+        ejectable = [d for d in self.drives if can_eject(d.path, d.kind)]
+        if ejectable:
+            self.menu.addSeparator()
+            eject_menu = self.menu.addMenu("Eject")
+            for d in ejectable:
+                act = eject_menu.addAction(d.title)
+                act.triggered.connect(lambda _c=False, drive=d: self.eject_requested.emit(drive))
 
     def _menu_text(self, d: Drive) -> str:
         free = self._free.get(d.path)

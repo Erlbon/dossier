@@ -501,7 +501,7 @@ class FolderModel(QAbstractTableModel):
             if col == 10:
                 return label_text(self._tag(entry.path)[2])
             if col == 7:
-                return location_text(entry.path, self.fs.dirname)
+                return entry.detail if entry.kind == "trash" else location_text(entry.path, self.fs.dirname)
             if col == SHARED_COL:
                 return self._shared(entry)
             if col == SHARE_COL:
@@ -577,6 +577,8 @@ class FolderModel(QAbstractTableModel):
             return icon_set.icon("home" if entry.note == USER_FOLDER_NOTE else "folder", t["accent"])
         if entry.kind == "pin":
             return icon_set.icon("folder", t["accent"])
+        if entry.kind == "trash":
+            return icon_set.icon("trash", t["dim"])
         if entry.kind == "netloc":
             return icon_set.icon("network", t["dim"])
         if entry.kind == "action":

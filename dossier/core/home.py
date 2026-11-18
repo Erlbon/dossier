@@ -18,7 +18,7 @@ from typing import Callable, Optional
 
 from .drive_identity import DriveMemory
 from .lights import LIT_KINDS, OK, UNCHECKED, LightBoard, describe
-from .platform import home_dir, is_desktop_mount, list_volumes, system_cloud_folders, user_folders
+from .platform import IS_MACOS, home_dir, is_desktop_mount, list_volumes, system_cloud_folders, user_folders
 from .vfs import Entry, FileSystem, NotWritable
 from .listings import FlatFileSystem, FoundFileSystem
 from .sftpfs import SftpFileSystem
@@ -29,7 +29,7 @@ HEADER_PREFIX = "home://#"
 ADD_NETWORK = HEADER_PREFIX + "add-network"
 ADD_SERVER = HEADER_PREFIX + "add-server"
 TAILNET_PREFIX = HEADER_PREFIX + "tailnet/"
-TYPE_NAMES = {"fixed": "Local disk", "removable": "Removable disk", "optical": "Optical disc", "other": "Disk",
+TYPE_NAMES = {"trash": "Trash", "fixed": "Local disk", "removable": "Removable disk", "optical": "Optical disc", "other": "Disk",
               "network": "Network drive", "place": "Folder", "pin": "Pinned folder", "netloc": "Network location", "server": "Server",
               "tailnet": "Tailnet device", "action": "", "header": ""}
 SECTIONS = ("drives", "places", "pins", "network", "servers", "tailnet")
@@ -74,6 +74,7 @@ class HomeProvider:
     servers: Callable[[], list] = lambda: []      # ServerItem objects: the saved servers (nothing is contacted to list them)
     folders: Callable[[str], list] = user_folders    # (title, path) of the user's own folders, by the desktop's own names
     clouds: Callable[[str], list] = system_cloud_folders   # (title, path) of the system's own cloud folders (iCloud Drive)
+    trash: bool = False                           # the Trash place (the window switches it on; tests of other sections leave it out)
     tailnet: Callable[[], list] = lambda: []      # TailnetItem objects, read earlier from the local Tailscale (empty: no section)
     board: LightBoard = None                      # what the panels found out about places (set in __post_init__)
     memory: DriveMemory = None                    # which drive each letter held
@@ -143,6 +144,10 @@ def build_entries(p: HomeProvider) -> list:
     for title, path in place_folders(p):
         entries.append(Entry(name=title, path=path, is_dir=True, kind="place", detail=path,
                              note=USER_FOLDER_NOTE if title == user_folder_name(p.home()) else ""))
+    if p.trash:
+        from .trash import TITLE, TRASH_URL
+        entries.append(Entry(name=TITLE, path=TRASH_URL, is_dir=True, kind="trash",
+                             detail="What was deleted: Put Back or Empty" if not IS_MACOS else "Opens in Finder, where Put Back works"))
     pins = [x for x in p.pins() if x]
     if pins:
         entries.append(_header("pins"))
@@ -226,6 +231,8 @@ class RouterFileSystem(FileSystem):
         self.gdrive = SftpFileSystem("gdrive")        # gdrive://<account>/path: Google Drive, signed in through the browser
         self.flat = FlatFileSystem(self)            # flat://<folder>: every file below a folder, as one list
         self.found = FoundFileSystem(self)            # found://<n>: the result list of a search
+        from .trash import TrashFileSystem
+        self.trash = TrashFileSystem(local)            # trash://: the Trash (the Recycle Bin), read-only
         self.sep = local.sep
         self.case_sensitive = local.case_sensitive
 
@@ -250,6 +257,8 @@ class RouterFileSystem(FileSystem):
             return self.gdrive
         if path.startswith("flat:"):
             return self.flat
+        if path.startswith("trash:"):
+            return self.trash
         return self.found if path.startswith("found:") else self.local
 
     def is_writable(self, path: str) -> bool:

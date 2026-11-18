@@ -250,6 +250,7 @@ class MenusMixin:
         go.addSeparator()
         go.addAction(self._action("Drives of Left Panel", "Alt+F1", lambda: self.left.open_drive_menu()))
         go.addAction(self._action("Drives of Right Panel", "Alt+F2", lambda: self.right.open_drive_menu()))
+        go.addAction(self._action("Eject This Drive", None, self.eject_current_drive))
 
     # Tools ----------------------------------------------------------------------------------------------------------------------
     def _build_tools_menu(self, tools) -> None:
