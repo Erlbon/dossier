@@ -41,6 +41,23 @@ def update_command(args: list) -> bool:
     return "--check-update" in args or "--update" in args or ("--version" in args and "--result-file" in args)
 
 
+FN_NOTE = ("Dossier's commands sit on the F-keys (F5 copies, F6 moves, F7 makes a folder, F8 deletes). On most Mac keyboards these keys "
+           "change the brightness and the sound unless you hold Fn, so press Fn+F5 to copy, and so on.\n\n"
+           "To use them without Fn, switch on \"Use F1, F2, etc. keys as standard function keys\" in System Settings, Keyboard, "
+           "Keyboard Shortcuts, Function Keys.\n\n"
+           "Dossier's other shortcuts follow the Mac: where Windows says Ctrl, press Cmd. Completing a name in the command line is "
+           "Option+Space.")
+
+
+def mac_first_start(window) -> bool:
+    """On a Mac, the first start shows a short note about the F-keys and Fn (card 39), once. True when it was shown."""
+    if str(window.settings.value("mac/fn_note_shown", "false")).lower() == "true":
+        return False
+    window.settings.setValue("mac/fn_note_shown", "true")
+    window.dialogs.info("The F-keys on a Mac", FN_NOTE)
+    return True
+
+
 def main(argv=None) -> int:
     args = list(sys.argv[1:] if argv is None else argv[1:])
     if args[:1] == ["--askpass"]:                   # ssh asking for a password: answered at once, with no window and no checks
@@ -91,6 +108,11 @@ def main(argv=None) -> int:
         probe.setSingleShot(True)
         probe.timeout.connect(lambda: (print("dossier-ready", flush=True), window.close()))
         probe.start(0)
+    else:
+        from ..core.platform import IS_MACOS
+        if IS_MACOS:
+            from PyQt6.QtCore import QTimer
+            QTimer.singleShot(400, lambda: mac_first_start(window))
     return leave(app.exec())
 
 

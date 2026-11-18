@@ -5,6 +5,7 @@
 #
 # The program is one exe: the window, and the command line (dossier ls, find, copy..., dossier mcp) in the same file.
 import os
+import sys
 
 from PyInstaller.utils.hooks import collect_submodules
 
@@ -13,11 +14,17 @@ block_cipher = None
 # DOSSIER_BUILD=folder: the one-folder build the installer ships (dist\dossier\dossier.exe and its _internal folder). It starts in about
 # a second, against 3.4 s for the one-file exe, which unpacks itself at every start (comparison review 2026-11-05, card 2). The default
 # stays the one-file dossier.exe: the portable download, and the file a bare copy's Check for Updates swaps.
-FOLDER = os.environ.get("DOSSIER_BUILD", "") == "folder"
+#
+# On the Mac and on Linux (the hand-started Build workflow, cards 41-43 of 2026-11-18) the build is always a folder: Dossier.app on the
+# Mac, dist/dossier for the Linux tarball. Neither updates itself (43A): Check for Updates links to the newer build.
+MAC = sys.platform == "darwin"
+LINUX = sys.platform.startswith("linux")
+FOLDER = os.environ.get("DOSSIER_BUILD", "") == "folder" or MAC or LINUX
 
 # The update framework's channel (redactor_common docs/update-framework.md): how this copy updates itself. The one-file exe carries
 # "windows-exe" inside (it swaps itself); the folder build gets "windows-zip" beside its exe below, which the installer replaces with
-# "windows-installer".
+# "windows-installer". The Linux folder says "linux-tarball" (it cannot replace itself, and says so); the Mac app has no channel the
+# framework knows yet, so it says it cannot tell and links to the release page.
 CHANNEL = os.path.join(workpath, "update-channel")
 if not FOLDER:
     os.makedirs(workpath, exist_ok=True)
@@ -73,10 +80,32 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon="dossier/gui/appicon/dossier.ico",
+    icon="build/dossier.icns" if MAC else "dossier/gui/appicon/dossier.ico",    # the .icns: python tools/make_icons.py --icns build/dossier.icns
 )
 
 if FOLDER:
     coll = COLLECT(exe, a.binaries, a.zipfiles, a.datas, strip=False, upx=False, upx_exclude=[], name="dossier")
-    with open(os.path.join(DISTPATH, "dossier", "update-channel"), "w", encoding="utf-8") as channel:
-        channel.write("windows-zip\n")
+    if not MAC:
+        with open(os.path.join(DISTPATH, "dossier", "update-channel"), "w", encoding="utf-8") as channel:
+            channel.write("linux-tarball\n" if LINUX else "windows-zip\n")
+
+if MAC:
+    sys.path.insert(0, SPECPATH)
+    from dossier.core.version import APP_VERSION, RELEASE
+
+    app = BUNDLE(
+        coll,
+        name="Dossier.app",
+        icon="build/dossier.icns",
+        bundle_identifier="io.github.erlbon.dossier",
+        info_plist={
+            "CFBundleName": "Dossier",
+            "CFBundleDisplayName": "Dossier",
+            "CFBundleShortVersionString": RELEASE,
+            "CFBundleVersion": APP_VERSION.replace("#", "."),
+            "LSMinimumSystemVersion": "11.0",
+            "NSHighResolutionCapable": True,
+            "NSRequiresAquaSystemAppearance": False,          # follow the Mac's light or dark look
+            "NSAppleEventsUsageDescription": "Dossier opens Terminal or iTerm in the folder you choose.",
+        },
+    )

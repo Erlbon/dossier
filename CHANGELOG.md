@@ -2,6 +2,33 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-18#08 -- Ready for a first Mac build (cards 36-44), and a Build workflow for the Mac and Linux
+
+The owner's Mac decisions of 2026-11-18 (cards 35-44, all option A; Linux option A), and what the macOS and Ubuntu test jobs found.
+- **A change of case only renames on the Mac too.** `Beach.JPG` to `Beach.jpg`, batch rename to capitals, `dossier check --fix`
+  and the Health window's rename fixes failed on a Mac: its disk ignores case, as Windows does, but Dossier only knew that on
+  Windows. The system itself is now asked whether both spellings reach the same file (`platform.is_case_only_change`), so it
+  also holds for a FAT or NTFS stick on Linux, and a case-sensitive volume still treats `a` and `A` as two files.
+- **A tar opened through 7-Zip no longer shows `@PaxHeader` entries** (the Mac's 7-Zip lists a tar's extra headers as files).
+- **The drive list on a Mac (36A)** comes from the Mac's own mount list (`getmntinfo`, the call behind `mount`): the start-up
+  disk as /, disks under /Volumes as removable, shares (smbfs, nfs, afpfs, webdav) as network drives, so a delete on a share
+  still says it is permanent. The system's hidden volumes are left out.
+- **Tags on a Mac (37A)** are kept as on Linux and mirrored into Finder's own tags, so they show in Finder; a file tagged in
+  Finder alone shows Finder's tags. A Finder colour (Red, Blue...) given as the colour label becomes Finder's colour tag.
+- **Terminal and iTerm (38A)** are terminal profiles on the Mac (iTerm only when installed). The administrator terminal and an
+  SSH session type their command into a new window (the Mac asks once whether Dossier may control the app).
+- **Keys (39A):** completing a name in the command line is Option+Space on the Mac (Cmd+Space is Spotlight). The first start on
+  a Mac shows a short note about the F-keys and Fn. The notepad's block selection now uses a font that is really fixed width
+  (a proportional one made the block ragged) and handles Alt+Shift (Option+Shift) with the arrows itself.
+- **Frosted glass (40A):** the picture viewer starts with dim glass on the Mac, and both glass settings say why macOS will
+  ask for the Screen Recording permission before it does.
+- **Small gaps (44A):** the creation date stays greyed on the Mac, with a tooltip that says so; no command-line link is offered.
+- **Build workflow** (`.github/workflows/build.yml`, started by hand): a zip of an unsigned Dossier.app for Apple Silicon with a
+  note on Open Anyway (41A, 42A), and a Linux tarball built on Ubuntu 22.04. Neither updates itself (43A): Check for Updates
+  links to the newer build. `tools/make_icons.py --icns` makes the Mac icon from the master SVG at build time.
+- Tests: no longer assume a terminal program on Linux runners, that a small copy reports progress per chunk where the
+  system's own copy reports per 16 MB (Linux), or that a tab bar at 175 percent always has a half row.
+
 ## 2026-11-18#07 -- Fit Columns to Panel works on Linux and macOS too
 
 - **Name now gets its width from Dossier, not from Qt's Stretch mode.** Stretch re-spreads the columns only on some events:

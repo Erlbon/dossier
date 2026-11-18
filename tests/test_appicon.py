@@ -93,3 +93,20 @@ def test_every_window_carries_the_icon(app, tmp_path):
 def test_the_taskbar_id_call_is_harmless_everywhere():
     from dossier.core.platform import set_app_id
     set_app_id("Erlbon.Dossier.Test")
+
+
+def test_the_mac_icon_holds_every_size_as_a_png(app, tmp_path):
+    import sys
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "tools"))
+    import make_icons
+    path = tmp_path / "dossier.icns"
+    make_icons.write_icns(str(path))
+    data = path.read_bytes()
+    assert data[:4] == b"icns" and struct.unpack(">I", data[4:8])[0] == len(data)
+    at, found = 8, []
+    while at < len(data):
+        kind, length = data[at:at + 4].decode("ascii"), struct.unpack(">I", data[at + 4:at + 8])[0]
+        img = QImage.fromData(data[at + 8:at + length])
+        found.append((kind, img.width()))
+        at += length
+    assert found == [(k, s) for k, s in make_icons.ICNS_TYPES]

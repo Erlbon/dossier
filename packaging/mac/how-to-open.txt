@@ -1,0 +1,13 @@
+Dossier for the Mac (Apple Silicon: M1 and later). A first test build: not signed by Apple, and it does not update itself.
+
+The Mac stops an app that Apple has not signed the first time it is opened. To get past that, once:
+1. Unzip, drag Dossier into Applications and open it. The Mac says it cannot check it: click Done.
+2. Open System Settings, then Privacy and Security, scroll down and click Open Anyway beside Dossier.
+3. Click Open (the Mac may ask for your password). From then on Dossier opens like any other app.
+
+Good to know
+- The F-keys (F5 copy, F6 move, F7 new folder, F8 delete) need Fn on most Mac keyboards, unless "Use F1, F2, etc. keys
+  as standard function keys" is on in System Settings, Keyboard. Where Windows says Ctrl, press Cmd.
+- The first time Dossier opens Terminal or iTerm for you, the Mac asks whether Dossier may control it.
+- Help > Check for Updates says whether there is a newer build and links to it; it does not install it.
+- Please write down anything that looks wrong or works differently from what a Mac user expects.

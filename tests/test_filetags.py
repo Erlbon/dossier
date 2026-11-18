@@ -164,6 +164,52 @@ def test_xattr_backend_keeps_the_record_and_the_names_other_tools_read(f):
     assert read_tags(f, b).tags == ["a", "b"]                       # the freedesktop names alone are read as tags
 
 
+class _DictXattrs(filetags.MacXattrBackend):
+    """The Mac backend's logic over a dict instead of the system library, so it is tested everywhere."""
+
+    def __init__(self):
+        self.attrs = {}
+
+    def _get(self, path, name):
+        try:
+            return self.attrs[(path, name)]
+        except KeyError:
+            raise OSError(93, "Attribute not found", path) from None
+
+    def _set(self, path, name, value):
+        self.attrs[(path, name)] = value
+
+    def _remove(self, path, name):
+        if self.attrs.pop((path, name), None) is None:
+            raise OSError(93, "Attribute not found", path)
+
+    def _list(self, path):
+        return [n for p, n in self.attrs if p == path]
+
+
+def test_the_mac_backend_mirrors_the_tags_into_finders_own(f):
+    import plistlib
+    b = _DictXattrs()
+    write_tags(f, Tags(tags=["Work", "2019", "red"], label="Blue", rating=4), b)
+    finder = plistlib.loads(b.attrs[(f, filetags.FINDER_TAGS)])
+    assert finder == ["Work\n0", "2019\n0", "Blue\n4"]              # a colour word as a tag is left to Finder's colour
+    assert read_tags(f, b).rating == 4 and read_tags(f, b).label == "Blue"
+    b.attrs.pop((f, filetags.XATTR))
+    assert read_tags(f, b).tags == ["Work", "2019", "Blue"]         # a file tagged in Finder alone shows Finder's tags
+    write_tags(f, Tags(), b)
+    assert (f, filetags.FINDER_TAGS) not in b.attrs                 # no tags left: Finder's attribute goes too
+    assert filetags.finder_tags_from(b"not a plist") == []
+
+
+@pytest.mark.skipif(sys.platform != "darwin", reason="the Mac's system library")
+def test_the_mac_backend_writes_real_finder_tags(f):
+    b = filetags.default_backend()
+    assert isinstance(b, filetags.MacXattrBackend) and b.can_hold(f)
+    write_tags(f, Tags(tags=["kept"], label="Red"), b)
+    assert filetags.FINDER_TAGS in b._list(f) and read_tags(f, b).tags == ["kept"]
+    assert filetags.finder_tags_from(b._get(f, filetags.FINDER_TAGS)) == ["kept", "Red"]
+
+
 def test_copy_tags_carries_them_and_says_when_it_could_not(tmp_path):
     a, b, c = (str(tmp_path / n) for n in ("a", "b", "c"))
     for p in (a, b, c):

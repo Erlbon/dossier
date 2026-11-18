@@ -1,6 +1,7 @@
 """Tags, a rating, a colour label and a note kept on the file itself (docs/tags-plan.md): in an NTFS alternate data stream
 ``file:dossier`` on Windows, in the extended attribute ``user.dossier`` on Linux (with ``user.xdg.tags`` and
-``user.baloo.rating`` alongside, the names other Linux tools read). No database and no sidecar file.
+``user.baloo.rating`` alongside, the names other Linux tools read), and on macOS in the same attribute with the tags
+mirrored into Finder's own (``com.apple.metadata:_kMDItemUserTags``). No database and no sidecar file.
 
 The record is one small JSON document. Keys this version does not know are kept when it writes, so a newer version never
 loses what an older one saved. Writing never touches the file's own content, so its checksum does not change.
@@ -16,7 +17,7 @@ import stat
 from dataclasses import dataclass, field
 from typing import Optional
 
-from .platform import IS_WINDOWS
+from .platform import IS_MACOS, IS_WINDOWS
 
 STREAM = "dossier"
 XATTR = "user.dossier"
@@ -132,52 +133,165 @@ class StreamBackend:
 
 
 class XattrBackend:
-    """Extended attributes (Linux, and macOS where Python has them)."""
+    """Extended attributes (Linux). The four raw calls are methods, so the Mac's backend can make them through the system
+    library instead (Python on macOS has no ``os.getxattr``)."""
+
+    def _get(self, path: str, name: str) -> bytes:
+        return os.getxattr(path, name)
+
+    def _set(self, path: str, name: str, value: bytes) -> None:
+        os.setxattr(path, name, value)
+
+    def _remove(self, path: str, name: str) -> None:
+        os.removexattr(path, name)
+
+    def _list(self, path: str) -> list:
+        return os.listxattr(path)
 
     def can_hold(self, path: str) -> bool:
         try:
-            os.listxattr(path)
+            self._list(path)
             return True
         except OSError:
             return False
 
     def read(self, path: str) -> Optional[bytes]:
         try:
-            return os.getxattr(path, XATTR)[:MAX_BYTES]
+            return self._get(path, XATTR)[:MAX_BYTES]
         except OSError:
             return None
 
     def write(self, path: str, data: bytes) -> None:
-        os.setxattr(path, XATTR, data)
+        self._set(path, XATTR, data)
 
     def remove(self, path: str) -> None:
         try:
-            os.removexattr(path, XATTR)
+            self._remove(path, XATTR)
+        except OSError:
+            pass
+
+    def _put_or_drop(self, path: str, name: str, value: bytes) -> None:
+        try:
+            if value:
+                self._set(path, name, value)
+            else:
+                self._remove(path, name)
         except OSError:
             pass
 
     # the names other tools read
     def read_xdg(self, path: str) -> list:
         try:
-            raw = os.getxattr(path, XDG_TAGS).decode("utf-8", errors="replace")
+            raw = self._get(path, XDG_TAGS).decode("utf-8", errors="replace")
         except OSError:
             return []
         return [p for p in raw.split(",") if p.strip()]
 
     def write_mirror(self, path: str, t: Tags) -> None:
-        for name, value in ((XDG_TAGS, ",".join(t.tags).encode("utf-8")), (BALOO_RATING, str(t.rating * 2).encode())):
-            try:
-                if value and value != b"0":
-                    os.setxattr(path, name, value)
-                else:
-                    os.removexattr(path, name)
-            except OSError:
-                pass
+        self._put_or_drop(path, XDG_TAGS, ",".join(t.tags).encode("utf-8"))
+        self._put_or_drop(path, BALOO_RATING, str(t.rating * 2).encode() if t.rating else b"")
+
+
+FINDER_TAGS = "com.apple.metadata:_kMDItemUserTags"
+# Finder's colours, by the number it stores after the tag's name ("Work\n4" is a blue tag named Work).
+FINDER_COLOURS = {"gray": 1, "grey": 1, "green": 2, "purple": 3, "blue": 4, "yellow": 5, "red": 6, "orange": 7}
+
+
+def finder_tags_from(data: bytes) -> list:
+    """The tag names in Finder's attribute (a binary property list of ``"name\\ncolour"`` strings); bad data gives none."""
+    import plistlib
+    try:
+        items = plistlib.loads(data)
+    except Exception:                                 # plistlib raises several kinds on damaged data
+        return []
+    return [str(i).split("\n")[0] for i in items if isinstance(i, str) and i.split("\n")[0].strip()] if isinstance(items, list) else []
+
+
+def finder_tags_bytes(t: Tags) -> bytes:
+    """``t`` as Finder's attribute: each tag without a colour, and the colour label as Finder's own colour tag when it is one
+    of Finder's seven ("Red", "Blue"...). Empty when there is nothing to show."""
+    import plistlib
+    items = [f"{tag}\n0" for tag in t.tags if tag.casefold() not in FINDER_COLOURS]
+    colour = FINDER_COLOURS.get(t.label.casefold())
+    if colour:
+        items.append(f"{t.label.capitalize()}\n{colour}")
+    return plistlib.dumps(items, fmt=plistlib.FMT_BINARY) if items else b""
+
+
+class MacXattrBackend(XattrBackend):
+    """Extended attributes on macOS, through the system library. The record lives in ``user.dossier`` as on Linux; the tags
+    are mirrored into Finder's own tags, so they show (and can be searched) in Finder, and Finder's tags are read when a
+    file has no record of Dossier's."""
+
+    def __init__(self) -> None:
+        import ctypes
+        import ctypes.util
+        self._ct = ctypes
+        lib = ctypes.CDLL(ctypes.util.find_library("c"), use_errno=True)
+        self._getxattr = lib.getxattr
+        self._getxattr.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_void_p, ctypes.c_size_t, ctypes.c_uint32, ctypes.c_int]
+        self._getxattr.restype = ctypes.c_ssize_t
+        self._setxattr = lib.setxattr
+        self._setxattr.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_void_p, ctypes.c_size_t, ctypes.c_uint32, ctypes.c_int]
+        self._setxattr.restype = ctypes.c_int
+        self._removexattr = lib.removexattr
+        self._removexattr.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_int]
+        self._removexattr.restype = ctypes.c_int
+        self._listxattr = lib.listxattr
+        self._listxattr.argtypes = [ctypes.c_char_p, ctypes.c_void_p, ctypes.c_size_t, ctypes.c_int]
+        self._listxattr.restype = ctypes.c_ssize_t
+
+    def _fail(self, path: str):
+        err = self._ct.get_errno()
+        return OSError(err, os.strerror(err), path)
+
+    def _get(self, path: str, name: str) -> bytes:
+        p, n = os.fsencode(path), name.encode("utf-8")
+        size = self._getxattr(p, n, None, 0, 0, 0)
+        if size < 0:
+            raise self._fail(path)
+        buf = self._ct.create_string_buffer(max(size, 1))
+        got = self._getxattr(p, n, buf, size, 0, 0)
+        if got < 0:
+            raise self._fail(path)
+        return buf.raw[:got]
+
+    def _set(self, path: str, name: str, value: bytes) -> None:
+        if self._setxattr(os.fsencode(path), name.encode("utf-8"), value, len(value), 0, 0) != 0:
+            raise self._fail(path)
+
+    def _remove(self, path: str, name: str) -> None:
+        if self._removexattr(os.fsencode(path), name.encode("utf-8"), 0) != 0:
+            raise self._fail(path)
+
+    def _list(self, path: str) -> list:
+        size = self._listxattr(os.fsencode(path), None, 0, 0)
+        if size < 0:
+            raise self._fail(path)
+        buf = self._ct.create_string_buffer(max(size, 1))
+        got = self._listxattr(os.fsencode(path), buf, size, 0)
+        if got < 0:
+            raise self._fail(path)
+        return [n.decode("utf-8", "replace") for n in buf.raw[:got].split(b"\0") if n]
+
+    def read_xdg(self, path: str) -> list:
+        try:
+            return finder_tags_from(self._get(path, FINDER_TAGS))
+        except OSError:
+            return []
+
+    def write_mirror(self, path: str, t: Tags) -> None:
+        self._put_or_drop(path, FINDER_TAGS, finder_tags_bytes(t))
 
 
 def default_backend():
     if IS_WINDOWS:
         return StreamBackend()
+    if IS_MACOS:
+        try:
+            return MacXattrBackend()
+        except (OSError, AttributeError, TypeError):
+            return None
     return XattrBackend() if hasattr(os, "getxattr") else None
 
 

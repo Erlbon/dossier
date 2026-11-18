@@ -107,6 +107,10 @@ below, build, hand it over, fix the rest from his report.
 - **Small gaps (44A):** no creation-date setting (greyed, with a tooltip) and no command-line link in the first build.
 - **Linux at the same time (the owner, option A):** a Linux tarball built in the same hand-started workflow, on Ubuntu 22.04
   (glibc old enough for Debian 12+/Ubuntu 22.04+), no self-update at first. The Windows release tool is unchanged.
+- **Built in 2026-11-18#08:** `gh workflow run build.yml` makes both archives (run page, Artifacts); `dossier.spec` builds
+  Dossier.app on the Mac and a folder with a `linux-tarball` channel on Linux. The Mac app has no update channel the framework
+  knows, so Check for Updates says it cannot tell how it was installed and links to the release page (a `macos-app` channel in
+  redactor_common would word it better). Case-insensitive volumes are asked of the system (`platform.is_case_only_change`).
 
 ## Open items
 - Icon sets are swappable (Settings > Appearance > Icon Set, user sets in the settings folder `icon-sets`). Tabler and Lucide draw the ebook and comic glyphs the other way round (Tabler `book` is open, Lucide `book` is closed): a set's manifest `map` fixes that per set; a Preferences page for per-file-type icon overrides is a possible later step (user, 2026-10-19).

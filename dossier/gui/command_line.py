@@ -6,6 +6,13 @@ import os
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import QApplication, QLineEdit, QListWidget, QListWidgetItem
 
+from ..core.platform import IS_MACOS
+
+
+def option_only(event) -> bool:
+    """Option (Qt's Alt) and no other modifier: the Mac's completion key."""
+    return (event.modifiers() & ~Qt.KeyboardModifier.KeypadModifier) == Qt.KeyboardModifier.AltModifier
+
 POPUP_ROWS = 10
 MAX_HISTORY = 500                      # commands kept in memory for Up and the history list: a window open for weeks stays small
 
@@ -69,7 +76,7 @@ class ChoicePopup(QListWidget):
 
 class CommandLine(QLineEdit):
     """A line edit with this session's history on Up and Down (kept in memory only: what a user types is theirs, and a history file is
-    opt-in), a list of the history under Ctrl+Down, completion of names under Ctrl+Space (the window finds the names on a thread and
+    opt-in), a list of the history under Ctrl+Down, completion of names under Ctrl+Space (Option+Space on the Mac; the window finds the names on a thread and
     hands them to ``apply_completion``), Esc to clear and give the panel back its focus, and Tab to go back to the panel."""
 
     escape_pressed = pyqtSignal()
@@ -164,8 +171,8 @@ class CommandLine(QLineEdit):
             self.escape_pressed.emit()
         elif key in (Qt.Key.Key_Tab, Qt.Key.Key_Backtab):
             self.tab_pressed.emit()
-        elif ctrl and key == Qt.Key.Key_Space:
-            self.complete_requested.emit()
+        elif key == Qt.Key.Key_Space and (option_only(event) if IS_MACOS else ctrl):
+            self.complete_requested.emit()          # Option+Space on the Mac, where Cmd+Space is Spotlight (card 39)
         elif ctrl and key == Qt.Key.Key_Down:
             self.show_history()
         elif key == Qt.Key.Key_Up and self.history:

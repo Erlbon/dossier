@@ -127,6 +127,13 @@ def test_the_7zip_listing_parser_reads_blocks_and_skips_the_archive_itself():
     assert members[1].ref == "docs\\one.txt" and members[1].mtime > 0 and members[2].mtime == 0.0
 
 
+def test_the_listing_parser_hides_a_tars_own_headers():
+    # The Mac's 7-Zip lists a tar's PAX and long-name headers as if they were files.
+    text = "\n".join(["Path = @PaxHeader", "Size = 30", "", "Path = docs/@PaxHeader", "Size = 30", "",
+                      "Path = @LongLink", "Size = 300", "", "Path = readme.txt", "Size = 5", ""])
+    assert [m.name for m in archives.parse_listing(text)] == ["readme.txt"]
+
+
 # py7zr ----------------------------------------------------------------------------------------------------
 @needs_py7zr
 def test_7z_made_by_py7zr_is_a_folder_tree(tmp_path):

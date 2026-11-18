@@ -1,4 +1,5 @@
 """Folder tabs in each panel, and the window title that names the subject."""
+import math
 import os
 
 import pytest
@@ -448,7 +449,9 @@ def test_the_current_tab_has_no_faint_row_at_its_foot_at_a_fractional_display_sc
     painter.end()
     r = p.tabs.tab_outline(0)
     x = int((r.left() + r.width() / 2) * ratio)
-    last_row = int(height * ratio)                                   # the device row that is only partly inside
+    # the last device row that is at least partly inside (only partly when height * ratio is fractional; with another
+    # system's fonts the height can come out whole, and then the row below is outside the widget altogether)
+    last_row = math.ceil(height * ratio) - 1
     got = img.pixelColor(x, last_row)
     want = QColor(theme.tab_colors()["active_fill"])
     assert (got.red(), got.green(), got.blue()) == (want.red(), want.green(), want.blue()) and got.alpha() == 255

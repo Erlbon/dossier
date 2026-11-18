@@ -144,7 +144,13 @@ def test_scan_is_lazy_and_matches_list(tmp_path):
 
 
 # copy with progress and cancel ----------------------------------------------------
-def test_copy_file_reports_progress_and_keeps_mtime(tmp_path):
+@pytest.mark.parametrize("system_copy", [True, False])
+def test_copy_file_reports_progress_and_keeps_mtime(tmp_path, monkeypatch, system_copy):
+    # A small file goes through the system's own copy where there is one (Windows' CopyFileExW, Linux's copy_file_range);
+    # Linux's reports once per 16 MB, so only the chunked copy is held to a report per chunk.
+    from dossier.core import fastcopy
+    if not system_copy:
+        monkeypatch.setattr(fastcopy, "fast_copy", lambda *a, **k: False)
     fs = LocalFileSystem()
     src = tmp_path / "s.bin"
     src.write_bytes(b"x" * 10_000)
@@ -154,7 +160,9 @@ def test_copy_file_reports_progress_and_keeps_mtime(tmp_path):
               chunk_size=4096)
     assert (tmp_path / "d.bin").read_bytes() == b"x" * 10_000
     assert seen[-1] == (10_000, 10_000)
-    assert [d for d, _ in seen] == sorted(d for d, _ in seen) and len(seen) >= 3
+    assert [d for d, _ in seen] == sorted(d for d, _ in seen)
+    if not system_copy or not fastcopy.available() or IS_WINDOWS:
+        assert len(seen) >= 3
     assert fs.stat(str(tmp_path / "d.bin")).mtime == pytest.approx(1_000_000_000.0, abs=2)
 
 

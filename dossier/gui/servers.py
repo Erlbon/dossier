@@ -356,7 +356,10 @@ class ServersMixin:
         remote = split_path(folder)[1]
         try:
             argv = sshlink.session_command(conn, self.known_hosts().path, remote)
-            launch = terminals.ssh_launch(argv, os.path.expanduser("~"), windows_terminal=self.windows_terminal, which=self._which)
+            profile = getattr(self, "profile", None)
+            app = profile.program if profile is not None and profile.kind == "macapp" else None      # the Mac: Terminal or iTerm, as chosen
+            launch = terminals.ssh_launch(argv, os.path.expanduser("~"), windows_terminal=self.windows_terminal, emulator=app,
+                                          which=self._which)
             self.launch_terminal(launch)
         except (sshlink.ConnectError, terminals.UnsafeArgument, OSError) as e:
             self.dialogs.info("SSH Terminal", str(e))

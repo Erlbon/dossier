@@ -45,7 +45,8 @@ class FrostDialog(OwnedDialog):
         note = QLabel("The menus, bars and the status line show a blurred picture of your screen, and the title bar gets Windows' own frosted look "
                       "(Windows 11); the file lists stay solid. The picture is taken when Dossier opens, so it does not follow what happens "
                       "behind the window afterwards."
-                      + ("" if available else " This is not available in a remote desktop session."))
+                      + ("" if available else " This is not available in a remote desktop session.")
+                      + (" " + glass.SCREEN_PERMISSION_NOTE if glass.SCREEN_PERMISSION_NOTE else ""))
         note.setWordWrap(True)
         layout.addWidget(note)
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel

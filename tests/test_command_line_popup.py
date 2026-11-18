@@ -106,7 +106,11 @@ def test_ctrl_space_asks_for_completion_and_ctrl_down_shows_the_history(world):
     win, d, left, right, tmp = world
     asked = []
     win.cmdline.complete_requested.connect(lambda: asked.append(1))
-    QTest.keyClick(win.cmdline, Qt.Key.Key_Space, Qt.KeyboardModifier.ControlModifier)
+    from dossier.core.platform import IS_MACOS
+    if IS_MACOS:                                     # Cmd+Space is Spotlight: the Mac completes with Option+Space
+        QTest.keyClick(win.cmdline, Qt.Key.Key_Space, Qt.KeyboardModifier.ControlModifier)
+        assert asked == []
+    QTest.keyClick(win.cmdline, Qt.Key.Key_Space, Qt.KeyboardModifier.AltModifier if IS_MACOS else Qt.KeyboardModifier.ControlModifier)
     assert asked == [1]
     for cmd in ("git status", "dir", "git log", "git status"):
         win.cmdline.remember(cmd)

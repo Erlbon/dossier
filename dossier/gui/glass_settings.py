@@ -53,7 +53,10 @@ class GlassDialog(OwnedDialog):
         self.slider.setEnabled(mode != glass.SOLID)
         self.value_label.setText(f"{self.slider.value()} %" if mode != glass.SOLID else "")
         best = glass.resolve(mode, self.capabilities)
-        self.note.setText("" if best == mode else f"This computer cannot do that look right now ({TITLES[best].split(' (')[0].lower()} will be used).")
+        text = "" if best == mode else f"This computer cannot do that look right now ({TITLES[best].split(' (')[0].lower()} will be used)."
+        if best == glass.FROSTED and glass.SCREEN_PERMISSION_NOTE:
+            text = glass.SCREEN_PERMISSION_NOTE                           # the Mac: say why it will ask, before it asks
+        self.note.setText(text)
 
     def values(self) -> tuple:
         """``(mode, level)``; the level is None for solid."""

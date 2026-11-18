@@ -57,3 +57,24 @@ def test_disk_usage_and_async_callback(tmp_path):
     usage_async([str(tmp_path)], cb)
     assert done.wait(5)
     assert got[str(tmp_path)] is not None and got[str(tmp_path)][0] == usage[0]   # free space may drift
+
+
+def test_the_macs_mount_list_gives_the_system_disk_shares_and_sticks():
+    from dossier.core.drives import is_network_path
+    from dossier.core.platform import mac_volumes
+    local, browse_not, root = 0x1000, 0x00100000, 0x4000
+    mounts = [("apfs", "/", "/dev/disk3s1s1", local | root | 0x1),
+              ("devfs", "/dev", "devfs", local),
+              ("apfs", "/System/Volumes/Data", "/dev/disk3s5", local | browse_not),
+              ("apfs", "/System/Volumes/VM", "/dev/disk3s6", local | browse_not),
+              ("autofs", "/System/Volumes/Data/home", "map auto_home", browse_not),
+              ("msdos", "/Volumes/STICK", "/dev/disk4s1", local),
+              ("smbfs", "/Volumes/media", "//me@nas/media", 0),
+              ("nfs", "/Volumes/backup", "nas:/backup", 0)]
+    vols = mac_volumes(mounts)
+    assert vols == [("/", "System", "fixed"), ("/Volumes/STICK", "STICK", "removable"),
+                    ("/Volumes/media", "media", "network"), ("/Volumes/backup", "backup", "network")]
+    if not IS_WINDOWS:                                       # the "delete is permanent" warning holds for a Mac share
+        drives = list_drives(vols, home="/Users/me")
+        assert is_network_path("/Volumes/media/films/a.mkv", drives)
+        assert not is_network_path("/Users/me/a.txt", drives)

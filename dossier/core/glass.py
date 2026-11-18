@@ -13,9 +13,17 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional
 
+from .platform import IS_MACOS
+
 SOLID, DIM, FROSTED = "solid", "dim", "frosted"
 MODES = (FROSTED, DIM, SOLID)
-DEFAULT_MODE = FROSTED                                   # the owner chose it (2026-10-28) once the blur was our own, not Windows' acrylic
+# The owner chose frosted (2026-10-28) once the blur was our own, not Windows' acrylic. Not on the Mac (card 40): the blur needs a picture
+# of the screen, which there needs the Screen Recording permission, and a new app asking for that at its first start looks like spyware.
+DEFAULT_MODE = DIM if IS_MACOS else FROSTED
+SCREEN_PERMISSION_NOTE = ("On a Mac the frosted look needs a picture of the screen, so the first time it is used macOS asks whether "
+                          "Dossier may record the screen (System Settings, Privacy and Security, Screen Recording). The picture is only "
+                          "blurred and shown behind Dossier's own windows; it is never saved or sent anywhere. Without the permission "
+                          "the Mac shows only the desktop picture.") if IS_MACOS else ""
 DEFAULT_LEVEL = {FROSTED: 65, DIM: 50, SOLID: 0}          # percent of the desktop that shows through
 MAX_LEVEL = 90                                           # never fully clear: the picture and the bar must stay readable
 _ORDER = {FROSTED: (FROSTED, DIM, SOLID), DIM: (DIM, SOLID), SOLID: (SOLID,)}

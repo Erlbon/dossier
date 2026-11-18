@@ -140,8 +140,28 @@ def test_windows_sessions_with_and_without_windows_terminal_and_elevation(monkey
     assert wsl.argv == ["/fake/wsl.exe", "--cd", "/mnt/c/My Work"]
 
 
+def test_mac_sessions_open_terminal_or_iterm_and_admin_types_sudo_there(monkeypatch):
+    monkeypatch.setattr(T, "IS_WINDOWS", False)
+    monkeypatch.setattr(T, "IS_MACOS", True)
+    terminal, iterm = T.MAC_PROFILES[0], T.MAC_PROFILES[1]
+    found = detect(list(T.MAC_PROFILES), which=fake_which(), find_app=lambda n: "/Applications/" + n + ".app" if n == "Terminal" else None)
+    assert [(p.id, bool(path)) for p, path in found][:2] == [("terminal-app", True), ("iterm", False)]   # iTerm only when installed
+    assert default_profile(found).id == "terminal-app"
+    assert session_launch(terminal, "/Users/me/a b").argv == ["open", "-a", "Terminal", "/Users/me/a b"]
+    assert session_launch(iterm, "/srv").argv == ["open", "-a", "iTerm", "/srv"]
+    root = session_launch(iterm, "/Users/me/it's", admin=True)
+    assert root.argv[0] == "osascript" and 'tell application "iTerm"' in root.argv and not root.elevate
+    assert root.argv[-1] == "cd '/Users/me/it'\"'\"'s' && sudo -s"           # the folder is an argument, never AppleScript text
+    shell = session_launch(SH, "/srv", which=fake_which("bash"))             # a shell profile is hosted in Terminal
+    assert 'tell application "Terminal"' in shell.argv and shell.argv[-1] == "cd /srv && /fake/bash -i"
+    ssh = T.ssh_launch(["ssh", "-t", "a@b", "cd /x && exec sh"], "/Users/me", emulator="iTerm")
+    assert 'tell application "iTerm"' in ssh.argv and ssh.argv[-1] == "cd /Users/me && ssh -t a@b 'cd /x && exec sh'"
+    assert run_launch(terminal, "ls -l", "/srv").argv[1:] == ["-c", "ls -l"]  # the command line runs the user's own shell
+
+
 def test_linux_sessions_pick_an_emulator_and_admin_means_sudo_inside_the_terminal(monkeypatch):
     monkeypatch.setattr(T, "IS_WINDOWS", False)
+    monkeypatch.setattr(T, "IS_MACOS", False)
     w = fake_which("bash", "gnome-terminal", "konsole", "xterm")
     normal = session_launch(SH, "/srv/x y", which=w)
     assert normal.argv == ["gnome-terminal", "--working-directory=/srv/x y", "--", "/fake/bash", "-i"]

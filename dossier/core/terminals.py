@@ -18,7 +18,7 @@ import subprocess
 from dataclasses import dataclass, field
 from typing import Callable, Optional
 
-from .platform import IS_WINDOWS
+from .platform import IS_MACOS, IS_WINDOWS
 
 Which = Callable[[str], Optional[str]]
 
@@ -60,20 +60,37 @@ POSIX_PROFILES = (
     Profile("pwsh", "PowerShell 7", "powershell", "pwsh", ("-NoLogo", "-NoExit")),
 )
 EMULATORS = ("x-terminal-emulator", "gnome-terminal", "konsole", "xfce4-terminal", "kitty", "alacritty", "xterm")
+# The Mac's terminal programs are apps, each a profile (card 38): the session is the user's own login shell inside it.
+MAC_PROFILES = (
+    Profile("terminal-app", "Terminal", "macapp", "Terminal"),
+    Profile("iterm", "iTerm", "macapp", "iTerm"),
+    Profile("login-shell", "Login shell (in Terminal)", "posix", os.environ.get("SHELL", "/bin/zsh") or "/bin/zsh", ("-i",)),
+    Profile("pwsh", "PowerShell 7 (in Terminal)", "powershell", "pwsh", ("-NoLogo", "-NoExit")),
+)
+MAC_APP_FOLDERS = ("/System/Applications/Utilities", "/Applications/Utilities", "/Applications", "~/Applications")
 
 
 def builtin_profiles() -> list:
-    return list(WINDOWS_PROFILES if IS_WINDOWS else POSIX_PROFILES)
+    return list(WINDOWS_PROFILES if IS_WINDOWS else MAC_PROFILES if IS_MACOS else POSIX_PROFILES)
 
 
 def custom_profile(template: str, title: str = "Custom") -> Profile:
     return Profile("custom", title, "custom", "", (), template)
 
 
-def detect(profiles: list, which: Which = shutil.which) -> list:
+def find_mac_app(name: str) -> Optional[str]:
+    """The ``.app`` bundle of a Mac program (``Terminal``, ``iTerm``) in the usual folders, or None."""
+    for folder in MAC_APP_FOLDERS:
+        path = os.path.join(os.path.expanduser(folder), name + ".app")
+        if os.path.isdir(path):
+            return path
+    return None
+
+
+def detect(profiles: list, which: Which = shutil.which, find_app: Callable[[str], Optional[str]] = find_mac_app) -> list:
     """``[(profile, found_path_or_None)]``. A profile whose program is missing is listed, not hidden,
     so the settings can say why it is unavailable."""
-    return [(p, which(p.program) if p.program else "custom") for p in profiles]
+    return [(p, (find_app(p.program) if p.kind == "macapp" else which(p.program)) if p.program else "custom") for p in profiles]
 
 
 def default_profile(found: list) -> Optional[Profile]:
@@ -122,6 +139,8 @@ def _dir_in_template(template: str, cwd: str) -> str:
 # running one command (the command line) ------------------------------------------------------------------
 def run_launch(profile: Profile, command: str, cwd: str, which: Which = shutil.which) -> Launch:
     """How to run ``command`` once, with output captured and no console window."""
+    if profile.kind == "macapp":                     # a terminal app runs the user's own shell: so does the command line
+        return Launch([os.environ.get("SHELL") or "/bin/zsh", "-c", command], cwd)
     exe = which(profile.program) or profile.program if profile.program else ""
     if profile.kind == "cmd":
         return Launch(f'{exe or "cmd.exe"} /d /s /c "{command}"', cwd)
@@ -154,6 +173,10 @@ def session_launch(profile: Profile, cwd: str, *, admin: bool = False, windows_t
         if "{dir}" not in profile.template:
             raise UnsafeArgument("the custom profile has no {dir} in its template")
         return Launch(profile.template.replace("{dir}", _dir_in_template(profile.template, cwd)), cwd, admin, "")
+    if profile.kind == "macapp":
+        if not admin:                                # the app opens a window with the login shell in that folder
+            return Launch(["open", "-a", profile.program, cwd], cwd)
+        return mac_terminal_launch(profile.program, cwd, ["sudo", "-s"])
     inner = [exe, *profile.session_args]
     if profile.kind == "wsl":
         inner = [exe, "--cd", to_wsl_path(cwd)]
@@ -176,6 +199,8 @@ def _hosted(inner: list, cwd: str, admin: bool, windows_terminal: Optional[str],
             escaped = [a.replace(";", chr(92) + ";") for a in inner]
             return Launch([windows_terminal, "-d", cwd.replace(";", chr(92) + ";"), *escaped], cwd, admin, windows_terminal)
         return Launch(inner, cwd, admin, exe)
+    if IS_MACOS:
+        return mac_terminal_launch(emulator or "Terminal", cwd, ["sudo", "-s"] if admin else inner)
     name = emulator or next((e for e in EMULATORS if which(e)), "")
     if not name:
         raise UnsafeArgument("no terminal program was found; choose one in the settings")
@@ -189,6 +214,24 @@ def _hosted(inner: list, cwd: str, admin: bool, windows_terminal: Optional[str],
     }
     argv = flags.get(os.path.basename(name), [name, "-e", *(root or inner)])   # xterm and the generic wrapper
     return Launch(argv, cwd, False)
+
+
+_MAC_SCRIPTS = {
+    # The command line comes in as the script's argument, never inside its text, so no name can break the AppleScript.
+    "Terminal": ("on run argv", 'tell application "Terminal"', "activate", "do script (item 1 of argv)", "end tell", "end run"),
+    "iTerm": ("on run argv", 'tell application "iTerm"', "activate", "set w to (create window with default profile)",
+              "tell current session of w to write text (item 1 of argv)", "end tell", "end run"),
+}
+
+
+def mac_terminal_launch(app: str, cwd: str, inner: list) -> Launch:
+    """``inner`` typed into a new window of a Mac terminal app (``Terminal`` or ``iTerm``) that first goes to ``cwd``. The Mac asks
+    once whether Dossier may control the app."""
+    lines = _MAC_SCRIPTS.get(app, _MAC_SCRIPTS["Terminal"])
+    argv = ["osascript"]
+    for line in lines:
+        argv += ["-e", line]
+    return Launch(argv + ["cd " + shlex.quote(cwd) + " && " + shlex.join(inner)], cwd)
 
 
 def default_launcher(launch: Launch) -> None:

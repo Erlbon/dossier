@@ -17,6 +17,21 @@ def test_a_share_root_is_a_full_path_on_every_python():
     assert is_full_path("C:" + B + "x") and not is_full_path("C:x") and not is_full_path("x") and not is_full_path("")
 
 
+@pytest.mark.parametrize("windows", [True, False])
+def test_a_case_only_change_follows_what_the_volume_does(tmp_path, monkeypatch, windows):
+    # Off Windows the volume answers (macOS's APFS and a FAT stick ignore case, ext4 does not); the temp folder here
+    # is whatever this system has, so the expected answer is read from the disk itself.
+    from dossier.core import platform
+    monkeypatch.setattr(platform, "IS_WINDOWS", windows and IS_WINDOWS)
+    if windows and not IS_WINDOWS:
+        pytest.skip("the Windows rule is tested on Windows")
+    (tmp_path / "a.md").write_text("x")
+    ignores_case = (tmp_path / "A.md").exists()
+    assert platform.is_case_only_change(str(tmp_path / "a.md"), str(tmp_path / "A.md")) == ignores_case
+    assert not platform.is_case_only_change(str(tmp_path / "a.md"), str(tmp_path / "b.md"))
+    assert not platform.is_case_only_change(str(tmp_path / "a.md"), str(tmp_path / "a.md"))
+
+
 def test_natural_sort_and_folders_first(tmp_path):
     (tmp_path / "file10.txt").write_text("x")
     (tmp_path / "file2.txt").write_text("x")

@@ -272,6 +272,12 @@ def test_alt_shift_arrows_grow_a_vertical_selection_from_the_keyboard(pad):
     assert ed.is_block_selection() and ed.selection_count() == 3
 
 
+def test_the_notepads_font_is_fixed_width_so_a_block_is_a_straight_rectangle(pad):
+    from dossier.gui.editor import fixed_pitch_font, is_fixed_width
+    pad("x\n")
+    assert is_fixed_width(fixed_pitch_font())
+
+
 def test_a_block_can_reach_past_the_end_of_short_lines(pad):
     win, *_ = pad("ab\nabcdefgh\nx\n")
     ed = win.editor

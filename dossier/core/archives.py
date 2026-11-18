@@ -227,6 +227,10 @@ def _quiet() -> dict:
     return kwargs
 
 
+# Names some 7-Zip builds give the extended headers of a tar (long names, PAX attributes): not files, never shown.
+TAR_HEADER_NAMES = frozenset({"@PaxHeader", "@LongLink"})
+
+
 def parse_listing(text: str) -> list:
     """The output of ``7z l -slt -ba``: blocks of ``Key = Value`` lines, one block per member."""
     out, block = [], {}
@@ -242,6 +246,8 @@ def parse_listing(text: str) -> list:
     members = []
     for b in out:
         name = b["Path"].replace("\\", "/")
+        if TAR_HEADER_NAMES.intersection(name.split("/")):
+            continue                     # a tar's own extra headers, which some 7-Zip builds (the Mac's) list as files
         attrs = b.get("Attributes", "")
         is_dir = b.get("Folder") == "+" or attrs.startswith("D") or " D" in (" " + attrs)
         try:

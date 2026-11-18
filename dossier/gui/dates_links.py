@@ -17,7 +17,7 @@ from PyQt6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, QF
 
 from ..core import filetimes as ft
 from ..core import links
-from ..core.platform import IS_WINDOWS
+from ..core.platform import IS_MACOS, IS_WINDOWS
 from .owned_dialog import OwnedDialog
 from .background import run_in_background
 
@@ -60,7 +60,8 @@ class DatesDialog(OwnedDialog):
             box.setChecked(name == "modified")
             if name == "created" and not ft.CAN_SET_CREATED:
                 box.setEnabled(False)
-                box.setToolTip("Only Windows has a creation date that a program can set")
+                box.setToolTip("Dossier does not set the creation date on a Mac yet; it is shown, not changed" if IS_MACOS
+                               else "Only Windows has a creation date that a program can set")
             box.toggled.connect(self.schedule)
             self.date_boxes[name] = box
             row.addWidget(box)

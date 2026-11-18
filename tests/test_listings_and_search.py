@@ -276,6 +276,7 @@ def test_a_flat_list_cannot_be_written_to_or_pinned_and_a_terminal_opens_in_its_
     assert win.left.real_folder() == str(left)
     launched = []
     win.launch_terminal = lambda launch: launched.append(launch)
+    monkeypatch.setattr(win, "_which", lambda name: "/usr/bin/" + name)      # a Linux runner has no terminal program
     win.open_terminal()
     assert launched and launched[0].cwd == str(left)
 

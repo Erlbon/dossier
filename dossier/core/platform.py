@@ -82,6 +82,23 @@ def path_key(path: str) -> str:
     return os.path.normcase(os.path.normpath(strip_longpath(path)))
 
 
+def is_case_only_change(old: str, new: str) -> bool:
+    """True when ``old`` and ``new`` differ only in the case of letters and the system sees them as one file, so
+    renaming one to the other is a change of spelling, never a clash with another item. Always so on Windows; on
+    other systems only where the volume ignores case (macOS's default APFS, a FAT or NTFS stick on Linux), which
+    the system itself answers: both names reach the same file."""
+    if old == new or has_scheme(old) or has_scheme(new):
+        return False
+    if IS_WINDOWS:
+        return os.path.normcase(old) == os.path.normcase(new)
+    if old.lower() != new.lower():
+        return False
+    try:
+        return os.path.samefile(old, new)
+    except (OSError, ValueError):
+        return False
+
+
 def decode_name(name: str | bytes) -> str:
     """Make a file name safe to show (O12).
 
@@ -173,16 +190,85 @@ def _posix_volumes() -> list:
         kind = "network" if network else ("removable" if mount.startswith(("/media", "/run/media", "/Volumes")) else "fixed")
         out.append((mount, "System" if mount == "/" else os.path.basename(mount), kind))
     if not out and IS_MACOS:
+        out.append(("/", "System", "fixed"))
         for name in sorted(os.listdir("/Volumes")) if os.path.isdir("/Volumes") else []:
-            out.append((os.path.join("/Volumes", name), name, "fixed"))
+            if not os.path.islink(os.path.join("/Volumes", name)):         # the start-up disk's link back to /
+                out.append((os.path.join("/Volumes", name), name, "removable"))
     return out or [("/", "System", "fixed")]
+
+
+_MAC_NETWORK_FS = ("smbfs", "nfs", "afpfs", "webdav", "cifs", "ftp", "macfuse-sshfs", "osxfuse-sshfs")
+_MAC_SKIP_FS = ("devfs", "autofs", "nullfs", "fdesc")
+_MNT_RDONLY, _MNT_LOCAL, _MNT_ROOTFS, _MNT_DONTBROWSE = 0x1, 0x1000, 0x4000, 0x00100000
+
+
+def _mac_mounts() -> list:
+    """The Mac's own mount list, the one ``mount`` prints: ``(fstype, mount point, source, flags)`` for each, read with
+    ``getmntinfo`` (MNT_NOWAIT, so a dead share is never asked)."""
+    import ctypes
+    import ctypes.util
+
+    class StatFs(ctypes.Structure):                  # struct statfs, 64-bit inode layout (the only one on Apple Silicon)
+        _fields_ = [("f_bsize", ctypes.c_uint32), ("f_iosize", ctypes.c_int32), ("f_blocks", ctypes.c_uint64),
+                    ("f_bfree", ctypes.c_uint64), ("f_bavail", ctypes.c_uint64), ("f_files", ctypes.c_uint64),
+                    ("f_ffree", ctypes.c_uint64), ("f_fsid", ctypes.c_int32 * 2), ("f_owner", ctypes.c_uint32),
+                    ("f_type", ctypes.c_uint32), ("f_flags", ctypes.c_uint32), ("f_fssubtype", ctypes.c_uint32),
+                    ("f_fstypename", ctypes.c_char * 16), ("f_mntonname", ctypes.c_char * 1024),
+                    ("f_mntfromname", ctypes.c_char * 1024), ("f_flags_ext", ctypes.c_uint32),
+                    ("f_reserved", ctypes.c_uint32 * 7)]
+
+    libc = ctypes.CDLL(ctypes.util.find_library("c"), use_errno=True)
+    try:
+        call = getattr(libc, "getmntinfo$INODE64")   # Intel Macs keep the old layout under the plain name
+    except AttributeError:
+        call = libc.getmntinfo
+    call.argtypes = [ctypes.POINTER(ctypes.POINTER(StatFs)), ctypes.c_int]
+    call.restype = ctypes.c_int
+    table = ctypes.POINTER(StatFs)()
+    count = call(ctypes.byref(table), 2)              # MNT_NOWAIT
+    return [(table[i].f_fstypename.decode("utf-8", "replace"), os.fsdecode(table[i].f_mntonname),
+             os.fsdecode(table[i].f_mntfromname), table[i].f_flags) for i in range(max(count, 0))]
+
+
+def mac_volumes(mounts: list) -> list:
+    """``(root, label, kind)`` for the Mac's mounts (see ``_mac_mounts``): the start-up disk as "/", shares as network
+    (no bin there: a delete is permanent, and the plan says so), other disks under /Volumes as removable. The system's
+    hidden volumes (Data, Preboot, VM...) and pseudo file systems are left out."""
+    out, seen = [], set()
+    for fstype, mount, _source, flags in mounts:
+        if fstype in _MAC_SKIP_FS or mount in seen:
+            continue
+        network = fstype.startswith(_MAC_NETWORK_FS) or not flags & _MNT_LOCAL
+        if mount == "/" or flags & _MNT_ROOTFS:
+            kind, label = "fixed", "System"
+        elif flags & _MNT_DONTBROWSE and not network:
+            continue
+        elif network:
+            kind, label = "network", os.path.basename(mount)
+        elif mount.startswith("/Volumes/"):
+            kind, label = "removable", os.path.basename(mount)
+        else:
+            continue
+        seen.add(mount)
+        out.append((mount, label, kind))
+    return out
+
+
+def _posix_or_mac_volumes() -> list:
+    if IS_MACOS:
+        try:
+            found = mac_volumes(_mac_mounts())
+        except (OSError, AttributeError, ValueError):
+            found = []
+        return found or _posix_volumes()
+    return _posix_volumes()
 
 
 def list_volumes() -> list:
     """The mounted volumes as ``(root, label, kind)``; kind is fixed, removable, network, optical or other.
     Drive letters on Windows, mount points elsewhere (O3). Never touches the disk space of a share, so it
     cannot hang on a dead network drive."""
-    return _windows_volumes() if IS_WINDOWS else _posix_volumes()
+    return _windows_volumes() if IS_WINDOWS else _posix_or_mac_volumes()
 
 
 def set_app_id(app_id: str) -> None:

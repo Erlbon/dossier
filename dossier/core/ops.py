@@ -24,7 +24,7 @@ from typing import Callable, Iterable, Optional, Sequence
 
 from . import sharing
 from .drives import drive_of, is_network_path, list_drives, on_removable_drive
-from .platform import IS_WINDOWS, SERVER_SCHEMES, has_scheme, path_key, strip_longpath
+from .platform import IS_WINDOWS, SERVER_SCHEMES, has_scheme, is_case_only_change, path_key, strip_longpath
 from .progress import Cancelled, CancelToken, ProgressFn, SpeedLimit, check
 from .transfer import Swap, carry_tags, copy_file, flush_file, move_item as _move_item, verify_copy
 from .undo_log import Step, UndoAction, UndoLog
@@ -615,7 +615,8 @@ def plan_rename_many(fs: FileSystem, pairs: Sequence[tuple]) -> Plan:
         if fs.basename(src) == new_name:
             skipped.append(src)
             continue
-        case_only = path_key(src) == path_key(dst)          # only differs in case, on a case-insensitive system
+        # only differs in case, on a case-insensitive system (Windows, or a Mac or FAT volume that ignores case)
+        case_only = path_key(src) == path_key(dst) or (not fs.scheme and is_case_only_change(src, dst))
         if case_only:
             ops.append(Op(Kind.RENAME, src, dst, is_dir=e.is_dir, size=e.size, src_mtime=e.mtime))
             taken.add(path_key(dst))

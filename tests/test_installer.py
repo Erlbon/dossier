@@ -61,7 +61,8 @@ def test_every_build_declares_its_update_channel():
     spec = read("dossier.spec")
     assert 'os.environ.get("DOSSIER_BUILD", "") == "folder"' in spec and "COLLECT(" in spec
     assert 'channel.write("windows-exe\\n")' in spec and "[] if FOLDER else [(CHANNEL, \".\")]" in spec
-    assert 'os.path.join(DISTPATH, "dossier", "update-channel")' in spec and 'channel.write("windows-zip\\n")' in spec
+    assert 'os.path.join(DISTPATH, "dossier", "update-channel")' in spec
+    assert 'channel.write("linux-tarball\\n" if LINUX else "windows-zip\\n")' in spec       # the Linux tarball cannot replace itself
 
 
 def test_no_build_is_packed_with_upx():

@@ -10,7 +10,7 @@ from bisect import bisect_right
 from typing import Optional
 
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QColor, QFontDatabase
+from PyQt6.QtGui import QColor, QFont, QFontDatabase, QFontMetricsF
 from PyQt6.Qsci import QsciScintilla
 
 from . import syntax, theme
@@ -52,10 +52,49 @@ def from_line_index(starts: list, text: str, line: int, index: int) -> int:
     return end
 
 
+MONOSPACED = ("Menlo", "SF Mono", "Monaco", "Consolas", "DejaVu Sans Mono", "Liberation Mono", "Courier New", "Courier")
+
+
+def is_fixed_width(font: QFont) -> bool:
+    """Whether a narrow and a wide letter take the same room (measured: what a font says of itself is not always right)."""
+    metrics = QFontMetricsF(font)
+    return metrics.horizontalAdvance("i") == metrics.horizontalAdvance("m") > 0
+
+
+def fixed_pitch_font() -> QFont:
+    """The system's fixed-width font, made sure to be fixed width: a block (vertical) selection is a rectangle of columns, so
+    with a proportional font ("i" narrower than "m") it would take a different number of characters on each line. Some
+    systems answer the fixed-font question with a proportional one (Qt without a desktop on the Mac)."""
+    font = QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont)
+    if is_fixed_width(font):
+        return font
+    for family in MONOSPACED:
+        candidate = QFont(family, max(font.pointSize(), 9))
+        if is_fixed_width(candidate):
+            return candidate
+    font.setStyleHint(QFont.StyleHint.TypeWriter)
+    font.setFixedPitch(True)
+    return font
+
+
+# Alt+Shift (Option+Shift on the Mac) with an arrow grows a block selection; handled here, so it does not depend on each
+# system's Scintilla key map.
+_BLOCK_KEYS = {Qt.Key.Key_Down: S.SCI_LINEDOWNRECTEXTEND, Qt.Key.Key_Up: S.SCI_LINEUPRECTEXTEND,
+               Qt.Key.Key_Left: S.SCI_CHARLEFTRECTEXTEND, Qt.Key.Key_Right: S.SCI_CHARRIGHTRECTEXTEND,
+               Qt.Key.Key_Home: S.SCI_VCHOMERECTEXTEND, Qt.Key.Key_End: S.SCI_LINEENDRECTEXTEND,
+               Qt.Key.Key_PageUp: S.SCI_PAGEUPRECTEXTEND, Qt.Key.Key_PageDown: S.SCI_PAGEDOWNRECTEXTEND}
+_ALT_SHIFT = Qt.KeyboardModifier.AltModifier | Qt.KeyboardModifier.ShiftModifier
+
+
 class EditorView(QsciScintilla):
     escape_pressed = pyqtSignal()
 
     def keyPressEvent(self, event) -> None:
+        mods = event.modifiers() & ~Qt.KeyboardModifier.KeypadModifier
+        if mods == _ALT_SHIFT and event.key() in _BLOCK_KEYS:
+            self.SendScintilla(_BLOCK_KEYS[event.key()])
+            event.accept()
+            return
         if event.key() == Qt.Key.Key_Escape:
             self.escape_pressed.emit()          # the editor takes Esc itself, so the window's shortcut never sees it
         super().keyPressEvent(event)
@@ -65,7 +104,7 @@ class EditorView(QsciScintilla):
         self.setUtf8(True)
         self.setEolMode(S.EolMode.EolUnix)              # the text is kept with \n; the file's kind is restored on save
         self.setEolVisibility(False)
-        self.setFont(QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont))
+        self.setFont(fixed_pitch_font())
         self.setMarginLineNumbers(0, True)
         self.setMarginsFont(self.font())
         self.setTabWidth(8)

@@ -40,8 +40,29 @@ def write_ico(path: str, sizes) -> None:
         f.write(header + directory + data)
 
 
+# The Mac's icon types that hold a PNG, with the pixel size of each (the "@2x" ones are the Retina forms of the smaller size).
+ICNS_TYPES = (("icp4", 16), ("ic11", 32), ("icp5", 32), ("ic12", 64), ("ic07", 128), ("ic13", 256), ("ic08", 256),
+              ("ic14", 512), ("ic09", 512), ("ic10", 1024))
+
+
+def write_icns(path: str) -> None:
+    """The Mac app's icon (``Dossier.app``): an ``icns`` file is a header and one PNG per size, each with a four-letter type
+    and its length. Made at build time on the Mac runner; not committed (nothing on Windows reads it)."""
+    pngs = {}
+    body = b""
+    for kind, size in ICNS_TYPES:
+        png = pngs.setdefault(size, png_bytes(size))
+        body += kind.encode("ascii") + struct.pack(">I", 8 + len(png)) + png
+    with open(path, "wb") as f:
+        f.write(b"icns" + struct.pack(">I", 8 + len(body)) + body)
+
+
 def main() -> None:
     app = QGuiApplication.instance() or QGuiApplication([])
+    if sys.argv[1:2] == ["--icns"]:                             # python tools/make_icons.py --icns build/dossier.icns
+        write_icns(sys.argv[2])
+        print("wrote", sys.argv[2])
+        return
     write_ico(appicon.ICO, appicon.SIZES)
     with open(appicon.PNG, "wb") as f:
         f.write(png_bytes(256))

@@ -1,5 +1,7 @@
 """An interactive SSH session on a server from the terminal button, F12 and Tools > SSH Terminal Here: the command line is built safely, the host
 key must have been approved, and nothing about a password is ever put on it."""
+import shlex
+
 import pytest
 
 from dossier.core import servers, sshlink, terminals
@@ -55,11 +57,20 @@ def test_the_ssh_command_is_hosted_like_a_local_terminal_session(monkeypatch):
     plain = terminals.ssh_launch(argv, "C:/Users/me")
     assert plain.argv == argv and not plain.elevate
     monkeypatch.setattr(terminals, "IS_WINDOWS", False)
+    monkeypatch.setattr(terminals, "IS_MACOS", False)
     linux = terminals.ssh_launch(argv, "/home/me", emulator="xterm", which=lambda n: "/usr/bin/" + n)
     assert linux.argv == ["xterm", "-e", *argv] and not linux.elevate
 
 
 # in the window -------------------------------------------------------------------------------------------------------------
+def ssh_words(launch):
+    """The ssh command of a launch: the argv itself, or on the Mac the words typed into Terminal after the cd."""
+    if launch.argv[0] == "osascript":
+        words = shlex.split(launch.argv[-1])
+        return words[words.index("&&") + 1:]
+    return launch.argv
+
+
 class Recorder:
     def __init__(self):
         self.launches = []
@@ -74,6 +85,7 @@ def ssh_window(world, monkeypatch):
     fake_ssh(monkeypatch)
     rec = Recorder()
     win.launch_terminal = rec
+    monkeypatch.setattr(win, "_which", lambda name: "/usr/bin/" + name)      # a Linux runner has no terminal program
     win._save_connections([CONN])
     return win, d, rec
 
@@ -87,7 +99,7 @@ def test_a_session_opens_in_the_folder_shown_for_a_server_whose_key_was_approved
     approve(win)
     win.open_ssh_terminal("sftp://alice@nas.example:2222/home/alice/music")
     assert len(rec.launches) == 1 and d.infos == []
-    argv = rec.launches[0].argv
+    argv = ssh_words(rec.launches[0])
     assert "alice@nas.example" in argv and argv[-1].startswith("cd /home/alice/music && exec ")
     assert "UserKnownHostsFile=" + sshlink.option_path(win.known_hosts().path) in argv
 
@@ -110,7 +122,7 @@ def test_the_terminal_command_on_a_server_folder_opens_a_session_and_admin_is_re
     win, d, rec = ssh_window
     approve(win)
     win.open_terminal(folder="sftp://alice@nas.example:2222/srv")
-    assert len(rec.launches) == 1 and rec.launches[0].argv[-1].startswith("cd /srv && exec ")
+    assert len(rec.launches) == 1 and ssh_words(rec.launches[0])[-1].startswith("cd /srv && exec ")
     win.open_terminal(admin=True, folder="sftp://alice@nas.example:2222/srv")
     assert len(rec.launches) == 1 and "administrator terminal is for this computer" in d.infos[-1][1]
     win.open_terminal(folder="webdav://x@host/a")

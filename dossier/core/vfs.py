@@ -12,7 +12,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import BinaryIO, Iterator, Optional
 
-from .platform import IS_WINDOWS, decode_name, has_scheme, is_link_like, longpath, path_key, strip_longpath
+from .platform import IS_WINDOWS, decode_name, has_scheme, is_case_only_change, is_link_like, longpath, path_key, strip_longpath
 from . import sharing
 
 
@@ -199,8 +199,7 @@ class LocalFileSystem(FileSystem):
         s, d = longpath(src), longpath(dst)
         if not overwrite and os.path.lexists(d):
             # A change of case only ('a.md' -> 'A.md') names the same file on a case-insensitive system.
-            case_only = src != dst and os.path.normcase(src) == os.path.normcase(dst)
-            if not case_only:
+            if not is_case_only_change(src, dst):
                 raise FileExistsError(dst)
         os.replace(s, d)
 

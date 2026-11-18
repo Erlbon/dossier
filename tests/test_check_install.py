@@ -71,3 +71,26 @@ def test_the_package_metadata_lists_everything_the_program_imports():
     text = open(os.path.join(ROOT, "pyproject.toml"), encoding="utf-8").read()
     for name in ("send2trash", "PyQt6", "PyQt6-QScintilla", "redactor_common"):
         assert name in text.split("[project.optional-dependencies]")[0], name
+
+
+def test_the_mac_note_about_the_f_keys_is_shown_once():
+    from dossier.gui.app import FN_NOTE, mac_first_start
+
+    class Settings(dict):
+        def value(self, key, default=None):
+            return self.get(key, default)
+
+        def setValue(self, key, value):
+            self[key] = value
+
+    class Window:
+        settings = Settings()
+        shown: list = []
+
+        class dialogs:
+            @staticmethod
+            def info(title, text):
+                Window.shown.append((title, text))
+
+    assert mac_first_start(Window) and not mac_first_start(Window)
+    assert Window.shown == [("The F-keys on a Mac", FN_NOTE)] and "Fn" in FN_NOTE and "Option+Space" in FN_NOTE

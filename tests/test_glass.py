@@ -40,3 +40,9 @@ def test_how_much_shows_through_and_the_opacity_of_the_dark_layer():
     assert glass.alpha_for(SOLID) == 255
     assert glass.alpha_for(FROSTED) == round(255 * 0.35) and glass.alpha_for(DIM) == round(255 * 0.5)
     assert glass.alpha_for(DIM, 60) == round(255 * 0.4)
+
+
+def test_the_mac_starts_without_the_frosted_look_and_says_why_it_would_ask():
+    from dossier.core.platform import IS_MACOS
+    assert glass.DEFAULT_MODE == (glass.DIM if IS_MACOS else glass.FROSTED)       # card 40: no Screen Recording prompt at the first start
+    assert bool(glass.SCREEN_PERMISSION_NOTE) == IS_MACOS
