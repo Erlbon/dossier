@@ -8,7 +8,7 @@ The README says what this is; `docs/spec.md` says what it must do (requirement i
 - **Stack:** Python 3.10+ and PyQt6. Shared code comes from the user's `redactor_common` package, pinned to a git tag in `requirements.txt` (never `@main`). If something reusable is written here, promote it to `redactor_common` first, then bump the pin.
 - **Licence:** GPL-3.0-or-later. Free and open source, never commercial.
 - **Selection:** ONE selection shared by all windows (spec section 3). It is stored by path in `dossier/core/selection.py`, not in any window.
-- **Platforms:** Windows primary, Linux (Debian 12+/Ubuntu 22.04+) a tested second. Tests run on both on every push. All OS-specific behaviour lives in `dossier/core/platform.py`; the rest of the core never tests `sys.platform`. Names are never assumed case-insensitive; undecodable file names are shown with a replacement mark and never crash a listing.
+- **Platforms:** Windows primary, Linux (Debian 12+/Ubuntu 22.04+) a tested second, macOS a third (no promise yet). The pre-push hook runs the tests on Windows; the Tests workflow (started by hand, `gh workflow run tests.yml`) runs them on Windows, Ubuntu and macOS. All OS-specific behaviour lives in `dossier/core/platform.py`; the rest of the core never tests `sys.platform`. Names are never assumed case-insensitive; undecodable file names are shown with a replacement mark and never crash a listing.
 - **Architecture:** Qt-free core (`dossier/core`), the GUI and a later MCP server are thin front ends over it. Nothing in `core` imports Qt.
 - **Looks:** no blue Norton Commander look; native chrome following the system theme. The visual target is the Design mockup the user approved (workspace board and viewers board); its palette borrows from pluteus's warm night theme (bg #0d0d0f, text #cfc8bd, accent #d9a05b).
 
@@ -89,6 +89,24 @@ The right-click menu takes the label and the key hint of a menu-bar command from
 - **Not in 0.4:** a Linux tarball (the sibling workflow's Linux job needs the Docker toolchain and its first run on Dossier is untried), code signing.
 - **The installer (the owner, 2026-11-05):** `installer/dossier.iss` (Inno Setup 6), per user only (`%LOCALAPPDATA%\Programs\Dossier`, no administrator rights, no "for all users" choice). It ships the **one-folder build** (`DOSSIER_BUILD=folder`, starts in 0.9 s against 3.4 s for the one-file exe; option A of 2026-11-05). The release publishes `dossier-setup.exe` beside the one-file `dossier.exe`, and `update-manifest.json` names both. Each copy declares how it updates in an `update-channel` file: the one-file exe carries `windows-exe` inside (it swaps itself), the folder build gets `windows-zip` beside it, and the installer's copy of redactor_common's contract (`#include UpdateContract` at the end of the `.iss`, path passed by `build_installer.bat`) overwrites that with `windows-installer` and starts Dossier again after a silent update (`/relaunch=yes`, and 0.7's `/RESTARTAPP=1`). Keep both asset names: 0.7 copies still look for exactly those, which is how they reach the framework without a hand update. Silent: `/VERYSILENT /SUPPRESSMSGBOXES`, optional `/TASKS="desktopicon,addtopath"`. Local build: `build_exe.bat`, then `build_installer.bat` (or `build_release.bat` for both). `dossier --check-update` / `--update` (with `--result-file`) and `REDACTOR_CONFIG_DIR` are the framework's command line and scratch profile; a plain `dossier --version` stays the command line's. Keep the AppId (a test checks it against `pyproject.toml`).
 - **No UPX** (the owner, 2026-11-07, as in the Redactor apps since 2026-10-30): Defender flags UPX-packed, unsigned exes as malware, so `dossier.spec` has `upx=False` and a test keeps it so. 0.7 (built by the old Actions workflow) was still packed: 54.4 MB; the first release without UPX is about 64 MB for that reason alone. Tell the owner when a release exe is 5 percent bigger than the one before for any other reason.
+
+## Mac and Linux builds (the owner, 2026-11-18, cards 35-44 all A, then Linux option A)
+A colleague of the owner's with a Mac tries a first Mac build. Order (35A): fix what the macOS test jobs break and the cards
+below, build, hand it over, fix the rest from his report.
+- **Drives (36A):** read the Mac's own mount list (the call behind `mount`) for each mount's kind: network (smbfs, nfs, afpfs,
+  webdav), removable, system. The "delete is permanent" warning on network drives must hold on the Mac.
+- **Tags (37A):** Finder's own tags (`com.apple.metadata:_kMDItemUserTags`), so they show in Finder, through the system library
+  (Python on macOS has no `os.getxattr`).
+- **Terminal (38A):** Terminal.app always, iTerm when installed, as profiles; the administrator terminal types `sudo -s`.
+- **Keys (39A):** follow the Mac (Qt's Ctrl becomes Cmd). Name completion moves to Option+Space on the Mac only (Cmd+Space is
+  Spotlight). F-keys stay; the first start on a Mac shows a short note about Fn and the "standard function keys" setting.
+- **Frosted background (40A):** off by default on the Mac; switching it on explains the Screen Recording permission first.
+- **Package (41A):** a zip of Dossier.app for Apple Silicon, built by a hand-started GitHub Actions macOS job (Intel/universal
+  only if the colleague's Mac needs it). **Unsigned (42A)**, with three lines on Open Anyway. **No self-update on the Mac (43A)**:
+  Check for Updates says there is a newer build and links to it.
+- **Small gaps (44A):** no creation-date setting (greyed, with a tooltip) and no command-line link in the first build.
+- **Linux at the same time (the owner, option A):** a Linux tarball built in the same hand-started workflow, on Ubuntu 22.04
+  (glibc old enough for Debian 12+/Ubuntu 22.04+), no self-update at first. The Windows release tool is unchanged.
 
 ## Open items
 - Icon sets are swappable (Settings > Appearance > Icon Set, user sets in the settings folder `icon-sets`). Tabler and Lucide draw the ebook and comic glyphs the other way round (Tabler `book` is open, Lucide `book` is closed): a set's manifest `map` fixes that per set; a Preferences page for per-file-type icon overrides is a possible later step (user, 2026-10-19).
