@@ -267,6 +267,74 @@ Added the same day at the owner's request: sections 1-3 are mostly platform plum
 - **Keep as is.**
 - **Recommendation: A.** Finder, Dolphin and Files all do it, and without it a drag into a folder two levels down needs the target opened first. Effort: medium.
 
+## 5. Ideas beyond the others: what nobody here does well
+
+Added the same day, when the owner asked whether any really clever function had been left out. His earlier inspirations from xplorer2 (ideas only; none of its code was ever looked at) are all built:
+- **Flatten:** the three-bars button and Go > All Files Below This Folder (Ctrl+Shift+B), and the copy box's "put every file straight into the destination";
+- **Subfolder sizes:** the Σ button, Space on a folder, View > Folder Sizes and the Share column;
+- **Programs of your own:** the tools bar's Add a Program, with placeholders, folders as submenus, and the programs under Open With.
+
+**A fix found on the way (rule: 50A, apps as files):** Add a Program suggests only Windows programs (`core/tools.py:203`), and on the Mac a program added as `Something.app` cannot start, because an app is a folder and `launch` runs the command directly (`core/tools.py:198`). On the Mac it must go through `open -a`; Add a Program should offer the apps in Applications on the Mac and the installed launchers on Linux.
+
+**Decisions (the owner, 2026-11-18): 63A, 64A, 65A, 66B, 67B, 68A.**
+- **63A:** Edit the Names as Text in Tools > Batch Rename, names only (no moves into subfolders), after massren, which the owner has used heavily. It extends a tool that exists, so card 3 does not hold it back.
+- **66B:** duplicates replaced with clones where the file system has them (APFS, btrfs, XFS, ReFS); no hard links. It extends the duplicates window, so card 3 does not hold it back either.
+- **New areas, built when card 3 allows:** 64A (Send to a tailnet device, and fetching what has arrived), 65A (What Changed Since..., by hand), 67B (earlier versions from the snapshots that are folders: NAS, btrfs, ZFS), 68A (rules per folder that propose a plan when the folder is opened).
+
+The ideas below are not in Dossier and are done badly or not at all by the managers in this review. Each builds on something Dossier already has (the plan, the manifests, the tailnet list, the duplicates window), which is why they suit it. Questions 63-68. Except 63 and 66, which extend a tool that exists, they are new areas, so card 3 holds them back: an answer says what to build when card 3 allows it.
+
+### 63. Rename by editing the names as text
+- **What:** the marked names open in the notepad, one per line. You edit them with everything a text editor has (find and replace, column selection, multi-line typing), save, and Dossier turns the difference into a rename plan, with swaps (a to b and b to a) and taken names handled as in every plan. Unix users know it as `vidir` and `qmv`; no file manager in this review has it built in.
+- **The owner's reference (2026-11-18): massren** (github.com/laurent22/massren, MIT, a command-line tool for Windows, the Mac and Linux). From its README, the functions worth taking, written our own way:
+  - the names are matched to the files by line, so a line left alone changes nothing;
+  - nothing happens if the number of lines changed, or if the folder changed on disk while you edited (a new file, a file gone);
+  - a header at the top says how it works, and can be switched off;
+  - folders are listed too, by default;
+  - any editor can be used: in Dossier, the F4 editor you chose (card 2), else the notepad;
+  - a dry run first, and every rename can be undone: in Dossier both come free, as the plan and Ctrl+Z (renames are among the few things undo covers);
+  - from version 1.4 a changed path moves the file into a subfolder: that is option B below.
+  - What massren leaves open and Dossier's plan already handles: swaps and longer cycles (a to b, b to c, c to a), and names that are taken.
+  - One difference on purpose: massren can also delete files (its `use_trash` setting decides where they go; its README does not say exactly how a delete is asked for). In Dossier an emptied line is refused like a changed line count: deleting is F8's job, and a rename should never delete.
+- **A:** one more way in Tools > Batch Rename, beside By Pattern, Search and Replace, Case and Numbers: "Edit the Names as Text".
+- **B:** as A, and with paths below the folder (from All Files Below This Folder), so changing a path moves the file into another subfolder.
+- **Keep as is.**
+- **Recommendation: A.** The notepad's column selection makes it the most powerful batch rename there is, and the plan makes it safe; paths that move files can come later. Effort: medium.
+
+### 64. Send to a tailnet device (Taildrop)
+- **What:** Tailscale can send files straight to another of your devices (`tailscale file cp`), and the device fetches them (`tailscale file get`). Dossier already lists the tailnet's devices on the Home page. This is AirDrop across Windows, the Mac, Linux and phones, and it answers question 54 (the Share menu) on all three systems.
+- **A:** right-click > Send to, with the tailnet's devices; and on the Home page, "Files waiting for you" when some have arrived, fetched into a folder you pick (Downloads by default), as a plan.
+- **B:** sending only.
+- **Keep as is.**
+- **Recommendation: A.** It is the lead feature (the tailnet as part of the file manager) carried one step further, and the receiving half is what makes it feel finished. Effort: medium.
+
+### 65. What changed here since...
+- **What:** `core/manifest.py` already writes every file below a folder with its size, time and SHA-256 (for the assistant). A window for it: Tools > Compare > Remember This Folder's State, and later What Changed Since..., which lists the files added, removed, changed and moved (same hash, new place) as a list that can be marked and acted on. Useful before and after an installer, a sync, a cleanup, or to see what a backup would pick up.
+- **A:** by hand: remember a state, compare with it later; states kept in Dossier's own folder, never in yours.
+- **B:** as A, and pinned folders get a state remembered automatically once a week.
+- **Keep as is.**
+- **Recommendation: A.** The core is written and tested; the window is the missing half. Automatic states can follow if you use it. Effort: medium.
+
+### 66. Duplicates that keep their place but not their space
+- **What:** the duplicates window can only delete. Keeping one copy and replacing the others with links frees the space while every folder keeps its file.
+- **A:** "Replace with hard links" (same drive only). Cheap and works on NTFS, but editing one copy changes all of them, which surprises people.
+- **B:** "Replace with clones" where the file system has them (APFS on the Mac, btrfs and XFS on Linux, ReFS on Windows): each copy shares the space until one is changed, and then only that one changes. Not on NTFS, so not on your usual drives.
+- **Keep as is.**
+- **Recommendation: B.** It is the safe kind of link, which is Dossier's character; hard links trade one surprise for disk space. Effort: medium.
+
+### 67. Earlier versions as folders
+- **What:** most systems already keep earlier versions: Windows (Previous Versions from shadow copies and File History), the Mac (Time Machine), Linux (btrfs and ZFS snapshots), and NAS boxes, whose snapshots appear as hidden folders over the share (`#snapshot`, `.snapshot`). Right-click > Earlier Versions would list the moments that hold this file or folder and open one read-only in the other panel, to compare or copy back with the normal commands.
+- **A:** all of them: the snapshots that are folders, and Windows' and the Mac's through their system calls.
+- **B:** only the snapshots that are already folders (NAS, btrfs, ZFS), which need no system calls and no rights.
+- **Keep as is.**
+- **Recommendation: B.** It covers your NAS, needs no administrator rights, and is the cheap half; the Windows and Mac halves can follow. Effort: medium (B), large (A).
+
+### 68. Rules that propose a plan
+- **What:** on the Mac, Hazel files things by rules ("PDFs in Downloads older than 30 days go to Archive/<year>"); nothing like it is built into any file manager here. Dossier's version would never act alone: a folder's rules make a plan when the folder is opened (or on Tools > Run Rules), and you press Run, as with every plan.
+- **A:** rules per folder, kept beside the folder layout, proposed as a plan when the folder is opened.
+- **B:** as A, and the rules of pinned folders are checked while Dossier runs, with "3 plans waiting" in the status line.
+- **Keep as is.**
+- **Recommendation: A, after card 3.** It is the plan idea made automatic without giving up control; checking in the background can wait until rules prove useful. Effort: large.
+
 ## Sources (web, checked 2026-11-18)
 - Commander One: Quick Look on another key than Space, Finder tags since 3.2, servers and MTP in Pro: https://www.macworld.com/article/3409155/commander-one-2-1-review-mac-file-manager-now-works-with-ios-devices.html, https://pcweenies.com/?p=16369, https://wiki.eltima.com/user-guides/commander/commander-one-from-the-mac-app-store.html, https://en.wikipedia.org/wiki/Commander_One
 - ForkLift 4: preview pane and info, sync, Share from the right-click menu: https://blog.binarynights.com/2023/04/04/forklift-4-beta-is-finally-here/, https://alternativeto.net/news/2024/11/forklift-4-2-introduces-improved-color-tags-remote-pane-control-and-sftp-updates/
