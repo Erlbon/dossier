@@ -162,7 +162,8 @@ def test_fit_columns_is_on_by_default_and_every_edge_stays_on_screen(world):
     assert win.fit_columns_on() and win.act_fit_columns.isChecked()
     h = win.left.table.horizontalHeader()
     name = columns.index_of("name")
-    assert not h.stretchLastSection() and h.sectionResizeMode(name) == h.ResizeMode.Stretch
+    assert not h.stretchLastSection() and h.sectionResizeMode(name) == h.ResizeMode.Fixed      # the panel sets Name's width
+    pump(win, lambda: h.length() == win.left.table.viewport().width())                       # and the columns fill the panel
 
 
 def test_widening_a_column_narrows_name_and_name_keeps_a_minimum(world):
@@ -178,8 +179,7 @@ def test_widening_a_column_narrows_name_and_name_keeps_a_minimum(world):
     pump(win, lambda: win.left._fit_squeezed)
     assert h.sectionSize(name) >= win.left.NAME_MIN
     h.resizeSection(size, 80)                            # room again: Name stretches again
-    pump(win, lambda: not win.left._fit_squeezed)
-    assert h.sectionResizeMode(name) == h.ResizeMode.Stretch
+    pump(win, lambda: not win.left._fit_squeezed and h.length() == win.left.table.viewport().width())
 
 
 def test_switching_fit_off_restores_stretch_last_and_is_remembered(world):

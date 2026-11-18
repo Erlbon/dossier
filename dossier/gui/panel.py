@@ -7,7 +7,7 @@ import threading
 from dataclasses import dataclass, field
 from typing import Optional
 
-from PyQt6.QtCore import QModelIndex, QPoint, QRectF, QSize, Qt, QTimer, QUrl, pyqtSignal
+from PyQt6.QtCore import QEvent, QModelIndex, QObject, QPoint, QRectF, QSize, Qt, QTimer, QUrl, pyqtSignal
 from PyQt6.QtGui import QColor, QContextMenuEvent, QDesktopServices, QDrag, QFontMetrics, QPainter, QPainterPath, QPalette, QPen, QPixmap, QTextCharFormat, QTextCursor
 from PyQt6.QtWidgets import (QAbstractItemView, QApplication, QFrame, QListView, QStackedWidget, QHBoxLayout, QHeaderView, QLabel, QLineEdit,
                              QTabBar, QToolButton,
@@ -681,6 +681,19 @@ class PanelOutline(QWidget):
         p.drawPath(path)
 
 
+class _ResizeWatch(QObject):
+    """Calls ``on_resize`` whenever the watched widget changes size (Fit Columns to Panel follows the table's viewport)."""
+
+    def __init__(self, on_resize, parent=None) -> None:
+        super().__init__(parent)
+        self._on_resize = on_resize
+
+    def eventFilter(self, obj, event) -> bool:
+        if event.type() == QEvent.Type.Resize:
+            self._on_resize()
+        return False
+
+
 class Panel(QFrame):
     folder_changed = pyqtSignal(object)   # the panel
     current_changed = pyqtSignal(object)  # the item under the cursor changed
@@ -863,6 +876,8 @@ class Panel(QFrame):
         header.customContextMenuRequested.connect(self.column_menu_requested.emit)
         header.sectionMoved.connect(self._column_moved)
         header.sectionResized.connect(self._fit_check_later)
+        self._fit_watch = _ResizeWatch(self._fit_check_later, self)      # the viewport narrows when a vertical scrollbar shows
+        self.table.viewport().installEventFilter(self._fit_watch)
         self.fit_columns = False          # View > Fit Columns to Panel; the window switches it on (the default) with apply_fit
         self._fit_squeezed = False        # fitting, but the other columns left Name less than NAME_MIN: Name is fixed, scrollbar
         self.table.setVerticalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
@@ -1289,7 +1304,9 @@ class Panel(QFrame):
         self._fit_squeezed = False
         if on:
             header.setStretchLastSection(False)
-            header.setSectionResizeMode(name, QHeaderView.ResizeMode.Stretch)
+            # Name's width is set here, not by Qt's Stretch mode: Stretch re-spreads only on some events, and on Linux and macOS
+            # widening another column left Name as it was, so the columns ran off the panel (Tests workflow, 2026-11-18).
+            header.setSectionResizeMode(name, QHeaderView.ResizeMode.Fixed)
         else:
             width = header.sectionSize(name)
             header.setSectionResizeMode(name, QHeaderView.ResizeMode.Interactive)
@@ -1303,8 +1320,8 @@ class Panel(QFrame):
             QTimer.singleShot(0, self._fit_check)
 
     def _fit_check(self) -> None:
-        """Keep Name at least NAME_MIN wide: when the other columns leave it less, Name stops stretching and the scrollbar shows;
-        when there is room again, Name stretches again."""
+        """Name gets the room the other columns leave, but never less than NAME_MIN: below that the columns are wider than the
+        panel and the scrollbar shows, until there is room again."""
         self._fit_pending = False
         if not self.fit_columns:
             return
@@ -1312,13 +1329,10 @@ class Panel(QFrame):
         name = column_index("name")
         others = sum(header.sectionSize(i) for i in range(header.count()) if i != name and not header.isSectionHidden(i))
         room = self.table.viewport().width() - others
-        if not self._fit_squeezed and room < self.NAME_MIN:
-            self._fit_squeezed = True
-            header.setSectionResizeMode(name, QHeaderView.ResizeMode.Interactive)
-            header.resizeSection(name, self.NAME_MIN)
-        elif self._fit_squeezed and room >= self.NAME_MIN:
-            self._fit_squeezed = False
-            header.setSectionResizeMode(name, QHeaderView.ResizeMode.Stretch)
+        self._fit_squeezed = room < self.NAME_MIN
+        want = max(room, self.NAME_MIN)
+        if header.sectionSize(name) != want:
+            header.resizeSection(name, want)              # sectionResized comes back here once and finds nothing to change
 
     def column_keys_in_order(self) -> list:
         return visual_column_keys(self.table.horizontalHeader(), list(COLUMN_KEYS))

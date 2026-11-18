@@ -2,6 +2,14 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-18#07 -- Fit Columns to Panel works on Linux and macOS too
+
+- **Name now gets its width from Dossier, not from Qt's Stretch mode.** Stretch re-spreads the columns only on some events:
+  on Windows something always set it off, but on Linux and macOS widening another column left Name as wide as before, and
+  the columns ran off the panel (found by the Tests workflow). Name now gets exactly the room the other columns leave
+  (never less than 120 pixels), again whenever a column or the panel changes size, including when a vertical scrollbar
+  appears. Name's own edge can no longer be dragged while the switch is on: it is the column that takes the slack.
+
 ## 2026-11-18#06 -- PyQt6 held below 6.12; the tests run on Python 3.10 and on GitHub's machines again
 
 The first run of the Tests workflow on Windows, Ubuntu and macOS found these.
