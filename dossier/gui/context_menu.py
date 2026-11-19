@@ -188,6 +188,8 @@ class ContextMenuMixin:
         menu.addSeparator()
         cmd("copy")
         cmd("move")
+        if not entry.is_dir and not any(has_scheme(p) for p in paths):
+            self.add_send_to_device(menu, panel, paths, row)             # Taildrop (card 64A): right-click only, File is full
         menu.addSeparator()
         cmd("clip_copy")
         cmd("clip_cut")

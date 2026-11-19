@@ -78,6 +78,10 @@ class FakeDialogs:
         self.file_changed_asked = getattr(self, "file_changed_asked", []) + [(name, modified)]
         return getattr(self, "file_changed_answer", "keep")
 
+    def ask_folder(self, title, default=""):
+        self.folders_asked = getattr(self, "folders_asked", []) + [(title, default)]
+        return getattr(self, "folder_answer", None)
+
     def ask_save_path(self, default):
         return self.save_path
 

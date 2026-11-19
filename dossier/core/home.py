@@ -29,6 +29,7 @@ HEADER_PREFIX = "home://#"
 ADD_NETWORK = HEADER_PREFIX + "add-network"
 ADD_SERVER = HEADER_PREFIX + "add-server"
 TAILNET_PREFIX = HEADER_PREFIX + "tailnet/"
+TAILDROP_RECEIVE = HEADER_PREFIX + "taildrop-receive"
 TYPE_NAMES = {"trash": "Trash", "fixed": "Local disk", "removable": "Removable disk", "optical": "Optical disc", "other": "Disk",
               "network": "Network drive", "place": "Folder", "pin": "Pinned folder", "netloc": "Network location", "server": "Server",
               "tailnet": "Tailnet device", "action": "", "header": ""}
@@ -59,6 +60,7 @@ class TailnetItem:
     detail: str                # the Details column: the address
     online: bool = False
     label: str = ""            # the Type column: the system and the state, for example "Windows, online"
+    receiver: bool = False     # Taildrop can send files to it (another device of the same owner, not this computer)
 
 
 @dataclass
@@ -175,6 +177,9 @@ def build_entries(p: HomeProvider) -> list:
             entries.append(Entry(name=item.name, path=TAILNET_PREFIX + item.name, is_dir=False, kind="tailnet", detail=item.detail, label=item.label,
                                  status=OK if item.online else UNCHECKED,
                                  note="Online: press Enter to add it as a server" if item.online else "Offline"))
+        # Tailscale cannot say what is waiting without taking it, so the row is there whenever Tailscale answers (card 64A)
+        entries.append(Entry(name="Files waiting for you...", path=TAILDROP_RECEIVE, is_dir=False, kind="action",
+                             note="Fetch the files other devices sent to this one with Taildrop"))
     return entries
 
 

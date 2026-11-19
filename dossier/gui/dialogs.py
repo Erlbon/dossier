@@ -289,6 +289,11 @@ class Dialogs:
         box.deleteLater()
         return "reload" if box.clickedButton() is reload_ else "keep"
 
+    def ask_folder(self, title: str, default: str = "") -> Optional[str]:
+        """A folder to use, or None when cancelled."""
+        path = QFileDialog.getExistingDirectory(self.parent, title, default)
+        return path or None
+
     def ask_save_path(self, default: str) -> Optional[str]:
         path, _filter = QFileDialog.getSaveFileName(self.parent, "Save As", default)
         return path or None

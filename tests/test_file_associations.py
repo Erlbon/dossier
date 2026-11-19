@@ -163,10 +163,11 @@ def test_a_switch_writes_on_a_thread_and_shows_the_state(world):
     pic = win.assoc_actions["picture"]
     assert pic.isEnabled() and not pic.isChecked()
     pic.setChecked(True)
-    pump(win, until=lambda: F.is_enabled(win.assoc_registry, F.PICTURES, EXE))
+    # wait for the registry AND the tick the thread's answer sets, or a late answer re-ticks it under a slow run
+    pump(win, until=lambda: F.is_enabled(win.assoc_registry, F.PICTURES, EXE) and not win._size_jobs and pic.isChecked())
     assert F.is_enabled(win.assoc_registry, F.PICTURES, EXE) and not F.is_enabled(win.assoc_registry, F.TEXTS, EXE)
     pic.setChecked(False)
-    pump(win, until=lambda: not F.is_enabled(win.assoc_registry, F.PICTURES, EXE))
+    pump(win, until=lambda: not F.is_enabled(win.assoc_registry, F.PICTURES, EXE) and not win._size_jobs and not pic.isChecked())
     assert not win.assoc_registry.values or not any("Picture" in p for p, _n in win.assoc_registry.values)
     assert not pic.isChecked()
 

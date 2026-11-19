@@ -4,7 +4,7 @@ import subprocess
 import types
 
 from dossier.core import tailnet
-from dossier.core.home import HomeProvider, TailnetItem, build_entries
+from dossier.core.home import TAILDROP_RECEIVE, HomeProvider, TailnetItem, build_entries
 
 STATUS = json.dumps({
     "Self": {"HostName": "laptop", "DNSName": "laptop.tail1234.ts.net.", "TailscaleIPs": ["100.64.0.1", "fd7a::1"], "OS": "windows", "Online": True},
@@ -56,6 +56,20 @@ def test_the_home_page_has_a_tailnet_section_only_when_there_are_devices():
     entries = build_entries(HomeProvider(volumes=lambda: [], exists=lambda p: False, tailnet=lambda: items))
     names = [e.name for e in entries]
     section = entries[names.index("Tailnet") + 1:]
-    assert [e.name for e in section] == ["laptop", "phone"] and all(e.kind == "tailnet" and not e.is_dir for e in section)
+    assert [e.name for e in section] == ["laptop", "phone", "Files waiting for you..."]
+    section = section[:2]
+    assert all(e.kind == "tailnet" and not e.is_dir for e in section)
     assert [e.detail for e in section] == ["100.64.0.1", "100.64.0.9"] and [e.label for e in section] == ["Windows, this computer", "Android, offline"]
     assert section[0].status == "ok" and section[1].status != "ok" and section[0].path.startswith("home://#tailnet/")
+    receive = entries[-1]
+    assert receive.kind == "action" and receive.path == TAILDROP_RECEIVE
+
+
+def test_only_devices_of_the_same_owner_can_receive_taildrop():
+    status = json.dumps({
+        "Self": {"HostName": "laptop", "TailscaleIPs": ["100.64.0.1"], "OS": "windows", "Online": True, "UserID": 7},
+        "Peer": {"a": {"HostName": "mine", "TailscaleIPs": ["100.64.0.2"], "Online": True, "UserID": 7},
+                 "b": {"HostName": "theirs", "TailscaleIPs": ["100.64.0.3"], "Online": True, "UserID": 9},
+                 "c": {"HostName": "unknown", "TailscaleIPs": ["100.64.0.4"], "Online": False}}})
+    got = {d.name: d.receiver for d in tailnet.parse_status(status)}
+    assert got == {"laptop": False, "mine": True, "theirs": False, "unknown": True}

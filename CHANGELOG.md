@@ -2,6 +2,17 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-19#17 -- Send to a tailnet device, and files waiting for you (card 64A)
+
+- **Send to Device** (right-click on files): sends them to one of your own tailnet devices with Taildrop (`tailscale file cp`),
+  in the background with Cancel; an error shows Tailscale's own words. Offline devices are greyed; other users' devices are not
+  offered.
+- **Home page, Tailnet: "Files waiting for you..."** fetches what other devices sent (`tailscale file get`) into a folder you
+  choose (Downloads by default), shown as a move first, so a file already there is asked about, never replaced silently.
+- The row shows whenever Tailscale answers: the CLI cannot tell whether files wait without taking them, so with nothing waiting
+  it says so. Not run on a real Mac or Linux desktop, and not tried against a real Tailscale.
+- Tests: the Open With switch test waits for the tick as well as the registry (it failed once under a slow run).
+
 ## 2026-11-19#16 -- Dossier's viewer and notepad in Windows' Open With (card 69C)
 
 - **Settings > Opening Files > Offer Dossier's Picture Viewer in Open With / Offer Dossier's Notepad in Open With** put Dossier

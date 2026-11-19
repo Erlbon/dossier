@@ -27,6 +27,7 @@ class Device:
     os: str = ""
     online: bool = False
     is_self: bool = False
+    receiver: bool = False      # Taildrop can send files to it: another device of the same user (or the status does not say whose it is)
 
     @property
     def host(self) -> str:
@@ -59,7 +60,7 @@ def find_tailscale() -> str:
     return next((c for c in candidates if os.path.isfile(c)), "")
 
 
-def _device(node: dict, is_self: bool) -> Optional[Device]:
+def _device(node: dict, is_self: bool, my_user=None) -> Optional[Device]:
     if not isinstance(node, dict):
         return None
     addresses = [a for a in node.get("TailscaleIPs", []) if isinstance(a, str)]
@@ -68,7 +69,10 @@ def _device(node: dict, is_self: bool) -> Optional[Device]:
     name = str(node.get("HostName") or dns.split(".")[0] or "").strip()
     if not name:
         return None
-    return Device(name, dns, v4 or (addresses[0] if addresses else ""), str(node.get("OS") or ""), bool(node.get("Online")) or is_self, is_self)
+    user = node.get("UserID")
+    mine = my_user is None or user is None or user == my_user         # a foreign owner's (shared-in) device gets no Taildrop from here
+    return Device(name, dns, v4 or (addresses[0] if addresses else ""), str(node.get("OS") or ""), bool(node.get("Online")) or is_self, is_self,
+                  receiver=mine and not is_self)
 
 
 def parse_status(text: str) -> list:
@@ -81,8 +85,9 @@ def parse_status(text: str) -> list:
     if not isinstance(doc, dict):
         return []
     me = _device(doc.get("Self"), True)
+    my_user = doc["Self"].get("UserID") if me is not None else None
     peers = doc.get("Peer") if isinstance(doc.get("Peer"), dict) else {}
-    others = [d for d in (_device(n, False) for n in peers.values()) if d is not None]
+    others = [d for d in (_device(n, False, my_user) for n in peers.values()) if d is not None]
     others.sort(key=lambda d: (not d.online, d.name.lower()))
     return ([me] if me else []) + others
 
