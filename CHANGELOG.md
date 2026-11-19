@@ -2,6 +2,15 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-19#09 -- Compress and Extract Here in one click (card 61A)
+
+- **Compress** (right-click, and Tools > Archives) packs the marked items into a zip beside them with no box: `report.txt.zip`
+  for one item, the folder's name for several (`Archive.zip` at a drive's top); a taken name becomes "name 2.zip".
+- **Extract Here** unpacks each archive into the folder it stands in, into a folder of the archive's name when it holds more
+  than one item at its top, so nothing spills loose. A name that is taken is asked about, as in every plan.
+- Pack to Zip... and Unpack... keep their boxes. Neither entry is shown inside archives or on servers.
+- Not run on a real Mac or Linux desktop.
+
 ## 2026-11-19#08 -- Typing in a panel jumps to a name on the Mac and Linux (card 57B); Ctrl+E
 
 - **Settings > Typing in a Panel:** a letter typed in a file list either jumps to the first name that starts with what was

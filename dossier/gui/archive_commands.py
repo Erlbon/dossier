@@ -120,6 +120,83 @@ class ArchiveCommandsMixin:
     def _ask_pack(self, dlg) -> bool:                       # a seam for tests
         return dlg.exec() == QDialog.DialogCode.Accepted
 
+    # Compress and Extract Here: one click, no box (card 61A) ------------------------------------------------------------
+    def compress_marked(self) -> None:
+        """Right-click Compress: pack the marked items (or the one under the cursor) into "name.zip" beside them, with no box. One
+        item gives its own name ("report.txt.zip", "photos.zip"), several give the name of the folder they stand in ("Archive.zip" at a
+        drive's top). A taken name gets " 2", " 3" and so on, never an overwrite."""
+        sources = self._local_targets()
+        if not sources:
+            self._say("Mark files or folders on a drive of this computer to compress them")
+            return
+        folder = self.fs.parent(sources[0]) or self.active.real_folder()
+        if len(sources) == 1:
+            stem = self.fs.basename(sources[0].rstrip("/" + chr(92)))
+        else:
+            stem = self.fs.basename(folder.rstrip("/" + chr(92))) or "Archive"
+
+        def work(progress, cancel):
+            target = zipwrite.free_zip_name(folder, stem)          # looks at the disk: on this thread
+            return zipwrite.pack(sources, target, cancel=cancel, progress=progress)
+
+        def finished(result) -> None:
+            for panel in (self.left, self.right):
+                panel.refresh()
+            text = f"Compressed {result.files:,} file{'s' if result.files != 1 else ''} into {os.path.basename(result.path)}"
+            if result.skipped:
+                text += f"; {len(result.skipped)} left out (links or unreadable)"
+                self.dialogs.info("Compress", chr(10).join(f"{os.path.basename(p)}: {why}" for p, why in result.skipped[:10]))
+            self._say(text)
+
+        run_in_background(self, self.cmd_runner, "Compressing", work, on_result=finished, tracked=self._size_jobs,
+                          failed_title="Compress")
+
+    def extract_here(self) -> None:
+        """Right-click Extract Here: unpack each archive marked (or under the cursor) into the folder it stands in, with no box. When
+        the archive holds more than one item at its top, they go into a folder named like the archive, so files never spill loose
+        (one item alone, a file or a folder, goes straight in). One plan, so a name that is taken is asked about, never overwritten."""
+        targets = self._local_targets()
+        if not targets:
+            self._say("Put the cursor on an archive on a drive of this computer to extract it")
+            return
+
+        def build(watch):
+            ops, warnings, blocking, skipped, not_archives = [], [], [], [], []
+            for archive in targets:
+                if os.path.isdir(archive) or archives.backend_for(archive) is None:
+                    not_archives.append(self.fs.basename(archive))
+                    continue
+                listed = self.fs.list(archive_root(archive))
+                members = [e.path for e in listed]
+                if not members:
+                    continue
+                beside = self.fs.parent(archive) or self.active.real_folder()
+                if len(listed) == 1:
+                    dest = beside
+                else:
+                    dest = self.fs.join(beside, os.path.splitext(self.fs.basename(archive))[0])
+                    if os.path.isfile(dest):
+                        raise FileExistsError(f"{dest} is a file")
+                    os.makedirs(dest, exist_ok=True)
+                plan = plan_copy(self.fs, members, dest, watch=watch)
+                ops += plan.ops
+                warnings += plan.warnings
+                blocking += plan.blocking
+                skipped += plan.skipped
+            if not ops and not blocking:
+                raise archives.ArchiveError("none of these is an archive Dossier can read" if not_archives else "the archive is empty")
+            if not_archives:
+                warnings.append(f"not archives, left out: {', '.join(not_archives[:5])}" + (" ..." if len(not_archives) > 5 else ""))
+            title = f"Extract {self.fs.basename(targets[0])}" if len(targets) == 1 else f"Extract {len(targets)} archives"
+            return Plan(title, tuple(ops), tuple(warnings), tuple(blocking), tuple(skipped))
+
+        def then(plan) -> None:
+            plan = self._settle(plan)
+            if plan is not None:
+                self._run(plan)
+
+        self._plan_in_background("Reading the archive", build, then)
+
     # unpack --------------------------------------------------------------------------------------------------------------
     def unpack_archive(self) -> None:
         """Alt+F9: unpack the archive under the cursor into a folder named like the archive, beside the archive (the folder it stands

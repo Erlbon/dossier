@@ -124,6 +124,93 @@ def test_the_menu_has_the_three_commands(world):
     assert {"Pack to Zip...", "Unpack...", "Convert Archive to Zip", "Open as Archive"} <= set(texts)
 
 
+def cursor_on(win, name):
+    win.selection.clear()
+    win.left.table.setCurrentIndex(win.left.model.index(win.left.model.row_of(name), 0))
+
+
+def test_compress_one_file_makes_name_zip_beside_it_without_a_box(world, monkeypatch):
+    win, d, left, right, *_ = world
+    (left / "report.txt").write_text("hello")
+    (left / "other.txt").write_text("o")
+    win.left.refresh()
+    win.select_all()
+    cursor_on(win, "report.txt")
+    monkeypatch.setattr(type(win), "_ask_pack", lambda self, dlg: pytest.fail("Compress must not ask"))
+    win.compress_marked()
+    pump(win, lambda: (left / "report.txt.zip").exists() and not win.busy and "Compressed" in win.status.text())
+    assert names(str(left / "report.txt.zip")) == ["report.txt"]
+    with zipfile.ZipFile(left / "report.txt.zip") as z:
+        assert z.read("report.txt") == b"hello"
+    assert not d.texts and not d.infos
+
+
+def test_compress_several_items_uses_the_folder_name_and_a_taken_name_gets_a_number(world):
+    win, d, left, right, *_ = world
+    (left / "a.txt").write_text("aaa")
+    (left / "sub").mkdir()
+    (left / "sub" / "b.txt").write_text("bbb")
+    (left / "left.zip").write_text("keep me")
+    win.left.refresh()
+    win.selection.set([str(left / "a.txt"), str(left / "sub")])
+    assert len(win.left.targets()) == 2
+    win.compress_marked()
+    pump(win, lambda: (left / "left 2.zip").exists() and not win.busy and "Compressed" in win.status.text())
+    assert (left / "left.zip").read_text() == "keep me"
+    assert {"a.txt", "sub/", "sub/b.txt"} <= set(names(str(left / "left 2.zip")))
+
+
+def make_zip(path, members):
+    with zipfile.ZipFile(path, "w") as w:
+        for n, c in members.items():
+            w.writestr(n, c)
+
+
+def test_extract_here_one_item_goes_straight_in_and_many_go_into_a_folder(world):
+    win, d, left, right, *_ = world
+    make_zip(left / "one.zip", {"only.txt": "1"})
+    make_zip(left / "many.zip", {"x.txt": "x", "dir/y.txt": "y"})
+    win.left.refresh()
+    cursor_on(win, "one.zip")
+    win.extract_here()
+    pump(win, lambda: (left / "only.txt").exists() and not win.busy)
+    assert (left / "only.txt").read_text() == "1"
+    cursor_on(win, "many.zip")
+    win.extract_here()
+    pump(win, lambda: (left / "many" / "dir" / "y.txt").exists() and not win.busy)
+    assert (left / "many" / "x.txt").read_text() == "x" and not (left / "x.txt").exists()
+    assert not d.texts                                                    # no box asked where to unpack
+
+
+def test_extract_here_does_not_overwrite_silently(world):
+    win, d, left, right, *_ = world
+    make_zip(left / "one.zip", {"only.txt": "new"})
+    (left / "only.txt").write_text("old")
+    win.left.refresh()
+    cursor_on(win, "one.zip")
+    asked = []
+    d.ask_conflicts = lambda rows, folder: asked.append(rows)           # the conflict question; cancelled
+    win.extract_here()
+    pump(win, lambda: asked)
+    pump(win, lambda: not win.busy)
+    assert (left / "only.txt").read_text() == "old"
+
+
+def test_the_menus_offer_compress_and_extract_here(world):
+    win, d, left, right, *_ = world
+    (left / "c.txt").write_text("c")
+    make_zip(left / "z.zip", {"a": "1"})
+    win.left.refresh()
+    pump(win, lambda: win.left.model.entry_count() >= 3)
+    menus = {a.text().replace("&", ""): a.menu() for a in win.menuBar().actions()}
+    sub = [a for a in menus["Tools"].actions() if a.text() == "Archives"][0].menu()
+    assert {"Compress", "Extract Here"} <= {a.text() for a in sub.actions()}
+    zipmenu = [a.text() for a in win.build_context_menu(win.left, win.left.model.row_of("z.zip")).actions()]
+    txtmenu = [a.text() for a in win.build_context_menu(win.left, win.left.model.row_of("c.txt")).actions()]
+    assert "Compress" in zipmenu and "Extract Here" in zipmenu
+    assert "Compress" in txtmenu and "Extract Here" not in txtmenu
+
+
 def test_unpack_suggests_a_folder_beside_the_archive_not_in_the_other_panel(world):
     win, d, left, right, *_ = world
     z = left / "stuff.zip"

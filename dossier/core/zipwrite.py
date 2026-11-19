@@ -132,6 +132,17 @@ def _walk(source: str, arc_top: str, skipped: list, cancel):
         yield from _walk(os.path.join(source, name), arc_top + "/" + name, skipped, cancel)
 
 
+def free_zip_name(folder: str, stem: str) -> str:
+    """The path of ``stem``.zip in ``folder``, or "stem 2.zip", "stem 3.zip" and so on when that is taken (as Finder does)."""
+    n = 1
+    while True:
+        name = f"{stem}.zip" if n == 1 else f"{stem} {n}.zip"
+        path = os.path.join(folder, name)
+        if not os.path.lexists(path):
+            return path
+        n += 1
+
+
 def pack(sources: Sequence[str], dest: str, level: str = "normal", store_compressed: bool = True,
          cancel: Optional[CancelToken] = None, progress: Optional[Callable] = None) -> WriteResult:
     """Write ``sources`` (files and folders, local) into the new zip ``dest``. Each source becomes a top-level entry under its

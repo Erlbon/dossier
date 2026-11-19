@@ -316,6 +316,8 @@ class MenusMixin:
             rename_menu.addAction(self._action(text, keys, slot))
         archives = tools.addMenu("Archives")
         archives.addAction(self._action("Open as Archive", "Ctrl+PgDown", lambda: self.active.open_as_archive()))
+        archives.addAction(self._action("Compress", None, self.compress_marked))
+        archives.addAction(self._action("Extract Here", None, self.extract_here))
         archives.addAction(self._action("Pack to Zip...", "Alt+F5", self.pack_to_zip))
         archives.addAction(self._action("Unpack...", "Alt+F9", self.unpack_archive))
         archives.addAction(self._action("Convert Archive to Zip", None, self.convert_archive_to_zip))

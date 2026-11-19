@@ -200,6 +200,11 @@ class ContextMenuMixin:
             self._entry_action(batch, None, slot, panel, paths, True, "", row)
         cmd("delete")
         menu.addSeparator()
+        local = not any(has_scheme(p) for p in paths)           # inside an archive or on a server these do not work: not shown
+        if local:
+            cmd("compress_marked")
+            if is_archive:
+                cmd("extract_here")
         cmd("pack_to_zip")
         if is_archive:
             cmd("unpack_archive", enabled=not many)
