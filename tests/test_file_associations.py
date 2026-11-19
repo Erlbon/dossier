@@ -190,3 +190,72 @@ def test_open_default_apps_uses_the_seam(world):
     _menu(win)
     win.act_default_apps.trigger()
     assert opened == ["ms-settings:defaultapps"]
+
+
+# question 75A: the general entry opens the file by its kind -----------------------------------------------------------------------
+def test_the_general_entry_runs_dossier_open_in_the_module_and_the_installer():
+    import os
+    reg = FakeRegistry()
+    F.enable(reg, F.PICTURES, EXE)
+    assert reg.values[(classes("Applications", "dossier.exe", "shell", "open", "command"), "")] == '"' + EXE + '" open "%1"'
+    with open(os.path.join(os.path.dirname(__file__), "..", "installer", "dossier.iss"), encoding="utf-8") as f:
+        iss = f.read()
+    line = [x for x in iss.splitlines() if f"Applications{BS}dossier.exe{BS}shell{BS}open{BS}command" in x][0]
+    assert 'ValueData: """{app}' + BS + 'dossier.exe"" open ""%1"""' in line
+
+
+def test_dossier_open_routes_a_picture_to_the_viewer_text_to_the_notepad_and_the_rest_to_the_window(tmp_path):
+    from dossier.core.viewmodes import open_route
+    png = tmp_path / "a.png"
+    png.write_bytes(b"\x89PNG\r\n\x1a\n" + bytes(20))
+    txt = tmp_path / "notes.txt"
+    txt.write_text("hello", encoding="utf-8")
+    md = tmp_path / "read.md"
+    md.write_text("# hi", encoding="utf-8")
+    exe = tmp_path / "tool.bin"
+    exe.write_bytes(b"MZ" + bytes(200))
+    assert open_route(str(png)) == "view"
+    assert open_route(str(txt)) == "edit" and open_route(str(md)) == "edit"
+    assert open_route(str(exe)) == "window" and open_route(str(tmp_path)) == "window"
+    from dossier.gui.app import routed_open
+    assert routed_open(["open", str(png)]) == ["view", str(png)]
+    assert routed_open(["open", str(txt)]) == ["edit", str(txt)]
+    assert routed_open(["open", str(exe)]) == [str(exe)]                                     # the window, cursor on the file
+    assert routed_open(["view", str(png)]) == ["view", str(png)] and routed_open([]) == []
+
+
+# question 76A: a moved one-file exe takes its switches over --------------------------------------------------------------------
+def test_switches_on_for_a_copy_whose_place_is_gone_are_taken_over_without_asking():
+    reg = FakeRegistry()
+    old = "D:" + BS + "gone" + BS + "dossier.exe"
+    F.enable(reg, F.PICTURES, old)
+    assert F.registered_exe(reg, F.PICTURES) == old and F.registered_exe(reg, F.TEXTS) is None
+    assert F.take_over_on_start(reg, EXE, exists=lambda p: False) == [F.PICTURES]
+    assert F.is_enabled(reg, F.PICTURES, EXE) and not F.is_enabled(reg, F.TEXTS, EXE)            # an off switch stays off
+
+
+def test_a_copy_that_still_exists_elsewhere_keeps_its_switches():
+    reg = FakeRegistry()
+    other = "D:" + BS + "other" + BS + "dossier.exe"
+    F.enable(reg, F.TEXTS, other)
+    assert F.take_over_on_start(reg, EXE, exists=lambda p: True) == []
+    assert F.is_enabled(reg, F.TEXTS, other)
+
+
+def test_an_older_general_entry_of_this_copy_is_brought_up_to_date():
+    reg = FakeRegistry()
+    F.enable(reg, F.TEXTS, EXE)
+    reg.set_value(classes("Applications", "dossier.exe", "shell", "open", "command"), "", '"' + EXE + '" "%1"')
+    assert F.take_over_on_start(reg, EXE, exists=lambda p: True) == [F.TEXTS]
+    assert reg.values[(classes("Applications", "dossier.exe", "shell", "open", "command"), "")] == '"' + EXE + '" open "%1"'
+    assert F.take_over_on_start(reg, EXE, exists=lambda p: True) == []
+
+
+def test_the_window_takes_the_switches_over_on_a_thread(world):
+    win, _d, _l, _r, tmp = world
+    win.assoc_registry, win.assoc_exe = FakeRegistry(), EXE
+    F.enable(win.assoc_registry, F.PICTURES, str(tmp / "gone" / "dossier.exe"))
+    _menu(win)
+    win.take_over_associations()
+    pump(win, until=lambda: win.assoc_actions["picture"].isChecked())
+    assert F.is_enabled(win.assoc_registry, F.PICTURES, EXE) and win.assoc_actions["picture"].isChecked()

@@ -13,9 +13,10 @@ Nothing here imports Qt, and the registry is reached through a writer object (``
 """
 from __future__ import annotations
 
+import os
 import sys
 from dataclasses import dataclass
-from typing import Optional, Protocol
+from typing import Callable, Optional, Protocol
 
 BS = chr(92)
 CLASSES = BS.join(("Software", "Classes"))
@@ -70,6 +71,12 @@ def open_command(group: Group, exe: str) -> str:
     return f'"{exe}" {group.verb} "%1"'
 
 
+def general_command(exe: str) -> str:
+    """The general ``Applications\\dossier.exe`` entry Windows always keeps: ``dossier open`` opens the file by its kind, a picture in
+    the viewer and text in the notepad (question 75A), instead of only showing its folder."""
+    return f'"{exe}" open "%1"'
+
+
 def _progid_key(group: Group) -> str:
     return key_path(CLASSES, group.progid)
 
@@ -94,7 +101,7 @@ def enable(reg: Registry, group: Group, exe: str) -> None:
     reg.set_value(_command_key(group), "", open_command(group, exe))
     reg.set_value(APP_KEY, "FriendlyAppName", "Dossier")
     reg.set_value(key_path(APP_KEY, "DefaultIcon"), "", f'"{exe}",0')
-    reg.set_value(key_path(APP_KEY, "shell", "open", "command"), "", f'"{exe}" "%1"')
+    reg.set_value(key_path(APP_KEY, "shell", "open", "command"), "", general_command(exe))
     for extension in group.extensions:
         reg.set_value(_with_progids_key(extension), group.progid, None)
         reg.set_value(_supported_key(), extension, None)
@@ -114,12 +121,38 @@ def disable(reg: Registry, group: Group) -> None:
 
 
 def is_enabled(reg: Registry, group: Group, exe: Optional[str] = None) -> bool:
-    """Whether the group is on: its command is written, and (when ``exe`` is given) names this program, so a copy that has moved is
-    shown as off until it is switched on again. This reads the registry, so call it on a thread."""
+    """Whether the group is on: its command is written, and (when ``exe`` is given) names this program, so a copy elsewhere shows as
+    off here (a copy whose old place is gone takes the switches over at start, ``take_over_on_start``). This reads the registry, so
+    call it on a thread."""
     command = reg.get_value(_command_key(group), "")
     if command is None:
         return False
     return exe is None or command == open_command(group, exe)
+
+
+def registered_exe(reg: Registry, group: Group) -> Optional[str]:
+    """The program the group's command names (the text between the first pair of quotes), or None when the group is off."""
+    command = reg.get_value(_command_key(group), "")
+    if not command or not command.startswith('"'):
+        return None
+    end = command.find('"', 1)
+    return command[1:end] if end > 1 else None
+
+
+def take_over_on_start(reg: Registry, exe: str, exists: Callable = os.path.exists) -> list:
+    """Question 76A, run when Dossier starts: a group that is on for a copy at a place that no longer exists (the one-file exe was
+    moved) is pointed at this copy, without asking; a group on for another copy that still exists is left alone. A group on for this
+    copy whose general entry is older (before ``dossier open``, question 75A) is rewritten too. Returns the groups rewritten."""
+    done = []
+    for group in GROUPS:
+        old = registered_exe(reg, group)
+        if old is None:
+            continue
+        stale_general = old == exe and reg.get_value(key_path(APP_KEY, "shell", "open", "command"), "") != general_command(exe)
+        if (old != exe and not exists(old)) or stale_general:
+            enable(reg, group, exe)
+            done.append(group)
+    return done
 
 
 class WinRegistry:

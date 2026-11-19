@@ -2,6 +2,16 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-19#24 -- Open With > Dossier opens the file; a moved dossier.exe keeps its switches (questions 75A, 76A)
+
+- **The general "Dossier" entry in Windows' Open With** now runs `dossier open`, which opens a picture in the picture viewer and
+  a text or Markdown file in the notepad, as F3 would choose; a folder or any other file still opens the file manager with the
+  cursor on it. The installer writes the same command.
+- **A one-file dossier.exe that was moved** takes the Open With switches over a few seconds after it starts, without asking, when
+  they were on for a copy whose place no longer exists. A copy that still exists elsewhere keeps its switches. An older general
+  entry of this copy is brought up to date the same way.
+- Not run against a real Explorer; the installer was not rebuilt.
+
 ## 2026-11-19#23 -- Open Folders with Dossier also wins over the desktop's own file (question 72A)
 
 - GNOME and KDE read `gnome-mimeapps.list` / `kde-mimeapps.list` before `mimeapps.list`, so a folder program named there

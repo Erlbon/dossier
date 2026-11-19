@@ -58,6 +58,18 @@ def mac_first_start(window) -> bool:
     return True
 
 
+def routed_open(args: list, route=None) -> list:
+    """``dossier open <path>`` becomes ``view <path>`` (a picture), ``edit <path>`` (text) or ``<path>`` (the window, a folder or
+    any other file shown with the cursor on it). Anything else is returned as it was."""
+    if args[:1] != ["open"]:
+        return args
+    if route is None:
+        from ..core.viewmodes import open_route as route
+    named = [a for a in args[1:] if not a.startswith("-")]
+    kind = route(named[0]) if len(named) == 1 else "window"
+    return ([kind] + named) if kind in ("view", "edit") else named
+
+
 def main(argv=None) -> int:
     args = list(sys.argv[1:] if argv is None else argv[1:])
     if args[:1] == ["--askpass"]:                   # ssh asking for a password: answered at once, with no window and no checks
@@ -83,6 +95,7 @@ def main(argv=None) -> int:
     if "--check" in args:
         print("Everything Dossier needs is installed.")
         return 0
+    args = routed_open(args)                       # Windows' general Open with > Dossier: open the file by its kind (question 75A)
     if args[:1] == ["view"]:                      # the picture viewer on its own, without the file manager (dossier view picture.jpg)
         from .viewer_app import main as view_main
         return view_main(args[1:])

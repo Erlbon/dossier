@@ -52,6 +52,29 @@ class FileAssociationsMixin:
         self.act_default_apps.triggered.connect(self.open_default_apps)
         menu.addAction(self.act_default_apps)
         menu.aboutToShow.connect(self.refresh_associations)
+        if program is not None:                        # a moved one-file exe takes its switches over a moment after start (76A)
+            from PyQt6.QtCore import QTimer
+            self._assoc_start_timer = QTimer(self)
+            self._assoc_start_timer.setSingleShot(True)
+            self._assoc_start_timer.timeout.connect(self.take_over_associations)
+            self._assoc_start_timer.start(3000)
+
+    def take_over_associations(self) -> None:
+        """Question 76A: on a thread, point switches that are on for a copy whose place is gone at this copy, without asking."""
+        program = self._assoc_program()
+        if program is None:
+            return
+        reg = self._assoc_reg()
+
+        def work(progress, cancel):
+            return [g.key for g in F.take_over_on_start(reg, program)]
+
+        def done(keys) -> None:
+            if keys:
+                self._show_associations({k: True for k in keys})
+
+        run_in_background(self, self.cmd_runner, "Checking Open With", work, on_result=done, tracked=self._size_jobs,
+                          indeterminate=True, failed_title="Open With")
 
     def open_default_apps(self) -> None:
         self.open_web_page(DEFAULT_APPS)               # the same seam as the Help menu's pages

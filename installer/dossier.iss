@@ -78,7 +78,7 @@ Root: HKCU; Subkey: "Software\Classes\Dossier.Text\shell\open\command"; ValueTyp
 ; the program's own entry, shared by both groups (the key goes with the uninstall)
 Root: HKCU; Subkey: "Software\Classes\Applications\dossier.exe"; ValueType: string; ValueName: "FriendlyAppName"; ValueData: "Dossier"; Flags: uninsdeletekey; Tasks: offerpictures offertext
 Root: HKCU; Subkey: "Software\Classes\Applications\dossier.exe\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: """{app}\dossier.exe"",0"; Tasks: offerpictures offertext
-Root: HKCU; Subkey: "Software\Classes\Applications\dossier.exe\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\dossier.exe"" ""%1"""; Tasks: offerpictures offertext
+Root: HKCU; Subkey: "Software\Classes\Applications\dossier.exe\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\dossier.exe"" open ""%1"""; Tasks: offerpictures offertext
 ; pictures: each extension lists the ProgID, and the program lists the type as supported
 Root: HKCU; Subkey: "Software\Classes\.jpg\OpenWithProgids"; ValueType: none; ValueName: "Dossier.Picture"; Flags: uninsdeletevalue; Tasks: offerpictures
 Root: HKCU; Subkey: "Software\Classes\.jpeg\OpenWithProgids"; ValueType: none; ValueName: "Dossier.Picture"; Flags: uninsdeletevalue; Tasks: offerpictures

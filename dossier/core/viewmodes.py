@@ -160,6 +160,22 @@ def opens_in_viewer(path: str, choice: str, alternate: bool = False, local: bool
     return wanted != alternate
 
 
+def open_route(path: str, head: Optional[bytes] = None, isdir: Callable = os.path.isdir) -> str:
+    """``dossier open <path>``, the command of Windows' general "Open with > Dossier" entry (question 75A): ``view`` for a picture
+    (the picture viewer), ``edit`` for text and Markdown (the notepad), ``window`` for a folder or any other file (the file manager
+    with its folder shown and the cursor on it), so a file is opened, not just shown, wherever Dossier has a window for it."""
+    if isdir(path):
+        return "window"
+    if head is None:
+        head = read_head(path)
+    mode = mode_for(path, head)
+    if mode == "image":
+        return "view"
+    if mode in ("text", "markdown") or (mode in ("document", "sheet") and text_underneath(path, head)):
+        return "edit"
+    return "window"
+
+
 def image_siblings(names: list) -> list:
     """The picture files among ``names`` (plain file names), in the order a person counts them: ``img2`` before ``img10``."""
     return sorted((n for n in names if n.lower().endswith(IMAGE_EXTENSIONS)), key=natural_key)
