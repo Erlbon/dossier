@@ -2,6 +2,16 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-19#15 -- Tabs in the notepad (card 70)
+
+- **F4 on several marked files** opens them as tabs in one notepad window, each tab with its own text and its own question on
+  closing (Ctrl+W closes a tab, Ctrl+Tab switches). F4 on one file still opens one window.
+- **`dossier edit` is one notepad with tabs:** a second `dossier edit x` (or another Open With from Explorer) hands the file to the
+  running notepad as a new tab and brings it to the front.
+- **Both notepads notice when the open file was changed by another program** (a file watcher, and a check when the window or
+  tab comes forward, read on a thread) and ask whether to reload it or keep yours.
+- Not run on a real Mac or Linux desktop.
+
 ## 2026-11-19#14 -- `dossier edit` opens the notepad on its own
 
 - **`dossier edit file...`** opens Dossier's notepad without the commander window, as `dossier view` does for the viewer: the

@@ -277,6 +277,18 @@ class Dialogs:
         box.deleteLater()                                      # freed once the answer has been read, not kept by the window for good
         return "overwrite" if box.clickedButton() is over else "reload" if box.clickedButton() is reload_ else None
 
+    def ask_file_changed(self, name: str, modified: bool) -> str:
+        """The open file changed on disk while it is open in a notepad: ``reload`` it or ``keep`` what is in the editor."""
+        text = f"{name} was changed by another program."
+        text += " Reloading throws away your changes." if modified else " Reload it to see the new text."
+        box = QMessageBox(QMessageBox.Icon.Warning, "File changed", text, parent=self.parent)
+        reload_ = box.addButton("Reload from disk", QMessageBox.ButtonRole.AcceptRole)
+        keep = box.addButton("Keep mine", QMessageBox.ButtonRole.RejectRole)
+        box.setDefaultButton(keep if modified else reload_)
+        box.exec()
+        box.deleteLater()
+        return "reload" if box.clickedButton() is reload_ else "keep"
+
     def ask_save_path(self, default: str) -> Optional[str]:
         path, _filter = QFileDialog.getSaveFileName(self.parent, "Save As", default)
         return path or None

@@ -110,6 +110,40 @@ EXTRACT_CONFIRM = 200 * 1024 * 1024     # a file unpacked from an archive: ask f
 STAT_LIMIT = 200      # at most this many sizes are read from the disk for one status line
 SIZE_LIMIT = 1000    # the status line sizes at most this many marked items
 CLOSE_WAIT = 5.0     # seconds a closing window waits for a cancelled copy to stop
+class MultiEdit:
+    """What F4's reading step hands over for several marked files: their paths, the documents read (on the thread), what could not be
+    read, and whether an editor program chosen in Settings takes them instead of the notepad."""
+
+    def __init__(self, paths: list, read: tuple) -> None:
+        self.paths = paths
+        self.docs, self.problems, self.program = read
+
+
+def load_many(files: list, open_now: list, program: bool) -> tuple:
+    """``(docs, problems, program)`` for F4 on several files; reads the disk, so it runs on a thread. A file open in the notepad
+    already is not read again; a file on a server or in a zip is edited one at a time."""
+    if program:
+        return [], [], True
+    opened = {os.path.normcase(o) for o in open_now}
+    docs: list = []
+    problems: list = []
+    for p in files:
+        if has_scheme(p):
+            problems.append(f"{p}: a file on a server or in an archive is edited on its own (select just that file)")
+        elif os.path.normcase(p) in opened:
+            continue
+        else:
+            try:
+                docs.append((p, load_document(p)))
+            except FileTooLarge as e:
+                problems.append(f"{p}: {e}. Use View (F3) to read it.")
+            except BinaryFile:
+                problems.append(f"{p}: this looks like a binary file, not text.")
+            except (OSError, EncodingProblem) as e:
+                problems.append(f"{p}: could not be opened: {getattr(e, 'strerror', None) or e}")
+    return docs, problems, False
+
+
 EXTERNAL = "external"  # what F4's reading step hands over when the chosen editor program is to open the file
 
 
@@ -503,8 +537,10 @@ class MainWindow(SidebarMixin, TypingModeMixin, RenameInPlaceMixin, LinuxDesktop
                             files.append(p)
                     except OSError:
                         pass
-                if len(files) != 1:
+                if not files:
                     return None, None, "Select one file to edit."
+                if len(files) > 1:                              # several marked files: tabs in one window (card 70)
+                    return files[0], MultiEdit(files, load_many(files, open_now, bool(program))), ""
                 chosen = files[0]
             if has_scheme(chosen):                              # a server or a zip: edit a copy, written back on save
                 known = self.local_copy_of(chosen)
@@ -539,8 +575,7 @@ class MainWindow(SidebarMixin, TypingModeMixin, RenameInPlaceMixin, LinuxDesktop
     def _bring_editor_forward(self, path: str, show_replace: bool) -> bool:
         for w in self.editors:
             if os.path.normcase(w.doc.path) == os.path.normcase(path):
-                w.raise_()
-                w.activateWindow()
+                w.bring_forward()                               # (a tab is chosen, and its window comes forward)
                 if show_replace:
                     w.bar.show_replace()
                 return True
@@ -556,18 +591,17 @@ class MainWindow(SidebarMixin, TypingModeMixin, RenameInPlaceMixin, LinuxDesktop
             if edit is not None:
                 self.watch_remote_edit(edit)                    # the program saves when it likes: watch the copy
             return
+        if isinstance(doc, MultiEdit):
+            self._edit_many(doc)
+            return
         if path is None or self._bring_editor_forward(path, show_replace) or doc is None:
             return
         try:
-            from .notepad import NotepadWindow
+            from .notepad import new_page
         except ImportError:
             self.dialogs.info("Edit", "The editor needs the PyQt6-QScintilla package: pip install PyQt6-QScintilla")
             return
-        remembered = str(self.settings.value("editor/markdown_preview", "")).lower()
-        win = NotepadWindow(doc, self.dialogs, show_replace=show_replace, preview={"true": True, "false": False}.get(remembered),
-                            syntax=str(self.settings.value("editor/syntax", "false")).lower() == "true")
-        win.syntax_toggled.connect(lambda on: self.settings.setValue("editor/syntax", "true" if on else "false"))
-        win.preview_toggled.connect(lambda on, w=win: self.settings.setValue("editor/markdown_preview", "true" if on else "false") if w.is_markdown() else None)
+        win = new_page(doc, self.dialogs, self.settings, show_replace=show_replace)
         self.editors.append(win)
         win.closed.connect(lambda w: self.editors.remove(w) if w in self.editors else None)
         waiting = self._text_waits().get(os.path.normcase(path))
@@ -579,6 +613,37 @@ class MainWindow(SidebarMixin, TypingModeMixin, RenameInPlaceMixin, LinuxDesktop
             win.saved.connect(self.write_back)
             self._say(f"Editing a copy of {edit.origin}: each save writes it back")
         win.show()
+
+    def _edit_many(self, many) -> None:
+        """F4 on several marked files: one notepad window with a tab for each. The files already open are brought forward; the ones that
+        could not be read are named in one message. With an editor program chosen in Settings, it gets every file."""
+        if many.program:
+            for p in many.paths:
+                self.edit_in_program(p)
+            return
+        try:
+            from .notepad import NotepadTabs, new_page
+        except ImportError:
+            self.dialogs.info("Edit", "The editor needs the PyQt6-QScintilla package: pip install PyQt6-QScintilla")
+            return
+        host = None
+        for p in many.paths:
+            if self._bring_editor_forward(p, False):
+                continue
+        for p, doc in many.docs:
+            if any(os.path.normcase(w.doc.path) == os.path.normcase(p) for w in self.editors):
+                continue                                         # opened since the files were read
+            if host is None:
+                host = NotepadTabs()
+            win = new_page(doc, self.dialogs, self.settings)
+            host.add_page(win)
+            self.editors.append(win)
+            win.closed.connect(lambda w: self.editors.remove(w) if w in self.editors else None)
+            win.saved.connect(lambda _p: self.refresh())
+        if host is not None:
+            host.show()
+        if many.problems:
+            self.dialogs.info("Edit", "Not opened:\n" + "\n".join(many.problems))
 
     def set_drive_style(self, style: str) -> None:
         if style not in self.drive_style_actions:

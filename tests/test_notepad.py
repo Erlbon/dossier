@@ -318,7 +318,7 @@ def test_f4_opens_the_file_under_the_cursor_once(commander):
     assert len(win.editors) == 1                              # the same file is brought forward, not opened twice
 
 
-def test_f4_refuses_folders_binaries_and_several_files_with_a_reason(commander):
+def test_f4_refuses_folders_and_binaries_with_a_reason(commander):
     win, dialogs, tmp = commander
     win.left.table.setCurrentIndex(win.left.model.index(win.left.model.row_of("sub"), 0))
     win.edit_file()
@@ -328,10 +328,38 @@ def test_f4_refuses_folders_binaries_and_several_files_with_a_reason(commander):
     win.edit_file()
     settle(win)
     assert "binary" in dialogs.infos[-1][1] and not win.editors
+
+
+def test_f4_on_several_marked_files_opens_one_window_with_a_tab_each(commander):
+    win, dialogs, tmp = commander
     win.selection.add([str(tmp / "left" / "a.txt"), str(tmp / "left" / "b.txt")])
     win.edit_file()
     settle(win)
-    assert "one file" in dialogs.infos[-1][1]
+    assert len(win.editors) == 2
+    hosts = {w._host for w in win.editors}
+    assert len(hosts) == 1 and None not in hosts
+    host = hosts.pop()
+    assert [p.doc.path for p in host.pages()] == [str(tmp / "left" / "a.txt"), str(tmp / "left" / "b.txt")]
+    assert host.tabs.count() == 2 and host.windowTitle().endswith("b.txt")
+    host.pages()[0].editor.insertAt("x", 0, 0)                    # a modified tab asks when it is closed
+    dialogs.save_answer = "cancel"
+    host.pages()[0].close()
+    assert host.tabs.count() == 2
+    dialogs.save_answer = "discard"
+    host.pages()[0].close()
+    assert host.tabs.count() == 1 and len(win.editors) == 1
+    for p in host.pages():
+        p.mark_clean()
+    host.close()
+    assert win.editors == []
+
+
+def test_f4_on_one_file_is_one_plain_window_not_tabs(commander):
+    win, dialogs, tmp = commander
+    win.left.table.setCurrentIndex(win.left.model.index(win.left.model.row_of("a.txt"), 0))
+    win.edit_file()
+    settle(win)
+    assert len(win.editors) == 1 and win.editors[0]._host is None and win.editors[0].isWindow()
 
 
 def test_a_file_over_the_limit_points_to_the_viewer(commander, monkeypatch):

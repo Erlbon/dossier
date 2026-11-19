@@ -11,7 +11,7 @@ from PyQt6.QtWidgets import QApplication  # noqa: E402
 
 from dossier.gui import app as app_module, notepad_app  # noqa: E402
 from dossier.gui.main_window import MainWindow  # noqa: E402
-from dossier.gui.notepad import NotepadWindow  # noqa: E402
+from dossier.gui.notepad import NotepadTabs, NotepadWindow  # noqa: E402
 
 
 @pytest.fixture(scope="module")
@@ -48,7 +48,8 @@ def test_an_existing_file_opens_in_a_notepad_window_with_its_text(qapp, tmp_path
     code, windows, said = run([str(p)], tmp_path)
     try:
         assert code == 0 and said == [] and len(windows) == 1
-        win = windows[0]
+        assert isinstance(windows[0], NotepadTabs) and len(windows[0].pages()) == 1
+        win = windows[0].pages()[0]
         assert isinstance(win, NotepadWindow) and win.doc.path == str(p) and win.doc.eol == "\r\n"
         assert win.editor.text().replace("\r\n", "\n") == "one\ntwo\n"
         new = [w for w in QApplication.topLevelWidgets() if id(w) not in before]
@@ -59,13 +60,13 @@ def test_an_existing_file_opens_in_a_notepad_window_with_its_text(qapp, tmp_path
             w.close()
 
 
-def test_several_files_open_one_window_each(qapp, tmp_path):
+def test_several_files_open_one_window_with_a_tab_each(qapp, tmp_path):
     names = [tmp_path / "a.txt", tmp_path / "b.txt"]
     for n in names:
         n.write_text("x", encoding="utf-8")
     code, windows, _said = run([str(n) for n in names], tmp_path)
     try:
-        assert code == 0 and [w.doc.path for w in windows] == [str(n) for n in names]
+        assert code == 0 and len(windows) == 1 and [w.doc.path for w in windows[0].pages()] == [str(n) for n in names]
     finally:
         for w in windows:
             w.mark_clean()
@@ -78,7 +79,7 @@ def test_a_missing_file_opens_empty_and_is_made_only_when_saved(qapp, tmp_path):
     try:
         assert code == 0 and said == [] and len(windows) == 1
         assert not p.exists()                                     # closing without saving leaves nothing behind
-        win = windows[0]
+        win = windows[0].pages()[0]
         assert win.editor.text() == "" and "made when you save" in win.message.text()
         win.editor.setText("hello")
         win.save()
@@ -101,7 +102,7 @@ def test_a_binary_file_is_refused_but_the_other_files_still_open(qapp, tmp_path)
     text.write_text("ok", encoding="utf-8")
     code, windows, said = run([str(binary), str(text)], tmp_path)
     try:
-        assert code == 0 and len(windows) == 1 and len(said) == 1 and "binary" in said[0]
+        assert code == 0 and len(windows) == 1 and len(windows[0].pages()) == 1 and len(said) == 1 and "binary" in said[0]
     finally:
         for w in windows:
             w.mark_clean()

@@ -109,8 +109,8 @@ class FrostSurface:
 
     def showEvent(self, event) -> None:
         super().showEvent(event)
-        if frost.active():
-            self.apply_title_backdrop()                                # a frosted window that starts frosted: the title bar too
+        if frost.active() and self.isWindow():                         # (a notepad that is a tab has no title bar of its own)
+            self.apply_title_backdrop()                              # a frosted window that starts frosted: the title bar too
 
     def moveEvent(self, event) -> None:
         super().moveEvent(event)

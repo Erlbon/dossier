@@ -4,16 +4,18 @@ mark and kind of line break (see core/textedit.py)."""
 from __future__ import annotations
 
 import os
+import threading
 from dataclasses import replace as dc_replace
 from typing import Optional
 
-from PyQt6.QtCore import QPoint, Qt, QTimer, pyqtSignal
+from PyQt6.QtCore import QEvent, QFileSystemWatcher, QPoint, Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QAction, QActionGroup, QKeySequence
 from PyQt6.QtWidgets import (QCheckBox, QComboBox, QHBoxLayout, QInputDialog, QLabel, QLineEdit, QMainWindow,
-                             QMenu, QPushButton, QSplitter, QVBoxLayout, QWidget)
+                             QMenu, QPushButton, QSplitter, QTabWidget, QVBoxLayout, QWidget)
 
 from ..core import markdownsafe, viewmodes
 from ..core.languages import HIGHLIGHT_LIMIT, LANGUAGES, label, language_for
+from ..core.platform import longpath
 from ..core.replace import FindSpec, PatternError, count, expand_at, find_next, replacements, validate
 from ..core.textedit import (Document, EncodingProblem, FileChangedOnDisk, convert_eol, load_document, save_document)
 from ..core.textview import ENCODINGS
@@ -114,6 +116,7 @@ class NotepadWindow(FrostSurface, QMainWindow):
     closed = pyqtSignal(object)
     preview_toggled = pyqtSignal(bool)        # the owner switched the Markdown preview on or off (the window remembers it for Markdown files)
     syntax_toggled = pyqtSignal(bool)         # the owner switched syntax highlighting on or off (remembered for every notepad)
+    _disk_seen = pyqtSignal(str, object)      # (path, (size, mtime_ns) or None): what a thread saw on disk, handed to the window's thread
 
     def __init__(self, doc: Document, dialogs, parent=None, show_replace: bool = False, preview: Optional[bool] = None,
                  syntax: bool = False) -> None:
@@ -124,6 +127,9 @@ class NotepadWindow(FrostSurface, QMainWindow):
         self.dialogs = dialogs
         self.doc = doc
         self._extra_dirty = False       # a change that is not in the text: the kind of line break
+        self._host = None               # the NotepadTabs window this is a tab of, if any
+        self._checking = False
+        self._asking = False
         self.resize(900, 640)
         self.editor = EditorView()
         self.preview = MarkdownView()
@@ -171,6 +177,14 @@ class NotepadWindow(FrostSurface, QMainWindow):
         self._update_title()
         self._update_status_fields()
         self._update_position()
+        self._disk_seen.connect(self._on_disk_seen)
+        self._disk_timer = QTimer(self)
+        self._disk_timer.setSingleShot(True)
+        self._disk_timer.setInterval(300)
+        self._disk_timer.timeout.connect(self.check_disk)
+        self._watcher = QFileSystemWatcher(self)
+        self._watcher.fileChanged.connect(lambda _p: self._disk_timer.start())
+        self._rewatch()
         if show_replace:
             self.bar.show_replace()
         self.act_preview.setChecked(preview if preview is not None else self.is_markdown())
@@ -505,6 +519,65 @@ class NotepadWindow(FrostSurface, QMainWindow):
             self.bar.setVisible(False)
             self.editor.setFocus()
 
+    # the file changed under the editor (card 70) -----------------------------------------------------------------------
+    def _rewatch(self) -> None:
+        """Watch the file again (a save that replaces the file drops the watch). A file not made yet has nothing to watch."""
+        old = self._watcher.files()
+        if old:
+            self._watcher.removePaths(old)
+        if self.doc.mtime_ns:
+            self._watcher.addPath(self.doc.path)
+
+    def check_disk(self) -> None:
+        """Ask a thread what the file looks like on disk now; ``_on_disk_seen`` gets the answer. Called when the file's watcher fires, when
+        the window comes to the front and when its tab is chosen."""
+        if self._checking or not self.doc.mtime_ns:
+            return
+        self._checking = True
+        path = self.doc.path
+
+        def work() -> None:
+            try:
+                st = os.stat(longpath(path))
+                seen = (st.st_size, st.st_mtime_ns)
+            except OSError:
+                seen = None
+            try:
+                self._disk_seen.emit(path, seen)
+            except RuntimeError:                       # the window is gone
+                pass
+        threading.Thread(target=work, daemon=True).start()
+
+    def _on_disk_seen(self, path: str, seen) -> None:
+        self._checking = False
+        if seen is None or path != self.doc.path or self._asking:
+            return
+        if tuple(seen) == (self.doc.size, self.doc.mtime_ns):
+            return
+        if self._host is not None and self._host.current_page() is not self:
+            return                                     # a tab out of sight: asked when it is chosen
+        self._asking = True
+        try:
+            choice = self.dialogs.ask_file_changed(os.path.basename(self.doc.path), self.is_modified())
+        finally:
+            self._asking = False
+        if choice == "reload":
+            self.reload(ask=False)
+        else:                                          # keep mine: the disk version is known now, a save writes straight over it
+            self.doc = dc_replace(self.doc, size=seen[0], mtime_ns=seen[1])
+
+    def bring_forward(self) -> None:
+        if self._host is not None:
+            self._host.show_page(self)
+        else:
+            self.raise_()
+            self.activateWindow()
+
+    def event(self, e) -> bool:
+        if e.type() == QEvent.Type.WindowActivate and self.isWindow():
+            self.check_disk()
+        return super().event(e)
+
     # files ---------------------------------------------------------------------------------------------------------------
     def save(self, force: bool = False) -> bool:
         """Write the file. Returns True when it was saved."""
@@ -529,6 +602,7 @@ class NotepadWindow(FrostSurface, QMainWindow):
             self.dialogs.info("Save", f"The file could not be saved: {e.strerror or e}")
             return False
         self.doc = new
+        self._rewatch()
         self.mark_clean()
         self.message.setText("Saved")
         self.saved.emit(self.doc.path)
@@ -544,6 +618,7 @@ class NotepadWindow(FrostSurface, QMainWindow):
         if not ok:
             self.doc = old
         self._update_title()
+        self._rewatch()
         self._apply_syntax()                                     # the new name may be another language
         return ok
 
@@ -558,6 +633,7 @@ class NotepadWindow(FrostSurface, QMainWindow):
             self._update_status_fields()
             return False
         self.doc = doc
+        self._rewatch()
         self.editor.set_document_text(doc.text)
         self._extra_dirty = False
         self._update_status_fields()
@@ -581,6 +657,122 @@ class NotepadWindow(FrostSurface, QMainWindow):
         if self.is_modified():
             answer = self.dialogs.ask_save(os.path.basename(self.doc.path))
             if answer == "cancel" or (answer == "save" and not self.save()):
+                event.ignore()
+                return
+        self.closed.emit(self)
+        super().closeEvent(event)
+
+
+def new_page(doc: Document, dialogs, settings, show_replace: bool = False) -> NotepadWindow:
+    """A notepad for ``doc`` with the remembered choices (Markdown preview, syntax colouring) from ``settings``, ready to be a window of its
+    own or a tab of ``NotepadTabs``."""
+    remembered = str(settings.value("editor/markdown_preview", "")).lower()
+    win = NotepadWindow(doc, dialogs, show_replace=show_replace, preview={"true": True, "false": False}.get(remembered),
+                        syntax=str(settings.value("editor/syntax", "false")).lower() == "true")
+    win.syntax_toggled.connect(lambda on: settings.setValue("editor/syntax", "true" if on else "false"))
+    win.preview_toggled.connect(lambda on, w=win: settings.setValue("editor/markdown_preview", "true" if on else "false")
+                                if w.is_markdown() else None)
+    return win
+
+
+class NotepadTabs(FrostSurface, QMainWindow):
+    """One window with a notepad in each tab (card 70): F4 on several marked files, and the notepad Explorer starts. Each tab is a whole
+    ``NotepadWindow`` (its own text, unsaved state, find bar, syntax and preview) shown as a widget. Closing a tab asks as closing a
+    window does; closing the last tab, or the window, ends it. Ctrl+W closes the tab, Ctrl+Tab and Ctrl+Shift+Tab switch."""
+
+    closed = pyqtSignal(object)
+
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+        self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+        self.resize(900, 640)
+        self.tabs = QTabWidget()
+        self.tabs.setDocumentMode(True)
+        self.tabs.setTabsClosable(True)
+        self.tabs.setMovable(True)
+        self.tabs.setTabBarAutoHide(True)
+        self.setCentralWidget(self.tabs)
+        self._closing = False
+        self.session = None                                  # whatever must live as long as the window (the single-instance server)
+        self.tabs.tabCloseRequested.connect(lambda i: self.tabs.widget(i).close())
+        self.tabs.currentChanged.connect(self._tab_changed)
+        for text, keys, step in (("Next Tab", "Ctrl+Tab", 1), ("Previous Tab", "Ctrl+Shift+Tab", -1)):
+            act = QAction(text, self)
+            act.setShortcut(QKeySequence(keys))
+            act.triggered.connect(lambda _c=False, d=step: self.step_tab(d))
+            self.addAction(act)
+
+    # the pages -------------------------------------------------------------------------------------------------------
+    def pages(self) -> list:
+        return [self.tabs.widget(i) for i in range(self.tabs.count())]
+
+    def current_page(self):
+        return self.tabs.currentWidget()
+
+    def mark_clean(self) -> None:
+        for page in self.pages():
+            page.mark_clean()
+
+    def page_for(self, path: str):
+        key = os.path.normcase(path)
+        return next((p for p in self.pages() if os.path.normcase(p.doc.path) == key), None)
+
+    def add_page(self, page: NotepadWindow) -> None:
+        page.setWindowFlags(Qt.WindowType.Widget)
+        page._host = self
+        i = self.tabs.addTab(page, "")
+        self._retitle(page)
+        page.windowTitleChanged.connect(lambda _t, p=page: self._retitle(p))
+        page.closed.connect(self._page_closed)
+        self.tabs.setCurrentIndex(i)
+        page.show()
+
+    def show_page(self, page) -> None:
+        self.tabs.setCurrentWidget(page)
+        if self.isMinimized():
+            self.showNormal()
+        self.show()
+        self.raise_()
+        self.activateWindow()
+
+    def step_tab(self, direction: int) -> None:
+        n = self.tabs.count()
+        if n > 1:
+            self.tabs.setCurrentIndex((self.tabs.currentIndex() + direction) % n)
+
+    def _retitle(self, page) -> None:
+        i = self.tabs.indexOf(page)
+        if i < 0:
+            return
+        name = os.path.basename(page.doc.path) + ("*" if page.is_modified() else "")
+        self.tabs.setTabText(i, name.replace("&", "&&"))
+        self.tabs.setTabToolTip(i, page.doc.path)
+        if page is self.current_page():
+            self.setWindowTitle(page.windowTitle())
+
+    def _tab_changed(self, _i: int) -> None:
+        page = self.current_page()
+        if page is not None:
+            self.setWindowTitle(page.windowTitle())
+            page.check_disk()
+
+    def _page_closed(self, page) -> None:
+        i = self.tabs.indexOf(page)
+        if i >= 0:
+            self.tabs.removeTab(i)
+        if self.tabs.count() == 0 and not self._closing:
+            self.close()
+
+    def event(self, e) -> bool:
+        if e.type() == QEvent.Type.WindowActivate and self.current_page() is not None:
+            self.current_page().check_disk()
+        return super().event(e)
+
+    def closeEvent(self, event) -> None:
+        self._closing = True
+        for page in self.pages():
+            if not page.close():                              # the owner cancelled the save question: stay open
+                self._closing = False
                 event.ignore()
                 return
         self.closed.emit(self)

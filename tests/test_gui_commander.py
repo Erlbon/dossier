@@ -74,6 +74,10 @@ class FakeDialogs:
     def ask_changed_on_disk(self, name):
         return self.disk_answer
 
+    def ask_file_changed(self, name, modified):
+        self.file_changed_asked = getattr(self, "file_changed_asked", []) + [(name, modified)]
+        return getattr(self, "file_changed_answer", "keep")
+
     def ask_save_path(self, default):
         return self.save_path
 
