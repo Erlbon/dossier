@@ -35,6 +35,7 @@ from ..core.worker import Job, JobRunner, JobState
 from .appicon import app_icon
 from .background import run_in_background
 from .command_line import CommandLine
+from .second_key_guard import SecondKeyGuard
 from .batch_rename import BatchRenameMixin
 from .command_completion import CommandCompletionMixin
 from .tab_sets import TabSetsMixin
@@ -214,6 +215,7 @@ class MainWindow(LinuxDesktopMixin, EjectTrashMixin,FolderTreeMixin, FileColorsM
         self._build_menus()
         self.apply_file_colors()
         self.apply_fkey_shortcuts()
+        self.second_key_guard = SecondKeyGuard(self)
         self.install_layer_watcher()
         for name in ("command", "fkeys", "tools"):                        # menus exist now: each bar goes where it was left
             self.set_bar_place(name, self.bar_place(name), save=False)

@@ -2,6 +2,18 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-19#05 -- Finder's and the Linux desktops' keys as second keys (card 51A)
+
+- **On the Mac**, Finder's keys work as second keys: Cmd+Backspace moves to the Trash, Cmd+Up goes to the parent folder,
+  Cmd+Down opens, Cmd+[ and Cmd+] go back and forward, Cmd+Shift+G edits the path, Cmd+Shift+. shows hidden files, Cmd+I opens
+  Properties, Cmd+Shift+N makes a new folder. Root of the Drive moves to Cmd+Shift+Up on the Mac.
+- **On Linux**: Alt+Up goes to the parent folder and Ctrl+Shift+N makes a new folder (Alt+Left and Alt+Right were already Back
+  and Forward). The F-keys and today's keys stay first everywhere; Windows is unchanged.
+- **Go > Parent Folder** is new; to keep Go at 16 entries, Drives of Left Panel and Drives of Right Panel share a "Drives"
+  submenu (the owner's option A; Alt+F1 and Alt+F2 are unchanged).
+- A text field with the focus keeps these keys for itself, so Cmd+Backspace in the command line edits the text.
+- Not run on a real Mac or Linux desktop (Cmd+Shift+. in particular may need a check on a real Mac keyboard).
+
 ## 2026-11-19#04 -- Ctrl+F is Search; Mark by Pattern on + and - (card 59A)
 
 - **Ctrl+F (Cmd+F on the Mac) opens Search in this folder** on every system; Alt+F7 still does. Ctrl+F was Mark by Pattern.

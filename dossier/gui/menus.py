@@ -17,7 +17,7 @@ from PyQt6.QtWidgets import QMenu
 
 from redactor_common.gui.command_palette import add_command_palette
 
-from ..core import fkey_config
+from ..core import fkey_config, second_keys
 from ..core.platform import FILE_MANAGER_NAME
 from ..core.version import APP_NAME, APP_REPO_URL
 from . import fkeys
@@ -32,9 +32,8 @@ def command_keys(action: QAction) -> str:
     """The keys of a menu action as the menus show them: its shortcuts, or the hint after a tab for a key the window does not own
     (Enter belongs to the panel)."""
     keys = [s.toString(QKeySequence.SequenceFormat.NativeText) for s in action.shortcuts()]
-    if keys:
-        return ", ".join(keys)
-    return action.text().split("\t", 1)[1] if "\t" in action.text() else ""
+    hint = action.text().split("\t", 1)[1] if "\t" in action.text() else ""
+    return ", ".join(([hint] if hint else []) + keys)        # the hint is the panel's own key (Enter, Backspace): it stays first
 
 
 class MenusMixin:
@@ -47,6 +46,7 @@ class MenusMixin:
         fixed = [k for k in (keys if isinstance(keys, (list, tuple)) else [keys] if keys else []) if not fkey_config.assignable(k)]
         if fixed:
             act.setShortcuts([QKeySequence(k) for k in fixed])
+        self.__dict__.setdefault("_fixed_keys", {})[act] = fixed
         command = getattr(slot, "__name__", "")
         if command in fkeys.COMMANDS:
             self.__dict__.setdefault("_command_actions", {})[command] = (act, fixed)
@@ -69,9 +69,36 @@ class MenusMixin:
         for command, (act, fixed) in self.__dict__.get("_command_actions", {}).items():
             assigned = [fkey_config.key_text(layer, n) for layer in fkey_config.LAYERS
                         for n, c in sorted(self._fkey_table.get(layer, {}).items()) if c == command]
-            act.setShortcuts([QKeySequence(k) for k in fixed + assigned])
+            act.setShortcuts([QKeySequence(k) for k in self._dedupe(fixed + assigned + self._second_of(act))])
+
+    @staticmethod
+    def _dedupe(keys: list) -> list:
+        return list(dict.fromkeys(keys))
+
+    def _second_of(self, act: QAction) -> list:
+        return list(self.__dict__.get("_second_map", {}).get(act, ()))
+
+    def apply_second_keys(self, system: str = "") -> None:
+        """Put Finder's or the Linux desktops' keys after each command's own keys (card 51A, ``core/second_keys.py``). ``system`` is
+        ``"mac"``, ``"linux"`` or ``"windows"``; empty means this one. Calling it again for another system takes the old keys off."""
+        self.keys_system = system or self.__dict__.get("keys_system") or second_keys.current_system()
+        table = second_keys.second_keys(self.keys_system)
+        self._second_map = {self._second_actions[name]: keys for name, keys in table.items() if name in self._second_actions}
+        first_root = second_keys.first_key("go_root", self.keys_system)
+        self._fixed_keys[self.act_root] = [first_root]
+        fkey_actions = {act for act, _fixed in self.__dict__.get("_command_actions", {}).values()}
+        for act, fixed in self._fixed_keys.items():
+            if act not in fkey_actions:
+                act.setShortcuts([QKeySequence(k) for k in self._dedupe(fixed + self._second_of(act))])
+        self.apply_fkey_shortcuts()
+
+    def guarded_keys(self) -> frozenset:
+        """The second keys a text field keeps for itself while it has the focus (Cmd+Backspace deletes text there, not files). Alt+Left
+        and Alt+Right are left out: they were Back and Forward everywhere before, text field or not."""
+        return second_keys.second_key_set(self.keys_system) - {"Alt+Left", "Alt+Right"}
 
     def _build_menus(self) -> None:
+        self.__dict__.setdefault("keys_system", second_keys.current_system())
         bar = self.menuBar()
         self._build_file_menu(bar.addMenu("&File"))
         self._build_edit_menu(bar.addMenu("&Edit"))
@@ -84,6 +111,10 @@ class MenusMixin:
         self._build_help_menu()
         for menu in bar.findChildren(QMenu):
             menu.setToolTipsVisible(True)                    # the explanations of entries are their tooltips, not grey lines
+        self._second_actions = {"delete": self.act_delete, "go_up": self.act_parent, "open": self.act_open, "back": self.act_back,
+                                "forward": self.act_forward, "go_to_folder": self.act_edit_path, "show_hidden": self.act_show_hidden,
+                                "properties": self.act_properties, "new_folder": self.act_mkdir}
+        self.apply_second_keys()
 
     @staticmethod
     def _add_all(menu, *groups) -> None:
@@ -188,6 +219,7 @@ class MenusMixin:
         self.act_show_hidden = QAction("Show Hidden and System Files", self)
         self.act_show_hidden.setCheckable(True)
         self.act_show_hidden.setShortcut("Ctrl+H")
+        self._fixed_keys[self.act_show_hidden] = ["Ctrl+H"]
         self.addAction(self.act_show_hidden)
         shown = str(self.settings.value("view/show_hidden", "true")).lower() != "false"
         self.act_show_hidden.setChecked(shown)
@@ -220,14 +252,18 @@ class MenusMixin:
     def _build_go_menu(self, go) -> None:
         self.act_back = self._action("Back", "Alt+Left", lambda: self.active.history_back())
         self.act_forward = self._action("Forward", "Alt+Right", lambda: self.active.history_forward())
+        self.act_parent = self._action("Parent Folder\tBackspace", None, lambda: self.active.go_up())   # Backspace belongs to the panel
+        self.act_root = self._action("Root of the Drive", second_keys.first_key("go_root", self.keys_system), self.go_to_root)
+        self.act_edit_path = self._action("Edit the Path", "Ctrl+L", lambda: self.active.address_bar.start_edit())
         self._add_all(go,
                       (self.act_back, self.act_forward,
                        self._action("Folder History...", "Alt+Down", self.show_history),
                        self._action("Hotlist...", "Ctrl+B", self.show_hotlist),
                        self._action("Folder Tree...", "Alt+F10", self.show_folder_tree)),
                       (self._action("Home Page", "Alt+Home", lambda: self.active.go_home()),
-                       self._action("Root of the Drive", "Ctrl+Backspace", self.go_to_root),
-                       self._action("Edit the Path", "Ctrl+L", lambda: self.active.address_bar.start_edit()),
+                       self.act_parent,
+                       self.act_root,
+                       self.act_edit_path,
                        self._action("Pin Folder to Home Page", "Ctrl+D", self.pin_folder)),
                       (self._action("Open Cursor Folder in the Other Panel", ["Ctrl+Right", "Ctrl+Left"], self.open_in_other_panel),
                        self._action("Same Folder in the Other Panel", "Ctrl+Shift+O", self.same_in_other_panel),
@@ -248,8 +284,9 @@ class MenusMixin:
         tabs_menu.aboutToShow.connect(lambda: self.build_tab_set_menus(self._tab_open_menu, self._tab_add_menu, self._tab_forget_menu))
         self.build_tab_set_menus(self._tab_open_menu, self._tab_add_menu, self._tab_forget_menu)
         go.addSeparator()
-        go.addAction(self._action("Drives of Left Panel", "Alt+F1", lambda: self.left.open_drive_menu()))
-        go.addAction(self._action("Drives of Right Panel", "Alt+F2", lambda: self.right.open_drive_menu()))
+        drives = go.addMenu("Drives")                    # Go keeps to 16 entries: Parent Folder (card 51) made room here
+        drives.addAction(self._action("Drives of Left Panel", "Alt+F1", lambda: self.left.open_drive_menu()))
+        drives.addAction(self._action("Drives of Right Panel", "Alt+F2", lambda: self.right.open_drive_menu()))
         go.addAction(self._action("Eject This Drive", None, self.eject_current_drive))
 
     # Tools ----------------------------------------------------------------------------------------------------------------------
