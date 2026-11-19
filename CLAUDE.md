@@ -63,6 +63,7 @@ Each menu answers one question; a new command goes in the menu whose question it
 - **Network**: servers, shares, network drives, sharing.
 - **Settings**: how Dossier looks (Appearance) and behaves. Explanations are tooltips, never greyed lines.
 - **Help**: shortcuts, documentation, updates, About.
+**Two full menus (the owner, 2026-11-19, both option A):** File > Quick Look (card 45, the Mac and Linux) made File 17, so View, View as Glass and Quick Look share a "View" submenu; Go > Parent Folder (card 51's Cmd+Up / Alt+Up) made Go 17, so Drives of Left Panel and Drives of Right Panel share a "Drives" submenu (Alt+F1/F2 unchanged).
 The right-click menu takes the label and the key hint of a menu-bar command from its action (`MenusMixin.bar_command`); give it its own text only when the clicked thing makes a better label ("Properties of This Folder"). `tests/test_menu_rules.py` holds the rules (headings, at most 16 entries a menu, no one-entry submenu, separators only between groups, no grey sentences, every shortcut in a menu, right-click = menu bar). The Redactor family lint (`redactor_common` `lint_menu_bar`) is not used: Dossier keeps Ctrl+S (Quick Filter), Ctrl+Shift+A (Unmark All), Ctrl+Shift+E and Ctrl+Shift+O.
 
 ## Decided (the owner, 2026-11-05, after the comparison review in `docs/comparison-review-2026-11-05.md`)

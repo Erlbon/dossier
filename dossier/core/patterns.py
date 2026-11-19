@@ -1,4 +1,4 @@
-"""Wildcard patterns for marking files (Ctrl+F in the window).
+"""Wildcard patterns for marking files (+ in the window).
 
 A pattern text holds one or more patterns separated by ``;``, ``,`` or spaces:
 

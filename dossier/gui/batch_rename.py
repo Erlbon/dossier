@@ -114,7 +114,7 @@ class BatchRenameMixin:
             skipped = sum(1 for e in entries if e.is_dir)
             entries = [e for e in entries if not e.is_dir]
         if not entries:
-            self._say("Mark the files to rename first (Space, or Ctrl+F for a pattern)")
+            self._say("Mark the files to rename first (Space, or + for a pattern)")
             return None
         if skipped:
             self._say(f"{skipped} folder{'s' if skipped != 1 else ''} left out: this renames files")

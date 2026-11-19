@@ -148,8 +148,8 @@ class MenusMixin:
                       (self._action("Mark All", "Ctrl+A", self.select_all),
                        self._action("Unmark All", "Ctrl+Shift+A", self.selection.clear),
                        self._action("Invert Marks", "*", self.invert_selection)),
-                      (self._action("Mark by Pattern...", "Ctrl+F", self.mark_by_pattern),
-                       self._action("Unmark by Pattern...", "Ctrl+Shift+F", lambda: self.mark_by_pattern(False)),
+                      (self._action("Mark by Pattern...", "+", self.mark_by_pattern),
+                       self._action("Unmark by Pattern...", "-", lambda: self.mark_by_pattern(False)),
                        self._action("Mark by Tag...", None, self.mark_by_tag),
                        self._action("Unmark by Tag...", None, lambda: self.mark_by_tag(False))))
         mark.addSeparator()
@@ -255,7 +255,7 @@ class MenusMixin:
     # Tools ----------------------------------------------------------------------------------------------------------------------
     def _build_tools_menu(self, tools) -> None:
         self._add_all(tools,
-                      (self._action("Search...", "Alt+F7", self.search_files),
+                      (self._action("Search...", ["Alt+F7", "Ctrl+F"], self.search_files),
                        self._action("Find Duplicate Files...", "Alt+Shift+F7", self.find_duplicate_files),
                        self._action("Check Folder Health...", None, self.check_folder_health)))
         tools.addSeparator()

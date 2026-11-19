@@ -1,4 +1,4 @@
-"""Marking by wildcard pattern (Ctrl+F)."""
+"""Marking by wildcard pattern (+ and -)."""
 import pytest
 
 from dossier.core import patterns
@@ -85,14 +85,14 @@ def fill(win, left):
     win.left.refresh()
 
 
-def test_ctrl_f_marks_the_matching_files_and_adds_to_earlier_marks(world):
+def test_plus_marks_the_matching_files_and_adds_to_earlier_marks(world):
     win, dialogs, left, *_ = world
     fill(win, left)
     dialogs.texts.append("*.jpg")
-    key(win, Qt.Key.Key_F, CTRL)
+    key(win, Qt.Key.Key_Plus)
     assert marked(win) == ["a.jpg", "b.jpg"] and "2 marked" in win.status.text()
     dialogs.texts.append("*.png")
-    key(win, Qt.Key.Key_F, CTRL)
+    key(win, Qt.Key.Key_Plus)
     assert marked(win) == ["a.jpg", "b.jpg", "c.png"]                    # added to what was marked
     assert win.settings.value("mark/pattern") == "*.png"                 # remembered for next time
 
@@ -103,10 +103,10 @@ def test_ctrl_shift_f_unmarks_and_folders_need_a_trailing_slash(world):
     win.select_all()
     assert len(win.selection) == 5
     dialogs.texts.append("*.jpg")
-    key(win, Qt.Key.Key_F, CTRL | Qt.KeyboardModifier.ShiftModifier)
+    key(win, Qt.Key.Key_Minus)
     assert marked(win) == ["c.png", "log.txt", "pics"]
     dialogs.texts.append("pics/")
-    key(win, Qt.Key.Key_F, CTRL | Qt.KeyboardModifier.ShiftModifier)
+    key(win, Qt.Key.Key_Minus)
     assert marked(win) == ["c.png", "log.txt"]
 
 
@@ -114,13 +114,13 @@ def test_a_pattern_that_matches_nothing_says_so_and_a_bad_one_is_explained(world
     win, dialogs, left, *_ = world
     fill(win, left)
     dialogs.texts.append("*.zip")
-    key(win, Qt.Key.Key_F, CTRL)
+    key(win, Qt.Key.Key_Plus)
     assert "Nothing matches" in win.status.text() and marked(win) == []
     dialogs.texts.append("!*.jpg")
-    key(win, Qt.Key.Key_F, CTRL)
+    key(win, Qt.Key.Key_Plus)
     assert dialogs.infos and "pattern" in dialogs.infos[-1][1]
     dialogs.texts.append("")                                             # cancelled: nothing changes
-    key(win, Qt.Key.Key_F, CTRL)
+    key(win, Qt.Key.Key_Plus)
     assert marked(win) == []
 
 
@@ -131,7 +131,7 @@ def test_the_dialog_starts_with_the_last_pattern(world):
     original = dialogs.ask_text
     dialogs.ask_text = lambda title, label, default="": asked.append(default) or original(title, label, default)
     dialogs.texts.append("*.png")
-    key(win, Qt.Key.Key_F, CTRL)
+    key(win, Qt.Key.Key_Plus)
     dialogs.texts.append("*.jpg")
-    key(win, Qt.Key.Key_F, CTRL)
+    key(win, Qt.Key.Key_Plus)
     assert asked == ["*.*", "*.png"]

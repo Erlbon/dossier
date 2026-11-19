@@ -872,7 +872,7 @@ class MainWindow(LinuxDesktopMixin, EjectTrashMixin,FolderTreeMixin, FileColorsM
         return [m.entry_at(r).path for r in range(m.entry_count()) if not m.is_up_row(r)]
 
     def mark_by_pattern(self, mark: bool = True) -> None:
-        """Ctrl+F: ask for wildcard patterns, and optionally size, date and attributes, and mark (or, with Ctrl+Shift+F, unmark)
+        """``+``: ask for wildcard patterns, and optionally size, date and attributes, and mark (or, with ``-``, unmark)
         the matching items of the active panel. Files by default; a pattern ending in / is for folders. Size, date and attributes
         are tested as Search tests them (``core.search.fits``), on the listing the panel already holds."""
         if self.active.is_home:

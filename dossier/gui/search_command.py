@@ -25,7 +25,7 @@ class SearchCommandMixin:
         return True
 
     def search_files(self, panel=None) -> None:
-        """Alt+F7: ask what to look for and where, then search on a thread; the result opens in a new tab."""
+        """Ctrl+F (Cmd+F on the Mac) or Alt+F7: ask what to look for and where, then search on a thread; the result opens in a new tab."""
         panel = panel or self.active
         if not self._search_root_ok(panel):
             return

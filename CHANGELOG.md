@@ -2,6 +2,13 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-19#04 -- Ctrl+F is Search; Mark by Pattern on + and - (card 59A)
+
+- **Ctrl+F (Cmd+F on the Mac) opens Search in this folder** on every system; Alt+F7 still does. Ctrl+F was Mark by Pattern.
+- **Mark by Pattern is `+` and Unmark by Pattern is `-`** in a panel (the keypad's too), the classic commander keys; both are
+  still in the Mark menu. In the command line and other text fields `+` and `-` type themselves. Ctrl+Shift+F is free.
+- Not run on a real Mac or Linux desktop.
+
 ## 2026-11-19#03 -- A launcher for the Linux tarball, and Dossier as the folder program (card 52A)
 
 - **The Linux tarball offers, once, to add Dossier to the application menu** on its first start: a launcher and its icon in

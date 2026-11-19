@@ -1,4 +1,4 @@
-"""Mark > Mark by Pattern... (Ctrl+F) and Unmark by Pattern...: a name pattern, and optionally size, date and attributes.
+"""Mark > Mark by Pattern... (+) and Unmark by Pattern...: a name pattern, and optionally size, date and attributes.
 
 The size, date and attribute boxes are the Search dialog's; the test is ``core.search.fits``, the same one Search uses. Everything is
 judged from the listing the panel already holds, so marking never touches the disk.
