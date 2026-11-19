@@ -2,6 +2,16 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-19#19 -- What changed here since... (card 65A)
+
+- **Tools > Compare > Remember This Folder's State** keeps every file below the folder with its size, time and checksum, in
+  Dossier's own folder (`folder-states` in the settings folder), never in yours. In the background, with Cancel.
+- **Tools > Compare > What Changed Since...** picks one of this folder's remembered states (newest first; "Forget This State"
+  deletes one) and lists the files added, changed, moved (same content, new place) and removed since then. Files that still
+  exist can be checked and marked in the panel, shown in a tab, or deleted with the usual plan. A file whose time changed but
+  whose content did not is only counted, not listed.
+- Not run on a real Mac or Linux desktop.
+
 ## 2026-11-19#18 -- Copy Path
 
 - **Copy Paths as Text is now called Copy Path**, on the right-click menu and in the Edit menu alike, the same word the address

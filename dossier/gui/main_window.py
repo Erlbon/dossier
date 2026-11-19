@@ -83,6 +83,7 @@ from .compare_folders import CompareFoldersMixin
 from .servers import ServersMixin
 from .copy_settings import CopySettingsMixin
 from .duplicates import DuplicatesMixin
+from .folder_states import FolderStatesMixin
 from .eject_trash import EjectTrashMixin
 from .sidebar_window import SidebarMixin
 from .file_associations import FileAssociationsMixin
@@ -158,7 +159,7 @@ def about_html() -> str:
             "The full credits are in CREDITS.md.</p>")
 
 
-class MainWindow(FileAssociationsMixin, SidebarMixin,TypingModeMixin, RenameInPlaceMixin, LinuxDesktopMixin, EjectTrashMixin,FolderTreeMixin, FileColorsMixin, TransferMixin, RemoteEditMixin, FrostMixin, GlassViewMixin, KeysMixin, AutoRefreshMixin, GitAwarenessMixin, MetadataEditMixin, HealthMixin, QuarantineMixin, NewFromContentMixin, TabSetsMixin, CommandCompletionMixin, DatesLinksMixin, ViewModesMixin, ToolsBarMixin, ContextMenuMixin, DragDropMixin, LookMixin, ZipEditMixin, ArchiveCommandsMixin, CopySettingsMixin, AssistantMixin, OpenFilesMixin, MenusMixin, WheelMixin, ToolsBarPlaceMixin, TailnetMixin, TaildropMixin, CompareFoldersMixin, ServersMixin, DuplicatesMixin, FolderLayoutsMixin, QueueResumeMixin, PlannedMixin, ColumnsMixin, PropertiesMixin, SharingMixin, MountMixin, ChecksumMixin, MarksAndNotesMixin, SearchCommandMixin, BatchRenameMixin, OperationQueueMixin, StallLogMixin, ErrorLogMixin,GoingPlacesMixin, FolderSizesMixin, UnpackMixin, QMainWindow):
+class MainWindow(FileAssociationsMixin, SidebarMixin,TypingModeMixin, RenameInPlaceMixin, LinuxDesktopMixin, EjectTrashMixin,FolderTreeMixin, FileColorsMixin, TransferMixin, RemoteEditMixin, FrostMixin, GlassViewMixin, KeysMixin, AutoRefreshMixin, GitAwarenessMixin, MetadataEditMixin, HealthMixin, QuarantineMixin, NewFromContentMixin, TabSetsMixin, CommandCompletionMixin, DatesLinksMixin, ViewModesMixin, ToolsBarMixin, ContextMenuMixin, DragDropMixin, LookMixin, ZipEditMixin, ArchiveCommandsMixin, CopySettingsMixin, AssistantMixin, OpenFilesMixin, MenusMixin, WheelMixin, ToolsBarPlaceMixin, TailnetMixin, TaildropMixin, CompareFoldersMixin, ServersMixin, DuplicatesMixin, FolderStatesMixin, FolderLayoutsMixin, QueueResumeMixin, PlannedMixin, ColumnsMixin, PropertiesMixin, SharingMixin, MountMixin, ChecksumMixin, MarksAndNotesMixin, SearchCommandMixin, BatchRenameMixin, OperationQueueMixin, StallLogMixin, ErrorLogMixin,GoingPlacesMixin, FolderSizesMixin, UnpackMixin, QMainWindow):
     def __init__(self, fs: Optional[FileSystem] = None, *, settings_path: Optional[str] = None, start=(None, None),
                  dialogs=None, trasher=None, terminal_launcher=None, which=None) -> None:
         super().__init__()

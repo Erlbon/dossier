@@ -314,6 +314,9 @@ class MenusMixin:
         compare = tools.addMenu("Compare")
         compare.addAction(self._action("Folders and Synchronize...", "Alt+Shift+F8", self.compare_folders))
         compare.addAction(self._action("Two Files Under the Cursors", None, self.compare_files))
+        compare.addSeparator()
+        compare.addAction(self._action("Remember This Folder's State", None, self.remember_folder_state))
+        compare.addAction(self._action("What Changed Since...", None, self.what_changed_since))
         rename_menu = tools.addMenu("Batch Rename")
         for text, keys, slot in (("By Pattern...", "Ctrl+M", self.rename_by_pattern),
                                  ("Search and Replace in Names...", None, self.rename_search_replace),
