@@ -177,9 +177,10 @@ def build_entries(p: HomeProvider) -> list:
             entries.append(Entry(name=item.name, path=TAILNET_PREFIX + item.name, is_dir=False, kind="tailnet", detail=item.detail, label=item.label,
                                  status=OK if item.online else UNCHECKED,
                                  note="Online: press Enter to add it as a server" if item.online else "Offline"))
-        # Tailscale cannot say what is waiting without taking it, so the row is there whenever Tailscale answers (card 64A)
-        entries.append(Entry(name="Files waiting for you...", path=TAILDROP_RECEIVE, is_dir=False, kind="action",
-                             note="Fetch the files other devices sent to this one with Taildrop"))
+        # Tailscale cannot say what is waiting without taking it, so the row is there whenever Tailscale answers and is worded
+        # as what it does (card 64A, question 74A)
+        entries.append(Entry(name="Fetch files sent to you...", path=TAILDROP_RECEIVE, is_dir=False, kind="action",
+                             note="Take the files other devices sent to this one with Taildrop; says so when none are waiting"))
     return entries
 
 

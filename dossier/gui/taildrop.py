@@ -71,7 +71,7 @@ class TaildropMixin:
 
     # receiving --------------------------------------------------------------------------------------------------------------------
     def receive_taildrop(self) -> None:
-        """Home page > Files waiting for you: ask where to, take the files into a folder there, show the move, run it."""
+        """Home page > Fetch files sent to you: ask where to, take the files into a folder there, show the move, run it."""
         def find_default(progress, cancel):
             home = home_dir()
             keys = [k for k, _name in KNOWN_FOLDERS]

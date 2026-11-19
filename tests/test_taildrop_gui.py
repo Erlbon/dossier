@@ -139,6 +139,6 @@ def test_the_receive_row_is_on_the_home_page_only_when_tailscale_answers(world, 
         win.left.go_home()
         pump(win, lambda: win.left.is_home)
         return [win.left.model.entry_at(r).name for r in range(win.left.model.entry_count())]
-    assert "Files waiting for you..." not in names()
+    assert "Fetch files sent to you..." not in names()
     loaded(win)
-    assert "Files waiting for you..." in names()
+    assert "Fetch files sent to you..." in names()

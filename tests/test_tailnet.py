@@ -56,7 +56,7 @@ def test_the_home_page_has_a_tailnet_section_only_when_there_are_devices():
     entries = build_entries(HomeProvider(volumes=lambda: [], exists=lambda p: False, tailnet=lambda: items))
     names = [e.name for e in entries]
     section = entries[names.index("Tailnet") + 1:]
-    assert [e.name for e in section] == ["laptop", "phone", "Files waiting for you..."]
+    assert [e.name for e in section] == ["laptop", "phone", "Fetch files sent to you..."]
     section = section[:2]
     assert all(e.kind == "tailnet" and not e.is_dir for e in section)
     assert [e.detail for e in section] == ["100.64.0.1", "100.64.0.9"] and [e.label for e in section] == ["Windows, this computer", "Android, offline"]

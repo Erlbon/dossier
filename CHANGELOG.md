@@ -2,6 +2,11 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-19#22 -- "Fetch files sent to you..." on the Home page (question 74A)
+
+- The Tailnet row that takes Taildrop files is now called **Fetch files sent to you...** instead of "Files waiting for you...":
+  Tailscale cannot tell whether files wait without taking them, so the row says what it does, not what it cannot know.
+
 ## 2026-11-19#21 -- Rules per folder that propose a plan (card 68A)
 
 - **Tools > Rules > Folder Rules...** gives a folder its own rules: name patterns, older than N days, larger than a size; move,

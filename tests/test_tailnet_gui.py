@@ -25,7 +25,7 @@ def test_the_devices_appear_on_the_home_page_after_the_background_reading(world,
     win.refresh_tailnet(force=True)
     wait(win, lambda: win.tailnet_items())
     names = home_names(win)
-    assert names[names.index("Tailnet") + 1:] == ["laptop", "homeserver3", "alpha-nas", "zeta-phone", "Files waiting for you..."]
+    assert names[names.index("Tailnet") + 1:] == ["laptop", "homeserver3", "alpha-nas", "zeta-phone", "Fetch files sent to you..."]
     assert win.tailnet_item("home://#tailnet/homeserver3").host == "100.118.213.22"
 
 
