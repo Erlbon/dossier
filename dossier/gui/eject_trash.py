@@ -59,6 +59,7 @@ class EjectTrashMixin:
                     if panel.is_home:
                         panel.refresh()
                     panel.drive_bar.reload()
+                self.refresh_sidebar()
             else:
                 self.dialogs.show_output(f"Could not eject {title}", result.output)
 

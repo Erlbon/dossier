@@ -83,6 +83,7 @@ from .servers import ServersMixin
 from .copy_settings import CopySettingsMixin
 from .duplicates import DuplicatesMixin
 from .eject_trash import EjectTrashMixin
+from .sidebar_window import SidebarMixin
 from .linux_desktop import LinuxDesktopMixin
 from .folder_layouts import FolderLayoutsMixin
 from .planned_ops import PlannedMixin
@@ -121,7 +122,7 @@ def about_html() -> str:
             "The full credits are in CREDITS.md.</p>")
 
 
-class MainWindow(TypingModeMixin, RenameInPlaceMixin, LinuxDesktopMixin, EjectTrashMixin,FolderTreeMixin, FileColorsMixin, TransferMixin, RemoteEditMixin, FrostMixin, GlassViewMixin, KeysMixin, AutoRefreshMixin, GitAwarenessMixin, MetadataEditMixin, HealthMixin, QuarantineMixin, NewFromContentMixin, TabSetsMixin, CommandCompletionMixin, DatesLinksMixin, ViewModesMixin, ToolsBarMixin, ContextMenuMixin, DragDropMixin, LookMixin, ZipEditMixin, ArchiveCommandsMixin, CopySettingsMixin, AssistantMixin, OpenFilesMixin, MenusMixin, WheelMixin, ToolsBarPlaceMixin, TailnetMixin, CompareFoldersMixin, ServersMixin, DuplicatesMixin, FolderLayoutsMixin, QueueResumeMixin, PlannedMixin, ColumnsMixin, PropertiesMixin, SharingMixin, MountMixin, ChecksumMixin, MarksAndNotesMixin, SearchCommandMixin, BatchRenameMixin, OperationQueueMixin, StallLogMixin, ErrorLogMixin,GoingPlacesMixin, FolderSizesMixin, UnpackMixin, QMainWindow):
+class MainWindow(SidebarMixin, TypingModeMixin, RenameInPlaceMixin, LinuxDesktopMixin, EjectTrashMixin,FolderTreeMixin, FileColorsMixin, TransferMixin, RemoteEditMixin, FrostMixin, GlassViewMixin, KeysMixin, AutoRefreshMixin, GitAwarenessMixin, MetadataEditMixin, HealthMixin, QuarantineMixin, NewFromContentMixin, TabSetsMixin, CommandCompletionMixin, DatesLinksMixin, ViewModesMixin, ToolsBarMixin, ContextMenuMixin, DragDropMixin, LookMixin, ZipEditMixin, ArchiveCommandsMixin, CopySettingsMixin, AssistantMixin, OpenFilesMixin, MenusMixin, WheelMixin, ToolsBarPlaceMixin, TailnetMixin, CompareFoldersMixin, ServersMixin, DuplicatesMixin, FolderLayoutsMixin, QueueResumeMixin, PlannedMixin, ColumnsMixin, PropertiesMixin, SharingMixin, MountMixin, ChecksumMixin, MarksAndNotesMixin, SearchCommandMixin, BatchRenameMixin, OperationQueueMixin, StallLogMixin, ErrorLogMixin,GoingPlacesMixin, FolderSizesMixin, UnpackMixin, QMainWindow):
     def __init__(self, fs: Optional[FileSystem] = None, *, settings_path: Optional[str] = None, start=(None, None),
                  dialogs=None, trasher=None, terminal_launcher=None, which=None) -> None:
         super().__init__()
@@ -183,10 +184,10 @@ class MainWindow(TypingModeMixin, RenameInPlaceMixin, LinuxDesktopMixin, EjectTr
         self.left = Panel(self.fs, self.selection, dispatch=self.dispatcher)
         self.right = Panel(self.fs, self.selection, dispatch=self.dispatcher)
         self.active = self.left
-        self.split = QSplitter(Qt.Orientation.Horizontal)
-        self.split.addWidget(self.left)
-        self.split.addWidget(self.right)
-        self.split.setChildrenCollapsible(False)
+        self.panel_split = QSplitter(Qt.Orientation.Horizontal)      # the two panels; self.split is this plus the sidebar
+        self.panel_split.addWidget(self.left)
+        self.panel_split.addWidget(self.right)
+        self.panel_split.setChildrenCollapsible(False)
 
         self.fkeys = self._build_fkey_bar()
         self.status = QLabel()
@@ -211,7 +212,7 @@ class MainWindow(TypingModeMixin, RenameInPlaceMixin, LinuxDesktopMixin, EjectTr
         self.tools_bar = self.build_tools_bar()                  # between the menu bar and the panels' tabs
         self.tools_bar.setVisible(str(self.settings.value("view/tools_bar", "true")).lower() == "true")
         box.addWidget(self.tools_bar)
-        box.addWidget(self.split, 1)
+        box.addWidget(self.build_sidebar(), 1)                 # the two panels, with the sidebar (hidden unless View > Bars > Sidebar) beside them
         self.command_row = self._build_command_row()
         box.addWidget(self.command_row)
         box.addWidget(self.fkeys)
@@ -276,6 +277,7 @@ class MainWindow(TypingModeMixin, RenameInPlaceMixin, LinuxDesktopMixin, EjectTr
             self.set_error_log(True)
         self.set_drive_style(str(self.settings.value("view/drive_selector", "menu")))
         self.set_notes_visible(self.act_notes.isChecked())
+        self.act_sidebar.setChecked(self.sidebar_wanted())
         self._set_active(self.left)
         self.left.view.setFocus()
         self._update_status()
@@ -355,6 +357,7 @@ class MainWindow(TypingModeMixin, RenameInPlaceMixin, LinuxDesktopMixin, EjectTr
         self._apply_fkey_icons()
         self._style_terminal_button()
         self.tools_bar.restyle()
+        self.sidebar.restyle()
         for p in (self.left, self.right):
             p.restyle()
 
@@ -783,6 +786,7 @@ class MainWindow(TypingModeMixin, RenameInPlaceMixin, LinuxDesktopMixin, EjectTr
         for panel in (self.left, self.right):
             if panel.is_home:
                 panel.refresh()
+        self.refresh_sidebar()
 
     def _home_blocked(self, what: str) -> bool:
         """True (after saying why) when the active panel shows the Home page: its entries are shortcuts, not files."""
@@ -1142,7 +1146,7 @@ class MainWindow(TypingModeMixin, RenameInPlaceMixin, LinuxDesktopMixin, EjectTr
                 panel.table.horizontalHeader().restoreState(state)
         sizes = self.settings.value("window/split")
         if sizes:
-            self.split.setSizes([int(s) for s in sizes])
+            self.panel_split.setSizes([int(s) for s in sizes])
 
     def about(self) -> None:
         self.dialogs.info(f"About {APP_NAME}", about_html())
@@ -1169,7 +1173,7 @@ class MainWindow(TypingModeMixin, RenameInPlaceMixin, LinuxDesktopMixin, EjectTr
             assistant_bridge.clear_state()           # an assistant must not think the window is still there
         self.cmd_runner.shutdown(wait=False, cancel_futures=True)   # a listing stuck on a dead share must not hold us
         self.settings.setValue("window/geometry", self.saveGeometry())
-        self.settings.setValue("window/split", self.split.sizes())
+        self.settings.setValue("window/split", self.panel_split.sizes())
         self.settings.setValue("panel/left", self.left.path)
         self.settings.setValue("panel/right", self.right.path)
         for key, panel in (("left", self.left), ("right", self.right)):

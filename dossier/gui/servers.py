@@ -336,6 +336,7 @@ class ServersMixin:
         for panel in (self.left, self.right):
             if panel.is_home:
                 panel.refresh()
+        self.refresh_sidebar()
 
     def open_ssh_terminal(self, folder: str = "") -> None:
         """An interactive SSH session on the server of the active panel, in the folder shown, in a terminal window of its own.
@@ -475,6 +476,7 @@ class ServersMixin:
         def go(session: Session) -> None:
             target = conn.url("/" if conn.protocol == "webdav" or conn.protocol in servers.CATALOGS else (conn.start_dir or session.home))   # a web folder's base is its top
             panel.new_tab(target) if new_tab else panel.set_folder(target)
+            self.refresh_sidebar()
         self.connect_server(conn, go)
 
     def _connect_needed(self, path: str, panel) -> None:
@@ -713,6 +715,7 @@ class ServersMixin:
         self.server_fs(conn).drop(authority, wait=False)          # closed on a thread: a dead server cannot hold the window
         self._links.pop((conn.protocol, authority), None)
         self._say(f"Disconnected from {conn.name}")
+        self.refresh_sidebar()
         for panel in (self.left, self.right):
             if panel.is_home:
                 panel.refresh()

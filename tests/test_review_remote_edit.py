@@ -47,10 +47,17 @@ def test_a_file_inside_a_zip_is_edited_and_written_back(world, tmp_path):
         z.writestr("todo.txt", "one\n")
         z.writestr("other.txt", "keep\n")
     editor = open_editor(win, f"zip://{archive}!/todo.txt")
+
+    def member(name):                       # closed again at once, and "not there" while the save swaps the file in
+        try:
+            with zipfile.ZipFile(archive) as z:
+                return z.read(name)
+        except (OSError, zipfile.BadZipFile, KeyError):
+            return None
     try:
         save_text(editor, "one\ntwo\n")
-        pump(win, lambda: zipfile.ZipFile(archive).read("todo.txt") == b"one\ntwo\n", timeout=10)
-        assert zipfile.ZipFile(archive).read("other.txt") == b"keep\n"
+        pump(win, lambda: member("todo.txt") == b"one\ntwo\n", timeout=10)
+        assert member("other.txt") == b"keep\n"
     finally:
         close_all(win)
 

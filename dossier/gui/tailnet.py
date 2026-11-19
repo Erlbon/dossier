@@ -93,6 +93,7 @@ class TailnetMixin:
         for panel in (self.left, self.right):
             if panel.is_home:
                 panel.refresh()
+        self.refresh_sidebar()
 
     # what a device can become ---------------------------------------------------------------------------------------------------------
     def tailnet_item(self, path: str) -> Optional[TailnetItem]:

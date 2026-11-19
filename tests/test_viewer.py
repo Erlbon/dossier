@@ -381,7 +381,7 @@ def test_menus_view_has_modes_and_notes_while_settings_has_the_choices(commander
                              "Unmark by Tag...", "Saved Marks"]
     assert texts("View") == ["Details", "Thumbnails", "Thumbnail Size", "Sort By", "Columns...", "Fit Columns to Panel", "Folder Layout", "Show Hidden and System Files",
                              "All Files Below This Folder",
-                             "Quick Filter", "Folder Sizes", "Refresh", "Folder Notes", "Tools Bar", "Bar Positions", "Full Screen"]
+                             "Quick Filter", "Folder Sizes", "Refresh", "Folder Notes", "Bars", "Bar Positions", "Full Screen"]
     assert texts("Go") == ["Back", "Forward", "Folder History...", "Hotlist...", "Folder Tree...", "Home Page", "Parent Folder", "Root of the Drive",
                            "Edit the Path", "Pin Folder to Home Page",
                            "Open Cursor Folder in the Other Panel", "Same Folder in the Other Panel", "Swap Panels", "Tabs",

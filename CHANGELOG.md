@@ -2,6 +2,17 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-19#11 -- A sidebar of places, hidden by default (card 60B)
+
+- **View > Bars > Sidebar** shows a narrow list at the left of both panels: pinned folders, drives (with an eject mark where
+  Eject works), servers and the Trash. A click opens the place in the active panel, as Enter on the Home page would; the
+  right-click menu has Open, Open in the Other Panel and Eject. Hidden until switched on; its width is remembered.
+- The sidebar takes its entries from the Home page and reads them on a thread; it refreshes when shown, when pins or servers
+  change and after an eject (a stick plugged in shows at the next of these).
+- View > Tools Bar moves into View > Bars beside it, so View stays at 16 entries.
+- Tests: the zip edit test no longer fails now and then (it read the zip while the save was swapping it in, and left it open).
+- Not run on a real Mac or Linux desktop.
+
 ## 2026-11-19#10 -- Folders that spring open while dragging (card 62A)
 
 - **Holding dragged files over a folder, a tab or a drive on the Home page for about a second opens it**, so a drop can go

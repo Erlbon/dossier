@@ -249,11 +249,17 @@ class MenusMixin:
         self.act_notes.toggled.connect(self.set_notes_visible)
         notes.addAction(self.act_notes)
         notes.addAction(self._action("Edit Folder Note", "Ctrl+Shift+E", self.edit_folder_note))
+        bars = view_menu.addMenu("Bars")                  # View is full (16): the two things that show and hide share a submenu
         self.act_tools_bar = QAction("Tools Bar", self)
         self.act_tools_bar.setCheckable(True)
         self.act_tools_bar.setChecked(self.tools_bar.isVisibleTo(self))
         self.act_tools_bar.toggled.connect(self.set_tools_bar_visible)
-        view_menu.addAction(self.act_tools_bar)
+        bars.addAction(self.act_tools_bar)
+        self.act_sidebar = QAction("Sidebar", self)       # card 60B: hidden until shown here
+        self.act_sidebar.setToolTip("Pinned folders, drives, servers and the Trash, at the left of both panels")
+        self.act_sidebar.setCheckable(True)
+        self.act_sidebar.toggled.connect(self.set_sidebar_visible)
+        bars.addAction(self.act_sidebar)
         self.build_bar_place_menus(view_menu)
         view_menu.addAction(self._action("Full Screen", None, self.toggle_full_screen))
 
