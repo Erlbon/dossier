@@ -2,6 +2,16 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-19#21 -- Rules per folder that propose a plan (card 68A)
+
+- **Tools > Rules > Folder Rules...** gives a folder its own rules: name patterns, older than N days, larger than a size; move,
+  copy or delete (to the recycle bin), with `<year>` and `<month>` of the file's date allowed in the destination. The first
+  matching rule wins. Rules are kept in Dossier's settings beside the folder layouts, never as a file in your folder.
+- **Rules never act alone.** When you open a folder whose rules match something, the status line says "Rules for this folder
+  would move 3 items. Show the Plan"; the link, or Tools > Rules > Run Rules, shows the plan, and nothing changes until you
+  press Run. No box pops up on entering a folder.
+- Not run on a real Mac or Linux desktop.
+
 ## 2026-11-19#20 -- Earlier Versions from snapshot folders (card 67B)
 
 - **Earlier Versions...** (right-click a file or folder, or Tools > Compare) lists the moments in the snapshot folders above it

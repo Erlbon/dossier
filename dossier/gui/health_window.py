@@ -43,9 +43,9 @@ class _Row(QTreeWidgetItem):
 class PlanPreview(OwnedDialog):
     """The steps a fix would take, listed; nothing has happened yet."""
 
-    def __init__(self, parent, plans: list) -> None:
+    def __init__(self, parent, plans: list, title: str = "Preview of the fix") -> None:
         super().__init__(parent)
-        self.setWindowTitle("Preview of the fix")
+        self.setWindowTitle(title)
         self.resize(760, 420)
         layout = QVBoxLayout(self)
         steps = 0

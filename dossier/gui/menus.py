@@ -339,6 +339,9 @@ class MenusMixin:
         quarantine.addAction(self._action("Move to Quarantine...", None, self.move_to_quarantine))
         quarantine.addAction(self._action("Put Back", None, self.put_back_from_quarantine))
         quarantine.addAction(self._action("Show the Quarantine Folder", None, self.show_quarantine_folder))
+        rules = tools.addMenu("Rules")
+        rules.addAction(self._action("Run Rules", None, self.run_folder_rules))
+        rules.addAction(self._action("Folder Rules...", None, self.edit_folder_rules))
         tools.addSeparator()
         operations = tools.addMenu("Operations")
         operations.addAction(self._action("Plan a Copy", None, self.plan_copy))                 # Shift+F5: onto the planned list

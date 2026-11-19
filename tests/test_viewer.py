@@ -387,7 +387,7 @@ def test_menus_view_has_modes_and_notes_while_settings_has_the_choices(commander
                            "Open Cursor Folder in the Other Panel", "Same Folder in the Other Panel", "Swap Panels", "Tabs",
                            "Drives", "Eject This Drive"]
     assert texts("Tools") == ["Search...", "Find Duplicate Files...", "Check Folder Health...", "Compare", "Batch Rename", "Archives", "Checksums",
-                              "Quarantine", "Operations", "Terminal Here", "Administrator Terminal Here", "SSH Terminal Here", "Command Line"]
+                              "Quarantine", "Rules", "Operations", "Terminal Here", "Administrator Terminal Here", "SSH Terminal Here", "Command Line"]
     assert texts("Network") == ["Add Server...", "Disconnect This Panel's Server", "Add Network Share...", "Client for NFS",
                                 "Show Tailnet Devices on the Home Page"]
     assert texts("Settings") == ["Appearance", "Copy and Move...", "Opening Files", "Mouse Wheel...", "Function Keys...", "Typing in a Panel", "Auto Refresh",
