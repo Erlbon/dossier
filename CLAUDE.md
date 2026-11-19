@@ -36,7 +36,7 @@ The function list follows The Next Tool (Ebdac Software GmbH, discontinued 2007)
 ## Decided (the owner, 2026-10-20)
 - **Undo is small on purpose.** Only renames, same-drive moves and new empty folders can be undone (`core/undo_log.py`). Never undo a copy by deleting what it made; an overwrite or a delete has no undo (older file in the recycle bin, or gone on a network drive). Do not grow it again without asking.
 - **Network drives have no recycle bin.** Delete there is permanent and an overwrite deletes the older file; both say so in the confirmation (`drives.is_network_path`).
-- **The window is split into mixins** (`gui/ops_queue.py`, `stall_log.py`, `going_places.py`, `folder_sizes.py`, `unpack.py`) and the one background-job helper `gui/background.py`. New background work uses `run_in_background`; do not hand-roll another holder/box/finished pattern. Sizes are formatted by `core/sizefmt.py`, a missing file is `vfs.stat_or_none`.
+- **The window is split into mixins** (no line limit on `main_window.py`: the old 1300-line cap was a Claude guard with no technical reason, dropped by the owner 2026-11-19; new window features still go in their own mixin, e.g. `gui/rename_in_place.py`) (`gui/ops_queue.py`, `stall_log.py`, `going_places.py`, `folder_sizes.py`, `unpack.py`) and the one background-job helper `gui/background.py`. New background work uses `run_in_background`; do not hand-roll another holder/box/finished pattern. Sizes are formatted by `core/sizefmt.py`, a missing file is `vfs.stat_or_none`.
 - **The window's thread never touches the disk.** Listing, notes, sizes, planning, unpacking and the status line's sizes all run on threads.
 
 ## Function keys (the owner, 2026-11-11, layout A)

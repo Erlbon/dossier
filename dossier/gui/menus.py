@@ -342,6 +342,7 @@ class MenusMixin:
                   self._action("SSH Terminal Here", None, self.open_ssh_terminal)):
             tools.addAction(a)
         command_line = tools.addMenu("Command Line")
+        command_line.addAction(self._action("Go to Command Line", "Ctrl+E", self.focus_command_line))
         command_line.addAction(self._action("Name to Command Line", "Ctrl+J", self.put_in_command_line))
         command_line.addAction(self._action("Path to Command Line", "Ctrl+Shift+J", self.put_path_in_command_line))
         command_line.addAction(self._action("Command Line History...", None, lambda: (self.cmdline.setFocus(), self.show_command_history())))
@@ -415,6 +416,7 @@ class MenusMixin:
         self.build_open_menu(settings)
         settings.addAction(self._action("Mouse Wheel...", None, self.open_wheel_settings))
         settings.addAction(self._action("Function Keys...", None, self.open_function_keys_settings))
+        self.build_typing_menu(settings)
         self.add_auto_refresh_actions(settings)
         self.act_keep_place = QAction("Keep Cursor Position After Moving or Deleting", self)
         self.act_keep_place.setToolTip("On: the cursor goes to the next item. Off: back to the top of the folder")

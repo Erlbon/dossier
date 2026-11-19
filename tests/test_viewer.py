@@ -390,7 +390,7 @@ def test_menus_view_has_modes_and_notes_while_settings_has_the_choices(commander
                               "Quarantine", "Operations", "Terminal Here", "Administrator Terminal Here", "SSH Terminal Here", "Command Line"]
     assert texts("Network") == ["Add Server...", "Disconnect This Panel's Server", "Add Network Share...", "Client for NFS",
                                 "Show Tailnet Devices on the Home Page"]
-    assert texts("Settings") == ["Appearance", "Copy and Move...", "Opening Files", "Mouse Wheel...", "Function Keys...", "Auto Refresh",
+    assert texts("Settings") == ["Appearance", "Copy and Move...", "Opening Files", "Mouse Wheel...", "Function Keys...", "Typing in a Panel", "Auto Refresh",
                                  "Keep Cursor Position After Moving or Deleting", "Git Status on Network Drives (can be slow)",
                                  "Drives and Sharing"] + (["Linux Desktop"] if sys.platform.startswith("linux") else []) + [
                                  "Quarantine...", "Assistant Access..."]

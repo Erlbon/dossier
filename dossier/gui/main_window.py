@@ -67,6 +67,7 @@ from .zip_edit import ZipEditMixin, zip_parts
 from .assistant import AssistantMixin
 from .open_files import OpenFilesMixin
 from .menus import MenusMixin
+from .typing_mode import TypingModeMixin
 from .wheel_settings import WheelMixin
 from .tools_bar_place import ToolsBarPlaceMixin
 from .bar_grip import BarGrip
@@ -120,7 +121,7 @@ def about_html() -> str:
             "The full credits are in CREDITS.md.</p>")
 
 
-class MainWindow(RenameInPlaceMixin, LinuxDesktopMixin, EjectTrashMixin,FolderTreeMixin, FileColorsMixin, TransferMixin, RemoteEditMixin, FrostMixin, GlassViewMixin, KeysMixin, AutoRefreshMixin, GitAwarenessMixin, MetadataEditMixin, HealthMixin, QuarantineMixin, NewFromContentMixin, TabSetsMixin, CommandCompletionMixin, DatesLinksMixin, ViewModesMixin, ToolsBarMixin, ContextMenuMixin, DragDropMixin, LookMixin, ZipEditMixin, ArchiveCommandsMixin, CopySettingsMixin, AssistantMixin, OpenFilesMixin, MenusMixin, WheelMixin, ToolsBarPlaceMixin, TailnetMixin, CompareFoldersMixin, ServersMixin, DuplicatesMixin, FolderLayoutsMixin, QueueResumeMixin, PlannedMixin, ColumnsMixin, PropertiesMixin, SharingMixin, MountMixin, ChecksumMixin, MarksAndNotesMixin, SearchCommandMixin, BatchRenameMixin, OperationQueueMixin, StallLogMixin, ErrorLogMixin,GoingPlacesMixin, FolderSizesMixin, UnpackMixin, QMainWindow):
+class MainWindow(TypingModeMixin, RenameInPlaceMixin, LinuxDesktopMixin, EjectTrashMixin,FolderTreeMixin, FileColorsMixin, TransferMixin, RemoteEditMixin, FrostMixin, GlassViewMixin, KeysMixin, AutoRefreshMixin, GitAwarenessMixin, MetadataEditMixin, HealthMixin, QuarantineMixin, NewFromContentMixin, TabSetsMixin, CommandCompletionMixin, DatesLinksMixin, ViewModesMixin, ToolsBarMixin, ContextMenuMixin, DragDropMixin, LookMixin, ZipEditMixin, ArchiveCommandsMixin, CopySettingsMixin, AssistantMixin, OpenFilesMixin, MenusMixin, WheelMixin, ToolsBarPlaceMixin, TailnetMixin, CompareFoldersMixin, ServersMixin, DuplicatesMixin, FolderLayoutsMixin, QueueResumeMixin, PlannedMixin, ColumnsMixin, PropertiesMixin, SharingMixin, MountMixin, ChecksumMixin, MarksAndNotesMixin, SearchCommandMixin, BatchRenameMixin, OperationQueueMixin, StallLogMixin, ErrorLogMixin,GoingPlacesMixin, FolderSizesMixin, UnpackMixin, QMainWindow):
     def __init__(self, fs: Optional[FileSystem] = None, *, settings_path: Optional[str] = None, start=(None, None),
                  dialogs=None, trasher=None, terminal_launcher=None, which=None) -> None:
         super().__init__()
@@ -663,6 +664,9 @@ class MainWindow(RenameInPlaceMixin, LinuxDesktopMixin, EjectTrashMixin,FolderTr
         self.prompt.setText(metrics.elidedText(text, Qt.TextElideMode.ElideMiddle, 360) + ">")
 
     def _space_pressed(self) -> None:
+        if self._jumping():                            # a space inside a name being typed
+            self._type_ahead(" ")
+            return
         if self.cmdline.text():
             self.cmdline.insert(" ")
             self.cmdline.setFocus()
@@ -673,10 +677,6 @@ class MainWindow(RenameInPlaceMixin, LinuxDesktopMixin, EjectTrashMixin,FolderTr
                 and not self.active.model.has_tree_size(entry.path)):
             self.calculate_folder_sizes(paths=[entry.path])      # Space on a folder adds up its size, so the marked total is true
 
-    def _type_to_command(self, text: str) -> None:
-        self.cmdline.setFocus()
-        self.cmdline.insert(text)
-
     def _enter_runs_command(self) -> bool:
         if self.cmdline.text().strip():
             self.run_command_line()
@@ -684,6 +684,8 @@ class MainWindow(RenameInPlaceMixin, LinuxDesktopMixin, EjectTrashMixin,FolderTr
         return False
 
     def _backspace_edits_command(self) -> bool:
+        if self._jump_backspace():
+            return True
         if self.cmdline.text():
             self.cmdline.setFocus()
             self.cmdline.backspace()

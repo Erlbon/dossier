@@ -1,7 +1,5 @@
 """The shared pieces are really shared (one size formatter, one stat helper, one background-job helper), and the window
 stays split along its seams."""
-import os
-
 import pytest
 
 from dossier.core import ops, sizefmt, undo_log, vfs
@@ -146,11 +144,9 @@ def test_partial_results_can_be_handed_over_after_a_cancel(runner):
     assert got == ["partial"] and window.said == []
 
 
-def test_the_window_is_split_along_its_seams_and_stays_small():
+def test_the_window_is_split_along_its_seams():
+    # no line limit: the owner dropped the old 1300-line cap on 2026-11-19 (it had no technical reason)
     from dossier.gui.main_window import MainWindow
     names = [c.__name__ for c in MainWindow.__mro__]
     for mixin in ("OperationQueueMixin", "StallLogMixin", "GoingPlacesMixin", "FolderSizesMixin", "UnpackMixin"):
         assert mixin in names
-    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    with open(os.path.join(root, "dossier", "gui", "main_window.py"), encoding="utf-8") as f:
-        assert len(f.readlines()) < 1300                      # it was 1580 lines before the queue, the log and the rest moved out

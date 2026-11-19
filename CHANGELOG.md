@@ -2,6 +2,16 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-19#08 -- Typing in a panel jumps to a name on the Mac and Linux (card 57B); Ctrl+E
+
+- **Settings > Typing in a Panel:** a letter typed in a file list either jumps to the first name that starts with what was
+  typed (a pause of a second starts over; Backspace takes a letter off, Space joins a name) or goes to the command line as
+  before. The Mac and Linux jump by default; Windows keeps the command line.
+- **Tools > Command Line > Go to Command Line** (Ctrl+E, Cmd+E on the Mac) puts the cursor in the command line in either mode.
+- The test that kept `main_window.py` under 1300 lines is gone (the owner, 2026-11-19: the number had no technical reason);
+  the check that the window is made of its parts stays.
+- Not run on a real Mac or Linux desktop.
+
 ## 2026-11-19#07 -- Rename and New Folder in the row (card 58B)
 
 - **F2 renames in the list:** the name becomes a text field with the part before the extension selected; Enter keeps it, Esc
