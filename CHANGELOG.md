@@ -2,6 +2,15 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-19#07 -- Rename and New Folder in the row (card 58B)
+
+- **F2 renames in the list:** the name becomes a text field with the part before the extension selected; Enter keeps it, Esc
+  cancels. The same plan, checks, conflict message and undo as the Rename box. Keys typed there stay in the field.
+- **New Folder** (F7, Ctrl+Shift+N) makes "New Folder" (or "New Folder 2"...) at once and leaves its name open for typing, as
+  Finder and Files do; typing `a/b/c` there still makes nested folders. Ctrl+Z first undoes the rename, then the empty folder.
+- The thumbnails view and folders inside archives keep the boxes.
+- Not run on a real Mac or Linux desktop.
+
 ## 2026-11-19#06 -- Quick Look on the Mac and Linux (card 45A); File > Preview
 
 - **File > Quick Look** (Ctrl+Y, Cmd+Y on the Mac) opens the system's own preview of the item under the cursor: `qlmanage -p`

@@ -18,7 +18,7 @@ from PyQt6.QtWidgets import (QApplication, QHBoxLayout, QLabel, QMainWindow, QMe
 
 from ..core.open_with import SystemPrograms
 from ..core.quicklook import QuickLook
-from ..core.ops import (Plan, check_name, conflict_rows, plan_copy, plan_delete, plan_move, plan_rename)
+from ..core.ops import (Plan, conflict_rows, plan_copy, plan_delete, plan_move)
 from ..core.home import ADD_NETWORK, HomeFileSystem, HomeProvider, RouterFileSystem, removable_from_home
 from ..core.commandline import Placeholders, expand, run_command
 from ..core import patterns, search, stage, viewmodes
@@ -30,8 +30,8 @@ from ..core.version import APP_NAME, APP_REPO_URL, APP_VERSION, RELEASE
 from ..core.textedit import BinaryFile, EncodingProblem, FileTooLarge, load_document
 from ..core.terminals import (UnsafeArgument, builtin_profiles, default_launcher, default_profile, detect,
                               session_launch)
-from ..core.undo_log import Step, UndoAction, UndoLog
-from ..core.vfs import FileSystem, LocalFileSystem, stat_or_none
+from ..core.undo_log import UndoLog
+from ..core.vfs import FileSystem, LocalFileSystem
 from ..core.worker import Job, JobRunner, JobState
 from .appicon import app_icon
 from .background import run_in_background
@@ -62,6 +62,7 @@ from .file_colors import FileColorsMixin
 from .folder_tree import FolderTreeMixin
 from .remote_edit import RemoteEditMixin
 from .transfer import TransferMixin
+from .rename_in_place import RenameInPlaceMixin
 from .zip_edit import ZipEditMixin, zip_parts
 from .assistant import AssistantMixin
 from .open_files import OpenFilesMixin
@@ -119,7 +120,7 @@ def about_html() -> str:
             "The full credits are in CREDITS.md.</p>")
 
 
-class MainWindow(LinuxDesktopMixin, EjectTrashMixin,FolderTreeMixin, FileColorsMixin, TransferMixin, RemoteEditMixin, FrostMixin, GlassViewMixin, KeysMixin, AutoRefreshMixin, GitAwarenessMixin, MetadataEditMixin, HealthMixin, QuarantineMixin, NewFromContentMixin, TabSetsMixin, CommandCompletionMixin, DatesLinksMixin, ViewModesMixin, ToolsBarMixin, ContextMenuMixin, DragDropMixin, LookMixin, ZipEditMixin, ArchiveCommandsMixin, CopySettingsMixin, AssistantMixin, OpenFilesMixin, MenusMixin, WheelMixin, ToolsBarPlaceMixin, TailnetMixin, CompareFoldersMixin, ServersMixin, DuplicatesMixin, FolderLayoutsMixin, QueueResumeMixin, PlannedMixin, ColumnsMixin, PropertiesMixin, SharingMixin, MountMixin, ChecksumMixin, MarksAndNotesMixin, SearchCommandMixin, BatchRenameMixin, OperationQueueMixin, StallLogMixin, ErrorLogMixin,GoingPlacesMixin, FolderSizesMixin, UnpackMixin, QMainWindow):
+class MainWindow(RenameInPlaceMixin, LinuxDesktopMixin, EjectTrashMixin,FolderTreeMixin, FileColorsMixin, TransferMixin, RemoteEditMixin, FrostMixin, GlassViewMixin, KeysMixin, AutoRefreshMixin, GitAwarenessMixin, MetadataEditMixin, HealthMixin, QuarantineMixin, NewFromContentMixin, TabSetsMixin, CommandCompletionMixin, DatesLinksMixin, ViewModesMixin, ToolsBarMixin, ContextMenuMixin, DragDropMixin, LookMixin, ZipEditMixin, ArchiveCommandsMixin, CopySettingsMixin, AssistantMixin, OpenFilesMixin, MenusMixin, WheelMixin, ToolsBarPlaceMixin, TailnetMixin, CompareFoldersMixin, ServersMixin, DuplicatesMixin, FolderLayoutsMixin, QueueResumeMixin, PlannedMixin, ColumnsMixin, PropertiesMixin, SharingMixin, MountMixin, ChecksumMixin, MarksAndNotesMixin, SearchCommandMixin, BatchRenameMixin, OperationQueueMixin, StallLogMixin, ErrorLogMixin,GoingPlacesMixin, FolderSizesMixin, UnpackMixin, QMainWindow):
     def __init__(self, fs: Optional[FileSystem] = None, *, settings_path: Optional[str] = None, start=(None, None),
                  dialogs=None, trasher=None, terminal_launcher=None, which=None) -> None:
         super().__init__()
@@ -1043,90 +1044,6 @@ class MainWindow(LinuxDesktopMixin, EjectTrashMixin,FolderTreeMixin, FileColorsM
                 file_clipboard.clear_if_ours(sources)
 
         self._plan_in_background("Preparing the paste", build, go)
-
-    def rename(self) -> None:
-        if self._home_blocked("Rename"):
-            return
-        entry = self.active.current_entry()
-        if entry is None or self.busy:
-            return
-        if zip_parts(entry.path) is not None:
-            self._rename_in_zip(entry)
-            return
-        old = self.fs.basename(entry.path)
-        new = self.dialogs.ask_name("Rename", "New name:", old, entry.is_dir)
-        if not new or new == old:
-            return
-        path = entry.path
-
-        def go(plan: Plan) -> None:                              # the plan looks at the disk: made on a thread, settled here
-            if plan.conflicts:
-                self.dialogs.info("Rename", f"An item named {new} already exists here.")
-                return
-            plan = self._settle(plan)
-            if plan is not None:
-                self._run(plan, select=new)
-        self._plan_in_background("Preparing the rename", lambda watch: plan_rename(self.fs, path, new), go)
-
-    def new_folder(self) -> None:
-        if self.active.is_home:
-            self.add_network_share()                 # on the Home page F7 adds an entry instead of a folder
-            return
-        if self._no_folder_yet("New Folder"):
-            return
-        if zip_parts(self.active.path) is not None:
-            self._new_folder_in_zip()
-            return
-        if not self.fs.is_writable(self.active.path):
-            self.dialogs.info("New Folder", "This folder is read-only here (an archive, a search result or a list of "
-                                            "all files cannot be added to).")
-            return
-        answer = self.dialogs.ask_text("New Folder", "Folder name (a\\b\\c makes folders inside each other):")
-        if not answer:
-            return
-        parts = [p for p in answer.replace("\\", "/").split("/") if p.strip()]       # a\b\c: one folder in the other
-        why = check_name(parts[0]) if parts else "the name is empty"
-        for part in parts[1:]:
-            why = why or check_name(part)
-        if why:
-            self.dialogs.info("New Folder", why[0].upper() + why[1:] + ".")
-            return
-        panel, folder = self.active, self.active.path
-        name = parts[0]
-        paths = []
-        for part in parts:
-            paths.append(self.fs.join(paths[-1] if paths else folder, part))
-
-        def work(progress, cancel):                              # on a server or a slow share these are round trips: on a thread
-            made_now = []
-            for path in paths:
-                st = stat_or_none(self.fs, path)
-                if st is not None:
-                    if not st.is_dir:
-                        return made_now, f"{path} is a file, not a folder."
-                    continue                                     # a\b where a is there already: only b is made
-                try:
-                    self.fs.mkdir(path)
-                except OSError as e:
-                    return made_now, f"Could not create the folder {path}: {e.strerror or e}"
-                made_now.append(path)
-            return made_now, "" if made_now else f"An item named {answer.strip()} already exists here."
-
-        def made(result) -> None:
-            made_now, problem = result
-            if made_now:                                         # undo removes the folders it made, innermost first
-                self.undo_log.push(UndoAction("New folder", [Step("created_dir", p) for p in made_now]))
-            if problem:
-                self.dialogs.info("New Folder", problem)
-                if not made_now:
-                    return
-            if panel.path == folder:
-                panel.set_folder(folder, select=name)
-            for other in (self.left, self.right):
-                if other is not panel and other.path == folder:
-                    other.refresh()
-        run_in_background(self, self.cmd_runner, "New Folder", work, on_result=made, tracked=self._size_jobs, indeterminate=True,
-                          failed_title="New Folder")
 
     def delete(self, permanent: bool = False) -> None:
         if self.active.path.startswith("trash:"):

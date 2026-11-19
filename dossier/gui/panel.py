@@ -10,7 +10,7 @@ from typing import Optional
 from PyQt6.QtCore import QEvent, QModelIndex, QObject, QPoint, QRectF, QSize, Qt, QTimer, QUrl, pyqtSignal
 from PyQt6.QtGui import QColor, QContextMenuEvent, QDesktopServices, QDrag, QFontMetrics, QPainter, QPainterPath, QPalette, QPen, QPixmap, QTextCharFormat, QTextCursor
 from PyQt6.QtWidgets import (QAbstractItemView, QApplication, QFrame, QListView, QStackedWidget, QHBoxLayout, QHeaderView, QLabel, QLineEdit,
-                             QTabBar, QToolButton,
+                             QStyledItemDelegate, QTabBar, QToolButton,
                              QTableView, QTextBrowser, QVBoxLayout, QWidget)
 
 from ..core import archives, bundles, gitinfo, pathparts, zipfs
@@ -31,6 +31,7 @@ from ..core.sftpfs import NotConnected
 from . import icon_set, look, theme
 from .address_bar import AddressBar
 from .drive_bar import DriveBar
+from .dialogs import stem_length
 from .models import FolderModel, human_size
 
 SAFE_SCHEMES = ("http", "https", "mailto")
@@ -99,6 +100,54 @@ class _FilterEdit(QLineEdit):
             self.leave.emit()
         else:
             super().keyPressEvent(event)
+
+
+class InlineNameEdit(QLineEdit):
+    """The field that renames in the list (F2): it keeps every key but Enter, Esc and the function keys for itself, so Delete, `+`, `-`,
+    Space and the second keys of card 51A edit the text and never run a window command on the files behind it."""
+
+    def keyPressEvent(self, event) -> None:
+        if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Escape):
+            event.accept()               # the delegate has already seen it (commit or cancel); the list behind must not: Enter would open the file
+            return
+        super().keyPressEvent(event)
+
+    def event(self, event) -> bool:
+        if event.type() == QEvent.Type.ShortcutOverride:
+            key = event.key()
+            if key not in (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Escape) and not Qt.Key.Key_F1 <= key <= Qt.Key.Key_F35:
+                event.accept()
+                return True
+        return super().event(event)
+
+
+class _NameDelegate(QStyledItemDelegate):
+    """Opens an ``InlineNameEdit`` in the Name cell. It never writes to the model: a finished edit hands the text to ``spec[1]``, the
+    window's own rename (so the same plan, checks and undo as the box)."""
+
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+        self.spec = None             # (the name to start from, what to call with the finished text)
+        self.editor = None
+
+    def createEditor(self, parent, option, index):
+        if self.spec is None:
+            return super().createEditor(parent, option, index)
+        edit = InlineNameEdit(parent)
+        edit.setText(self.spec[0])
+        self.editor = edit
+        return edit
+
+    def setEditorData(self, editor, index) -> None:
+        if self.spec is None:
+            super().setEditorData(editor, index)
+
+    def setModelData(self, editor, model, index) -> None:
+        spec, self.spec = self.spec, None                  # once: Enter and then losing the focus must not run it twice
+        if spec is None:
+            return
+        text = editor.text()
+        QTimer.singleShot(0, lambda: spec[1](text))        # after the editor has closed
 
 
 class _FileView:
@@ -884,6 +933,10 @@ class Panel(QFrame):
         self._fit_squeezed = False        # fitting, but the other columns left Name less than NAME_MIN: Name is fixed, scrollbar
         self.table.setVerticalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
         self.table.setIconSize(QSize(16, 16))
+        self._name_delegate = _NameDelegate(self.table)    # F2 and New Folder rename in the Name cell (start_inline_edit)
+        self.table.setItemDelegateForColumn(0, self._name_delegate)
+        self._name_delegate.closeEditor.connect(self._inline_edit_closed)
+        self._edit_wanted = None                           # (name, on_commit): start editing that name once the listing shows it
 
         self.icons = PanelIcons()                          # the thumbnail view: the same list, the same cursor and marks
         self._setup_view(self.icons)
@@ -1110,6 +1163,59 @@ class Panel(QFrame):
     def current_name(self) -> str:
         e = self.current_entry()
         return self.fs.basename(e.path) if e else ""
+
+    # renaming in the list --------------------------------------------------------------------------------------------
+    def names_here(self) -> list:
+        """The names listed in this folder (what a new item's name must not repeat)."""
+        return [self.fs.basename(e.path) for r in range(self.model.entry_count())
+                if (e := self.model.entry_at(r)) is not None and not self.model.is_up_row(r)]
+
+    def can_edit_in_place(self) -> bool:
+        """The details table can rename in the list; the thumbnails view and the Home page cannot."""
+        return not self.is_home and self.stack.currentWidget() is self.table
+
+    def start_inline_edit(self, row: int, text: str, is_dir: bool, on_commit) -> bool:
+        """Turn the name on ``row`` into a text field holding ``text`` (the real file name), with the part before the extension
+        selected. Enter or leaving the field calls ``on_commit(new text)`` after the field has closed; Esc closes it and calls
+        nothing. False (nothing started) in the thumbnails view and on the Home page: the caller then asks in a box."""
+        if self.is_home or self.stack.currentWidget() is not self.table or not 0 <= row < self.model.entry_count() \
+                or self.model.is_up_row(row):
+            return False
+        index = self.model.index(row, 0)
+        self._name_delegate.spec = (text, on_commit)
+        self._name_delegate.editor = None
+        self.model.editing_row = row
+        self.table.setCurrentIndex(index)
+        self.table.scrollTo(index)
+        self.table.edit(index)
+        editor = self._name_delegate.editor
+        if editor is None:                                 # Qt would not open it
+            self._inline_edit_closed()
+            return False
+        editor.setFocus()
+        editor.setSelection(0, stem_length(text, is_dir))
+        return True
+
+    def _inline_edit_closed(self, *_args) -> None:
+        self._name_delegate.spec = None
+        self._name_delegate.editor = None
+        self.model.editing_row = -1
+
+    def inline_editing(self) -> bool:
+        return self._name_delegate.editor is not None and self._name_delegate.spec is not None
+
+    def edit_when_listed(self, name: str, is_dir: bool, on_commit) -> None:
+        """Start renaming ``name`` as soon as the listing that is about to be shown holds it (a folder just made, New Folder)."""
+        self._edit_wanted = (name, is_dir, on_commit)
+
+    def _start_wanted_edit(self) -> None:
+        wanted, self._edit_wanted = self._edit_wanted, None
+        if wanted is None:
+            return
+        name, is_dir, on_commit = wanted
+        row = self.model.row_of(name)
+        if row >= 0:
+            self.start_inline_edit(row, name, is_dir, on_commit)
 
     # navigation ----------------------------------------------------------------------
     def set_folder(self, path: str, select: str = "", file_ok: bool = False) -> bool:
@@ -1552,6 +1658,7 @@ class Panel(QFrame):
             path, select = listing.path, self.fs.basename(listing.file)
         provider = getattr(getattr(self.fs, "home", None), "provider", None)
         if listing.error is not None:
+            self._edit_wanted = None
             e = listing.error
             if isinstance(e, NotConnected):                  # the window offers to connect, and comes back here
                 self.connect_needed.emit(path)
@@ -1603,6 +1710,7 @@ class Panel(QFrame):
         self.folder_changed.emit(self)
         if listing.file:
             self.file_entered.emit(listing.file)
+        self._start_wanted_edit()
         return True
 
     # tabs: each panel has its own, every tab is one folder ----------------------------------------------

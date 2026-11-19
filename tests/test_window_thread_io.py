@@ -8,7 +8,7 @@ import pytest
 pytest.importorskip("PyQt6")
 
 from dossier.core import archives  # noqa: E402
-from dossier.gui import batch_rename as batch_rename_module, compare_folders as compare_module, main_window as main_module  # noqa: E402
+from dossier.gui import batch_rename as batch_rename_module, compare_folders as compare_module, main_window as main_module, rename_in_place as rename_module  # noqa: E402
 from tests.test_gui_commander import app, pump, world  # noqa: E402,F401
 
 
@@ -35,7 +35,7 @@ def test_delete_and_rename_are_planned_on_a_thread(world, monkeypatch):
     d.confirm_answer = False                                                     # asked, and kept
     win.delete()
     pump(win, lambda: d.confirms)
-    monkeypatch.setattr(main_module, "plan_rename", recorder(where, main_module.plan_rename))
+    monkeypatch.setattr(rename_module, "plan_rename", recorder(where, rename_module.plan_rename))
     d.texts = ["b.txt"]
     win.rename()
     pump(win, lambda: (left / "b.txt").exists())

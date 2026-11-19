@@ -140,6 +140,7 @@ class FolderModel(QAbstractTableModel):
         self.show_hidden = True          # View > Show Hidden and System Files
         self.file_colors = FileColors()  # the colours of names by type (Settings > Appearance > File Colours)
         self._tree_sizes: dict = {}
+        self.editing_row = -1                    # the row whose name is being renamed in place (only then is it editable)
         self.drop_row = -1                       # the row a drag is hovering over (a folder that would take the drop)
         self.icon_px = 0                         # 0: the details table; otherwise the thumbnail view, with pictures this big
         self.thumbs = None                       # the Thumbnails that make the pictures, set by the window
@@ -457,7 +458,10 @@ class FolderModel(QAbstractTableModel):
             return Qt.ItemFlag.NoItemFlags
         if self.is_home and self.entry_kind(index.row()) == "header":
             return Qt.ItemFlag.NoItemFlags           # a section title: the cursor skips it
-        return Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable
+        flags = Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable
+        if index.column() == 0 and index.row() == self.editing_row:
+            flags |= Qt.ItemFlag.ItemIsEditable      # only the name being renamed in place
+        return flags
 
     def is_marked(self, entry: Entry) -> bool:
         return not self.is_home and entry.name != ".." and entry.path in self.selection
