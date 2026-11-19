@@ -2,6 +2,13 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-19#26 -- A trusted Linux launcher that changes is asked about again (question 73A)
+
+- When you trust a `.desktop` launcher, Dossier now keeps its checksum with the path. If the file has changed since (edited, or
+  replaced by a download), Dossier asks again and shows the command it now runs. Launchers trusted before this build are asked
+  about once more, since no checksum was kept for them.
+- Not run on a real Linux desktop.
+
 ## 2026-11-19#25 -- Edit the Names as Text shows the whole plan before renaming (question 77B)
 
 - After you edit the names, the short box with up to ten "old -> new" lines is gone. In its place comes the plan window folder

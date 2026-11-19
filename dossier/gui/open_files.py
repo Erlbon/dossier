@@ -7,6 +7,7 @@ The same menu chooses the editor for F4: Dossier's notepad, or a program of the 
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 
@@ -190,35 +191,48 @@ class OpenFilesMixin:
             self._say(f"Started {name}")
 
     # launchers (Linux .desktop files): asked once each, as Files' "Trust and Launch" --------------------------------------------
-    def trusted_launchers(self) -> list:
+    def trusted_launchers(self) -> dict:
+        """Launchers said yes to: path -> the SHA-256 of the file as it was then (question 73A). The older list of bare paths (card 50)
+        reads as paths with no checksum, so those are asked about once more."""
         try:
-            value = json.loads(str(self.settings.value("open/trusted_launchers", "") or "[]"))
+            value = json.loads(str(self.settings.value("open/trusted_launchers", "") or "{}"))
         except ValueError:
-            return []
-        return [v for v in value if isinstance(v, str)] if isinstance(value, list) else []
+            return {}
+        if isinstance(value, list):
+            return {v: "" for v in value if isinstance(v, str)}
+        return {k: v for k, v in value.items() if isinstance(k, str) and isinstance(v, str)} if isinstance(value, dict) else {}
 
     def _open_launcher(self, path: str) -> None:
         from ..core import desktop_entries
-        run_in_background(self, self.cmd_runner, "Opening", lambda progress, cancel: desktop_entries.read_entry(path),
-                          on_result=lambda app: self._launcher_read(path, app), tracked=self._size_jobs, indeterminate=True,
-                          failed_title="Open")
 
-    def _launcher_read(self, path: str, app) -> None:
+        def read(progress, cancel):                             # the launcher and its checksum: on a thread
+            with open(path, "rb") as f:
+                digest = hashlib.sha256(f.read()).hexdigest()
+            return desktop_entries.read_entry(path), digest
+
+        run_in_background(self, self.cmd_runner, "Opening", read, on_result=lambda found: self._launcher_read(path, *found),
+                          tracked=self._size_jobs, indeterminate=True, failed_title="Open")
+
+    def _launcher_read(self, path: str, app, digest: str = "") -> None:
         if app is None or not app.exec:
             self.view_file([path])                              # not a launcher after all: it is a text file
             return
         trusted = self.trusted_launchers()
-        if path not in trusted:
+        if trusted.get(path) != digest or not digest:
+            changed = bool(trusted.get(path))                   # trusted before, but the file is not the one said yes to
+            first = (f"{app.name or os.path.basename(path)} has changed since you trusted it." + chr(10) + chr(10) + "It now runs: "
+                     if changed else f"Start {app.name or os.path.basename(path)}?" + chr(10) + chr(10) + "It runs: ")
             answer = self.dialogs.ask_choice(
-                "Start Launcher", f"Start {app.name or os.path.basename(path)}?" + chr(10) + chr(10) + "It runs: " + app.exec
-                + chr(10) + chr(10) + "Only start launchers you trust. Dossier will not ask again for this one.",
+                "Start Launcher", first + app.exec + chr(10) + chr(10)
+                + "Only start launchers you trust. Dossier asks again only if this file changes.",
                 [("start", "Start"), ("view", "View as Text")])
             if answer == "view":
                 self.view_file([path])
                 return
             if answer != "start":
                 return
-            self.settings.setValue("open/trusted_launchers", json.dumps(trusted + [path]))
+            trusted[path] = digest
+            self.settings.setValue("open/trusted_launchers", json.dumps(trusted))
         self._start_program(app.name or os.path.basename(path), path, os.path.dirname(path))
 
     def _open_file_plain(self, path: str, alternate: bool = False) -> bool:

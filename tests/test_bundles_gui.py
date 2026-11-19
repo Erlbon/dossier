@@ -52,7 +52,37 @@ def test_enter_on_an_untrusted_launcher_asks_once(world, monkeypatch):
     win.left.open_current()
     pump(win, lambda: len(started) == 2)
     assert len(dialogs.choices_asked) == 1                       # trusted now: not asked again
-    assert win.trusted_launchers() == [str(left / "fancy.desktop")]
+    trusted = win.trusted_launchers()
+    assert list(trusted) == [str(left / "fancy.desktop")] and len(trusted[str(left / "fancy.desktop")]) == 64     # path + SHA-256
+
+
+def test_a_trusted_launcher_that_changed_asks_again_and_shows_the_new_command(world, monkeypatch):
+    """Question 73A: trust is kept with the file's checksum, so a changed launcher is asked about again."""
+    win, dialogs, left, *_ = world
+    started = _launcher(win, left, monkeypatch)
+    _show(win, win.left, "fancy.desktop")
+    dialogs.choice_answer = "start"
+    win.left.open_current()
+    pump(win, lambda: started)
+    (left / "fancy.desktop").write_text(DESKTOP.replace("fancy --go", "evil --now"), encoding="utf-8")
+    dialogs.choice_answer = None                                  # this time the user says no
+    win.left.open_current()
+    pump(win, lambda: len(dialogs.choices_asked) == 2)
+    assert "changed since you trusted it" in dialogs.choices_asked[1][1] and "evil --now" in dialogs.choices_asked[1][1]
+    assert len(started) == 1
+
+
+def test_the_old_list_of_trusted_paths_is_asked_about_once_more(world, monkeypatch):
+    import json
+    win, dialogs, left, *_ = world
+    started = _launcher(win, left, monkeypatch)
+    win.settings.setValue("open/trusted_launchers", json.dumps([str(left / "fancy.desktop")]))     # card 50's form
+    assert win.trusted_launchers() == {str(left / "fancy.desktop"): ""}
+    _show(win, win.left, "fancy.desktop")
+    dialogs.choice_answer = "start"
+    win.left.open_current()
+    pump(win, lambda: started)
+    assert len(dialogs.choices_asked) == 1 and win.trusted_launchers()[str(left / "fancy.desktop")]
 
 
 def test_a_launcher_that_is_not_started_is_not_trusted(world, monkeypatch):
@@ -62,7 +92,7 @@ def test_a_launcher_that_is_not_started_is_not_trusted(world, monkeypatch):
     dialogs.choice_answer = None
     win.left.open_current()
     pump(win, lambda: getattr(dialogs, "choices_asked", None))
-    assert not started and win.trusted_launchers() == []
+    assert not started and win.trusted_launchers() == {}
 
 
 def test_enter_on_a_runnable_file_asks_run_or_view(world, monkeypatch):
