@@ -9,12 +9,17 @@ with Ctrl+Z, marks follow the files).
 from __future__ import annotations
 
 import os
+import shutil
+import tempfile
+import threading
 import time
 from typing import Optional
 
 from PyQt6.QtWidgets import QDialog
 
+from ..core import rename_text, stage
 from ..core.ops import plan_rename_many
+from ..core.rename_text import plan_text_renames
 from .background import run_in_background
 
 # What a file can offer a pattern: facts about the file itself, then the tags Dossier already reads (TAG_PLACEHOLDERS), which are
@@ -44,6 +49,7 @@ PLACEHOLDERS += TAG_PLACEHOLDERS
 PHOTO_EXTENSIONS = (".jpg", ".jpeg", ".tif", ".tiff", ".png", ".webp", ".heic")
 ALWAYS_PAD = {"month": 2, "day": 2, "hour": 2, "minute": 2, "second": 2}
 HISTORY_KEY = "rename/pattern_history"
+TEXT_HEADER_KEY = "rename/text_header"
 
 
 def file_values(entry, path: str, index: int) -> dict:
@@ -120,7 +126,7 @@ class BatchRenameMixin:
             self._say(f"{skipped} folder{'s' if skipped != 1 else ''} left out: this renames files")
         return entries
 
-    def _apply_renames(self, pairs: list) -> None:
+    def _apply_renames(self, pairs: list, planner=None) -> None:
         """Rename ``(path, new_name)`` pairs through the normal rename plan (so Ctrl+Z puts them back)."""
         pairs = [(old, new) for old, new in pairs if new and new != os.path.basename(old)]
         if not pairs:
@@ -136,7 +142,7 @@ class BatchRenameMixin:
                 self.dialogs.info("Batch Rename", f"{len(plan.conflicts)} new names are taken or repeat:{chr(10)}" + chr(10).join(names))
                 return
             self._run(plan)
-        self._plan_in_background("Preparing the renames", lambda watch: plan_rename_many(self.fs, pairs), go)
+        self._plan_in_background("Preparing the renames", lambda watch: (planner or plan_rename_many)(self.fs, pairs), go)
 
     # ---------------------------------------------------------------------------------------------------------
     def rename_by_pattern(self) -> None:
@@ -182,6 +188,121 @@ class BatchRenameMixin:
             return
         self.settings.setValue(HISTORY_KEY, encode_history(dedupe_and_trim(history, dialog.pattern_edit.text())))
         self._apply_renames([(old, os.path.basename(new)) for _item, old, new in dialog.planned_renames()])
+
+    # Edit the names as text (card 63) -----------------------------------------------------------------------
+    def text_rename_header(self) -> bool:
+        return str(self.settings.value(TEXT_HEADER_KEY, "true")).lower() != "false"
+
+    def set_text_rename_header(self, on: bool) -> None:
+        self.settings.setValue(TEXT_HEADER_KEY, "true" if on else "false")
+
+    def _text_waits(self) -> dict:
+        """Name lists open in the notepad: normalised path -> what to do when that window closes (see ``_edit_prepared``)."""
+        return self.__dict__.setdefault("_text_rename_waits", {})
+
+    def rename_as_text(self) -> None:
+        """Write the names of the marked items to a temporary text file, one per line, open it in the F4 editor, and rename what the
+        user changed once the editing is over. For the notepad that is when its window closes; for another program Dossier cannot see
+        it end, so a box says "Done editing"."""
+        entries = self._entries_to_rename()
+        if entries is None:
+            return
+        paths = [e.path for e in entries]
+        header = self.text_rename_header()
+
+        def work(progress, cancel):                                  # reads the folder and writes the file: on a thread
+            snap = rename_text.snapshot(self.fs, paths)
+            os.makedirs(stage.stage_root(), exist_ok=True)
+            folder = tempfile.mkdtemp(dir=stage.stage_root())
+            file = os.path.join(folder, "names.txt")
+            with open(file, "w", encoding="utf-8", newline="") as f:
+                f.write(rename_text.render(snap, header))
+            return snap, file
+
+        run_in_background(self, self.cmd_runner, "Writing the names", self._catching(work), on_result=self._text_started,
+                          tracked=self._size_jobs, indeterminate=True, failed_title="Batch Rename")
+
+    @staticmethod
+    def _catching(work):
+        """Turn a ``RenameTextError`` raised on the thread into a message handed back (``("error", text)``), so it is shown plainly."""
+        def wrapped(progress, cancel):
+            try:
+                return work(progress, cancel)
+            except rename_text.RenameTextError as e:
+                return "error", str(e)
+        return wrapped
+
+    def _text_started(self, result) -> None:
+        if result[0] == "error":
+            self.dialogs.info("Edit the Names as Text", result[1])
+        else:
+            self._open_name_list(*result)
+
+    def _open_name_list(self, snap, file: str) -> None:
+        done = {"yes": False}
+
+        def finish() -> None:
+            if not done["yes"]:
+                done["yes"] = True
+                self._text_waits().pop(os.path.normcase(file), None)
+                self._read_name_list(snap, file)
+
+        def abandon() -> None:
+            done["yes"] = True
+            self._text_waits().pop(os.path.normcase(file), None)
+            self._remove_name_list(file)
+
+        if self.editor_program():
+            self.edit_in_program(file)
+            if self.dialogs.confirm("Edit the Names as Text",
+                                    "Edit the names in the program that was just opened, one per line. Save the file, then press "
+                                    "Done editing. Do not add, remove or reorder lines.", "Done editing"):
+                finish()
+            else:
+                abandon()
+            return
+        self._text_waits()[os.path.normcase(file)] = finish           # the notepad's window calls this when it closes
+        self._say("Edit the names, save, and close the notepad to rename")
+        self.edit_file(file)
+
+    def _remove_name_list(self, file: str) -> None:
+        threading.Thread(target=lambda: shutil.rmtree(os.path.dirname(file), ignore_errors=True), daemon=True).start()
+
+    def _read_name_list(self, snap, file: str) -> None:
+        def build(watch):                                            # reading, checking and planning: on a thread
+            try:
+                try:
+                    with open(file, "rb") as f:
+                        raw = f.read()
+                finally:
+                    shutil.rmtree(os.path.dirname(file), ignore_errors=True)
+                try:
+                    text = raw.decode("utf-8-sig")
+                except UnicodeDecodeError:
+                    text = raw.decode("cp1252", errors="replace")
+                names = rename_text.parse(text, snap)
+                rename_text.check_unchanged(self.fs, snap)
+                pairs = rename_text.pairs_from(snap, names)
+            except rename_text.RenameTextError as e:
+                return "error", str(e)
+            except OSError as e:
+                return "error", f"The list of names could not be read: {e.strerror or e}. Nothing was renamed."
+            return "pairs", pairs
+
+        def then(result) -> None:
+            if result[0] == "error":
+                self.dialogs.info("Edit the Names as Text", result[1])
+                return
+            pairs = result[1]
+            if not pairs:
+                self._say("Nothing to rename: every name stays as it is")
+                return
+            shown = [f"{os.path.basename(old)}  ->  {new}" for old, new in pairs[:10]]
+            more = [f"... and {len(pairs) - 10} more"] if len(pairs) > 10 else []
+            if self.dialogs.confirm("Edit the Names as Text", f"Rename {len(pairs)} item{'s' if len(pairs) != 1 else ''}?{chr(10)}{chr(10)}"
+                                    + chr(10).join(shown + more), "Rename"):
+                self._apply_renames(pairs, plan_text_renames)
+        self._plan_in_background("Reading the names", build, then)
 
     def rename_search_replace(self) -> None:
         entries = self._entries_to_rename()

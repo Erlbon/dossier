@@ -196,7 +196,7 @@ class ContextMenuMixin:
         menu.addSeparator()
         cmd("rename", enabled=not many)
         batch = menu.addMenu("Batch Rename")
-        for slot in ("rename_by_pattern", "rename_search_replace", "rename_case", "rename_number"):
+        for slot in ("rename_by_pattern", "rename_search_replace", "rename_case", "rename_number", "rename_as_text"):
             self._entry_action(batch, None, slot, panel, paths, True, "", row)
         cmd("delete")
         menu.addSeparator()

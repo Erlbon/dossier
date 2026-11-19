@@ -2,6 +2,16 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-19#12 -- Rename by editing the names as text (card 63A)
+
+- **Tools > Batch Rename > Edit the Names as Text** (also in the right-click Batch Rename submenu): the marked names open one
+  per line in the F4 editor (Dossier's notepad, or your program with a "Done editing" box). Save and close, and Dossier lists the
+  renames, then runs them as a plan, so one Ctrl+Z puts them all back.
+- Lines are matched to files by position. Nothing is renamed if the number of lines changed, a line was emptied, a name is not
+  allowed, or the folder changed while you edited. Swaps and rings (a to b, b to a) work, through temporary names.
+- The rules at the top of the list can be switched off in Settings > Opening Files.
+- Not run on a real Mac or Linux desktop.
+
 ## 2026-11-19#11 -- A sidebar of places, hidden by default (card 60B)
 
 - **View > Bars > Sidebar** shows a narrow list at the left of both panels: pinned folders, drives (with an eject mark where

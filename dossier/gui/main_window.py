@@ -570,6 +570,9 @@ class MainWindow(SidebarMixin, TypingModeMixin, RenameInPlaceMixin, LinuxDesktop
         win.preview_toggled.connect(lambda on, w=win: self.settings.setValue("editor/markdown_preview", "true" if on else "false") if w.is_markdown() else None)
         self.editors.append(win)
         win.closed.connect(lambda w: self.editors.remove(w) if w in self.editors else None)
+        waiting = self._text_waits().get(os.path.normcase(path))
+        if waiting is not None:                                 # a list of names to rename (batch_rename.py): read it back on close
+            win.closed.connect(lambda _w, go=waiting: go())
         win.saved.connect(lambda _p: self.refresh())
         edit = self.remote_edit_of(path)
         if edit is not None:                                    # a copy of a server or zip file: each save writes it back

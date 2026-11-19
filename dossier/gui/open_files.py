@@ -53,6 +53,14 @@ class OpenFilesMixin:
         self.act_editor_notepad.triggered.connect(lambda: self.set_editor_program(""))
         self.act_editor_program.triggered.connect(self.choose_editor_program)
         self._show_editor_choice()
+        menu.addSeparator()
+        self.act_text_header = QAction("Rules at the Top of a Name List (Batch Rename)", self)
+        self.act_text_header.setCheckable(True)
+        self.act_text_header.setChecked(self.text_rename_header())
+        self.act_text_header.setToolTip("Tools > Batch Rename > Edit the Names as Text writes a few lines of rules above the names. "
+                                        "Off: only the names.")
+        self.act_text_header.toggled.connect(self.set_text_rename_header)
+        menu.addAction(self.act_text_header)
 
     # the editor for F4 ------------------------------------------------------------------------------------------------------------
     def editor_program(self) -> str:

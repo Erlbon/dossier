@@ -318,7 +318,8 @@ class MenusMixin:
         for text, keys, slot in (("By Pattern...", "Ctrl+M", self.rename_by_pattern),
                                  ("Search and Replace in Names...", None, self.rename_search_replace),
                                  ("Change Case...", None, self.rename_case),
-                                 ("Number the Files...", None, self.rename_number)):
+                                 ("Number the Files...", None, self.rename_number),
+                                 ("Edit the Names as Text", None, self.rename_as_text)):
             rename_menu.addAction(self._action(text, keys, slot))
         archives = tools.addMenu("Archives")
         archives.addAction(self._action("Open as Archive", "Ctrl+PgDown", lambda: self.active.open_as_archive()))

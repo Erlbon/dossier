@@ -209,9 +209,109 @@ def test_numbering_puts_a_number_in_front_of_the_name_in_list_order(world, monke
     assert [n.split(" - ")[-1] for n in result] == ["a.txt", "b.txt", "c.txt"]
 
 
-def test_the_menu_has_the_four_commands(world):
+def test_the_menu_has_the_five_commands(world):
     win, *_ = world
     menus = {a.text().replace("&", ""): a.menu() for a in win.menuBar().actions()}
     sub = [a for a in menus["Tools"].actions() if a.text() == "Batch Rename"][0].menu()
     assert [a.text() for a in sub.actions()] == ["By Pattern...", "Search and Replace in Names...", "Change Case...",
-                                                 "Number the Files..."]
+                                                 "Number the Files...", "Edit the Names as Text"]
+
+
+# Edit the names as text (card 63) ---------------------------------------------------------------------------------------------
+def start_text_rename(win, left, files, editor=""):
+    """Mark ``files``, run the command with the editor seams recorded; returns (paths of the name list, started programs)."""
+    mark_all(win, left, files)
+    win.settings.setValue("editor/program", editor)
+    started, opened = [], []
+    win.tool_starter = lambda command, argv, cwd: started.append((command, argv))
+    win.edit_file = lambda path=None, show_replace=False: opened.append(path)         # the notepad's seam
+    win.rename_as_text()
+    pump(win, lambda: started or opened)
+    return (started[0][1][0] if started else opened[0]), started
+
+
+def edit_list(path, change):
+    with open(path, encoding="utf-8") as f:
+        lines = f.read().split(chr(10))
+    with open(path, "w", encoding="utf-8", newline="") as f:
+        f.write(chr(10).join(change(lines)))
+
+
+def test_text_rename_writes_the_names_and_the_notepad_closing_renames_and_ctrl_z_undoes(world):
+    win, dialogs, left, *_ = world
+    path, started = start_text_rename(win, left, ["a.txt", "b.txt"])
+    assert not started and os.path.isfile(path)
+    with open(path, encoding="utf-8") as f:
+        text = f.read()
+    assert text.startswith("//") and text.split(chr(10))[-3:] == ["a.txt", "b.txt", ""]            # header, then one name a line
+    edit_list(path, lambda lines: [ln.replace("a.txt", "first.txt") for ln in lines])
+    win._text_waits()[os.path.normcase(path)]()                                                   # the notepad window closes
+    pump(win, lambda: not win.busy)
+    assert listing(left) == ["b.txt", "first.txt"] and not os.path.exists(path)                     # the temporary file is gone
+    assert dialogs.confirms[-1][0] == "Edit the Names as Text"
+    key(win, Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    pump(win, lambda: listing(left) == ["a.txt", "b.txt"])
+
+
+def test_text_rename_in_another_program_waits_for_done_editing(world):
+    win, dialogs, left, *_ = world
+    answers = []
+    started_path = []
+
+    def confirm(title, text, ok_label="OK"):
+        answers.append((title, ok_label))
+        if len(answers) == 1:                                   # "Done editing": the user changed the names in the other program
+            edit_list(started_path[0], lambda lines: [ln.upper() for ln in lines])
+        return True
+    dialogs.confirm = confirm
+    mark_all(win, left, ["a.txt", "b.txt"])
+    win.settings.setValue("editor/program", "ed.exe")
+    started = []
+    win.tool_starter = lambda command, argv, cwd: (started.append(command), started_path.append(argv[0]))
+    win.rename_as_text()
+    pump(win, lambda: answers)
+    assert started == ["ed.exe"] and answers[0] == ("Edit the Names as Text", "Done editing")
+    pump(win, lambda: dialogs.infos == [] and len(answers) >= 2)                                   # the second box: Rename?
+    pump(win, lambda: not win.busy)
+    assert listing(left) == ["A.TXT", "B.TXT"]
+
+
+def test_text_rename_swaps_names_and_undoes_in_one_step(world):
+    win, dialogs, left, *_ = world
+    path, _s = start_text_rename(win, left, ["a.txt", "b.txt"])
+    edit_list(path, lambda lines: [{"a.txt": "b.txt", "b.txt": "a.txt"}.get(ln, ln) for ln in lines])
+    win._text_waits()[os.path.normcase(path)]()
+    pump(win, lambda: not win.busy)
+    assert (left / "a.txt").read_text() == "b.txt" and (left / "b.txt").read_text() == "a.txt" and listing(left) == ["a.txt", "b.txt"]
+    key(win, Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    pump(win, lambda: (left / "a.txt").read_text() == "a.txt")
+    assert (left / "b.txt").read_text() == "b.txt"
+
+
+def test_text_rename_refuses_a_changed_line_count_an_empty_line_and_a_changed_folder(world):
+    win, dialogs, left, *_ = world
+    for change, wanted in ((lambda lines: [ln for ln in lines if ln != "b.txt"], "Nothing was renamed"),
+                           (lambda lines: [("" if ln == "b.txt" else ln) for ln in lines], "empty"),
+                           (lambda lines: lines, "folder changed")):
+        for n in ("a.txt", "b.txt", "c.txt", "new.txt"):
+            if (left / n).exists():
+                os.remove(left / n)
+        dialogs.infos.clear()
+        path, _s = start_text_rename(win, left, ["a.txt", "b.txt"])
+        edit_list(path, lambda lines, c=change: [ln.replace("a.txt", "zzz") for ln in c(lines)])
+        if wanted == "folder changed":
+            (left / "new.txt").write_text("n")                                                    # the folder changed meanwhile
+        win._text_waits()[os.path.normcase(path)]()
+        pump(win, lambda: dialogs.infos)
+        assert wanted in dialogs.infos[-1][1]
+        pump(win, lambda: not win.busy)
+        assert "zzz" not in listing(left) and not os.path.exists(path)
+
+
+def test_text_rename_header_can_be_switched_off(world):
+    win, dialogs, left, *_ = world
+    win.act_text_header.setChecked(False)
+    path, _s = start_text_rename(win, left, ["a.txt", "b.txt"])
+    with open(path, encoding="utf-8") as f:
+        assert f.read() == "a.txt" + chr(10) + "b.txt" + chr(10)
+    assert win.settings.value("rename/text_header") == "false"

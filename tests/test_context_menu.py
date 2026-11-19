@@ -191,7 +191,8 @@ def test_the_item_menu_has_batch_rename_and_a_folder_has_terminal_and_pin(world)
     pump(win, lambda: row_of(win, "box") >= 0)
     file_menu = win.build_context_menu(win.left, row_of(win, "a.txt"))
     assert [a.text().split("\t")[0] for a in submenu(file_menu, "Batch Rename").actions()] == [
-        "By Pattern...", "Search and Replace in Names...", "Change Case...", "Number the Files..."]
+        "By Pattern...", "Search and Replace in Names...", "Change Case...", "Number the Files...",
+        "Edit the Names as Text"]
     assert "Terminal Here" not in texts(file_menu) and "Pin to the Home Page" not in texts(file_menu)
     folder_menu = win.build_context_menu(win.left, row_of(win, "box"))
     assert "Terminal Here" in texts(folder_menu) and "Pin to the Home Page" in texts(folder_menu)
