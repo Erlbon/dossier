@@ -181,3 +181,27 @@ def test_the_disk_check_runs_on_a_thread_and_finds_a_real_change(qapp, tmp_path)
     finally:
         pad.mark_clean()
         pad.close()
+
+
+def test_the_notepad_tabs_are_the_panels_tabs_with_their_own_cross(qapp, tmp_path):
+    """The owner, 2026-11-19: the notepad's tabs look like the main window's (rounded, gold and blue) and close with the same cross."""
+    from PyQt6.QtWidgets import QTabBar, QToolButton
+    from dossier.gui.panel import PanelTabBar
+    a, b = make_files(tmp_path, "a.txt", "b.txt")
+    dialogs = FakeDialogs()
+    host = NotepadTabs()
+    pa = new_page(load_document(a), dialogs, open_settings(str(tmp_path / "s.ini")))
+    pb = new_page(load_document(b), dialogs, open_settings(str(tmp_path / "s.ini")))
+    host.add_page(pa)
+    host.add_page(pb)
+    host.show()
+    try:
+        bar = host.tabs.tabBar()
+        assert isinstance(bar, PanelTabBar) and not host.tabs.tabsClosable()
+        cross = bar.tabButton(0, QTabBar.ButtonPosition.RightSide)
+        assert isinstance(cross, QToolButton) and not cross.icon().isNull()
+        cross.click()
+        assert pump(lambda: host.tabs.count() == 1) and host.current_page() is pb
+    finally:
+        host.mark_clean()
+        host.close()

@@ -688,14 +688,21 @@ class NotepadTabs(FrostSurface, QMainWindow):
         self.resize(900, 640)
         self.tabs = QTabWidget()
         self.tabs.setDocumentMode(True)
-        self.tabs.setTabsClosable(True)
+        # the panels' own tabs: rounded tops, the current one gold, the others blue, a small cross of our own (the owner, 2026-11-19)
+        from .panel import PanelTabBar
+        bar = PanelTabBar()
+        bar.panel_active = True
+        bar.setAcceptDrops(False)
+        bar.middle_clicked.connect(lambda i: self.tabs.widget(i).close())
+        self.tabs.setTabBar(bar)
+        self._close_buttons: dict = {}
         self.tabs.setMovable(True)
         self.tabs.setTabBarAutoHide(True)
         self.setCentralWidget(self.tabs)
         self._closing = False
         self.session = None                                  # whatever must live as long as the window (the single-instance server)
-        self.tabs.tabCloseRequested.connect(lambda i: self.tabs.widget(i).close())
         self.tabs.currentChanged.connect(self._tab_changed)
+        self._style_tab_row()
         for text, keys, step in (("Next Tab", "Ctrl+Tab", 1), ("Previous Tab", "Ctrl+Shift+Tab", -1)):
             act = QAction(text, self)
             act.setShortcut(QKeySequence(keys))
@@ -721,6 +728,7 @@ class NotepadTabs(FrostSurface, QMainWindow):
         page.setWindowFlags(Qt.WindowType.Widget)
         page._host = self
         i = self.tabs.addTab(page, "")
+        self._attach_close_button(page)
         self._retitle(page)
         page.windowTitleChanged.connect(lambda _t, p=page: self._retitle(p))
         page.closed.connect(self._page_closed)
@@ -750,7 +758,42 @@ class NotepadTabs(FrostSurface, QMainWindow):
         if page is self.current_page():
             self.setWindowTitle(page.windowTitle())
 
+    def _style_tab_row(self) -> None:
+        """The row behind the tabs in the card colour, and the crosses small and quiet until the pointer is on them, as in the panels."""
+        t = theme.current()
+        self.tabs.tabBar().setStyleSheet(
+            f"QTabBar{{background:{t['card']};}}"
+            f"QTabBar QToolButton{{padding:1px;border:none;border-radius:3px;background:transparent;}}"
+            f"QTabBar QToolButton:hover{{background:{t['line']};}}")
+        self._style_close_buttons()
+
+    def _attach_close_button(self, page) -> None:
+        from PyQt6.QtCore import QSize
+        from PyQt6.QtWidgets import QTabBar, QToolButton
+        btn = QToolButton()
+        btn.setAutoRaise(True)
+        btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        btn.setIconSize(QSize(12, 12))
+        btn.setToolTip("Close tab (Ctrl+W)")
+        btn.clicked.connect(lambda _c=False, p=page: p.close())
+        self.tabs.tabBar().setTabButton(self.tabs.indexOf(page), QTabBar.ButtonPosition.RightSide, btn)
+        self._close_buttons[id(page)] = (page, btn)
+        page.destroyed.connect(lambda _o=None, k=id(page): self._close_buttons.pop(k, None))
+        self._style_close_buttons()
+
+    def _style_close_buttons(self) -> None:
+        """A cross in the text colour of its tab: dark on the gold current tab, light on the blue ones."""
+        from . import icon_set
+        c = theme.tab_colors()
+        current = self.current_page()
+        for key, (page, btn) in list(self._close_buttons.items()):
+            try:
+                btn.setIcon(icon_set.icon("x", c["active_text"] if page is current else c["blue_text"]))
+            except RuntimeError:                      # the button went away with its tab
+                self._close_buttons.pop(key, None)
+
     def _tab_changed(self, _i: int) -> None:
+        self._style_close_buttons()
         page = self.current_page()
         if page is not None:
             self.setWindowTitle(page.windowTitle())
