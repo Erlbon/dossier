@@ -2,6 +2,16 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-19#13 -- Duplicates replaced with clones (card 66B)
+
+- **Find Duplicate Files > Replace with Clones...** replaces the checked copies with clones: each copy keeps its name, place
+  and dates but shares the space of the copy that stays, and a later change to one copy changes only that copy. Shown as a
+  plan first (how many files, how much space comes back), run with progress and Cancel; a file that changed since the search
+  is left alone. Nothing is deleted, and there are no hard links.
+- Works on APFS (Mac), btrfs and XFS with reflink (Linux) and ReFS (Windows); on NTFS and other volumes the button is greyed
+  and its tooltip says why.
+- Not run on a real Mac or Linux desktop, and the ReFS call is untested on a ReFS volume (only an injected copy was tested).
+
 ## 2026-11-19#12 -- Rename by editing the names as text (card 63A)
 
 - **Tools > Batch Rename > Edit the Names as Text** (also in the right-click Batch Rename submenu): the marked names open one

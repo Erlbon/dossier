@@ -631,3 +631,154 @@ def system_cloud_folders(home: str) -> list:
         return [("iCloud Drive", os.path.join(home, "Library", "Mobile Documents", "com~apple~CloudDocs"))]
     return []
 
+
+# Cloning a file (card 66B): the file system's own "copy that shares the data blocks" -----------------------------------------------
+
+def fstype_from_mounts(path: str, mounts: list) -> str:
+    """The file system name (lower case) of the mount that holds ``path``: the longest mount point that is a parent of it.
+    ``mounts`` is ``[(fstype, mount point), ...]``. "" when none fits."""
+    best, name = -1, ""
+    target = path.rstrip("/") or "/"
+    for fstype, mount in mounts:
+        base = mount.rstrip("/") or "/"
+        if target == base or base == "/" or target.startswith(base + "/"):
+            if len(base) > best:
+                best, name = len(base), fstype.lower()
+    return name
+
+
+def _linux_mounts() -> list:
+    try:
+        with open("/proc/mounts", encoding="utf-8", errors="replace") as f:
+            lines = f.read().splitlines()
+    except OSError:
+        return []
+    out = []
+    for line in lines:
+        parts = line.split()
+        if len(parts) >= 3:
+            out.append((parts[2], parts[1].replace(chr(92) + "040", " ")))
+    return out
+
+
+def filesystem_name(path: str) -> str:
+    """The file system the volume of ``path`` uses, lower case (ntfs, refs, apfs, btrfs, xfs, ext4...), or "" when it cannot be told."""
+    try:
+        if IS_WINDOWS:
+            import ctypes
+            drive = os.path.splitdrive(os.path.abspath(strip_longpath(path)))[0]
+            if not drive:
+                return ""
+            buf = ctypes.create_unicode_buffer(64)
+            if ctypes.windll.kernel32.GetVolumeInformationW(drive.rstrip(chr(92)) + chr(92), None, 0, None, None, None, buf, 64):
+                return buf.value.lower()
+            return ""
+        real = os.path.realpath(path)
+        if IS_MACOS:
+            return fstype_from_mounts(real, [(t, m) for t, m, _s, _f in _mac_mounts()])
+        return fstype_from_mounts(real, _linux_mounts())
+    except (OSError, AttributeError, ValueError):
+        return ""
+
+
+def clone_native(src: str, dst: str) -> None:
+    """Make ``dst`` (which must not exist) a clone of ``src``: same data blocks, copy-on-write. Raises OSError when the file system
+    cannot (the half-made ``dst`` is removed). APFS: ``clonefile``; Linux (btrfs, XFS): the ``FICLONE`` ioctl; Windows (ReFS):
+    ``FSCTL_DUPLICATE_EXTENTS_TO_FILE`` (untested on a ReFS volume)."""
+    if IS_MACOS:
+        import ctypes
+        import ctypes.util
+        libc = ctypes.CDLL(ctypes.util.find_library("c"), use_errno=True)
+        if libc.clonefile(os.fsencode(src), os.fsencode(dst), 0) != 0:
+            code = ctypes.get_errno()
+            raise OSError(code, os.strerror(code), dst)
+        return
+    if IS_LINUX:
+        import fcntl
+        source = os.open(src, os.O_RDONLY)
+        try:
+            target = os.open(dst, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            try:
+                fcntl.ioctl(target, 0x40049409, source)          # FICLONE
+            except OSError:
+                os.close(target)
+                target = -1
+                os.unlink(dst)
+                raise
+            finally:
+                if target >= 0:
+                    os.close(target)
+        finally:
+            os.close(source)
+        return
+    if IS_WINDOWS:
+        _clone_refs(src, dst)
+        return
+    raise OSError(95, "This system cannot clone files", dst)
+
+
+def _clone_refs(src: str, dst: str) -> None:
+    import ctypes
+    from ctypes import wintypes
+    k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    k32.CreateFileW.restype = wintypes.HANDLE
+    k32.CreateFileW.argtypes = [wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD, wintypes.LPVOID, wintypes.DWORD, wintypes.DWORD,
+                                wintypes.HANDLE]
+    k32.CloseHandle.argtypes = [wintypes.HANDLE]
+    k32.DeviceIoControl.argtypes = [wintypes.HANDLE, wintypes.DWORD, wintypes.LPVOID, wintypes.DWORD, wintypes.LPVOID, wintypes.DWORD,
+                                    ctypes.POINTER(wintypes.DWORD), wintypes.LPVOID]
+    k32.SetFilePointerEx.argtypes = [wintypes.HANDLE, ctypes.c_longlong, ctypes.POINTER(ctypes.c_longlong), wintypes.DWORD]
+    k32.SetEndOfFile.argtypes = [wintypes.HANDLE]
+    invalid = wintypes.HANDLE(-1).value
+
+    class Extents(ctypes.Structure):                              # DUPLICATE_EXTENTS_DATA
+        _fields_ = [("FileHandle", wintypes.HANDLE), ("SourceFileOffset", ctypes.c_longlong),
+                    ("TargetFileOffset", ctypes.c_longlong), ("ByteCount", ctypes.c_longlong)]
+
+    def fail(path):
+        code = ctypes.get_last_error()
+        if code:
+            raise ctypes.WinError(code)
+        raise OSError(5, "Windows could not clone the file", path)
+
+    size = os.path.getsize(src)
+    sectors, per_sector, free, total = (wintypes.DWORD() for _ in range(4))
+    cluster = 65536
+    root = os.path.splitdrive(os.path.abspath(src))[0] + chr(92)
+    if k32.GetDiskFreeSpaceW(root, ctypes.byref(sectors), ctypes.byref(per_sector), ctypes.byref(free), ctypes.byref(total)):
+        cluster = max(sectors.value * per_sector.value, 4096)
+    rounded = -(-size // cluster) * cluster
+    source = k32.CreateFileW(longpath(src), 0x80000000, 7, None, 3, 0x80, None)         # GENERIC_READ, share all, OPEN_EXISTING
+    if source == invalid:
+        fail(src)
+    target = k32.CreateFileW(longpath(dst), 0xC0000000, 0, None, 1, 0x80, None)         # read+write, CREATE_NEW
+    if target == invalid:
+        k32.CloseHandle(source)
+        fail(dst)
+    ok = False
+    try:
+        if rounded:
+            if not k32.SetFilePointerEx(target, rounded, None, 0) or not k32.SetEndOfFile(target):
+                fail(dst)
+            step = max((1 << 30) // cluster, 1) * cluster         # about 1 GiB, a whole number of clusters
+            offset = 0
+            while offset < rounded:
+                count = min(step, rounded - offset)
+                data = Extents(source, offset, offset, count)
+                returned = wintypes.DWORD()
+                if not k32.DeviceIoControl(target, 0x98344, ctypes.byref(data), ctypes.sizeof(data), None, 0, ctypes.byref(returned), None):
+                    fail(dst)
+                offset += count
+            if rounded != size:
+                if not k32.SetFilePointerEx(target, size, None, 0) or not k32.SetEndOfFile(target):
+                    fail(dst)
+        ok = True
+    finally:
+        k32.CloseHandle(target)
+        k32.CloseHandle(source)
+        if not ok:
+            try:
+                os.unlink(dst)
+            except OSError:
+                pass
+

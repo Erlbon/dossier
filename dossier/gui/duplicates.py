@@ -14,6 +14,7 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFormLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton,
                              QSpinBox, QTreeWidget, QTreeWidgetItem, QVBoxLayout)
 
+from ..core import clone
 from ..core import duplicates as dup
 from ..core.listings import FOUND_PREFIX, ResultSet
 from ..core.sizefmt import human_size
@@ -144,14 +145,23 @@ class DuplicatesResultDialog(OwnedDialog):
         self.delete_button = QPushButton("Delete Checked...")
         self.mark_button = QPushButton("Mark Checked in the Panels")
         self.tab_button = QPushButton("Show All in a Tab")
+        self.clone_button = QPushButton("Replace with Clones...")
+        self.clone_ok = any(clone.is_clone_filesystem(n) for n in result.filesystems.values())
+        if self.clone_ok:
+            self.clone_button.setToolTip("Each checked copy keeps its name, place and dates but shares the space of the copy that "
+                                         "stays. Changing one copy later changes only that copy. Nothing is deleted.")
+        else:
+            names = sorted({n for n in result.filesystems.values() if n})
+            self.clone_button.setToolTip(clone.not_supported_reason(names[0] if len(names) == 1 else ""))
         close = QPushButton("Close")
-        for b in (self.delete_button, self.mark_button, self.tab_button, close):
+        for b in (self.delete_button, self.mark_button, self.tab_button, self.clone_button, close):
             b.setAutoDefault(False)
             buttons.addWidget(b)
         close.clicked.connect(self.reject)
         self.delete_button.clicked.connect(lambda: self._finish("delete"))
         self.mark_button.clicked.connect(lambda: self._finish("mark"))
         self.tab_button.clicked.connect(lambda: self._finish("tab"))
+        self.clone_button.clicked.connect(lambda: self._finish("clone"))
         layout.addLayout(buttons)
         self._busy = False
         self._changed()
@@ -197,6 +207,7 @@ class DuplicatesResultDialog(OwnedDialog):
         self.counts.setText(text)
         self.delete_button.setEnabled(bool(paths) and not emptied)
         self.mark_button.setEnabled(bool(paths))
+        self.clone_button.setEnabled(bool(paths) and not emptied and self.clone_ok)
 
     def _finish(self, action: str) -> None:
         self.action = action
@@ -242,7 +253,13 @@ class DuplicatesMixin:
             def report(stage: str, done: int, total: int) -> None:
                 state.update(stage=stage, done=done, total=total)
                 progress(done, 0)
-            return dup.find_duplicates(self.fs, roots, min_size=min_size, name=name, cancel=cancel, progress=report)
+            result = dup.find_duplicates(self.fs, roots, min_size=min_size, name=name, cancel=cancel, progress=report)
+            for group in result.groups:                       # which volumes can clone (asked here, off the window's thread)
+                for e in group.files:
+                    folder = os.path.dirname(e.path)
+                    if folder not in result.filesystems:
+                        result.filesystems[folder] = self._filesystem_of(folder)
+            return result
 
         def detail() -> str:
             if state["total"]:
@@ -277,9 +294,70 @@ class DuplicatesMixin:
             self.selection.add(paths)
             self._say(f"{len(paths):,} duplicate file{'s' if len(paths) != 1 else ''} marked: press F8 to delete them")
             return
+        if action == "clone":
+            self._replace_with_clones(result, paths)
+            return
         if action == "delete":
             if dup.groups_left_empty(result.groups, paths):
                 self.dialogs.info("Delete Duplicates", "Every copy of some file is checked. At least one copy of each group must stay.")
                 return
             with self._acting_on(self.active, paths):
                 self.delete()
+
+    # clones (card 66B) ---------------------------------------------------------------------------------------------------------
+    def _filesystem_of(self, path: str) -> str:               # seam for tests
+        return clone.filesystem_of(path)
+
+    def _replace_with_clones(self, result: dup.Result, paths: list) -> None:
+        """Plan on a thread, show the plan (files, space), then replace on a thread with progress and Cancel."""
+        if dup.groups_left_empty(result.groups, paths):
+            self.dialogs.info("Replace with Clones", "Every copy of some file is checked. At least one copy of each group must stay.")
+            return
+
+        def plan_work(progress, cancel):
+            return clone.build_plan(result.groups, paths, fstype_of=self._filesystem_of)
+
+        run_in_background(self, self.cmd_runner, "Planning clones", plan_work, on_result=self._clone_plan_ready,
+                          tracked=self._size_jobs, indeterminate=True, failed_title="Replace with Clones")
+
+    def _clone_plan_ready(self, plan: clone.ClonePlan) -> None:
+        if not plan.items:
+            why = chr(10).join(sorted({reason for _p, reason in plan.skipped})) or "Nothing was chosen."
+            self.dialogs.info("Replace with Clones", "No file can be replaced with a clone." + chr(10) + chr(10) + why)
+            return
+        n = len(plan.items)
+        text = (f"{n:,} file{'s' if n != 1 else ''} will be replaced with clones of the copy that stays, and {human_size(plan.space)} "
+                "comes back. Each keeps its name, place and dates. Each is read and compared with its clone first, and a file that "
+                "changed since the search is left alone. Nothing is deleted.")
+        if plan.skipped:
+            text += chr(10) + chr(10) + f"{len(plan.skipped):,} checked file{'s' if len(plan.skipped) != 1 else ''} cannot be replaced: " \
+                + "; ".join(sorted({reason for _p, reason in plan.skipped}))
+        if not self.dialogs.confirm("Replace with Clones", text, "Replace"):
+            return
+        cloner = getattr(self, "_clone_function", None)
+        state = {"done": 0, "total": n}
+
+        def work(progress, cancel):
+            def report(done: int, total: int) -> None:
+                state["done"] = done
+                progress(done, total)
+            return clone.run_plan(plan, cancel=cancel, progress=report, clone=cloner)
+
+        run_in_background(self, self.cmd_runner, "Replacing copies with clones", work, on_result=self._clones_done,
+                          tracked=self._size_jobs, detail=lambda: f"{state['done']:,} of {state['total']:,}", plan_bytes=None,
+                          partial_on_cancel=True, failed_title="Replace with Clones")
+
+    def _clones_done(self, report: clone.CloneReport) -> None:
+        text = f"{report.done:,} file{'s' if report.done != 1 else ''} replaced with clones, {human_size(report.freed)} freed."
+        if report.cancelled:
+            text += " Stopped before the rest."
+        if report.failures:
+            shown = report.failures[:15]
+            text += chr(10) + chr(10) + f"{len(report.failures):,} could not be replaced and were left as they were:" + chr(10)
+            text += chr(10).join(f"{p}: {why}" for p, why in shown)
+            if len(report.failures) > len(shown):
+                text += chr(10) + f"... and {len(report.failures) - len(shown):,} more."
+        self.dialogs.info("Replace with Clones", text)
+        self.left.refresh()
+        self.right.refresh()
+        self._say(f"{report.done:,} cop{'ies' if report.done != 1 else 'y'} replaced with clones, {human_size(report.freed)} freed")

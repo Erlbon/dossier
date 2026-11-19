@@ -179,3 +179,45 @@ def test_the_context_menu_offers_it_for_folders_and_empty_space(world):
     assert "Find Duplicate Files in This Folder..." in texts(win.build_context_menu(win.left, win.left.model.row_of("folder")))
     assert "Find Duplicate Files in This Folder..." not in texts(win.build_context_menu(win.left, win.left.model.row_of("f.txt")))
     assert "Find Duplicate Files..." in texts(win.build_context_menu(win.left, -1))
+
+
+def test_replace_with_clones_is_greyed_with_a_reason_on_an_unsupported_volume(world, monkeypatch):
+    win, d, left, right, tmp = world
+    make(left)
+    monkeypatch.setattr(type(win), "_filesystem_of", lambda self, path: "ntfs")
+    seen = []
+    answer(monkeypatch, win, result=lambda dlg: (seen.append(dlg), False)[1])
+    refresh(win)
+    win.find_duplicate_files()
+    pump(win, lambda: seen)
+    dlg = seen[0]
+    dlg.check_extras()
+    assert dlg.checked_paths() and not dlg.clone_button.isEnabled()
+    assert "NTFS" in dlg.clone_button.toolTip() and "btrfs" in dlg.clone_button.toolTip()
+
+
+def test_replace_with_clones_shows_the_plan_and_replaces_through_the_injected_cloner(world, monkeypatch):
+    import shutil
+    win, d, left, right, tmp = world
+    paths = make(left)
+    monkeypatch.setattr(type(win), "_filesystem_of", lambda self, path: "btrfs")
+    win._clone_function = lambda src, dst: shutil.copyfile(src, dst)
+    before = {n: os.stat(p).st_mtime for n, p in paths.items()}
+
+    def clone_extras(dlg):
+        assert dlg.clone_ok and dlg.clone_button.isEnabled() is False          # nothing checked yet
+        dlg.policy.setCurrentIndex(0)
+        dlg.check_extras()
+        assert dlg.clone_button.isEnabled()
+        dlg._finish("clone")
+        return True
+    answer(monkeypatch, win, result=clone_extras)
+    refresh(win)
+    win.find_duplicate_files()
+    pump(win, lambda: d.confirms)
+    assert "3 files will be replaced with clones" in d.confirms[-1][1] and "14.6 K" in d.confirms[-1][1]
+    pump(win, lambda: any(t == "Replace with Clones" for t, _x in d.infos))
+    assert "3 files replaced with clones" in d.infos[-1][1]
+    for n in ("a1.dat", "a2.dat", "a3.dat", "b1.dat", "b2.dat"):
+        assert os.path.exists(paths[n]) and os.stat(paths[n]).st_mtime == before[n]      # nothing deleted, dates kept
+    assert open(paths["a2.dat"], "rb").read() == b"A" * 4000

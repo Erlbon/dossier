@@ -47,6 +47,7 @@ class Result:
     candidates: int = 0                            # files that shared their size with another
     unreadable: int = 0                            # files that could not be read (left out)
     bytes_read: int = 0
+    filesystems: dict = field(default_factory=dict)  # folder -> file system name, filled in by the window (for "Replace with Clones")
 
     @property
     def wasted(self) -> int:
