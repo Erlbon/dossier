@@ -33,6 +33,7 @@ from .address_bar import AddressBar
 from .drive_bar import DriveBar
 from .dialogs import stem_length
 from .models import FolderModel, human_size
+from .spring_open import SpringTimer
 
 SAFE_SCHEMES = ("http", "https", "mailto")
 
@@ -165,6 +166,8 @@ class _FileView:
     drag_source = ""            # set by the panel: its name in a drag, so a drop knows where it came from
     drop_check = None           # set by the panel: (paths, source, row) -> whether a drop here would do something
     content_check = None        # set by the panel: row -> whether a picture or text dropped here could become a new file
+    spring_hover = None         # set by the panel: (paths, row) -> starts or cancels the spring-open timer (card 62A)
+    spring_end = None           # set by the panel: (dropped) -> the drag left the list, or files were dropped on it
     _press = None               # where and on which row the left button went down
 
     def contextMenuEvent(self, event) -> None:
@@ -296,7 +299,12 @@ class _FileView:
         painter.drawText(12, 5 + metrics.ascent(), text)
         painter.end()
         drag.setPixmap(pixmap)
-        drag.exec(Qt.DropAction.CopyAction | Qt.DropAction.MoveAction, Qt.DropAction.MoveAction)
+        SpringTimer.internal = True                  # the end of this drag is known: exec() returning (card 62A)
+        try:
+            drag.exec(Qt.DropAction.CopyAction | Qt.DropAction.MoveAction, Qt.DropAction.MoveAction)
+        finally:
+            SpringTimer.internal = False
+        SpringTimer.drag_finished()                  # panels that sprang open and got no drop go back
         self._set_drop_row(-1)
         self.drag_ended.emit()
 
@@ -335,6 +343,8 @@ class _FileView:
 
     def dragMoveEvent(self, event) -> None:
         paths, source, row = self._drop_info(event)
+        if self.spring_hover is not None:
+            self.spring_hover(paths, row)             # card 62A: a folder, or a drive on the Home page, opens if the drag stays on it
         if not paths:
             content_row = self._content_row(event)
             if content_row is None:
@@ -354,11 +364,15 @@ class _FileView:
 
     def dragLeaveEvent(self, event) -> None:
         self._set_drop_row(-1)
+        if self.spring_end is not None:
+            self.spring_end(False)
         event.accept()
 
     def dropEvent(self, event) -> None:
         paths, source, row = self._drop_info(event)
         self._set_drop_row(-1)
+        if self.spring_end is not None:
+            self.spring_end(True)
         if not paths:
             content_row = self._content_row(event)
             if content_row is None:
@@ -592,6 +606,9 @@ class PanelTabBar(QTabBar):
         super().__init__(parent)
         self.setDrawBase(False)
         self.setMouseTracking(True)
+        self.setAcceptDrops(True)
+        self.spring_hover = None         # set by the panel: (paths, tab index under the pointer or -1) while files are dragged over the bar
+        self.spring_end = None           # set by the panel: (dropped) -> the drag left the bar
         self._hover = -1
         self.panel_active = False        # set by the panel: the current tab then continues the gold frame below it
         self.first_inset = 0             # set by the panel: how far the first tab's left edge is moved in, to line up with the box below
@@ -664,6 +681,34 @@ class PanelTabBar(QTabBar):
             p.drawText(text_rect, int(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft),
                        QFontMetrics(font).elidedText(self.tabText(i), Qt.TextElideMode.ElideRight,
                                                      int(text_rect.width())))
+
+    # Files dragged over a tab (card 62A): the tab is no place to drop them, but holding them there switches to it.
+    def _drag_paths(self, event) -> list:
+        from .dragdrop import read_paths
+        return read_paths(event.mimeData())[0]
+
+    def dragEnterEvent(self, event) -> None:
+        if self._drag_paths(event):
+            event.acceptProposedAction()          # taken, so that the moves keep coming; dragMoveEvent refuses the drop itself
+            self.dragMoveEvent(event)
+        else:
+            event.ignore()
+
+    def dragMoveEvent(self, event) -> None:
+        paths = self._drag_paths(event)
+        if self.spring_hover is not None:
+            self.spring_hover(paths, self.tabAt(event.position().toPoint()))
+        event.ignore()
+
+    def dragLeaveEvent(self, event) -> None:
+        if self.spring_end is not None:
+            self.spring_end(False)
+        event.accept()
+
+    def dropEvent(self, event) -> None:
+        if self.spring_end is not None:
+            self.spring_end(False)             # refused: no drop happened
+        event.ignore()
 
     def mouseReleaseEvent(self, event) -> None:
         if event.button() == Qt.MouseButton.MiddleButton:
@@ -786,6 +831,10 @@ class Panel(QFrame):
         self._pending = None            # (listing, path, select) of a slow folder being opened
         self._landing = None            # (path, names) on a reload: where the cursor goes if its item is gone
         self.keep_place = True          # Settings: off sends the cursor to the top instead
+        self.spring_open = True         # Settings: a drag held over a folder, tab or drive for a moment opens it (card 62A)
+        self.spring_mac = None          # tests: pretend to be on the Mac (packages never spring); None asks the system
+        self._spring_origin = None      # while a drag has sprung: {"tab": the tab shown first, "paths": {tab id: its folder first}}
+        self.spring = SpringTimer(lambda: self.spring_open, self._spring_restore, self)
         self._poll = QTimer(self)
         self._poll.setInterval(40)
         self._poll.timeout.connect(self._poll_pending)
@@ -801,6 +850,8 @@ class Panel(QFrame):
         self.tabs.setExpanding(False)
         self.tabs.setElideMode(Qt.TextElideMode.ElideRight)
         self.tabs.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.tabs.spring_hover = self._spring_tab
+        self.tabs.spring_end = self._spring_end
         self.new_tab_button = QToolButton()
         self.new_tab_button.setText("+")
         self.new_tab_button.setToolTip("New tab (Ctrl+T)")
@@ -896,6 +947,8 @@ class Panel(QFrame):
         self.table.drag_source = str(id(self))
         self.table.drop_check = self._drop_target
         self.table.content_check = self._content_target
+        self.table.spring_hover = self._spring_row
+        self.table.spring_end = self._spring_end
         self.table.stage_for = self._stage_for_paths
         self.table.content_dropped.connect(self._content_dropped)
         self.table.setAcceptDrops(True)
@@ -1023,6 +1076,8 @@ class Panel(QFrame):
         view.drag_source = str(id(self))
         view.drop_check = self._drop_target
         view.content_check = self._content_target
+        view.spring_hover = self._spring_row
+        view.spring_end = self._spring_end
         view.stage_for = self._stage_for_paths
         view.content_dropped.connect(self._content_dropped)
         view.setAcceptDrops(True)
@@ -1474,8 +1529,8 @@ class Panel(QFrame):
             dest, on_row = entry.path, True
         else:
             dest, on_row = self.path, False
-        if not on_row and source == str(id(self)):
-            return None                                   # dropped on its own list: nothing to move
+        # (dropped on its own list with nothing to move is refused by all_in_folder below; after a spring-open the panel shows
+        # another folder than the one the drag began in, and a drop there is a real move)
         if not (self.fs.is_writable(dest) or dest.startswith("zip://")):
             return None
         if not can_drop(paths, dest, self.fs.sep):
@@ -1483,6 +1538,77 @@ class Panel(QFrame):
         if source == str(id(self)) and all_in_folder(paths, dest, self.fs.dirname):
             return None
         return dest if on_row else "here"
+
+    def _spring_row(self, paths: list, row: int) -> None:
+        """Files are dragged over ``row`` (paths empty: the drag has gone). A folder, or a drive on the Home page, opens in this panel
+        after the delay. Not the item being dragged, not the ".." row, not a Mac package, and not in a locked tab (it would open a new tab)."""
+        entry = self.model.entry_at(row) if paths and row >= 0 else None
+        if (entry is None or not entry.is_dir or entry.kind in ("header", "action", "tailnet", "server", "trash") or self.model.is_up_row(row)
+                or entry.path in paths or self._locked_here()
+                or (not has_scheme(entry.path) and bundles.is_package(entry.name, True, self.spring_mac))):
+            if paths:
+                self.spring.over()
+            self.spring.cancel()
+            return
+        path, shown = entry.path, self.model.path
+
+        def open_it() -> None:
+            if self.model.path != shown:
+                return                                     # the panel went elsewhere meanwhile
+            self._spring_note()
+            self.view._set_drop_row(-1)
+            self.set_folder(path)
+        self.spring.over()
+        self.spring.hover(("folder", path), open_it)
+
+    def _spring_note(self) -> None:
+        """Before a spring changes anything: remember the shown tab and the folder of the tab that is about to move (once each)."""
+        tid = self._current_tab_id
+        if self._spring_origin is None:
+            self._spring_origin = {"tab": tid, "paths": {}}
+        self._spring_origin["paths"].setdefault(tid, self.model.path)
+        self.spring.armed = True
+
+    def _spring_restore(self) -> None:
+        """The drag ended with no drop here: the folders and the tab shown before the first spring come back."""
+        origin, self._spring_origin = self._spring_origin, None
+        if not origin:
+            return
+        for tid, path in origin["paths"].items():
+            index = self._index_of_tab(tid)
+            if index < 0:
+                continue
+            if index != self.tabs.currentIndex():
+                self.tabs.setCurrentIndex(index)
+            if self.model.path != path:
+                self.set_folder(path)
+        index = self._index_of_tab(origin["tab"])
+        if index >= 0 and index != self.tabs.currentIndex():
+            self.tabs.setCurrentIndex(index)
+
+    def _spring_end(self, dropped: bool) -> None:
+        """The drag left this panel's list or tab bar, or files were dropped on the list."""
+        if dropped:
+            self._spring_origin = None
+            self.spring.dropped()
+        else:
+            self.spring.left()
+
+    def _spring_tab(self, paths: list, index: int) -> None:
+        """Files are dragged over tab ``index`` of the bar: switch to it after the delay."""
+        if not paths or index < 0 or index == self.tabs.currentIndex():
+            if paths:
+                self.spring.over()
+            self.spring.cancel()
+            return
+        key = self.tabs.tabData(index)
+
+        def switch() -> None:
+            if 0 <= index < self.tabs.count() and self.tabs.tabData(index) == key:
+                self._spring_note()
+                self.tabs.setCurrentIndex(index)
+        self.spring.over()
+        self.spring.hover(("tab", key if key is not None else index), switch)
 
     def _stage_for_paths(self, paths: list):
         """For a drag of items that are not on a drive (inside an archive, on a server): a function that copies them out when another

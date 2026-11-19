@@ -357,3 +357,176 @@ def test_a_plain_ctrl_click_still_just_toggles_one_item(world):
     QTest.mouseClick(win.left.table.viewport(), Qt.MouseButton.LeftButton, Qt.KeyboardModifier.ControlModifier,
                      row_center(win.left, "b.txt"))
     assert win.left.marked_here() == []
+
+
+# spring-loaded folders, tabs and drives (card 62A) ---------------------------------------------------------------------------
+def _drag_move(widget, pos, mime):
+    from PyQt6.QtGui import QDragMoveEvent
+    event = QDragMoveEvent(pos, Qt.DropAction.MoveAction, mime, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
+    widget.dragMoveEvent(event)
+    return event
+
+
+def _leave(widget):
+    from PyQt6.QtGui import QDragLeaveEvent
+    widget.dragLeaveEvent(QDragLeaveEvent())
+
+
+def _springy(world, monkeypatch, delay=40):
+    from dossier.gui.spring_open import SpringTimer
+    monkeypatch.setattr(SpringTimer, "DELAY_MS", delay)
+    win, d, left, right, tmp = world
+    (right / "box").mkdir()
+    (right / "box" / "inner.txt").write_text("i")
+    (right / "plain.txt").write_text("p")
+    win.right.refresh()
+    pump(win, lambda: win.right.model.row_of("box") >= 0 and win.right.model.row_of("plain.txt") >= 0)
+    return win, left, right, dragdrop.make_mime([str(left / "x")], str(id(win.left)))
+
+
+def test_a_drag_held_over_a_folder_opens_it_after_the_delay(world, monkeypatch):
+    win, left, right, mime = _springy(world, monkeypatch)
+    event = _drag_move(win.right.table, row_center(win.right, "box"), mime)
+    assert event.isAccepted() and win.right.path == str(right)                 # not at once
+    pump(win, lambda: win.right.path == str(right / "box"))
+    assert win.right.model.drop_row == -1
+
+
+def test_leaving_before_the_delay_opens_nothing(world, monkeypatch):
+    win, left, right, mime = _springy(world, monkeypatch, delay=150)
+    _drag_move(win.right.table, row_center(win.right, "box"), mime)
+    _leave(win.right.table)
+    QTest.qWait(300)
+    assert win.right.path == str(right)
+    _drag_move(win.right.table, row_center(win.right, "box"), mime)           # moving on to a file row cancels it as well
+    _drag_move(win.right.table, row_center(win.right, "plain.txt"), mime)
+    QTest.qWait(300)
+    assert win.right.path == str(right)
+
+
+def test_with_the_setting_off_nothing_springs_open(world, monkeypatch):
+    win, left, right, mime = _springy(world, monkeypatch)
+    assert win.act_spring_open.isChecked()
+    win.act_spring_open.setChecked(False)
+    assert win.right.spring_open is False and win.left.spring_open is False
+    _drag_move(win.right.table, row_center(win.right, "box"), mime)
+    QTest.qWait(250)
+    assert win.right.path == str(right)
+    win.act_spring_open.setChecked(True)
+    assert win.right.spring_open is True
+
+
+def test_the_dragged_folder_itself_and_a_mac_package_do_not_spring(world, monkeypatch):
+    win, left, right, mime = _springy(world, monkeypatch)
+    (right / "Thing.app").mkdir()
+    win.right.refresh()
+    pump(win, lambda: win.right.model.row_of("Thing.app") >= 0)
+    own = dragdrop.make_mime([str(right / "box")], str(id(win.right)))
+    _drag_move(win.right.table, row_center(win.right, "box"), own)             # a folder hovering over itself
+    win.right.spring_mac = True
+    _drag_move(win.right.table, row_center(win.right, "Thing.app"), mime)       # a package on the Mac
+    QTest.qWait(250)
+    assert win.right.path == str(right)
+
+
+def test_the_up_row_does_not_spring(world, monkeypatch):
+    win, left, right, mime = _springy(world, monkeypatch)
+    win.right.set_folder(str(right / "box"))
+    pump(win, lambda: win.right.path == str(right / "box") and win.right.model.row_of("inner.txt") >= 0)
+    up = next(r for r in range(win.right.model.entry_count()) if win.right.model.is_up_row(r))
+    _drag_move(win.right.table, win.right.table.visualRect(win.right.model.index(up, 0)).center(), mime)
+    QTest.qWait(250)
+    assert win.right.path == str(right / "box")
+
+
+def test_a_drag_held_over_a_tab_switches_to_it(world, monkeypatch):
+    win, left, right, mime = _springy(world, monkeypatch)
+    win.right.new_tab(str(left), activate=False)
+    assert win.right.tabs.count() == 2 and win.right.tabs.currentIndex() == 0
+    bar = win.right.tabs
+    pos = bar.tabRect(1).center()
+    event = _drag_move(bar, pos, mime)
+    assert not event.isAccepted()                                              # no drop on a tab bar
+    assert win.right.tabs.currentIndex() == 0
+    pump(win, lambda: win.right.tabs.currentIndex() == 1)
+    pump(win, lambda: win.right.path == str(left))
+
+
+def test_a_drag_held_over_a_drive_on_the_home_page_opens_it(world, monkeypatch):
+    win, left, right, mime = _springy(world, monkeypatch)
+    win.right.set_folder("home://")
+    pump(win, lambda: win.right.is_home and win.right.model.entry_count() > 1)
+    row = next(r for r in range(win.right.model.entry_count())
+               if win.right.model.entry_at(r).kind not in ("header", "action") and win.right.model.entry_at(r).is_dir)
+    target = win.right.model.entry_at(row).path
+    opened = []
+    monkeypatch.setattr(win.right, "set_folder", lambda path, *a, **k: opened.append(path) or True)
+    _drag_move(win.right.table, win.right.table.visualRect(win.right.model.index(row, 0)).center(), mime)
+    pump(win, lambda: opened)
+    assert opened == [target]
+
+
+def test_after_a_spring_the_drop_lands_in_the_folder_it_opened(world, monkeypatch):
+    win, left, right, mime = _springy(world, monkeypatch)
+    (left / "a.txt").write_text("A")
+    win.left.refresh()
+    pump(win, lambda: win.left.model.row_of("a.txt") >= 0)
+    (left / "box").mkdir()
+    win.left.refresh()
+    pump(win, lambda: win.left.model.row_of("box") >= 0)
+    own = dragdrop.make_mime([str(left / "a.txt")], str(id(win.left)))
+    _drag_move(win.left.table, row_center(win.left, "box"), own)
+    pump(win, lambda: win.left.path == str(left / "box"))
+    drop(win.left, [str(left / "a.txt")], source=str(id(win.left)))             # on the empty space of the folder that sprang open
+    pump(win, lambda: (left / "box" / "a.txt").exists() and not win.busy)
+
+
+# the way back when nothing is dropped (card 62A) ------------------------------------------------------------------------------
+def test_a_drag_from_another_program_that_leaves_sends_the_panel_back(world, monkeypatch):
+    from dossier.gui.spring_open import SpringTimer
+    win, left, right, mime = _springy(world, monkeypatch)
+    monkeypatch.setattr(SpringTimer, "LEAVE_MS", 40)
+    _drag_move(win.right.table, row_center(win.right, "box"), mime)
+    pump(win, lambda: win.right.path == str(right / "box"))
+    _leave(win.right.table)                                                   # Esc, or a drop outside the panel, ends in a leave
+    pump(win, lambda: win.right.path == str(right))
+
+
+def test_a_drag_from_dossier_ends_when_exec_returns_and_the_panel_goes_back(world, monkeypatch):
+    from dossier.gui.spring_open import SpringTimer
+    win, left, right, mime = _springy(world, monkeypatch)
+    monkeypatch.setattr(SpringTimer, "internal", True)
+    _drag_move(win.right.table, row_center(win.right, "box"), mime)
+    pump(win, lambda: win.right.path == str(right / "box"))
+    _leave(win.right.table)
+    QTest.qWait(150)
+    assert win.right.path == str(right / "box")                               # a leave alone does not end a drag of ours
+    SpringTimer.drag_finished()
+    pump(win, lambda: win.right.path == str(right))
+
+
+def test_after_a_drop_in_the_panel_it_stays_where_it_sprang_to(world, monkeypatch):
+    from dossier.gui.spring_open import SpringTimer
+    win, left, right, mime = _springy(world, monkeypatch)
+    monkeypatch.setattr(SpringTimer, "LEAVE_MS", 40)
+    (left / "a.txt").write_text("A")
+    _drag_move(win.right.table, row_center(win.right, "box"), mime)
+    pump(win, lambda: win.right.path == str(right / "box"))
+    drop(win.right, [str(left / "a.txt")], source=str(id(win.left)))
+    pump(win, lambda: (right / "box" / "a.txt").exists() and not win.busy)
+    _leave(win.right.table)
+    SpringTimer.drag_finished()
+    QTest.qWait(150)
+    assert win.right.path == str(right / "box")
+
+
+def test_a_spring_on_a_tab_goes_back_to_the_original_tab(world, monkeypatch):
+    from dossier.gui.spring_open import SpringTimer
+    win, left, right, mime = _springy(world, monkeypatch)
+    monkeypatch.setattr(SpringTimer, "LEAVE_MS", 40)
+    win.right.new_tab(str(left), activate=False)
+    bar = win.right.tabs
+    _drag_move(bar, bar.tabRect(1).center(), mime)
+    pump(win, lambda: win.right.tabs.currentIndex() == 1 and win.right.path == str(left))
+    _leave(bar)
+    pump(win, lambda: win.right.tabs.currentIndex() == 0 and win.right.path == str(right))

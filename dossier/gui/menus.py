@@ -427,6 +427,14 @@ class MenusMixin:
         self.act_keep_place.toggled.connect(self.set_keep_place)
         settings.addAction(self.act_keep_place)
         self._apply_keep_place(self.keep_place_on())
+        self.act_spring_open = QAction("Open Folders While Dragging Over Them", self)
+        self.act_spring_open.setToolTip("Holding dragged files over a folder, a tab or a drive on the Home page for a moment opens it, "
+                                        "so the drop can go deeper")
+        self.act_spring_open.setCheckable(True)
+        self.act_spring_open.setChecked(self.spring_open_on())
+        self.act_spring_open.toggled.connect(self.set_spring_open)
+        settings.addAction(self.act_spring_open)
+        self._apply_spring_open(self.spring_open_on())
         self.add_git_actions(settings)
         drives_menu = settings.addMenu("Drives and Sharing")
         self.act_remember_drives = QAction("Remember Drives Between Sessions", self)
@@ -469,6 +477,22 @@ class MenusMixin:
     def _apply_keep_place(self, on: bool) -> None:
         for panel in (self.left, self.right):
             panel.keep_place = on
+
+    def spring_open_on(self) -> bool:
+        """Settings > Open Folders While Dragging Over Them (card 62A). On by default."""
+        return str(self.settings.value("panels/spring_open", "true")).lower() == "true"
+
+    def set_spring_open(self, on: bool) -> None:
+        self.settings.setValue("panels/spring_open", "true" if on else "false")
+        self._apply_spring_open(on)
+        self._say("Dragged files open the folder, tab or drive they are held over" if on
+                  else "Dragged files no longer open what they are held over")
+
+    def _apply_spring_open(self, on: bool) -> None:
+        for panel in (self.left, self.right):
+            panel.spring_open = on
+            if not on:
+                panel.spring.cancel()
 
     # Help -----------------------------------------------------------------------------------------------------------------------
     def open_web_page(self, url: str) -> None:

@@ -2,6 +2,16 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-19#10 -- Folders that spring open while dragging (card 62A)
+
+- **Holding dragged files over a folder, a tab or a drive on the Home page for about a second opens it**, so a drop can go
+  deeper. On by default; Settings > Open Folders While Dragging Over Them switches it off. The ".." row, a locked tab, a Mac
+  package and the item being dragged do not spring.
+- **If nothing is dropped there** (Esc, a drop outside the panel or the window), the panel goes back to the folder and tab it
+  showed before; a drop in the panel keeps the folder it opened to. For a drag from another program, which sends no end
+  signal, the panel goes back about half a second after the pointer leaves it for good.
+- Not run on a real Mac or Linux desktop, nor with a real mouse drag (the tests send simulated drag events).
+
 ## 2026-11-19#09 -- Compress and Extract Here in one click (card 61A)
 
 - **Compress** (right-click, and Tools > Archives) packs the marked items into a zip beside them with no box: `report.txt.zip`
