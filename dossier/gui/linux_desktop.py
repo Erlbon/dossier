@@ -3,6 +3,7 @@ Desktop (add the launcher, open folders with Dossier). The files are written by 
 with every disk access on a thread."""
 from __future__ import annotations
 
+import json
 from typing import Optional
 
 from ..core import desktop_entries as D
@@ -14,6 +15,7 @@ OFFER_KEY = "linux/launcher_offered"
 FOLDERS_KEY = "linux/folders_with_dossier"
 BEFORE_KEY = "linux/folders_before"
 HAD_BEFORE_KEY = "linux/folders_had_before"
+DESKTOP_BEFORE_KEY = "linux/folders_desktop_before"   # JSON {path: value or null}, question 72A
 
 OFFER_TEXT = ("Add Dossier to the application menu?" + chr(10) * 2 +
               "This puts a launcher and an icon in your own folders (under ~/.local/share). Nothing is installed for other users and "
@@ -31,6 +33,7 @@ class LinuxDesktopMixin:
     desktop_homes: Optional[tuple] = None       # tests put (data folder, config folder) here, so nothing real is written
     program_words: Optional[list] = None        # tests put the program's command words here
     icon_source: Optional[str] = None
+    desktop_names: Optional[tuple] = None       # tests put the XDG_CURRENT_DESKTOP names here
 
     def _linux_folders(self) -> tuple:
         return self.desktop_homes or (L.data_home(), L.config_home())
@@ -97,6 +100,11 @@ class LinuxDesktopMixin:
         command, icon = self._linux_command(), self._linux_icon()
         before_raw = str(self.settings.value(BEFORE_KEY, ""))
         before = before_raw if _true(self.settings.value(HAD_BEFORE_KEY, "false")) else None
+        desktops = self.desktop_names if self.desktop_names is not None else D.current_desktops()
+        try:
+            desktop_before = dict(json.loads(str(self.settings.value(DESKTOP_BEFORE_KEY, "") or "{}")))
+        except (ValueError, TypeError):
+            desktop_before = {}
 
         def switch_on(progress, cancel):
             progress(0, 0)
@@ -108,20 +116,29 @@ class LinuxDesktopMixin:
                     D.config_dirs(), D.data_dirs(), D.current_desktops()))).default.get(L.FOLDER_TYPE, []))
             except OSError:
                 fallback = ()
-            return L.set_folder_default(config, fallback=fallback)
+            before_now = L.set_folder_default(config, fallback=fallback)
+            # the desktop's own file wins over mimeapps.list: change it too where it names a folder program (question 72A)
+            return before_now, L.set_desktop_folder_defaults(config, desktops)
 
         def switch_off(progress, cancel):
             progress(0, 0)
-            return L.restore_folder_default(config, before)
+            restored = L.restore_desktop_folder_defaults(desktop_before)
+            return L.restore_folder_default(config, before) or restored > 0
 
         def on_done(result) -> None:
             if on:
+                result, desktop_changed = result
                 self.settings.setValue(HAD_BEFORE_KEY, "false" if result is None else "true")
                 self.settings.setValue(BEFORE_KEY, result or "")
+                merged = dict(desktop_before)
+                for path, value in desktop_changed.items():
+                    merged.setdefault(path, value)                   # a second On keeps the first way back
+                self.settings.setValue(DESKTOP_BEFORE_KEY, json.dumps(merged))
                 self.settings.setValue(FOLDERS_KEY, "true")
                 self._say("Folders now open with Dossier from other programs. Switch this off to go back.")
             else:
                 self.settings.setValue(FOLDERS_KEY, "false")
+                self.settings.setValue(DESKTOP_BEFORE_KEY, "{}")
                 self._say("Folders open with the program they used before" if result else
                           "Folders were not changed: another program has been chosen for them since")
             self._sync_open_folders_action()

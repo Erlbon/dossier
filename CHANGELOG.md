@@ -2,6 +2,13 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-19#23 -- Open Folders with Dossier also wins over the desktop's own file (question 72A)
+
+- GNOME and KDE read `gnome-mimeapps.list` / `kde-mimeapps.list` before `mimeapps.list`, so a folder program named there
+  used to win and the switch did nothing. Where that file already names a folder program, Dossier is now put first there too;
+  switching off puts back exactly what was there. A desktop file that names nothing for folders is not created or touched.
+- Not run on a real Linux desktop.
+
 ## 2026-11-19#22 -- "Fetch files sent to you..." on the Home page (question 74A)
 
 - The Tailnet row that takes Taildrop files is now called **Fetch files sent to you...** instead of "Files waiting for you...":

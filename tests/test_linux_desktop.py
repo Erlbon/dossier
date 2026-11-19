@@ -201,6 +201,7 @@ from tests.test_gui_commander import pump, world, app  # noqa: E402,F401
 def _homes(win, tmp_path):
     win.desktop_homes = (str(tmp_path / "share"), str(tmp_path / "config"))
     win.program_words = ["/opt/dossier/dossier"]
+    win.desktop_names = ()
     return win.desktop_homes
 
 
@@ -269,3 +270,44 @@ def test_open_folders_with_dossier_switches_on_with_a_way_back(world):
     pump(win, until=lambda: not win.open_folders_with_dossier())
     assert L.folder_default(config) == "thunar.desktop;" and not win.open_folders_with_dossier()
     assert not win.act_open_folders.isChecked()
+
+
+def test_the_desktops_own_file_is_changed_too_and_put_back_exactly(world):
+    """Question 72A: gnome-mimeapps.list wins over mimeapps.list, so where it names a folder program it is changed as well, and
+    switching off puts back exactly what was there. A desktop file that names nothing for folders is not created or touched."""
+    win, _d, _l, _r, tmp = world
+    _data, config = _homes(win, tmp)
+    win.desktop_names = ("GNOME", "KDE")
+    from PyQt6.QtWidgets import QMenu
+    win.build_linux_desktop_menu(QMenu(), linux=True)
+    os.makedirs(config)
+    gnome = os.path.join(config, "gnome-mimeapps.list")
+    kde = os.path.join(config, "kde-mimeapps.list")
+    gnome_text = "[Default Applications]" + chr(10) + "inode/directory=org.gnome.Nautilus.desktop;" + chr(10)
+    kde_text = "[Default Applications]" + chr(10) + "text/plain=kate.desktop;" + chr(10)
+    for path, text in ((gnome, gnome_text), (kde, kde_text)):
+        with open(path, "w", encoding="utf-8", newline="") as f:
+            f.write(text)
+    win.act_open_folders.setChecked(True)
+    pump(win, until=win.open_folders_with_dossier)
+    with open(gnome, encoding="utf-8", newline="") as f:
+        assert L.get_key(f.read(), L.DEFAULT_GROUP, L.FOLDER_TYPE) == "dossier.desktop;org.gnome.Nautilus.desktop;"
+    with open(kde, encoding="utf-8", newline="") as f:
+        assert f.read() == kde_text                                              # names no folder program: left alone
+    win.act_open_folders.setChecked(False)
+    pump(win, until=lambda: not win.open_folders_with_dossier())
+    with open(gnome, encoding="utf-8", newline="") as f:
+        assert f.read() == gnome_text
+    assert not os.path.exists(L.mimeapps_path(config)) or L.folder_default(config) is None
+
+
+def test_a_desktop_file_without_a_folder_key_or_already_dossier_is_not_written(tmp_path):
+    config = str(tmp_path)
+    assert L.set_desktop_folder_defaults(config, ("GNOME",)) == {}                  # no file: none created
+    assert not os.path.exists(os.path.join(config, "gnome-mimeapps.list"))
+    path = os.path.join(config, "gnome-mimeapps.list")
+    with open(path, "w", encoding="utf-8") as f:
+        f.write("[Default Applications]" + chr(10) + "inode/directory=dossier.desktop;" + chr(10))
+    assert L.set_desktop_folder_defaults(config, ("GNOME",)) == {}
+    assert L.restore_desktop_folder_defaults({path: "pcmanfm.desktop;"}) == 1
+    assert L.folder_default_value("x") == "x;"

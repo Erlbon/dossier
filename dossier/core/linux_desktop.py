@@ -6,7 +6,9 @@ folders. Everything is in the user's own folders (``~/.local/share``, ``~/.confi
   folder is shown).
 - **Folders:** the key ``inode/directory`` in the ``[Default Applications]`` group of the user's own ``mimeapps.list``. Only that
   one key is changed; every other line and group stays as it was, and the file is replaced as a whole, so a crash never leaves half
-  a file. What the key said before is kept by the caller, and ``restore_folder_default`` puts it back.
+  a file. What the key said before is kept by the caller, and ``restore_folder_default`` puts it back. The desktop's own file
+  (``gnome-mimeapps.list``) is read first and wins, so where it already names a folder program it is changed the same way and
+  put back on Off (question 72A); where it names none it is not touched.
 
 Nothing here imports Qt. Every function takes the folders as parameters; the callers pass ``data_home()`` and ``config_home()``.
 The writes are small, but the window still runs them on a thread.
@@ -279,6 +281,47 @@ def restore_folder_default(config: str, before: Optional[str], app_id: str = APP
         return False
     write_atomically(path, set_key(text, DEFAULT_GROUP, FOLDER_TYPE, before).encode("utf-8"))
     return True
+
+
+def desktop_mimeapps_paths(config: str, desktops: tuple) -> list:
+    """The desktop's own files in the user's config folder (``gnome-mimeapps.list``, ``kde-mimeapps.list``), in the order the
+    standard reads them; they come before ``mimeapps.list``, so a folder program named there wins."""
+    out: list = []
+    for d in desktops:
+        path = os.path.join(config, f"{d.lower()}-mimeapps.list")
+        if path not in out:
+            out.append(path)
+    return out
+
+
+def set_desktop_folder_defaults(config: str, desktops: tuple, app_id: str = APP_ID) -> dict:
+    """Question 72A: also put Dossier first in the desktop's own file, but only where that file already names a folder program
+    (a file that says nothing for folders is not created or touched). Returns {path: what the key said before}, only for the files
+    changed, which the caller keeps for ``restore_desktop_folder_defaults``."""
+    changed: dict = {}
+    for path in desktop_mimeapps_paths(config, desktops):
+        text = _read(path)
+        before = get_key(text, DEFAULT_GROUP, FOLDER_TYPE)
+        ids = [i.strip() for i in (before or "").split(";") if i.strip()]
+        if not ids or ids[0] == app_id:
+            continue
+        write_atomically(path, set_key(text, DEFAULT_GROUP, FOLDER_TYPE, folder_default_value(app_id, tuple(ids))).encode("utf-8"))
+        changed[path] = before
+    return changed
+
+
+def restore_desktop_folder_defaults(befores: dict, app_id: str = APP_ID) -> int:
+    """Put back exactly what each desktop file said before, where it still names Dossier first (a program chosen since is left
+    alone). Returns how many files were changed back."""
+    count = 0
+    for path, before in befores.items():
+        text = _read(path)
+        now = get_key(text, DEFAULT_GROUP, FOLDER_TYPE)
+        if now is None or now.split(";")[0].strip() != app_id:
+            continue
+        write_atomically(path, set_key(text, DEFAULT_GROUP, FOLDER_TYPE, before).encode("utf-8"))
+        count += 1
+    return count
 
 
 def is_folder_default(config: str, app_id: str = APP_ID) -> bool:
