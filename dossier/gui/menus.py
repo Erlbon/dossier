@@ -317,6 +317,7 @@ class MenusMixin:
         compare.addSeparator()
         compare.addAction(self._action("Remember This Folder's State", None, self.remember_folder_state))
         compare.addAction(self._action("What Changed Since...", None, self.what_changed_since))
+        compare.addAction(self._action("Earlier Versions...", None, self.earlier_versions))
         rename_menu = tools.addMenu("Batch Rename")
         for text, keys, slot in (("By Pattern...", "Ctrl+M", self.rename_by_pattern),
                                  ("Search and Replace in Names...", None, self.rename_search_replace),

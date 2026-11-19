@@ -216,6 +216,8 @@ class ContextMenuMixin:
         cmd("change_dates")
         cmd("move_to_quarantine")
         cmd("new_link", enabled=not many)
+        if local:
+            cmd("earlier_versions", enabled=not many)               # snapshots kept as folders (card 67B)
         cmd("show_properties")
         cmd("show_in_file_manager")
         if shellmenu.can_show(paths):

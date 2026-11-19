@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from typing import BinaryIO, Iterator, Optional
 
 from .platform import IS_WINDOWS, decode_name, has_scheme, is_case_only_change, is_link_like, longpath, mode_and_flags, path_key, strip_longpath
-from . import sharing
+from . import sharing, snapshots
 
 
 class NotWritable(OSError):
@@ -145,7 +145,8 @@ class LocalFileSystem(FileSystem):
         return ""
 
     def is_writable(self, path: str) -> bool:
-        return not sharing.machine_of(path)          # a computer's list of shares: open a share to change anything
+        # a computer's list of shares: open a share to change anything; a snapshot folder (card 67B) is an earlier version, read-only
+        return not sharing.machine_of(path) and not snapshots.is_inside_snapshot(path)
 
     def join(self, base: str, *parts: str) -> str:
         return os.path.join(base, *parts)

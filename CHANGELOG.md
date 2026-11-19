@@ -2,6 +2,17 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-19#20 -- Earlier Versions from snapshot folders (card 67B)
+
+- **Earlier Versions...** (right-click a file or folder, or Tools > Compare) lists the moments in the snapshot folders above it
+  that still hold it: NAS (`#snapshot`, `.snapshot`, `~snapshot`), ZFS (`.zfs/snapshot`) and btrfs with snapper
+  (`.snapshots`), newest first, searched in the background. The one you choose opens in the other panel with the cursor on the
+  item, to compare or copy back with the normal commands.
+- **A snapshot folder is read-only everywhere in Dossier:** nothing can be copied, moved, renamed or deleted into or inside it.
+  The rule goes by the folder's name, so a folder of your own called `.snapshot` is read-only too.
+- Windows' Previous Versions and Time Machine are not included (option B). Not run on a real Mac or Linux desktop, nor on a real
+  NAS, ZFS or btrfs volume.
+
 ## 2026-11-19#19 -- What changed here since... (card 65A)
 
 - **Tools > Compare > Remember This Folder's State** keeps every file below the folder with its size, time and checksum, in
