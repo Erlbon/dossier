@@ -2,6 +2,16 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-19#16 -- Dossier's viewer and notepad in Windows' Open With (card 69C)
+
+- **Settings > Opening Files > Offer Dossier's Picture Viewer in Open With / Offer Dossier's Notepad in Open With** put Dossier
+  in Windows' Open With list for pictures (jpg, png, gif, webp, bmp, tiff, heic, svg) and text files (txt, md, log, ini, cfg,
+  json, xml, yaml, csv). The installer has the same two ticks, on by default; they are one setting, read back from Windows.
+  Windows still wants your own "Always" click, so **Open Default Apps...** opens Windows' page for it.
+- Per user only (HKCU, no administrator). Switching off, or uninstalling, removes exactly what was added and never touches your
+  own choice or other programs. The one-file exe has the switches too; it registers the place it runs from.
+- Windows only. Not tried against a real Explorer Open With list; the installer was compiled, not run.
+
 ## 2026-11-19#15 -- Tabs in the notepad (card 70)
 
 - **F4 on several marked files** opens them as tabs in one notepad window, each tab with its own text and its own question on

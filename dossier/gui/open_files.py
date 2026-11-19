@@ -61,6 +61,7 @@ class OpenFilesMixin:
                                         "Off: only the names.")
         self.act_text_header.toggled.connect(self.set_text_rename_header)
         menu.addAction(self.act_text_header)
+        self.build_associations_menu(menu)         # Windows only: Dossier in Open With (card 69C)
 
     # the editor for F4 ------------------------------------------------------------------------------------------------------------
     def editor_program(self) -> str:

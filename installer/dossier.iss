@@ -60,6 +60,67 @@ ChangesEnvironment=yes
 [Tasks]
 Name: "desktopicon"; Description: "A shortcut on the desktop"; GroupDescription: "Shortcuts:"; Flags: unchecked
 Name: "addtopath"; Description: "Add Dossier to PATH, so ""dossier ls"", ""dossier find"" and the other commands work in any terminal"; GroupDescription: "Command line:"; Flags: unchecked
+Name: "offerpictures"; Description: "Offer Dossier's picture viewer for pictures (jpg, png, gif, webp, bmp, tiff, heic, svg)"; GroupDescription: "Open With:"
+Name: "offertext"; Description: "Offer Dossier's notepad for text files (txt, md, log, ini, cfg, json, xml, yaml, csv)"; GroupDescription: "Open With:"
+
+[Registry]
+; Dossier in Windows' "Open with" (card 69C), per user (HKCU, no administrator rights): the same keys and values as
+; dossier/core/file_associations.py writes for Settings > Opening Files; tests/test_installer.py keeps the two equal. Only an offer: Windows
+; leaves "Always" to the user (Settings > Default apps), and his own choice is never touched. Uninstalling deletes what was written here.
+Root: HKCU; Subkey: "Software\Classes\Dossier.Picture"; ValueType: string; ValueName: ""; ValueData: "Dossier Picture Viewer"; Flags: uninsdeletekey; Tasks: offerpictures
+Root: HKCU; Subkey: "Software\Classes\Dossier.Picture"; ValueType: string; ValueName: "FriendlyTypeName"; ValueData: "Dossier Picture Viewer"; Tasks: offerpictures
+Root: HKCU; Subkey: "Software\Classes\Dossier.Picture\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: """{app}\dossier.exe"",0"; Tasks: offerpictures
+Root: HKCU; Subkey: "Software\Classes\Dossier.Picture\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\dossier.exe"" view ""%1"""; Tasks: offerpictures
+Root: HKCU; Subkey: "Software\Classes\Dossier.Text"; ValueType: string; ValueName: ""; ValueData: "Dossier Notepad"; Flags: uninsdeletekey; Tasks: offertext
+Root: HKCU; Subkey: "Software\Classes\Dossier.Text"; ValueType: string; ValueName: "FriendlyTypeName"; ValueData: "Dossier Notepad"; Tasks: offertext
+Root: HKCU; Subkey: "Software\Classes\Dossier.Text\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: """{app}\dossier.exe"",0"; Tasks: offertext
+Root: HKCU; Subkey: "Software\Classes\Dossier.Text\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\dossier.exe"" edit ""%1"""; Tasks: offertext
+; the program's own entry, shared by both groups (the key goes with the uninstall)
+Root: HKCU; Subkey: "Software\Classes\Applications\dossier.exe"; ValueType: string; ValueName: "FriendlyAppName"; ValueData: "Dossier"; Flags: uninsdeletekey; Tasks: offerpictures offertext
+Root: HKCU; Subkey: "Software\Classes\Applications\dossier.exe\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: """{app}\dossier.exe"",0"; Tasks: offerpictures offertext
+Root: HKCU; Subkey: "Software\Classes\Applications\dossier.exe\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\dossier.exe"" ""%1"""; Tasks: offerpictures offertext
+; pictures: each extension lists the ProgID, and the program lists the type as supported
+Root: HKCU; Subkey: "Software\Classes\.jpg\OpenWithProgids"; ValueType: none; ValueName: "Dossier.Picture"; Flags: uninsdeletevalue; Tasks: offerpictures
+Root: HKCU; Subkey: "Software\Classes\.jpeg\OpenWithProgids"; ValueType: none; ValueName: "Dossier.Picture"; Flags: uninsdeletevalue; Tasks: offerpictures
+Root: HKCU; Subkey: "Software\Classes\.png\OpenWithProgids"; ValueType: none; ValueName: "Dossier.Picture"; Flags: uninsdeletevalue; Tasks: offerpictures
+Root: HKCU; Subkey: "Software\Classes\.gif\OpenWithProgids"; ValueType: none; ValueName: "Dossier.Picture"; Flags: uninsdeletevalue; Tasks: offerpictures
+Root: HKCU; Subkey: "Software\Classes\.webp\OpenWithProgids"; ValueType: none; ValueName: "Dossier.Picture"; Flags: uninsdeletevalue; Tasks: offerpictures
+Root: HKCU; Subkey: "Software\Classes\.bmp\OpenWithProgids"; ValueType: none; ValueName: "Dossier.Picture"; Flags: uninsdeletevalue; Tasks: offerpictures
+Root: HKCU; Subkey: "Software\Classes\.tif\OpenWithProgids"; ValueType: none; ValueName: "Dossier.Picture"; Flags: uninsdeletevalue; Tasks: offerpictures
+Root: HKCU; Subkey: "Software\Classes\.tiff\OpenWithProgids"; ValueType: none; ValueName: "Dossier.Picture"; Flags: uninsdeletevalue; Tasks: offerpictures
+Root: HKCU; Subkey: "Software\Classes\.heic\OpenWithProgids"; ValueType: none; ValueName: "Dossier.Picture"; Flags: uninsdeletevalue; Tasks: offerpictures
+Root: HKCU; Subkey: "Software\Classes\.svg\OpenWithProgids"; ValueType: none; ValueName: "Dossier.Picture"; Flags: uninsdeletevalue; Tasks: offerpictures
+Root: HKCU; Subkey: "Software\Classes\Applications\dossier.exe\SupportedTypes"; ValueType: none; ValueName: ".jpg"; Tasks: offerpictures
+Root: HKCU; Subkey: "Software\Classes\Applications\dossier.exe\SupportedTypes"; ValueType: none; ValueName: ".jpeg"; Tasks: offerpictures
+Root: HKCU; Subkey: "Software\Classes\Applications\dossier.exe\SupportedTypes"; ValueType: none; ValueName: ".png"; Tasks: offerpictures
+Root: HKCU; Subkey: "Software\Classes\Applications\dossier.exe\SupportedTypes"; ValueType: none; ValueName: ".gif"; Tasks: offerpictures
+Root: HKCU; Subkey: "Software\Classes\Applications\dossier.exe\SupportedTypes"; ValueType: none; ValueName: ".webp"; Tasks: offerpictures
+Root: HKCU; Subkey: "Software\Classes\Applications\dossier.exe\SupportedTypes"; ValueType: none; ValueName: ".bmp"; Tasks: offerpictures
+Root: HKCU; Subkey: "Software\Classes\Applications\dossier.exe\SupportedTypes"; ValueType: none; ValueName: ".tif"; Tasks: offerpictures
+Root: HKCU; Subkey: "Software\Classes\Applications\dossier.exe\SupportedTypes"; ValueType: none; ValueName: ".tiff"; Tasks: offerpictures
+Root: HKCU; Subkey: "Software\Classes\Applications\dossier.exe\SupportedTypes"; ValueType: none; ValueName: ".heic"; Tasks: offerpictures
+Root: HKCU; Subkey: "Software\Classes\Applications\dossier.exe\SupportedTypes"; ValueType: none; ValueName: ".svg"; Tasks: offerpictures
+; text files
+Root: HKCU; Subkey: "Software\Classes\.txt\OpenWithProgids"; ValueType: none; ValueName: "Dossier.Text"; Flags: uninsdeletevalue; Tasks: offertext
+Root: HKCU; Subkey: "Software\Classes\.md\OpenWithProgids"; ValueType: none; ValueName: "Dossier.Text"; Flags: uninsdeletevalue; Tasks: offertext
+Root: HKCU; Subkey: "Software\Classes\.log\OpenWithProgids"; ValueType: none; ValueName: "Dossier.Text"; Flags: uninsdeletevalue; Tasks: offertext
+Root: HKCU; Subkey: "Software\Classes\.ini\OpenWithProgids"; ValueType: none; ValueName: "Dossier.Text"; Flags: uninsdeletevalue; Tasks: offertext
+Root: HKCU; Subkey: "Software\Classes\.cfg\OpenWithProgids"; ValueType: none; ValueName: "Dossier.Text"; Flags: uninsdeletevalue; Tasks: offertext
+Root: HKCU; Subkey: "Software\Classes\.json\OpenWithProgids"; ValueType: none; ValueName: "Dossier.Text"; Flags: uninsdeletevalue; Tasks: offertext
+Root: HKCU; Subkey: "Software\Classes\.xml\OpenWithProgids"; ValueType: none; ValueName: "Dossier.Text"; Flags: uninsdeletevalue; Tasks: offertext
+Root: HKCU; Subkey: "Software\Classes\.yaml\OpenWithProgids"; ValueType: none; ValueName: "Dossier.Text"; Flags: uninsdeletevalue; Tasks: offertext
+Root: HKCU; Subkey: "Software\Classes\.yml\OpenWithProgids"; ValueType: none; ValueName: "Dossier.Text"; Flags: uninsdeletevalue; Tasks: offertext
+Root: HKCU; Subkey: "Software\Classes\.csv\OpenWithProgids"; ValueType: none; ValueName: "Dossier.Text"; Flags: uninsdeletevalue; Tasks: offertext
+Root: HKCU; Subkey: "Software\Classes\Applications\dossier.exe\SupportedTypes"; ValueType: none; ValueName: ".txt"; Tasks: offertext
+Root: HKCU; Subkey: "Software\Classes\Applications\dossier.exe\SupportedTypes"; ValueType: none; ValueName: ".md"; Tasks: offertext
+Root: HKCU; Subkey: "Software\Classes\Applications\dossier.exe\SupportedTypes"; ValueType: none; ValueName: ".log"; Tasks: offertext
+Root: HKCU; Subkey: "Software\Classes\Applications\dossier.exe\SupportedTypes"; ValueType: none; ValueName: ".ini"; Tasks: offertext
+Root: HKCU; Subkey: "Software\Classes\Applications\dossier.exe\SupportedTypes"; ValueType: none; ValueName: ".cfg"; Tasks: offertext
+Root: HKCU; Subkey: "Software\Classes\Applications\dossier.exe\SupportedTypes"; ValueType: none; ValueName: ".json"; Tasks: offertext
+Root: HKCU; Subkey: "Software\Classes\Applications\dossier.exe\SupportedTypes"; ValueType: none; ValueName: ".xml"; Tasks: offertext
+Root: HKCU; Subkey: "Software\Classes\Applications\dossier.exe\SupportedTypes"; ValueType: none; ValueName: ".yaml"; Tasks: offertext
+Root: HKCU; Subkey: "Software\Classes\Applications\dossier.exe\SupportedTypes"; ValueType: none; ValueName: ".yml"; Tasks: offertext
+Root: HKCU; Subkey: "Software\Classes\Applications\dossier.exe\SupportedTypes"; ValueType: none; ValueName: ".csv"; Tasks: offertext
 
 [Files]
 Source: "..\dist\dossier\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
