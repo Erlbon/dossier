@@ -2,6 +2,10 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-19#27 -- Release 0.11
+
+- `RELEASE` is 0.11, with its notes in `docs/releases/v0.11.md` (everything since 0.10, build 2026-11-18#09).
+
 ## 2026-11-19#26 -- A trusted Linux launcher that changes is asked about again (question 73A)
 
 - When you trust a `.desktop` launcher, Dossier now keeps its checksum with the path. If the file has changed since (edited, or
