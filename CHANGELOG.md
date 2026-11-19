@@ -2,6 +2,13 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-19#14 -- `dossier edit` opens the notepad on its own
+
+- **`dossier edit file...`** opens Dossier's notepad without the commander window, as `dossier view` does for the viewer: the
+  same editor as F4 (encoding, line endings, saving), one window per file for now (tabs follow with card 70); closing the
+  last one ends the program. A file that does not exist opens empty and is made when you save. `dossier edit --help` says how.
+- Not run on a real Mac or Linux desktop, or from the built exe.
+
 ## 2026-11-19#13 -- Duplicates replaced with clones (card 66B)
 
 - **Find Duplicate Files > Replace with Clones...** replaces the checked copies with clones: each copy keeps its name, place

@@ -118,6 +118,12 @@ are alike too. `--sync` makes the folders alike, in a direction: `update_right`,
 listener. It is off until you switch it on, and read-only unless you allow changes to files: Settings > Assistant Access. A change the
 assistant proposes runs only after you press Run in the window. The tools and the setup are in [assistant.md](assistant.md).
 
+### edit (the notepad, not a command-line command)
+
+`dossier edit file [file...]` opens only the notepad (the editor F4 opens), with no file manager window behind it. Each file gets its own
+window; closing the last one ends the program. A file that does not exist opens as an empty text and is made when you save (the folder must
+exist). Encoding, line breaks and saving are as in F4; `dossier edit --help` prints the usage.
+
 ### view (the picture viewer, not a command-line command)
 
 `dossier view [--glass LOOK] [--scheme auto|light|dark] picture...` opens only the picture viewer, with no file manager window behind it: a

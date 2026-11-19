@@ -86,6 +86,9 @@ def main(argv=None) -> int:
     if args[:1] == ["view"]:                      # the picture viewer on its own, without the file manager (dossier view picture.jpg)
         from .viewer_app import main as view_main
         return view_main(args[1:])
+    if args[:1] == ["edit"]:                      # the notepad on its own (dossier edit notes.txt)
+        from .notepad_app import main as edit_main
+        return edit_main(args[1:])
     from PyQt6.QtWidgets import QApplication
 
     from ..core.platform import set_app_id
