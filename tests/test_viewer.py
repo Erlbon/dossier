@@ -375,7 +375,7 @@ def test_menus_view_has_modes_and_notes_while_settings_has_the_choices(commander
     assert [a.text().split("\t")[0] for a in preview.actions() if a.isVisible()] == expected
     new =next(a.menu() for a in menus["File"].actions() if a.text() == "New")
     assert [a.text().split("\t")[0] for a in new.actions()] == ["New Folder", "New File...", "New Link..."]
-    assert texts("Edit") == ["Undo", "Copy", "Cut", "Paste", "Paste as New File...", "Copy Paths as Text", "Copy Names as Text",
+    assert texts("Edit") == ["Undo", "Copy", "Cut", "Paste", "Paste as New File...", "Copy Path", "Copy Names as Text",
                              "Copy This Folder's Path"]
     assert texts("Mark") == ["Mark All", "Unmark All", "Invert Marks", "Mark by Pattern...", "Unmark by Pattern...", "Mark by Tag...",
                              "Unmark by Tag...", "Saved Marks"]

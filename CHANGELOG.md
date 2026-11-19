@@ -2,6 +2,12 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-19#18 -- Copy Path
+
+- **Copy Paths as Text is now called Copy Path**, on the right-click menu and in the Edit menu alike, the same word the address
+  bar's right-click uses. It does the same as before, for files and folders: the full path (folder and name) of the item under
+  the cursor, or of each marked item, one per line.
+
 ## 2026-11-19#17 -- Send to a tailnet device, and files waiting for you (card 64A)
 
 - **Send to Device** (right-click on files): sends them to one of your own tailnet devices with Taildrop (`tailscale file cp`),

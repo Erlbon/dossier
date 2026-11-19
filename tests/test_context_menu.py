@@ -38,7 +38,7 @@ def test_a_file_gets_the_file_commands(world):
     t = texts(menu)
     assert t[:3] == ["Open", "View", "Edit"] and "Rename" in t and "Delete" in t and "Properties" in t
     assert "Open in a New Tab" not in t and "Unpack..." not in t
-    assert "Pack to Zip..." in t and "Copy to the Other Panel" in t and "Copy Paths as Text" in t
+    assert "Pack to Zip..." in t and "Copy to the Other Panel" in t and "Copy Path" in t
 
 
 def test_a_folder_gets_the_folder_commands(world):

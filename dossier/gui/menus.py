@@ -178,7 +178,7 @@ class MenusMixin:
                        self._action("Cut", "Ctrl+X", self.clip_cut),
                        self._action("Paste", "Ctrl+V", self.clip_paste),
                        self._action("Paste as New File...", "Ctrl+Shift+V", self.paste_as_new_file)),
-                      (self._action("Copy Paths as Text", None, self.copy_marked_paths),
+                      (self._action("Copy Path", None, self.copy_marked_paths),
                        self._action("Copy Names as Text", None, self.copy_marked_names),
                        self._action("Copy This Folder's Path", None, self.copy_folder_path)))
 
