@@ -148,13 +148,22 @@ class MenusMixin:
         self.act_delete_perm = self._action("Delete Permanently", None, self.delete_permanently)
         self.act_properties = self._action("Properties", "Alt+Return", self.show_properties)
         self.act_show_in_fm = self._action(f"Show in {FILE_MANAGER_NAME}", None, self.show_in_file_manager)
+        # Quick Look (card 45A): the Mac's and the GNOME previewer, not on Windows. Ctrl+Y is Cmd+Y on the Mac. Hidden until the
+        # system has one (on Linux that is looked up on a thread), so the key does nothing where there is no previewer.
+        self.act_quick_look = self._action("Quick Look", "Ctrl+Y" if self.quick_look_info.system else None, self.quick_look)
+        self.act_quick_look.setVisible(self.quick_look_info.available)
+        # View, View as Glass and Quick Look share one submenu (owner, 2026-11-19, option A): with Quick Look the File menu had 17.
+        preview_menu = QMenu("Preview", self)
+        for act in (self.act_view, self.act_glass_view, self.act_quick_look):
+            preview_menu.addAction(act)
+        preview_menu.aboutToShow.connect(lambda: self.act_quick_look.setVisible(self.quick_look_info.available))
         # File keeps to 16 entries (tests/test_menu_rules.py): with Copy... and Move... (2026-11-11) the three New commands share a
         # submenu, as in Explorer. Their own labels stay, so the right-click menu reads the same.
         new_menu = QMenu("New", self)
         for act in (self.act_mkdir, self.act_new_file, self.act_new_link):
             new_menu.addAction(act)
         self._add_all(file_menu,
-                      (self.act_open, self.act_view, self.act_glass_view, self.act_edit),
+                      (self.act_open, preview_menu.menuAction(), self.act_edit),
                       (self.act_rename, self.act_copy, self.act_copy_box, self.act_move, self.act_move_box, new_menu.menuAction()),
                       (self.act_change_dates,),
                       (self.act_delete, self.act_delete_perm),

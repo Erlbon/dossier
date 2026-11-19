@@ -17,6 +17,7 @@ from PyQt6.QtWidgets import (QApplication, QHBoxLayout, QLabel, QMainWindow, QMe
                              QToolButton, QVBoxLayout, QWidget)
 
 from ..core.open_with import SystemPrograms
+from ..core.quicklook import QuickLook
 from ..core.ops import (Plan, check_name, conflict_rows, plan_copy, plan_delete, plan_move, plan_rename)
 from ..core.home import ADD_NETWORK, HomeFileSystem, HomeProvider, RouterFileSystem, removable_from_home
 from ..core.commandline import Placeholders, expand, run_command
@@ -164,6 +165,8 @@ class MainWindow(LinuxDesktopMixin, EjectTrashMixin,FolderTreeMixin, FileColorsM
         threading.Thread(target=stage.clean_up, daemon=True, name="dossier-stage-clean").start()   # temporary copies a crash left behind
         self.system_programs = SystemPrograms()    # Open With's programs from the system (read on a thread on Linux)
         self.system_programs.start()
+        self.quick_look_info = QuickLook()         # the Mac's or the GNOME previewer (sushi, looked for once on a thread on Linux)
+        self.quick_look_info.start()
         self._jobs: list = []                      # running first, then the ones waiting
         self._init_taskbar()                       # the queue's progress on the taskbar button
         self._links: dict = {}                     # the ssh process of each connected server

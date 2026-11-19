@@ -7,7 +7,7 @@ import subprocess
 from PyQt6.QtCore import QPoint
 from PyQt6.QtWidgets import QMenu
 
-from ..core.platform import FILE_MANAGER_NAME, file_manager_command, has_scheme
+from ..core.platform import FILE_MANAGER_NAME, IS_WINDOWS, file_manager_command, has_scheme
 from .zip_edit import zip_parts
 
 
@@ -106,6 +106,28 @@ class GoingPlacesMixin:
 
     def _start_command(self, command) -> None:                 # a seam: the tests start no program
         subprocess.Popen(command)
+
+    def _start_detached(self, command) -> None:                # a seam: the previewer outlives a Dossier that closes
+        extra = {} if IS_WINDOWS else {"start_new_session": True}
+        subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, **extra)
+
+    def quick_look(self) -> None:
+        """File > Quick Look (Ctrl+Y, Cmd+Y on the Mac): the system's own preview window for the item under the cursor."""
+        info = self.quick_look_info
+        if not info.available:
+            return
+        entry = self.active.current_entry()
+        if self.active.is_home or entry is None or entry.name == ".." or entry.kind in ("header", "action"):
+            self._say("Nothing under the cursor to look at")
+            return
+        command = info.command(entry.path)
+        if command is None:
+            self._say("Quick Look shows only files and folders on this computer")
+            return
+        try:
+            self._start_detached(command)
+        except OSError as problem:
+            self._say(f"Quick Look could not start: {problem}")
 
     def put_in_command_line(self, full_path: bool = False) -> None:
         """Ctrl+J: the name under the cursor into the command line; Ctrl+Shift+J: its full path. Quoted when it holds a space."""

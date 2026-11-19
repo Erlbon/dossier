@@ -2,6 +2,15 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-19#06 -- Quick Look on the Mac and Linux (card 45A); File > Preview
+
+- **File > Quick Look** (Ctrl+Y, Cmd+Y on the Mac) opens the system's own preview of the item under the cursor: `qlmanage -p`
+  on the Mac, the GNOME previewer (sushi) on Linux when it is installed (called over D-Bus as its published interface says).
+  Also in the right-click menu. Not on Windows, and not shown where no previewer is installed. Space still marks.
+- **File > Preview** holds View, View as Glass and Quick Look, so File stays within 16 entries (the owner's option A); F3 and
+  the other keys are unchanged, and the right-click menu keeps its own View, Edit and Quick Look entries.
+- Not run on a real Mac or Linux desktop.
+
 ## 2026-11-19#05 -- Finder's and the Linux desktops' keys as second keys (card 51A)
 
 - **On the Mac**, Finder's keys work as second keys: Cmd+Backspace moves to the Trash, Cmd+Up goes to the parent folder,

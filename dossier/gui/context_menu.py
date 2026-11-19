@@ -181,6 +181,8 @@ class ContextMenuMixin:
             add("Find Duplicate Files in This Folder...", lambda: self.find_duplicate_files(panel, entry.path), enabled=not many)
         else:
             cmd("view_file", enabled=not many)
+            if self.quick_look_info.available and not has_scheme(entry.path):
+                cmd("quick_look", enabled=not many)
             cmd("edit_file", enabled=not many)
         self._add_open_with(menu, panel, paths, row, single_file=not entry.is_dir and not many, files=not entry.is_dir)
         menu.addSeparator()
