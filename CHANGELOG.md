@@ -2,6 +2,11 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-19#25 -- Edit the Names as Text shows the whole plan before renaming (question 77B)
+
+- After you edit the names, the short box with up to ten "old -> new" lines is gone. In its place comes the plan window folder
+  rules use: every rename listed, with Run and Close. Nothing is renamed until you press Run; Close leaves every name as it was.
+
 ## 2026-11-19#24 -- Open With > Dossier opens the file; a moved dossier.exe keeps its switches (questions 75A, 76A)
 
 - **The general "Dossier" entry in Windows' Open With** now runs `dossier open`, which opens a picture in the picture viewer and

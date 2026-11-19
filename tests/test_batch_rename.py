@@ -248,9 +248,24 @@ def test_text_rename_writes_the_names_and_the_notepad_closing_renames_and_ctrl_z
     win._text_waits()[os.path.normcase(path)]()                                                   # the notepad window closes
     pump(win, lambda: not win.busy)
     assert listing(left) == ["b.txt", "first.txt"] and not os.path.exists(path)                     # the temporary file is gone
-    assert dialogs.confirms[-1][0] == "Edit the Names as Text"
+    assert not any(c[0] == "Edit the Names as Text" for c in dialogs.confirms)                     # no short confirm (77B)
+    assert len(win.rename_previews) == 1 and "first.txt" in win.rename_previews[0]                 # the whole plan, then Run
     key(win, Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
     pump(win, lambda: listing(left) == ["a.txt", "b.txt"])
+
+
+def test_text_rename_lists_every_rename_and_close_renames_nothing(world):
+    """Question 77B: the plan window lists all the renames, not ten, and closing it leaves every name as it was."""
+    win, dialogs, left, *_ = world
+    names = [f"f{i:02}.txt" for i in range(14)]
+    path, _s = start_text_rename(win, left, names)
+    edit_list(path, lambda lines: [ln.replace(".txt", ".md") for ln in lines])
+    win._show_rename_preview = lambda d: (win.rename_previews.append(d.text.toPlainText()), d.reject())
+    win._text_waits()[os.path.normcase(path)]()
+    pump(win, lambda: win.rename_previews and not win.busy)
+    shown = win.rename_previews[-1]
+    assert all(n.replace(".txt", ".md") in shown for n in names) and "more" not in shown
+    assert listing(left) == sorted(names)
 
 
 def test_text_rename_in_another_program_waits_for_done_editing(world):
@@ -271,8 +286,9 @@ def test_text_rename_in_another_program_waits_for_done_editing(world):
     win.rename_as_text()
     pump(win, lambda: answers)
     assert started == ["ed.exe"] and answers[0] == ("Edit the Names as Text", "Done editing")
-    pump(win, lambda: dialogs.infos == [] and len(answers) >= 2)                                   # the second box: Rename?
+    pump(win, lambda: dialogs.infos == [] and win.rename_previews)                                 # then the plan window, Run
     pump(win, lambda: not win.busy)
+    assert len(answers) == 1                                                                       # only "Done editing" was asked
     assert listing(left) == ["A.TXT", "B.TXT"]
 
 

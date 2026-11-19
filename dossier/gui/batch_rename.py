@@ -126,8 +126,9 @@ class BatchRenameMixin:
             self._say(f"{skipped} folder{'s' if skipped != 1 else ''} left out: this renames files")
         return entries
 
-    def _apply_renames(self, pairs: list, planner=None) -> None:
-        """Rename ``(path, new_name)`` pairs through the normal rename plan (so Ctrl+Z puts them back)."""
+    def _apply_renames(self, pairs: list, planner=None, preview: str = "") -> None:
+        """Rename ``(path, new_name)`` pairs through the normal rename plan (so Ctrl+Z puts them back). With ``preview`` (a window
+        title) the whole plan is shown first and nothing runs until Run is pressed."""
         pairs = [(old, new) for old, new in pairs if new and new != os.path.basename(old)]
         if not pairs:
             self._say("Nothing to rename: every name stays as it is")
@@ -141,8 +142,18 @@ class BatchRenameMixin:
                 names = [self.fs.basename(plan.ops[i].dst) for i in plan.conflicts[:8]]
                 self.dialogs.info("Batch Rename", f"{len(plan.conflicts)} new names are taken or repeat:{chr(10)}" + chr(10).join(names))
                 return
+            if preview:
+                from .health_window import PlanPreview
+                dialog = PlanPreview(self, [plan], preview)
+                self._show_rename_preview(dialog)
+                if dialog.result() != QDialog.DialogCode.Accepted:
+                    self._say("Nothing was renamed")
+                    return
             self._run(plan)
         self._plan_in_background("Preparing the renames", lambda watch: (planner or plan_rename_many)(self.fs, pairs), go)
+
+    def _show_rename_preview(self, dialog) -> None:              # a seam for tests
+        dialog.exec()
 
     # ---------------------------------------------------------------------------------------------------------
     def rename_by_pattern(self) -> None:
@@ -297,11 +308,8 @@ class BatchRenameMixin:
             if not pairs:
                 self._say("Nothing to rename: every name stays as it is")
                 return
-            shown = [f"{os.path.basename(old)}  ->  {new}" for old, new in pairs[:10]]
-            more = [f"... and {len(pairs) - 10} more"] if len(pairs) > 10 else []
-            if self.dialogs.confirm("Edit the Names as Text", f"Rename {len(pairs)} item{'s' if len(pairs) != 1 else ''}?{chr(10)}{chr(10)}"
-                                    + chr(10).join(shown + more), "Rename"):
-                self._apply_renames(pairs, plan_text_renames)
+            # the plan window lists every rename with Run and Close, as folder rules show theirs (question 77B)
+            self._apply_renames(pairs, plan_text_renames, preview="Plan from the edited names")
         self._plan_in_background("Reading the names", build, then)
 
     def rename_search_replace(self) -> None:

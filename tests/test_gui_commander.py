@@ -156,6 +156,8 @@ def world(app, tmp_path):
     win = MainWindow(settings_path=str(tmp_path / "s.ini"), start=(str(left), str(right)), dialogs=dialogs,
                      trasher=trasher)
     win.edit_in_place = False  # F2 and New Folder ask in a box here, as the old tests expect; tests/test_inline_rename.py turns it on
+    win.rename_previews = []
+    win._show_rename_preview = lambda d: (win.rename_previews.append(d.text.toPlainText()), d.accept())   # never a real window
     win.show()
     win.activateWindow()
     activate_window(win)      # window shortcuts only fire in an active window
