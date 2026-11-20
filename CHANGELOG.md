@@ -2,6 +2,11 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-20#06 -- Release 0.12
+
+- `RELEASE` is 0.12, with its notes in `docs/releases/v0.12.md` (everything since 0.11, builds 2026-11-19#28 to 2026-11-20#05:
+  the picture viewer's answers 82A-84A, 88A-95B and 97A, the glass bar's menus, the notepad's tabs).
+
 ## 2026-11-20#05 -- No scroll bars on the glass (question 97A)
 
 - A zoomed picture in View as Glass and `dossier view` no longer shows scroll bars at the right and bottom edges: they broke the
