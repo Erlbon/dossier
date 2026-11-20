@@ -2,6 +2,13 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-20#01 -- The floating bar's menus look like the bar
+
+- The menus that open from the floating bar (the notepad's File, Edit, View and gear menus, and the viewer's gear menu) are now
+  in the bar's own look: a rounded box with a faint edge in the bar's colours, more room around each entry, and the same rounded
+  highlight as the bar's buttons. Their submenus (Language, Encoding, Line Break, View As) match. One shared function
+  (`floating_bar.glass_menu`, through `FloatingBar.popup_menu`) does it for both windows.
+
 ## 2026-11-19#28 -- The notepad's tabs look like the main window's
 
 - The notepad's tabs are now the panels' own tabs: rounded tops, the current tab gold and the others blue, and the same small

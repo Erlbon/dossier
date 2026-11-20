@@ -10,14 +10,42 @@ from __future__ import annotations
 
 from typing import Callable
 
-from PyQt6.QtCore import QEvent, QObject, QPropertyAnimation, QSize, Qt, QTimer
+from PyQt6.QtCore import QEvent, QObject, QPoint, QPropertyAnimation, QSize, Qt, QTimer
 from PyQt6.QtGui import QColor, QPainter
-from PyQt6.QtWidgets import QFrame, QGraphicsOpacityEffect, QHBoxLayout, QLabel, QPushButton, QWidget
+from PyQt6.QtWidgets import QFrame, QGraphicsOpacityEffect, QHBoxLayout, QLabel, QMenu, QPushButton, QWidget
 
 from . import icon_set, theme
 
 BAR_IDLE_MS = 2500           # the bar fades out after this long without the mouse moving
 FADE_MS = 180
+
+
+def glass_menu(menu: QMenu) -> None:
+    """Give a menu of the floating bar the bar's own look (the owner, 2026-11-19, option A): a rounded box with a faint edge in the
+    bar's colours, room around each entry, and the same rounded highlight as the bar's buttons. Its submenus get it too. Called at
+    every opening, so a change of colour scheme is followed."""
+    t = theme.current()
+    fg = QColor(t["fg"])
+    hover = f"rgba({fg.red()}, {fg.green()}, {fg.blue()}, 38)"
+    sheet = (f"QMenu {{ background: {theme.mix(t['fg'], t['card'], 0.14)}; color: {fg.name()}; border: 1px solid {hover};"
+             f" border-radius: 14px; padding: 8px; font-size: 14px; }}"
+             f"QMenu::item {{ padding: 7px 28px 7px 14px; border-radius: 9px; background: transparent; }}"
+             f"QMenu::item:selected {{ background: {hover}; }}"
+             f"QMenu::item:disabled {{ color: {t['dim']}; }}"
+             f"QMenu::separator {{ height: 1px; background: {hover}; margin: 5px 10px; }}"
+             f"QMenu::indicator {{ width: 14px; height: 14px; margin-left: 6px; }}"
+             f"QMenu::right-arrow {{ margin-right: 8px; }}")
+    menus, seen = [menu], set()
+    while menus:
+        m = menus.pop()
+        if id(m) in seen:
+            continue
+        seen.add(id(m))
+        if not m.testAttribute(Qt.WidgetAttribute.WA_TranslucentBackground):   # the corners outside the rounding stay clear
+            m.setWindowFlags(m.windowFlags() | Qt.WindowType.FramelessWindowHint | Qt.WindowType.NoDropShadowWindowHint)
+            m.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        m.setStyleSheet(sheet)
+        menus += [a.menu() for a in m.actions() if a.menu() is not None]
 
 
 class FloatingBar(QObject):
@@ -97,6 +125,12 @@ class FloatingBar(QObject):
         self.buttons[key] = b
         self.bar.adjustSize()
         return b
+
+    def popup_menu(self, menu: QMenu, key: str) -> None:
+        """A menu of the bar, in the bar's own look (``glass_menu``), opened upwards from its button (the bar floats near the bottom)."""
+        glass_menu(menu)
+        button = self.buttons[key]
+        menu.popup(button.mapToGlobal(button.rect().topLeft()) - QPoint(0, menu.sizeHint().height()))
 
     def watch(self, widget) -> None:
         """Mouse movement over ``widget`` (and its viewport) shows the bar."""

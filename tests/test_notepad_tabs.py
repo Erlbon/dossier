@@ -205,3 +205,24 @@ def test_the_notepad_tabs_are_the_panels_tabs_with_their_own_cross(qapp, tmp_pat
     finally:
         host.mark_clean()
         host.close()
+
+
+def test_the_bar_menus_have_the_bars_own_look_and_so_do_their_submenus(qapp, tmp_path):
+    """The owner, 2026-11-19, option A: the floating bar's menus are rounded glass like the bar, submenus too."""
+    from PyQt6.QtCore import Qt
+    a, = make_files(tmp_path, "a.txt")
+    page = new_page(load_document(a), FakeDialogs(), open_settings(str(tmp_path / "s.ini")))
+    page.show()
+    try:
+        page._popup_menu(page.settings_menu, "settings")
+        assert pump(lambda: page.settings_menu.isVisible())
+        for menu in (page.settings_menu, page.lang_menu, page.encoding_menu, page.file_menu):
+            if menu is page.file_menu:
+                page.settings_menu.close()
+                page._popup_menu(page.file_menu, "file")
+            assert "border-radius: 14px" in menu.styleSheet()
+            assert menu.testAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        page.file_menu.close()
+    finally:
+        page.mark_clean()
+        page.close()

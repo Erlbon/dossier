@@ -8,7 +8,7 @@ import threading
 from dataclasses import replace as dc_replace
 from typing import Optional
 
-from PyQt6.QtCore import QEvent, QFileSystemWatcher, QPoint, Qt, QTimer, pyqtSignal
+from PyQt6.QtCore import QEvent, QFileSystemWatcher, Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QAction, QActionGroup, QKeySequence
 from PyQt6.QtWidgets import (QCheckBox, QComboBox, QHBoxLayout, QInputDialog, QLabel, QLineEdit, QMainWindow,
                              QMenu, QPushButton, QSplitter, QTabWidget, QVBoxLayout, QWidget)
@@ -310,9 +310,8 @@ class NotepadWindow(FrostSurface, QMainWindow):
         self.menuBar().hide()                       # the menus live in the floating bar: one bar, not a menu bar as well (the actions keep their keys)
 
     def _popup_menu(self, menu, key: str) -> None:
-        """A menu of the bar, opened upwards from its button (the bar floats near the bottom)."""
-        button = self.floating.buttons[key]
-        menu.popup(button.mapToGlobal(button.rect().topLeft()) - QPoint(0, menu.sizeHint().height()))
+        """A menu of the bar, in the bar's look, opened upwards from its button."""
+        self.floating.popup_menu(menu, key)
 
     def _build_status(self) -> None:
         """No status line: messages float over the text for a few seconds, the position is in the bar, encoding and line break are in

@@ -12,7 +12,7 @@ import os
 import time
 from typing import Optional
 
-from PyQt6.QtCore import QPoint, Qt, QTimer, pyqtSignal
+from PyQt6.QtCore import Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QAction, QKeySequence, QTextDocument
 from PyQt6.QtWidgets import (QCheckBox, QComboBox, QHBoxLayout, QInputDialog, QLabel, QLineEdit, QMainWindow, QMenu,
                              QPushButton, QSplitter, QStackedWidget, QVBoxLayout, QWidget)
@@ -302,9 +302,7 @@ class TextViewerWindow(FrostSurface, QMainWindow):
         return menu
 
     def _popup_settings(self) -> None:
-        menu = self._settings_menu()
-        button = self.floating.buttons["settings"]
-        menu.popup(button.mapToGlobal(button.rect().topLeft()) - QPoint(0, menu.sizeHint().height()))
+        self.floating.popup_menu(self._settings_menu(), "settings")
 
     def _mode_chosen(self, i: int) -> None:
         if 0 <= i < len(self._modes) and self._modes[i] != self.mode:
