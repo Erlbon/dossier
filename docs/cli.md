@@ -136,6 +136,14 @@ to 100 for how much shows through (0 is solid), or both as `frosted:60`. A look 
 dim, dim to solid; a remote desktop session gets solid. Without parameters the look chosen in Settings > Appearance > Picture Viewer Glass
 is used. The same viewer opens from the window with Files > View as Glass.
 
+### quit (also exit and --quit)
+
+`dossier quit` closes every running Dossier of yours: the window with its viewers and notepads, the notepad on its own (`dossier edit`) and
+the picture viewer on its own (`dossier view`). Each closes as File > Quit (Ctrl+Q) does, keeping its panels and tabs for the next start,
+but without a question. A copy or move that is running stops and is offered again at the next start. A Dossier with unsaved text in a
+notepad does not close: the command says which files and ends with exit code 1. With nothing running it says so and ends with 0.
+`dossier exit` and `dossier --quit` are the same; the installer uses `--quit` before an update.
+
 ## Examples
 
 ```

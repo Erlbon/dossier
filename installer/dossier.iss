@@ -24,8 +24,12 @@
 #endif
 
 ; The family's installer contract (included at the end): starting Dossier again after an update, update-channel, and waiting until a
-; running Dossier has let go of its exe before files are replaced (Dossier has no --quit: Windows' close request ends it, saving first).
+; running Dossier has let go of its exe before files are replaced. Before that it asks every running Dossier to close itself, saving its
+; panels as Ctrl+Q does (`dossier --quit`, build 2026-11-20#08 on); an older installed copy does not know --quit (it would open a window),
+; so it is asked only when InstalledKnowsQuit says the installed build is new enough.
 #define UpdateExe "dossier.exe"
+#define UpdateQuitArgs "--quit"
+#define UpdateQuitCheck "InstalledKnowsQuit"
 
 [Setup]
 AppId={{C61A77AD-D4A2-44EB-8CFB-B15A58A735F3}
@@ -149,6 +153,29 @@ Type: files; Name: "{app}\dossier.exe.new"
 Type: files; Name: "{app}\dossier.exe.new.part"
 
 [Code]
+// Whether the installed Dossier knows `dossier --quit` (build 2026-11-20#08 and later). Its uninstall entry's DisplayVersion is
+// "0.12 (build 2026-11-20#06)": the date and the number after "(build " are compared. No entry or no build: it is not asked.
+function InstalledKnowsQuit: Boolean;
+var
+  V, Build, Day: String;
+  P, N: Integer;
+begin
+  Result := False;
+  if not RegQueryStringValue(HKCU, 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{C61A77AD-D4A2-44EB-8CFB-B15A58A735F3}_is1', 'DisplayVersion', V) then
+    exit;
+  P := Pos('(build ', V);
+  if P = 0 then
+    exit;
+  Build := Copy(V, P + 7, Length(V));
+  P := Pos(')', Build);
+  if P > 0 then
+    Build := Copy(Build, 1, P - 1);
+  Day := Copy(Build, 1, 10);
+  N := StrToIntDef(Copy(Build, 12, Length(Build)), 0);
+  Result := (CompareStr(Day, '2026-11-20') > 0) or ((Day = '2026-11-20') and (N >= 8));
+  Log(Format('Installed Dossier %s knows --quit: %d', [V, Ord(Result)]));
+end;
+
 // Per user only (no "for all users" choice): the program stays where the user can write. So PATH is the user's own.
 const
   PathKeyRoot = HKEY_CURRENT_USER;

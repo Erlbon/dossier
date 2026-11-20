@@ -228,6 +228,12 @@ def open_notepads(paths: list, settings, dialogs, problem: Callable[[str], None]
     host.closed.connect(lambda _w: host.session.close_server())
     if server_name and not host.session.listen(server_name):
         problem("Later files will open in new windows: the notepad could not listen for them.")
+    from .quit_command import QuitListener, unsaved_in
+
+    def busy() -> str:
+        names = unsaved_in([host])
+        return f"it has unsaved changes in {', '.join(names)}" if names else ""
+    host.quit_listener = QuitListener(host, settings.fileName(), "notepad", busy, host.close)     # dossier quit
     host.show()
     return len(loaded)
 

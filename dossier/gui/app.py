@@ -75,6 +75,10 @@ def main(argv=None) -> int:
     if args[:1] == ["--askpass"]:                   # ssh asking for a password: answered at once, with no window and no checks
         from ..core.askpass import main as askpass_main
         return askpass_main(args[1:])
+    from .quit_command import WORDS as QUIT_WORDS
+    if args[:1] and args[0] in QUIT_WORDS:          # dossier quit / exit / --quit: close the running Dossier, as Ctrl+Q does
+        from .quit_command import main as quit_main
+        return quit_main()
     if update_command(args):                        # the update framework: what this copy would do with a release, or do it
         from redactor_common.core import update_cli
 

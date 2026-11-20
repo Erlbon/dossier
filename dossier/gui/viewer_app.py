@@ -84,6 +84,8 @@ def main(args: list, *, settings_path: Optional[str] = None, show: bool = True) 
     level = asked_level if asked_level is not None else (None if asked_mode else saved_level)
     window = GlassViewer(pictures, first, mode, level, blur_kind=ns.blur, tint=tint, settings=settings)
     window._theme = manager                                              # kept alive as long as the window
+    from .quit_command import QuitListener
+    window.quit_listener = QuitListener(window, settings.fileName(), "viewer", lambda: "", window.close)    # dossier quit
     window.show()
     if not show:
         return 0

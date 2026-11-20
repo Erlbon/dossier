@@ -2,6 +2,18 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-20#08 -- dossier quit: close a running Dossier from the command line, and before an update
+
+- **`dossier quit`** (also `dossier exit` and `dossier --quit`) closes every running Dossier of yours: the window with its viewers and
+  notepads, the stand-alone notepad (`dossier edit`) and the stand-alone picture viewer (`dossier view`). Each closes as File > Quit
+  (Ctrl+Q) does, keeping its panels and tabs, but without a question. A Dossier with unsaved notepad text stays open; the command names
+  the files and ends with exit code 1. Each running Dossier listens on a local server of its own and leaves a small file in `running`
+  beside its settings file; a file left by a Dossier that died is removed (`gui/quit_command.py`, `docs/cli.md`).
+- **The installer asks a running Dossier to quit before an update** (the update contract's `UpdateQuitArgs`), so it saves itself and
+  closes instead of being closed by Windows after 30 seconds. Only copies from this build on are asked (`InstalledKnowsQuit`): an
+  older one would open a window on `--quit`. This is what made the 0.12 release gate fail on the owner's own running Dossier.
+- `CLAUDE.md`: the owner's Dossier on his PC is never uninstalled; the gate updates it in place.
+
 ## 2026-11-20#07 -- The glass bar can be seen over a pale picture
 
 - The floating bar over a picture (View as Glass, `dossier view`, F3, the notepad) had no backdrop of its own: only a faint tint

@@ -219,6 +219,8 @@ class MainWindow(FileAssociationsMixin, SidebarMixin,TypingModeMixin, RenameInPl
         self._job: Optional[Job] = None
         self.viewers: list = []
         self.editors: list = []
+        from .quit_command import QuitListener
+        self.quit_listener = QuitListener(self, self.settings.fileName(), "window", self._quit_busy, self.close)   # dossier quit
 
         self.left = Panel(self.fs, self.selection, dispatch=self.dispatcher)
         self.right = Panel(self.fs, self.selection, dispatch=self.dispatcher)
@@ -1231,8 +1233,14 @@ class MainWindow(FileAssociationsMixin, SidebarMixin,TypingModeMixin, RenameInPl
     def about(self) -> None:
         self.dialogs.info(f"About {APP_NAME}", about_html())
 
+    def _quit_busy(self) -> str:
+        """Why ``dossier quit`` cannot close this window now ("" when it can): unsaved text in a notepad is never thrown away."""
+        from .quit_command import unsaved_in
+        names = unsaved_in(self.editors)
+        return f"the notepad has unsaved changes in {', '.join(names)}" if names else ""
+
     def closeEvent(self, event) -> None:
-        self.thumbs.shutdown()                       # the thumbnail threads end before the window does
+        self.thumbs.shutdown()                      # the thumbnail threads end before the window does
         watch = getattr(self, "_stall_watch", None)
         if watch is not None:
             watch.stop()
