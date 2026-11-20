@@ -359,6 +359,25 @@ def test_the_glide_keeps_the_point_under_the_mouse_where_it_is(viewers, tmp_path
     assert len(drift) > 2 and max(drift) < 3                                           # it stayed under the mouse
 
 
+def test_a_zoomed_picture_on_the_glass_has_no_scroll_bars_but_still_moves(viewers, tmp_path):
+    """97A (2026-11-20): the bars broke the glass look. The arrows and the wheel still move a zoomed picture; F3 keeps its bars."""
+    path = tmp_path / "big.png"
+    QImage(1800, 1200, QImage.Format.Format_RGB32).save(str(path))
+    window = glass_viewer(viewers, [path, path])
+    view = window.view
+    view.zoom_by(4.0)
+    QApplication.processEvents()
+    bar = view.horizontalScrollBar()
+    assert not bar.isVisible() and not view.verticalScrollBar().isVisible() and bar.maximum() > 0
+    before = bar.value()
+    QTest.keyClick(view, Qt.Key.Key_Right)
+    assert bar.value() > before and window.index == 0                                  # it scrolled, it did not step
+    f3 = f3_viewer(viewers, [path])
+    f3.image_page.view.zoom_by(4.0)
+    QApplication.processEvents()
+    assert f3.image_page.view.horizontalScrollBar().isVisible()
+
+
 def animated_gif(path, frames=((255, 0, 0), (0, 0, 255)), size=4, delay=3, loop=True):
     """A small animated GIF, written by hand (Qt writes no GIF): one colour per frame. The LZW codes stay three bits wide by
     clearing the table every two pixels."""

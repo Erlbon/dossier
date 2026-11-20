@@ -97,6 +97,8 @@ class GlassViewer(PictureActions, QWidget):
         self.view = GlassImageView(self)
         self.view.setStyleSheet("QGraphicsView { background: transparent; border: 0; }")
         self.view.viewport().setAutoFillBackground(False)
+        for policy in (self.view.setHorizontalScrollBarPolicy, self.view.setVerticalScrollBarPolicy):
+            policy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)                  # 97A: no bars on the glass; drag and wheel still move it
         self.view.setMouseTracking(True)
         self.view.viewport().setMouseTracking(True)
         self.view.viewport().installEventFilter(self)

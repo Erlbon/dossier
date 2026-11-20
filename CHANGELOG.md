@@ -2,6 +2,11 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-20#05 -- No scroll bars on the glass (question 97A)
+
+- A zoomed picture in View as Glass and `dossier view` no longer shows scroll bars at the right and bottom edges: they broke the
+  glass look. Dragging, the arrows and the wheel still move the picture. F3 keeps its scroll bars.
+
 ## 2026-11-20#04 -- The picture viewer after the Picasa comparison: Delete, kept turns, facts, read-ahead, glide, moving GIFs, Open With (88A, 89A, 90A, 92A, 93A, 94A, 95B)
 
 In View as Glass, `dossier view` and pictures in F3 alike, except where it says otherwise. No slideshow and no rating anywhere.
