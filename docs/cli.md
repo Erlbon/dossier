@@ -142,7 +142,10 @@ is used. The same viewer opens from the window with Files > View as Glass.
 the picture viewer on its own (`dossier view`). Each closes as File > Quit (Ctrl+Q) does, keeping its panels and tabs for the next start,
 but without a question. A copy or move that is running stops and is offered again at the next start. A Dossier with unsaved text in a
 notepad does not close: the command says which files and ends with exit code 1. With nothing running it says so and ends with 0.
-`dossier exit` and `dossier --quit` are the same; the installer uses `--quit` before an update.
+`dossier exit` and `dossier --quit` are the same; the installer uses `--quit` before an update. A Dossier from before this command
+(0.12 and older) does not listen for it: on Windows its windows get the ordinary close request, as from their own close button, so it
+closes as it always does and asks about unsaved text as usual. That is done only for your usual settings, never when `REDACTOR_CONFIG_DIR`
+points elsewhere (a test's or the release check's scratch profile).
 
 ## Examples
 

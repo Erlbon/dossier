@@ -75,6 +75,37 @@ def test_dossier_quit_exit_and_dash_dash_quit_never_start_a_window(app, tmp_path
     assert capsys.readouterr().out.count("No Dossier is running.") == 3
 
 
+def test_an_older_dossier_that_does_not_listen_is_closed_the_ordinary_way(app, tmp_path, monkeypatch):
+    """0.12 and older do not listen: their windows get Windows' ordinary close request (as from their own close button), the ones
+    that answered are skipped, and one still open afterwards (asking about unsaved text) is said so."""
+    from dossier.core import platform
+    asked, alive = [], {111: False, 222: True}
+    monkeypatch.setattr(platform, "ask_windows_to_close", lambda exe, skip: asked.append((exe, set(skip))) or [111, 222])
+    monkeypatch.setattr(platform, "process_running", lambda pid: alive[pid])
+    window = listener(str(tmp_path / "dossier.ini"))
+    answers = Q.quit_running(str(tmp_path / "dossier.ini"))
+    older = Q.close_older({a["pid"] for a in answers}, close_ms=200)
+    assert asked == [("dossier.exe", {os.getpid()})] and not window.isVisible()
+    assert [(a["pid"], a["gone"]) for a in older] == [(111, True), (222, False)]
+
+
+def test_older_copies_are_never_asked_from_a_scratch_profile_or_a_given_settings_file(app, tmp_path, monkeypatch):
+    """A test's or the release gate's profile must never reach the Dossier the owner has open."""
+    from dossier.core import platform
+    asked = []
+    monkeypatch.setattr(platform, "ask_windows_to_close", lambda *a: asked.append(a) or [])
+    Q.main(str(tmp_path / "dossier.ini"), out=lambda _t: None)
+    monkeypatch.setenv("REDACTOR_CONFIG_DIR", str(tmp_path / "profile"))
+    Q.main(None, out=lambda _t: None)
+    assert asked == []
+    monkeypatch.delenv("REDACTOR_CONFIG_DIR")
+    from dossier.gui import app_settings
+    monkeypatch.setattr(app_settings, "open_settings", lambda path=None: __import__("PyQt6.QtCore", fromlist=["QSettings"]).QSettings(
+        str(tmp_path / "usual.ini"), __import__("PyQt6.QtCore", fromlist=["QSettings"]).QSettings.Format.IniFormat))
+    lines = []
+    assert Q.main(None, out=lines.append) == 0 and len(asked) == 1 and lines == ["No Dossier is running."]   # the usual profile asks
+
+
 def test_the_installer_asks_a_running_dossier_to_quit_only_when_it_knows_how():
     iss = read("installer", "dossier.iss")
     assert '#define UpdateQuitArgs "--quit"' in iss and '#define UpdateQuitCheck "InstalledKnowsQuit"' in iss

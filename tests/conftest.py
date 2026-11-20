@@ -77,6 +77,14 @@ def _zoom_jumps_unless_a_test_asks(request, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _never_close_the_owners_dossier(monkeypatch):
+    """``dossier quit`` closes an older Dossier by sending its windows Windows' close request: a test must never reach the Dossier
+    the owner has open on the computer the tests run on."""
+    from dossier.core import platform
+    monkeypatch.setattr(platform, "ask_windows_to_close", lambda *a, **k: [])
+
+
+@pytest.fixture(autouse=True)
 def _delete_leftover_windows():
     yield
     widgets = sys.modules.get("PyQt6.QtWidgets")

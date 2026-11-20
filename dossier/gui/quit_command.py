@@ -179,12 +179,34 @@ def unsaved_in(windows: list) -> list:
 LABELS = {"window": "Dossier", "notepad": "Dossier's notepad", "viewer": "Dossier's picture viewer"}
 
 
+def close_older(skip_pids, close_ms: int = CLOSE_MS) -> list:
+    """Dossier from before this command (0.12 and older) does not listen: on Windows its windows get the ordinary close request, as
+    from their own close button, so it closes as it always does (and asks about unsaved text). Answers like ``quit_running``'s."""
+    from ..core import platform
+    asked = platform.ask_windows_to_close("dossier.exe", skip_pids)
+    end = time.monotonic() + close_ms / 1000
+    left = set(asked)
+    while left and time.monotonic() < end:
+        left = {pid for pid in left if platform.process_running(pid)}
+        time.sleep(0.05)
+    return [{"kind": "older", "pid": pid, "closing": True, "reason": "", "gone": pid not in left} for pid in asked]
+
+
+LABELS["older"] = "An older Dossier"
+
+
 def main(settings_path: Optional[str] = None, out=print) -> int:
-    """The command: say what closed and what did not. Exit code 0 when everything closed (or nothing ran), 1 when one stayed open."""
+    """The command: say what closed and what did not. Exit code 0 when everything closed (or nothing ran), 1 when one stayed open.
+    Older copies that do not listen are closed the ordinary Windows way, but only for the usual profile: never from a test's or the
+    release gate's scratch profile (REDACTOR_CONFIG_DIR) or a given settings file, which must not reach the owner's own Dossier."""
+    from redactor_common.core import app_paths
+
     from .app_settings import open_settings
     app = QCoreApplication.instance() or QCoreApplication(["dossier"])          # noqa: F841 (the local sockets need one)
     settings = open_settings(settings_path)
     answers = quit_running(settings.fileName())
+    if settings_path is None and app_paths.config_override() is None:
+        answers += close_older({a.get("pid") for a in answers})
     if not answers:
         out("No Dossier is running.")
         return 0
@@ -198,5 +220,6 @@ def main(settings_path: Optional[str] = None, out=print) -> int:
             out(f"{label} closed.")
         else:
             code = 1
-            out(f"{label} was asked to close but is still running.")
+            out(f"{label} was asked to close but is still running" +
+                (" (it may be asking about unsaved text)." if a.get("kind") == "older" else "."))
     return code

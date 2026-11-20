@@ -2,6 +2,16 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-20#09 -- dossier quit also closes an older Dossier
+
+- `dossier quit` did not close the installed 0.12, which does not listen for it (the owner, 2026-11-20). Now, on Windows, a running
+  `dossier.exe` that did not answer gets Windows' ordinary close request on its windows, as from their own close button, so it
+  closes as it always does: it saves its panels, and asks about unsaved notepad text as usual (the command then says it may be
+  asking). Tried on the real 0.12 program in a scratch profile: closed in 0.2 s, exit code 0, settings saved.
+- Only for the usual profile: never when `REDACTOR_CONFIG_DIR` is set (a test's or the release check's scratch profile) or a
+  settings file is given, and the tests turn it off altogether, so nothing run from them reaches the owner's own Dossier
+  (`platform.ask_windows_to_close`, `platform.process_running`).
+
 ## 2026-11-20#08 -- dossier quit: close a running Dossier from the command line, and before an update
 
 - **`dossier quit`** (also `dossier exit` and `dossier --quit`) closes every running Dossier of yours: the window with its viewers and

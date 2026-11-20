@@ -459,6 +459,71 @@ def taskbar_button(hwnd):
     return _TaskbarList3(hwnd) if IS_WINDOWS else None
 
 
+def ask_windows_to_close(exe_name: str, skip_pids=()) -> list:
+    """Windows: send the ordinary close request (WM_CLOSE, what a window's own close button sends) to every visible top-level window
+    of every running program called ``exe_name`` of this desktop, except the processes in ``skip_pids`` and this one. The program
+    closes as it always does (saving its state, asking about unsaved text). Returns the process ids asked; [] elsewhere."""
+    if not IS_WINDOWS:
+        return []
+    import ctypes
+    from ctypes import wintypes
+    user32, kernel32 = ctypes.windll.user32, ctypes.windll.kernel32
+    kernel32.OpenProcess.restype = wintypes.HANDLE
+    skip = set(skip_pids) | {os.getpid()}
+    names: dict = {}
+    found: dict = {}
+
+    def image_of(pid: int) -> str:
+        if pid not in names:
+            names[pid] = ""
+            handle = kernel32.OpenProcess(0x1000, False, pid)                       # PROCESS_QUERY_LIMITED_INFORMATION
+            if handle:
+                try:
+                    buf = ctypes.create_unicode_buffer(1024)
+                    size = wintypes.DWORD(1024)
+                    if kernel32.QueryFullProcessImageNameW(handle, 0, buf, ctypes.byref(size)):
+                        names[pid] = os.path.basename(buf.value)
+                finally:
+                    kernel32.CloseHandle(handle)
+        return names[pid]
+
+    @ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+    def each(hwnd, _lparam):
+        if user32.IsWindowVisible(hwnd) and not user32.GetWindow(hwnd, 4):            # GW_OWNER: top-level windows only
+            pid = wintypes.DWORD()
+            user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+            if pid.value not in skip and image_of(pid.value).lower() == exe_name.lower():
+                found.setdefault(pid.value, []).append(hwnd)
+        return True
+
+    user32.EnumWindows(each, 0)
+    for hwnds in found.values():
+        for hwnd in hwnds:
+            user32.PostMessageW(hwnd, 0x0010, 0, 0)                                  # WM_CLOSE
+    return list(found)
+
+
+def process_running(pid: int) -> bool:
+    """Whether the process ``pid`` still runs."""
+    if IS_WINDOWS:
+        import ctypes
+        from ctypes import wintypes
+        kernel32 = ctypes.windll.kernel32
+        kernel32.OpenProcess.restype = wintypes.HANDLE
+        handle = kernel32.OpenProcess(0x00100000, False, pid)                      # SYNCHRONIZE
+        if not handle:
+            return False
+        try:
+            return kernel32.WaitForSingleObject(handle, 0) == 0x102                 # WAIT_TIMEOUT: still running
+        finally:
+            kernel32.CloseHandle(handle)
+    try:
+        os.kill(pid, 0)
+    except OSError:
+        return False
+    return True
+
+
 def is_remote_session() -> bool:
     """True inside a remote desktop session, where window transparency and blur are not available."""
     if not IS_WINDOWS:
