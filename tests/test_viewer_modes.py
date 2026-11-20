@@ -703,3 +703,25 @@ def test_find_is_a_strip_that_shows_on_request_and_esc_hides_it_before_closing(v
     assert win.find_strip.isVisibleTo(win)
     win._escape()
     assert not win.find_strip.isVisibleTo(win) and win.isVisible()
+
+
+def test_f3_shows_the_slider_for_several_pictures_but_not_for_text(viewer, tmp_path):
+    """Question 84A in F3: the strip above the bar is for pictures only, and only when there is more than one file."""
+    from PyQt6.QtGui import QColor, QImage
+    pics = []
+    for n in ("a.png", "b.png", "c.png"):
+        image = QImage(40, 30, QImage.Format.Format_RGB32)
+        image.fill(QColor("#4f7a4a"))
+        image.save(str(tmp_path / n))
+        pics.append(str(tmp_path / n))
+    win = viewer(pics)
+    wait(lambda: win.mode == "image")
+    win.floating.show_fully()
+    assert not win.floating.slider.isHidden()
+    texts = [str(tmp_path / "x.txt"), str(tmp_path / "y.txt")]
+    for t in texts:
+        open(t, "w", encoding="utf-8").write("hello")
+    win2 = viewer(texts)
+    wait(lambda: win2.mode == "text")
+    win2.floating.show_fully()
+    assert win2.floating.slider.isHidden()

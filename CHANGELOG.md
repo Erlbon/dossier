@@ -2,6 +2,18 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-20#03 -- The picture viewer: no hidden clicks, a click keeps the bar, a slider (questions 82A, 83A, 84A)
+
+- **82A: the glass bar takes clicks only once it is fully shown.** The bar could be clicked while it was still fading in, almost
+  invisible, so a click near the bottom of a picture turned it on a rotate button nobody could see. A click on a bar that is not
+  fully there now only brings it in.
+- **83A: a click on the picture shows the bar and keeps it** until the next click on the picture, which hides it. Moving the mouse
+  still shows it for a moment, as before. A drag (panning a zoomed picture) and a double click (fit) are not clicks.
+- **84A: a slider for long folders.** A thin glass strip above the bar, nearly the window's width, shown with the bar when there
+  is more than one picture. Dragging shows "331 / 870 · name" above the handle and reads nothing until you let go; a click on
+  the strip jumps there. In View as Glass, `dossier view` and pictures in F3. The bar's menus open above the strip.
+- All three live in the shared `FloatingBar`, so every window with the glass bar has them.
+
 ## 2026-11-20#02 -- The bar's menus open just above the bar
 
 - A menu of the floating bar now opens just above the bar, with a small gap, its left edge lined up with its button, instead of

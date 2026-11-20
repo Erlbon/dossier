@@ -226,6 +226,9 @@ class TextViewerWindow(FrostSurface, QMainWindow):
         bar.add_button("settings", "Settings", "View as, encoding, follow", self._popup_settings, icon="settings")
         for page in (self.view, self.hex, self.markdown, self.sheet_page.table.viewport(), view):
             bar.watch(page)
+        bar.toggle_on_click(view)                    # on a picture, a click shows the bar and keeps it; again hides it (83A)
+        bar.add_slider(lambda: len(self.paths), lambda: self.index, lambda i: os.path.basename(self.paths[i]),   # 84A, pictures only
+                       lambda i: self.load(i), wanted=lambda: self.mode == "image")
 
     PILL_KEYS = {"text": ("edit", "find", "goto", "copy", "follow"), "hex": ("find", "goto", "copy"), "markdown": ("edit", "find", "copy"),
                  "document": ("find", "copy", "info"), "sheet": ("find", "copy", "info"),

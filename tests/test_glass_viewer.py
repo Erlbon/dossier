@@ -5,8 +5,8 @@ import pytest
 
 pytest.importorskip("PyQt6")
 
-from PyQt6.QtCore import QSettings, Qt  # noqa: E402
-from PyQt6.QtGui import QColor, QImage  # noqa: E402
+from PyQt6.QtCore import QEvent, QPoint, QPointF, QSettings, Qt  # noqa: E402
+from PyQt6.QtGui import QColor, QImage, QMouseEvent  # noqa: E402
 from PyQt6.QtTest import QTest  # noqa: E402
 from PyQt6.QtWidgets import QApplication, QMessageBox  # noqa: E402
 
@@ -125,6 +125,66 @@ def test_the_bar_fades_out_when_the_mouse_rests_and_comes_back_when_it_moves(vie
     window._poke()
     wait_for(lambda: window.bar_visible() and not window.caption.isHidden())
     assert window.bar_visible() and not window.caption.isHidden()
+
+
+def test_a_click_on_a_bar_still_fading_in_only_shows_it_and_turns_nothing(viewers, tmp_path):
+    """Question 82A (2026-11-20): the owner's picture turned on a click near the bottom, on a rotate button he could not see."""
+    window = open_viewer(viewers, make_pictures(tmp_path), mode=glass.SOLID)
+    bar = window.floating
+    bar._fade(window.bar, 0.0)
+    wait_for(lambda: not window.bar_visible())
+    bar._fade(window.bar, 1.0)                                    # the mouse moved: the bar starts to fade in
+    bar._effects[window.bar].setOpacity(0.1)
+    turn = window.view._turn
+    QTest.mouseClick(window.buttons["right"], Qt.MouseButton.LeftButton)
+    assert window.view._turn == turn and bar.fully_shown()          # nothing turned; the bar is now there
+    QTest.mouseClick(window.buttons["right"], Qt.MouseButton.LeftButton)
+    assert window.view._turn == (turn + 1) % 4                      # once shown, the button works
+
+
+def test_a_click_on_the_picture_keeps_the_bar_and_the_next_click_hides_it(viewers, tmp_path):
+    """Question 83A: a click shows the bar and keeps it (no fade after a rest); another click takes it away. A drag is no click."""
+    window = open_viewer(viewers, make_pictures(tmp_path), mode=glass.SOLID)
+    bar = window.floating
+    port = window.view.viewport()
+    middle = port.rect().center()
+    QTest.mouseClick(port, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, middle)
+    wait_for(lambda: bar.pinned)
+    assert bar.pinned and bar.fully_shown()
+    bar.fade_out()                                                # the rest timer: a pinned bar stays
+    assert bar.fully_shown()
+    QTest.mouseClick(port, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, middle)
+    wait_for(lambda: not bar.pinned and not window.bar_visible())
+    assert not bar.pinned and not window.bar_visible()
+    QTest.mousePress(port, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, middle)
+    QTest.mouseRelease(port, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, middle + QPoint(40, 0))
+    QTest.qWait(QApplication.doubleClickInterval() + 100)
+    assert not bar.pinned                                         # that was a drag
+
+
+def test_the_slider_shows_where_it_is_dragged_and_goes_there_when_let_go(viewers, tmp_path):
+    """Question 84A: a strip above the bar; dragging shows "n / N · name" and only the place let go on is shown."""
+    paths = make_pictures(tmp_path, tuple(f"p{i:02}.png" for i in range(20)))
+    window = open_viewer(viewers, paths, mode=glass.SOLID)
+    bar, slider = window.floating, window.floating.slider
+    bar.show_fully()
+    assert not slider.isHidden() and slider.geometry().bottom() < window.bar.geometry().top()      # just above the bar
+    end = QPoint(slider.width() - 2, slider.height() // 2)
+    QTest.mousePress(slider, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, QPoint(slider.HEIGHT // 2, 11))
+    QTest.mouseMove(slider, end)
+    slider.mouseMoveEvent(QMouseEvent(QEvent.Type.MouseMove, QPointF(end), QPointF(slider.mapToGlobal(end)),
+                                      Qt.MouseButton.NoButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier))
+    assert window.index == 0 and slider.tip.text() == "20 / 20 · p19.png"                          # nothing read while dragging
+    QTest.mouseRelease(slider, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, end)
+    assert window.index == 19 and slider.tip.isHidden()
+    QTest.mouseClick(slider, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, QPoint(slider.width() // 2, 11))
+    assert 8 <= window.index <= 11                                                                  # a click jumps there
+
+
+def test_one_picture_has_no_slider(viewers, tmp_path):
+    window = open_viewer(viewers, make_pictures(tmp_path, ("only.png",)), mode=glass.SOLID)
+    window.floating.show_fully()
+    assert window.floating.slider.isHidden()
 
 
 def test_pictures_around_lists_the_folder_in_natural_order_with_the_place_of_the_one_named(tmp_path):

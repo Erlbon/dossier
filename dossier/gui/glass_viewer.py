@@ -97,6 +97,9 @@ class GlassViewer(QWidget):
 
         self.floating = FloatingBar(self, self.view, self.step, self.close, captioned=True)
         self.floating.add_button("copy", "Copy", "Copy the picture and its file (Ctrl+C)", self.view.copy, icon="copy")
+        self.floating.toggle_on_click(self.view)                            # a click shows the bar and keeps it; again hides it (83A)
+        self.floating.add_slider(lambda: len(self.paths), lambda: self.index,   # a strip for long folders (84A)
+                                 lambda i: os.path.basename(self.paths[i]), lambda i: self.step(i - self.index))
         self.bar, self.caption, self.buttons = self.floating.bar, self.floating.caption, self.floating.buttons
         self._said = QTimer(self)                                           # the window's own, so it dies with the window
         self._said.setSingleShot(True)

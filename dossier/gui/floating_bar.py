@@ -8,16 +8,18 @@ caption (the file name and place in the folder) floats at the top as well.
 """
 from __future__ import annotations
 
-from typing import Callable
+from typing import Callable, Optional
 
-from PyQt6.QtCore import QEvent, QObject, QPoint, QPropertyAnimation, QSize, Qt, QTimer
+from PyQt6.QtCore import QEvent, QObject, QPoint, QPropertyAnimation, QRectF, QSize, Qt, QTimer
 from PyQt6.QtGui import QColor, QPainter
-from PyQt6.QtWidgets import QFrame, QGraphicsOpacityEffect, QHBoxLayout, QLabel, QMenu, QPushButton, QWidget
+from PyQt6.QtWidgets import QApplication, QFrame, QGraphicsOpacityEffect, QHBoxLayout, QLabel, QMenu, QPushButton, QWidget
 
 from . import icon_set, theme
 
 BAR_IDLE_MS = 2500           # the bar fades out after this long without the mouse moving
 FADE_MS = 180
+SLIDER_GAP = 10              # between the slider and the bar below it
+CLICK_SLOP = 4               # a press and release this close together (pixels) is a click on the picture, not a drag
 
 
 def glass_menu(menu: QMenu) -> None:
@@ -53,6 +55,13 @@ class FloatingBar(QObject):
         super().__init__(host)
         self.host = host
         self.view = view
+        # set first: the buttons send their events here as soon as they exist
+        self.pinned = False              # shown by a click on the picture: stays until the next click there (83A)
+        self.slider: Optional["GlassSlider"] = None
+        self.buttons: dict = {}
+        self._effects: dict = {}
+        self._click_targets: set = set()
+        self._press: Optional[tuple] = None
         fg = QColor(theme.current()["fg"])
         shade = f"rgba({fg.red()}, {fg.green()}, {fg.blue()}, 38)"
         text = fg.name()
@@ -61,7 +70,6 @@ class FloatingBar(QObject):
         row = self.row = QHBoxLayout(self.bar)
         row.setContentsMargins(12, 6, 12, 6)
         row.setSpacing(2)
-        self.buttons: dict = {}
         for key, glyph, tip, slot in (specs if specs is not None else (("prev", "◀", "Previous picture (Left)", lambda: step(-1)),
                                       ("next", "▶", "Next picture (Right)", lambda: step(1)),
                                       ("out", "−", "Zoom out (-)", lambda: view.zoom_by(0.8)),
@@ -79,6 +87,7 @@ class FloatingBar(QObject):
             if len(glyph) > 2 and glyph != "1:1":
                 b.setStyleSheet("font-size: 16px;")                             # a word, not a symbol
             b.clicked.connect(lambda _c=False, s=slot: s())
+            b.installEventFilter(self)                                   # no click while the bar is still fading in (82A)
             row.addWidget(b)
             self.buttons[key] = b
         self.bar.setStyleSheet(
@@ -90,7 +99,6 @@ class FloatingBar(QObject):
         self.caption.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.caption.setStyleSheet(f"QLabel#glasscaption {{ background: {shade}; color: {text}; border-radius: 10px; padding: 3px 12px; }}")
         self.captioned = captioned
-        self._effects: dict = {}
         self._fades: dict = {}
         for widget in self._widgets():
             effect = QGraphicsOpacityEffect(widget)
@@ -102,6 +110,9 @@ class FloatingBar(QObject):
         self._idle.setSingleShot(True)
         self._idle.setInterval(BAR_IDLE_MS)
         self._idle.timeout.connect(self.fade_out)
+        self._click = QTimer(self)       # a click waits out the double-click time: a double click fits the picture instead
+        self._click.setSingleShot(True)
+        self._click.timeout.connect(self.toggle_pinned)
         self.watch(view)
         view.installEventFilter(self)                                       # a resize of the picture moves the bar with it
         self.enabled = True
@@ -121,6 +132,7 @@ class FloatingBar(QObject):
         if len(glyph) > 2 and not icon:
             b.setStyleSheet("font-size: 16px;")                                 # a word, not a symbol
         b.clicked.connect(lambda _c=False: slot())
+        b.installEventFilter(self)
         self.row.insertWidget(self.row.count() - 1, b)
         self.buttons[key] = b
         self.bar.adjustSize()
@@ -135,11 +147,72 @@ class FloatingBar(QObject):
     MENU_GAP = 8
 
     def menu_position(self, menu: QMenu, key: str) -> QPoint:
-        """Where a menu opens: its left edge at the button's, its bottom ``MENU_GAP`` above the top of the bar."""
+        """Where a menu opens: its left edge at the button's, its bottom ``MENU_GAP`` above the top of the bar (or of the slider,
+        when it is shown above the bar)."""
         button = self.buttons[key]
         left = button.mapToGlobal(QPoint(0, 0)).x()
-        bar_top = self.bar.mapToGlobal(QPoint(0, 0)).y()
-        return QPoint(left, bar_top - self.MENU_GAP - menu.sizeHint().height())
+        top = self.bar.mapToGlobal(QPoint(0, 0)).y()
+        if self._slider_shown():
+            top = min(top, self.slider.mapToGlobal(QPoint(0, 0)).y())
+        return QPoint(left, top - self.MENU_GAP - menu.sizeHint().height())
+
+    # a click on the picture shows the bar and keeps it; the next click there hides it (83A) ---------------------------------------
+    def toggle_on_click(self, widget) -> None:
+        """A plain click on ``widget`` (a picture view) pins the bar, or unpins and hides it. A drag (panning) and a double click
+        (fit) are not clicks. The events still reach the view."""
+        target = widget.viewport() if hasattr(widget, "viewport") else widget
+        self._click_targets.add(target)
+        target.installEventFilter(self)
+
+    def toggle_pinned(self) -> None:
+        if not self.enabled:
+            return
+        if self.pinned:
+            self.pinned = False
+            for widget in self._widgets():
+                self._fade(widget, 0.0)
+            return
+        self.pinned = True
+        self._idle.stop()
+        self.show_fully()
+
+    # 82A: the bar takes clicks only once it is fully shown -------------------------------------------------------------------------
+    def fully_shown(self) -> bool:
+        effect = self._effects.get(self.bar)
+        return not self.bar.isHidden() and effect is not None and effect.opacity() >= 0.999
+
+    def show_fully(self) -> None:
+        """Bring the bar (and caption and slider) in at once, without a fade."""
+        for widget in self._widgets():
+            fade = self._fades.pop(widget, None)
+            if fade is not None:
+                fade.stop()
+            self._effects[widget].setOpacity(1.0)
+            widget.show()
+        self.place()
+        if not self.pinned:
+            self._idle.start()
+
+    # 84A: the slider above the bar -------------------------------------------------------------------------------------------------
+    def add_slider(self, count: Callable[[], int], index: Callable[[], int], name: Callable[[int], str], go: Callable[[int], None],
+                   wanted: Callable[[], bool] = lambda: True) -> "GlassSlider":
+        """A thin glass strip above the bar for long lists: dragging shows "331 / 870 · name" and only where it is let go is shown
+        (``go``); a click on the strip jumps there. Shown with the bar, only when ``wanted()`` and there is more than one item."""
+        self.slider = GlassSlider(self.host, self, count, index, name, go)
+        self.slider.installEventFilter(self)
+        effect = QGraphicsOpacityEffect(self.slider)
+        self.slider.setGraphicsEffect(effect)
+        self._effects[self.slider] = effect
+        self._slider_wanted = wanted
+        self.slider.hide()
+        self.place()
+        return self.slider
+
+    def _slider_shown(self) -> bool:
+        return self.slider is not None and not self.slider.isHidden()
+
+    def _slider_fits(self) -> bool:
+        return self.slider is not None and self._slider_wanted() and self.slider.count() > 1
 
     def watch(self, widget) -> None:
         """Mouse movement over ``widget`` (and its viewport) shows the bar."""
@@ -162,7 +235,13 @@ class FloatingBar(QObject):
         return label
 
     def _widgets(self) -> tuple:
-        return (self.bar, self.caption) if self.captioned else (self.bar,)
+        out = (self.bar, self.caption) if self.captioned else (self.bar,)
+        if getattr(self, "slider", None) is not None:
+            if self._slider_fits():
+                out += (self.slider,)
+            else:
+                self.slider.hide()                                          # one picture, or not a picture: no slider
+        return out
 
     # showing and hiding ----------------------------------------------------------------------------------------------------------
     def set_enabled(self, on: bool) -> None:
@@ -172,8 +251,10 @@ class FloatingBar(QObject):
             self.poke()
             return
         self._idle.stop()
-        for widget in (self.bar, self.caption):
-            widget.hide()
+        self.pinned = False
+        for widget in (self.bar, self.caption, self.slider):
+            if widget is not None:
+                widget.hide()
 
     def set_caption(self, text: str) -> None:
         self.caption.setText(text)
@@ -190,6 +271,12 @@ class FloatingBar(QObject):
         self.caption.move(area.x() + (area.width() - self.caption.width()) // 2, area.y() + max(18, area.height() // 40))
         self.bar.raise_()
         self.caption.raise_()
+        if self.slider is not None:                                         # nearly the area's width, just above the bar
+            width = max(self.bar.width(), int(area.width() * 0.76))
+            self.slider.setGeometry(area.x() + (area.width() - width) // 2, self.bar.y() - SLIDER_GAP - GlassSlider.HEIGHT,
+                                    width, GlassSlider.HEIGHT)
+            self.slider.raise_()
+            self.slider.update()
 
     def _fade(self, widget: QWidget, to: float) -> None:
         effect = self._effects[widget]
@@ -214,22 +301,146 @@ class FloatingBar(QObject):
             if widget.isHidden() or self._effects[widget].opacity() < 1.0:
                 self._fade(widget, 1.0)
         self.place()
-        self._idle.start()
+        if not self.pinned:
+            self._idle.start()
 
     def fade_out(self) -> None:
-        if self.bar.underMouse():
+        if self.pinned:
+            return                                                          # a click put it there: the next click takes it away
+        if self.bar.underMouse() or (self.slider is not None and (self.slider.underMouse() or self.slider.dragging)):
             self._idle.start()                                              # the mouse is on the bar: leave it
             return
         for widget in self._widgets():
             self._fade(widget, 0.0)
 
+    _CLICKS = (QEvent.Type.MouseButtonPress, QEvent.Type.MouseButtonRelease, QEvent.Type.MouseButtonDblClick)
+
     def eventFilter(self, obj, event) -> bool:
         kind = event.type()
+        if obj in self.buttons.values() or (self.slider is not None and obj is self.slider):
+            if kind in self._CLICKS and not self.fully_shown():             # 82A: a click on a bar still fading in only shows it
+                if kind == QEvent.Type.MouseButtonPress:
+                    self.show_fully()
+                return True
+            if kind == QEvent.Type.MouseMove:
+                self.poke()
+            return False                                                    # their own resizes must not place the bar again
+        if obj in self._click_targets and kind in self._CLICKS:
+            self._watch_click(event)
+            return False
         if kind == QEvent.Type.MouseMove:
             self.poke()
         elif kind == QEvent.Type.Resize:
             self.place()
         return False
+
+    def _watch_click(self, event) -> None:
+        """A press and release of the left button within a few pixels is a click; a double click cancels it (that fits the picture)."""
+        kind = event.type()
+        if event.button() != Qt.MouseButton.LeftButton:
+            return
+        where = event.position().toPoint()
+        if kind == QEvent.Type.MouseButtonPress:
+            self._press = (where, self._click.isActive())
+        elif kind == QEvent.Type.MouseButtonDblClick:
+            self._click.stop()
+            self._press = None
+        elif kind == QEvent.Type.MouseButtonRelease and self._press is not None:
+            start, _waiting = self._press
+            self._press = None
+            if (where - start).manhattanLength() <= CLICK_SLOP:
+                self._click.start(QApplication.doubleClickInterval())
+
+
+class GlassSlider(QWidget):
+    """The strip above the bar (84A): a rounded glass track, the part up to the current item in gold, a round handle. Dragging shows
+    "331 / 870 · name" above the handle and moves nothing until the button is let go; a click jumps to that place."""
+
+    HEIGHT = 22
+
+    def __init__(self, host: QWidget, bar: "FloatingBar", count: Callable[[], int], index: Callable[[], int],
+                 name: Callable[[int], str], go: Callable[[int], None]) -> None:
+        super().__init__(host)
+        self.floating = bar
+        self.count, self.index, self.name, self.go = count, index, name, go
+        self.dragging = False
+        self.target: Optional[int] = None                     # the item under the handle while dragging
+        self.setMouseTracking(True)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setToolTip("Drag to go through the pictures; a click jumps there")
+        fg = QColor(theme.current()["fg"])
+        self.tip = QLabel(host)
+        self.tip.setStyleSheet(f"background: rgba({fg.red()}, {fg.green()}, {fg.blue()}, 38); color: {fg.name()};"
+                               f" border-radius: 10px; padding: 3px 12px;")
+        self.tip.hide()
+
+    def _index_at(self, x: float) -> int:
+        n = self.count()
+        usable = max(1, self.width() - self.HEIGHT)
+        share = min(1.0, max(0.0, (x - self.HEIGHT / 2) / usable))
+        return round(share * (n - 1)) if n > 1 else 0
+
+    def _x_of(self, i: int) -> float:
+        n = self.count()
+        share = i / (n - 1) if n > 1 else 0.0
+        return self.HEIGHT / 2 + share * max(1, self.width() - self.HEIGHT)
+
+    def shown_index(self) -> int:
+        return self.target if self.dragging and self.target is not None else self.index()
+
+    def paintEvent(self, event) -> None:
+        t = theme.current()
+        fg, gold = QColor(t["fg"]), QColor(t["accent"])
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p.setPen(Qt.PenStyle.NoPen)
+        r = self.HEIGHT / 2
+        track = QColor(fg)
+        track.setAlpha(38)
+        p.setBrush(track)
+        p.drawRoundedRect(QRectF(0, 0, self.width(), self.HEIGHT), r, r)
+        x = self._x_of(self.shown_index())
+        gold.setAlpha(115)
+        p.setBrush(gold)
+        p.drawRoundedRect(QRectF(0, 0, x + r, self.HEIGHT), r, r)
+        p.setBrush(fg)
+        p.drawEllipse(QRectF(x - r + 2, 2, self.HEIGHT - 4, self.HEIGHT - 4))
+
+    def _follow(self, x: float) -> None:
+        self.target = self._index_at(x)
+        self.tip.setText(f"{self.target + 1} / {self.count()} · {self.name(self.target)}")
+        self.tip.adjustSize()
+        centre = self.mapTo(self.tip.parentWidget(), QPoint(int(self._x_of(self.target)), 0))
+        left = min(max(0, centre.x() - self.tip.width() // 2), self.tip.parentWidget().width() - self.tip.width())
+        self.tip.move(left, centre.y() - self.tip.height() - 6)
+        self.tip.show()
+        self.tip.raise_()
+        self.update()
+
+    def mousePressEvent(self, event) -> None:
+        if event.button() != Qt.MouseButton.LeftButton or self.count() < 2:
+            return
+        self.dragging = True
+        self._follow(event.position().x())
+
+    def mouseMoveEvent(self, event) -> None:
+        self.floating.poke()
+        if self.dragging:
+            self._follow(event.position().x())
+
+    def mouseReleaseEvent(self, event) -> None:
+        if not self.dragging:
+            return
+        self.dragging = False
+        self.tip.hide()
+        target, self.target = self.target, None
+        if target is not None and target != self.index():
+            self.go(target)                                   # only the picture let go on is read
+        self.update()
+
+    def hideEvent(self, event) -> None:
+        self.tip.hide()
+        super().hideEvent(event)
 
 
 class _Separator(QWidget):
