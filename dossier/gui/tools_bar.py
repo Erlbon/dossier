@@ -605,12 +605,13 @@ class ToolsBarMixin:
         """Open With a program the system names for the type (a ``.desktop`` launcher or a Mac ``.app``), on what was clicked."""
         self.run_tool(T.Tool(name, program, "{files}"))
 
-    def open_with_other_program(self) -> None:
+    def open_with_other_program(self, files: Optional[list] = None, here: Optional[str] = None) -> None:
         """Open With > Other Program... on the Mac and Linux: choose any installed program (the same list as Add a Program) and
-        open what was clicked with it. The files are taken now: the list is read on a thread."""
+        open what was clicked (or ``files``, a viewer's picture) with it. The files are taken now: the list is read on a thread."""
         panel = self.active
-        files = [] if panel.is_home else panel.targets()
-        here = panel.real_folder() if not panel.is_home else ""
+        if files is None:
+            files = [] if panel.is_home else panel.targets()
+            here = panel.real_folder() if not panel.is_home else ""
 
         def work(progress, cancel):
             progress(0, 0)

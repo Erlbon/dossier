@@ -82,7 +82,7 @@ def main(args: list, *, settings_path: Optional[str] = None, show: bool = True) 
     saved_mode, saved_level = saved_look(settings)
     mode = asked_mode or saved_mode
     level = asked_level if asked_level is not None else (None if asked_mode else saved_level)
-    window = GlassViewer(pictures, first, mode, level, blur_kind=ns.blur, tint=tint)
+    window = GlassViewer(pictures, first, mode, level, blur_kind=ns.blur, tint=tint, settings=settings)
     window._theme = manager                                              # kept alive as long as the window
     window.show()
     if not show:

@@ -7,6 +7,7 @@ disk: whether an entry shows is judged from the names alone.
 """
 from __future__ import annotations
 
+import os
 from contextlib import contextmanager
 
 from PyQt6.QtCore import Qt
@@ -14,6 +15,7 @@ from PyQt6.QtGui import QAction
 from PyQt6.QtWidgets import QApplication, QMenu
 
 from ..core import archives, bundles, sharing, shellmenu
+from ..core import tools as T
 from ..core.mounting import SMB
 from ..core.platform import FILE_MANAGER_NAME, has_scheme, open_with_command
 from ..core.eject import can_eject
@@ -232,14 +234,37 @@ class ContextMenuMixin:
         local = bool(paths) and not any(has_scheme(p) for p in paths)
         chooser = open_with_command(paths[0]) if single_file and local else None
         programs = getattr(self, "system_programs", None)
-        system = programs.for_file(paths[0]) if programs is not None and files and local else []
         other = chooser is None and programs is not None and programs.system in ("mac", "linux") and files and local
+        system = programs.for_file(paths[0]) if programs is not None and files and local else []
         if not self.tools and chooser is None and not system and not other:
             return
-        sub = menu.addMenu("Open With")
+        self._fill_open_with(menu.addMenu("Open With"), system, chooser, other,
+                             add=lambda target, text, slot: self._entry_action(target, text, slot, panel, paths, row=row),
+                             program=lambda p: self.open_with_program(p.name, p.path), tool=self.run_tool,
+                             pick_other=self.open_with_other_program)
+
+    def viewer_open_with(self, sub: QMenu, path: str) -> None:
+        """Open With for the picture in a viewer (card 95B): the same programs as the panel's Open With for this kind of file,
+        started on that one picture, wherever the panels are. The viewer stays open."""
+        folder = os.path.dirname(path)
+        programs = getattr(self, "system_programs", None)
+        chooser = open_with_command(path)
+        other = chooser is None and programs is not None and programs.system in ("mac", "linux")
+
+        def add(target: QMenu, text: str, slot) -> None:
+            target.addAction(text).triggered.connect(lambda _c=False: slot())
+
+        self._fill_open_with(sub, programs.for_file(path) if programs is not None else [], chooser, other, add=add,
+                             program=lambda p: self._launch_tool(T.Tool(p.name, p.path, "{files}"), [path], folder),
+                             tool=lambda t: self._launch_tool(t, [path], folder),
+                             pick_other=lambda: self.open_with_other_program([path], folder))
+
+    def _fill_open_with(self, sub: QMenu, system: list, chooser, other: bool, add, program, tool, pick_other) -> None:
+        """The entries of an Open With menu: the system's programs (default first), the tools bar's programs (its folders as
+        submenus), then Choose Another Program... (Windows) or Other Program... (the Mac and Linux). ``add(menu, text, slot)`` makes
+        an entry; ``program``, ``tool`` and ``pick_other`` start what was picked."""
         for p in system:
-            self._entry_action(sub, p.name + (" (default)" if p.default else ""),
-                               lambda p=p: self.open_with_program(p.name, p.path), panel, paths, row=row)
+            add(sub, p.name + (" (default)" if p.default else ""), lambda p=p: program(p))
         if system and self.tools:
             sub.addSeparator()
 
@@ -250,15 +275,15 @@ class ContextMenuMixin:
                 elif item.kind == "separator":
                     target.addSeparator()
                 else:
-                    self._entry_action(target, item.name, lambda t=item: self.run_tool(t), panel, paths, row=row)
+                    add(target, item.name, lambda t=item: tool(t))
         fill(sub, self.tools)
         if chooser is not None or other:
             if self.tools or system:
                 sub.addSeparator()
             if chooser is not None:
-                self._entry_action(sub, "Choose Another Program...", lambda: self._start_command(chooser), panel, paths, row=row)
+                add(sub, "Choose Another Program...", lambda: self._start_command(chooser))
             else:
-                self._entry_action(sub, "Other Program...", self.open_with_other_program, panel, paths, row=row)
+                add(sub, "Other Program...", pick_other)
 
     def _machine_share_menu(self, panel, entry, row: int = -1) -> QMenu:
         """A share in another computer's list (``\\\\machine``): open it, keep it on the Home page or mount it. Nothing that would

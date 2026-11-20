@@ -2,6 +2,31 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-20#04 -- The picture viewer after the Picasa comparison: Delete, kept turns, facts, read-ahead, glide, moving GIFs, Open With (88A, 89A, 90A, 92A, 93A, 94A, 95B)
+
+In View as Glass, `dossier view` and pictures in F3 alike, except where it says otherwise. No slideshow and no rating anywhere.
+- **88A: Delete** sends the picture to the Recycle Bin (the Trash) with no question, says so in the caption ("IMG_4412.jpg is in
+  the Recycle Bin") and shows the next one; the last one closes the viewer. On a drive with no bin (a network or removable drive)
+  it asks first and says it is for good. Put Back in the Recycle Bin place brings it back; Dossier's undo does not cover it.
+  A panel showing the folder is read again.
+- **89A: a turn of a JPEG is kept** in its EXIF Orientation at once (`core/exif.py` `write_orientation`). The picture data is never
+  encoded again and the file keeps its modified date: an Orientation already there is changed in place; EXIF without one gets it
+  added; a JPEG without EXIF gets a small EXIF block with only the Orientation, after its JFIF header. Other kinds turn for
+  looking only, and the caption says so the first time. A mirrored photo stays mirrored. The panel's thumbnail is made again.
+- **90A: the facts card.** I or the bar's new ⓘ button shows a small glass card at the top right of the glass viewer: name,
+  dimensions and size, date taken, camera and lens, exposure. It stays while stepping until I again, and is remembered
+  (`viewer/facts`). F3 keeps its full I panel.
+- **92A: read ahead.** The next and the previous picture are read on a thread of their own while you look, and the last ones are
+  kept in memory (at most 300 MB), so stepping is instant. Not while the slider is dragged.
+- **93A: zoom, fit and 1:1 glide** there in about a sixth of a second, toward the point under the mouse. A new picture is fitted
+  at once.
+- **94A: animated GIF and WebP play**, round and round (also a GIF that says to play once); Space pauses and plays, and steps on
+  only past a still picture. Zoom, fit and turning work on them. The right-click menu has Pause / Play.
+- **95B: Open With** in the gear menu (the glass bar has a gear now; F3's gear has it for pictures): the same programs as the
+  panel's Open With for this kind of file, started on the picture; the viewer stays open. **E** opens the picture at once in the
+  program set in Settings > Opening Files > Edit Pictures With. The right-click menu lists E and Delete too.
+- Shared code in `gui/picture_tools.py`; the panel's Open With and the viewer's share `_fill_open_with`.
+
 ## 2026-11-20#03 -- The picture viewer: no hidden clicks, a click keeps the bar, a slider (questions 82A, 83A, 84A)
 
 - **82A: the glass bar takes clicks only once it is fully shown.** The bar could be clicked while it was still fading in, almost

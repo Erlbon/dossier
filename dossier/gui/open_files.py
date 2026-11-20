@@ -54,6 +54,11 @@ class OpenFilesMixin:
         self.act_editor_notepad.triggered.connect(lambda: self.set_editor_program(""))
         self.act_editor_program.triggered.connect(self.choose_editor_program)
         self._show_editor_choice()
+        self.act_picture_editor = QAction("", self)
+        self.act_picture_editor.setToolTip("The program E opens a picture in, in the picture viewers (View as Glass and F3)")
+        self.act_picture_editor.triggered.connect(self.choose_picture_editor)
+        menu.addAction(self.act_picture_editor)
+        self._show_picture_editor()
         menu.addSeparator()
         self.act_text_header = QAction("Rules at the Top of a Name List (Batch Rename)", self)
         self.act_text_header.setCheckable(True)
@@ -86,6 +91,21 @@ class OpenFilesMixin:
         self.act_editor_program.setText(f"Edit (F4) in {os.path.basename(program)} (Change...)" if program
                                         else "Edit (F4) in Another Program...")
         (self.act_editor_program if program else self.act_editor_notepad).setChecked(True)
+
+    # the program for E in the picture viewers (card 95B) ----------------------------------------------------------------------------
+    def choose_picture_editor(self) -> None:
+        from .picture_tools import EDITOR_KEY
+        program = self.dialogs.ask_program("Edit Pictures With", str(self.settings.value(EDITOR_KEY, "") or ""))
+        if program:
+            self.settings.setValue(EDITOR_KEY, program)
+            self._say(f"E in the picture viewer opens the picture in {os.path.splitext(os.path.basename(program))[0]}")
+        self._show_picture_editor()
+
+    def _show_picture_editor(self) -> None:
+        from .picture_tools import EDITOR_KEY
+        program = str(self.settings.value(EDITOR_KEY, "") or "")
+        self.act_picture_editor.setText(f"Edit Pictures With {os.path.splitext(os.path.basename(program))[0]} (Change...)" if program
+                                        else "Edit Pictures With...")
 
     def edit_in_program(self, path: str) -> bool:
         """Open ``path`` in the chosen editor program; False when none is chosen. The file must be on this computer."""

@@ -27,10 +27,11 @@ from .dialogs import ProgressBox
 from .floating_bar import FloatingBar, Toast
 from .frost_window import FrostSurface
 from .hex_view import HexView
-from .image_view import ImagePage, InfoPanel, read_image
+from .image_view import ImagePage, InfoPanel, read_image  # noqa: F401  (read_image: re-exported)
 from .line_view import LineView
 from .markdown_view import MarkdownView
 from .models import human_size
+from .picture_tools import PictureActions, ReadAhead, read_picture
 from .qt_bridge import QtDispatcher
 from .sheet_view import SheetPage
 
@@ -38,7 +39,7 @@ from .sheet_view import SheetPage
 INFO_MODES = ("image", "document", "sheet", "pdf")       # the modes the Info switch (I, ⓘ) shows a panel for
 
 
-class TextViewerWindow(FrostSurface, QMainWindow):
+class TextViewerWindow(PictureActions, FrostSurface, QMainWindow):
     edit_requested = pyqtSignal(str, bool)       # path, open the replace bar too
 
     def __init__(self, paths: list, index: int = 0, dispatch=None, parent=None) -> None:
@@ -58,6 +59,8 @@ class TextViewerWindow(FrostSurface, QMainWindow):
         self._chapter = 0
         self._dispatch = dispatch or QtDispatcher(self)      # callbacks must reach the GUI thread
         self._runner = JobRunner(self._dispatch)
+        self.cache = ReadAhead(self._dispatch)               # pictures read ahead (92A)
+        self.setup_picture_actions()                         # the window behind gives its own with set_picture_services
         self.resize(960, 620)
 
         self.view = LineView()
@@ -88,6 +91,10 @@ class TextViewerWindow(FrostSurface, QMainWindow):
         self.image_page.view.changed.connect(self._update_status)
         self.image_page.view.step_requested.connect(self.step)        # the wheel turns the pages of a folder of pictures
         self.image_page.view.copied.connect(lambda text: self.status.setText(text))
+        self.image_page.view.delete_requested.connect(self.delete_picture)          # 88A
+        self.image_page.view.edit_requested.connect(self.edit_picture)              # 95B
+        self.image_page.view.turned.connect(self.keep_turn)                         # 89A
+        self.image_page.view.can_delete = self.image_page.view.can_edit = True
         self.markdown.open_file_requested.connect(self._open_linked)
         self.markdown.refused.connect(lambda text: self.status.setText(f"This link is not opened: {text}"))
 
@@ -302,6 +309,9 @@ class TextViewerWindow(FrostSurface, QMainWindow):
             follow.setCheckable(True)
             follow.setChecked(self.follow.isChecked())
             follow.triggered.connect(lambda checked=False: self.follow.setChecked(bool(checked)))
+        if self.mode == "image":
+            menu.addSeparator()
+            self.add_picture_menu(menu)                      # Open With and Edit (95B)
         return menu
 
     def _popup_settings(self) -> None:
@@ -534,34 +544,64 @@ class TextViewerWindow(FrostSurface, QMainWindow):
 
     def _open_image(self, path: str) -> None:
         self.stack.setCurrentWidget(self.image_page)
+        kept = self.cache.get(path)
+        if kept is not None:                                 # read ahead: shown at once (92A)
+            self._image_shown(path, kept)
+            return
         self.status.setText("Reading the picture...")
-        holder: dict = {}
 
         def work(progress, cancel):
             progress(0, 0)
-            return read_image(path), read_exif(path)
+            return read_picture(path)
 
         def finished(job: Job) -> None:
-            if path != self.paths[self.index] or self.mode != "image":
+            ok = job.state is JobState.DONE and job.result is not None and not job.result.image.isNull()
+            if ok:
+                self.cache.put(path, job.result)
+            if not self.paths or path != self.paths[self.index] or self.mode != "image":
                 return
-            if job.state is not JobState.DONE or job.result is None or job.result[0].isNull():
+            if not ok:
                 self.status.setText("This picture cannot be decoded here. View as: Hex shows what is in the file")
+                self._read_ahead()
                 return
-            image, exif = job.result
-            self.image_page.view.set_image(image, path)
-            try:
-                size = os.path.getsize(path)
-            except OSError:
-                size = 0
-            kind = viewmodes.image_kind(viewmodes.read_head(path), path)
-            facts = [("Name", os.path.basename(path)), ("Size", human_size(size)),
-                     ("Dimensions", f"{image.width()} x {image.height()} pixels"), ("Format", kind.upper() or "?")]
-            self.image_page.info.show_info(facts, exif)
-            self._update_status()
+            self._image_shown(path, job.result)
 
-        job = self._runner.submit("Picture", work, on_done=finished)
-        holder["job"] = job
-        self._job = job
+        self._job = self._runner.submit("Picture", work, on_done=finished)
+
+    def _image_shown(self, path: str, picture) -> None:
+        image = picture.image
+        self.image_page.view.set_image(image, path, picture.movie)
+        facts = [("Name", os.path.basename(path)), ("Size", human_size(picture.size)),
+                 ("Dimensions", f"{image.width()} x {image.height()} pixels"), ("Format", picture.kind.upper() or "?")]
+        self.image_page.info.show_info(facts, picture.exif)
+        self._update_status()
+        self._read_ahead()
+
+    def _read_ahead(self) -> None:
+        """The next and the previous file, when they are pictures, read while this one is looked at; not while the slider is
+        dragged (92A)."""
+        slider = self.floating.slider
+        if len(self.paths) < 2 or (slider is not None and slider.dragging):
+            return
+        near = {self.paths[(self.index + d) % len(self.paths)] for d in (1, -1)} - {self.paths[self.index]}
+        self.cache.read_ahead([p for p in near if viewmodes.is_image_name(p)])
+
+    # what PictureActions needs ------------------------------------------------------------------------------------------------
+    def set_picture_services(self, **services) -> None:
+        """The window behind gives its settings, Recycle Bin, Open With and program starter (Delete, E, Open With: 88A, 95B)."""
+        self.setup_picture_actions(**services)
+
+    def _picture_view(self):
+        return self.image_page.view
+
+    def _tell(self, text: str) -> None:
+        self.status.setText(text)
+
+    def _after_delete(self) -> None:
+        if not self.paths:
+            self.close()
+            return
+        self.load(min(self.index, len(self.paths) - 1))
 
     def _open_linked(self, path: str) -> None:
         """A link in a Markdown file to a file on this computer: show it next, in this window."""
@@ -881,5 +921,6 @@ class TextViewerWindow(FrostSurface, QMainWindow):
     def closeEvent(self, event) -> None:
         self._timer.stop()
         self._close_current()
+        self.cache.close()
         self._runner.shutdown(wait=False)
         super().closeEvent(event)

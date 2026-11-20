@@ -64,6 +64,19 @@ def _patient_listings(request, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _zoom_jumps_unless_a_test_asks(request, monkeypatch):
+    """Zoom, fit and 1:1 glide in the viewers (93A); tests read the zoom straight after a key, so here it jumps. A test of the glide
+    is marked ``glides``."""
+    if request.node.get_closest_marker("glides"):
+        return
+    try:
+        from dossier.gui import image_view
+    except ImportError:                          # no Qt in this environment
+        return
+    monkeypatch.setattr(image_view, "GLIDE_MS", 0)
+
+
+@pytest.fixture(autouse=True)
 def _delete_leftover_windows():
     yield
     widgets = sys.modules.get("PyQt6.QtWidgets")

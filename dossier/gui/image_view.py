@@ -2,17 +2,20 @@
 
 The picture is decoded on a thread by the window (``read_image``); this file only shows it. Zoom: ``+`` and ``-`` or Ctrl+wheel, ``0`` fits
 the window, the wheel steps to the next or previous picture and so do Right, Page Down and Space (forward) and Left, Page Up and
-Backspace (back) unless a zoomed picture needs them to scroll, ``1`` shows every pixel, double-click toggles between the two; ``L`` and ``R`` turn the picture a quarter (the file is
-never changed); dragging moves a zoomed picture. A photo taken upright but stored sideways is turned by its EXIF orientation when it is
-read. Ctrl+C copies the picture as it is shown (turned too) and its file. A right-click gives the same as a menu.
+Backspace (back) unless a zoomed picture needs them to scroll, ``1`` shows every pixel, double-click toggles between the two; ``L`` and ``R``
+turn the picture a quarter (``turned`` tells the window, which keeps the turn in a JPEG, 89A); dragging moves a zoomed picture. Zoom, fit
+and 1:1 glide there in about a sixth of a second toward the point under the mouse (93A); a new picture is fitted at once. An animated GIF
+or WebP plays round and round, and Space pauses it (94A). A photo taken upright but stored sideways is turned by its EXIF orientation when
+it is read. Ctrl+C copies the picture as it is shown (turned too) and its file. Delete and E are the window's (``delete_requested``,
+``edit_requested``). A right-click gives the same as a menu.
 """
 from __future__ import annotations
 
 import time
 from typing import Optional
 
-from PyQt6.QtCore import QRectF, Qt, pyqtSignal
-from PyQt6.QtGui import QColor, QImage, QImageReader, QKeySequence, QPainter, QPixmap, QTransform
+from PyQt6.QtCore import QBuffer, QByteArray, QEasingCurve, QIODevice, QPointF, QRectF, Qt, QVariantAnimation, pyqtSignal
+from PyQt6.QtGui import QColor, QCursor, QImage, QImageReader, QKeySequence, QMovie, QPainter, QPixmap, QTransform
 from PyQt6.QtWidgets import (QAbstractItemView, QGraphicsPixmapItem, QGraphicsScene, QGraphicsView, QHeaderView, QMenu, QSplitter,
                              QTreeWidget, QTreeWidgetItem, QWidget)
 
@@ -22,6 +25,7 @@ from . import file_clipboard, theme
 
 MIN_ZOOM, MAX_ZOOM = 0.02, 32.0
 SETTLE = 0.35        # seconds after the wheel last scrolled the picture before the same spin may step to the next one
+GLIDE_MS = 160       # zoom, fit and 1:1 glide this long (93A); 0 jumps (the tests set it so, except the one about gliding)
 
 
 def read_image(path: str) -> QImage:
@@ -35,9 +39,22 @@ class ImageView(QGraphicsView):
     changed = pyqtSignal()
     step_requested = pyqtSignal(int)                    # the wheel asks for the next (1) or previous (-1) picture
     copied = pyqtSignal(str)                            # what a copy did, for the window to say
+    turned = pyqtSignal(int)                            # the owner turned the picture this many quarters (89A: the window keeps it)
+    delete_requested = pyqtSignal()                     # Delete (88A)
+    edit_requested = pyqtSignal()                       # E (95B)
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
+        self.glide_ms = GLIDE_MS
+        self._glide = QVariantAnimation(self)
+        self._glide.setStartValue(0.0)
+        self._glide.setEndValue(1.0)
+        self._glide.setEasingCurve(QEasingCurve.Type.OutCubic)
+        self._glide.valueChanged.connect(self._glide_step)
+        self._glide_plan: Optional[tuple] = None
+        self._movie: Optional[QMovie] = None
+        self._movie_buffer: Optional[QBuffer] = None
+        self.can_delete = self.can_edit = False         # the window says whether Delete and E do something (the right-click menu)
         self._wheel_steps = 0
         self._scrolled_at = 0.0
         self.wheel_map = dict(wheel.DEFAULTS)           # what the wheel does, set by the viewer from the settings
@@ -59,7 +76,11 @@ class ImageView(QGraphicsView):
         self.setBackgroundBrush(QColor(theme.current()["bg"]))
 
     # the picture ------------------------------------------------------------------------------------------------------------------
-    def set_image(self, image: Optional[QImage], path: str = "") -> None:
+    def set_image(self, image: Optional[QImage], path: str = "", movie: bytes = b"") -> None:
+        """Show ``image`` (fitted at once, no glide). ``movie``: the bytes of an animated GIF or WebP, which then plays (94A)."""
+        self._glide.stop()
+        self._glide_plan = None
+        self._stop_movie()
         self._scene.clear()
         self._item = None
         self._image = image if image is not None and not image.isNull() else None
@@ -67,8 +88,60 @@ class ImageView(QGraphicsView):
         self._turn = 0
         if self._image is not None:
             self._show()
-            self.fit()
+            self.fit(glide=False)
+            if movie:
+                self._start_movie(movie)
         self.changed.emit()
+
+    # 94A: a moving picture ------------------------------------------------------------------------------------------------------
+    def _start_movie(self, data: bytes) -> None:
+        buffer = QBuffer(self)
+        buffer.setData(QByteArray(data))
+        buffer.open(QIODevice.OpenModeFlag.ReadOnly)
+        movie = QMovie(buffer, QByteArray(), self)
+        if not movie.isValid():
+            buffer.close()
+            return
+        self._movie, self._movie_buffer = movie, buffer
+        movie.frameChanged.connect(self._next_frame)
+        movie.finished.connect(movie.start)                     # round and round, also when the file says to play once
+        movie.start()
+
+    def _stop_movie(self) -> None:
+        movie, buffer = self._movie, self._movie_buffer
+        self._movie = self._movie_buffer = None
+        if movie is not None:
+            movie.frameChanged.disconnect()
+            movie.finished.disconnect()
+            movie.stop()
+            movie.deleteLater()
+        if buffer is not None:
+            buffer.close()
+            buffer.deleteLater()
+
+    def _next_frame(self, _number: int) -> None:
+        movie = self._movie
+        if movie is None or self._item is None:
+            return
+        frame = movie.currentImage()
+        if frame.isNull():
+            return
+        self._image = frame
+        self._item.setPixmap(QPixmap.fromImage(self.shown_image()))
+
+    def is_animated(self) -> bool:
+        return self._movie is not None
+
+    def is_paused(self) -> bool:
+        return self._movie is not None and self._movie.state() == QMovie.MovieState.Paused
+
+    def toggle_pause(self) -> None:
+        if self._movie is not None:
+            self._movie.setPaused(self._movie.state() != QMovie.MovieState.Paused)
+            self.changed.emit()
+
+    def frame_number(self) -> int:
+        return self._movie.currentFrameNumber() if self._movie is not None else 0
 
     def has_image(self) -> bool:
         return self._image is not None
@@ -117,47 +190,99 @@ class ImageView(QGraphicsView):
     def zoom(self) -> float:
         return self.transform().m11()
 
-    def fit(self) -> None:
+    def gliding(self) -> bool:
+        return self._glide_plan is not None
+
+    def target_zoom(self) -> float:
+        """Where the zoom is going (the zoom itself when it is not gliding)."""
+        return self._glide_plan[1] if self._glide_plan is not None else self.zoom
+
+    def _fit_scale(self) -> float:
+        view, pic = self.viewport().size(), self._scene.sceneRect()
+        if pic.width() <= 0 or pic.height() <= 0:
+            return 1.0
+        scale = min(view.width() / pic.width(), view.height() / pic.height())
+        return scale if self._is_svg() else min(scale, 1.0)
+
+    def _center(self) -> QPointF:
+        return self.mapToScene(self.viewport().rect()).boundingRect().center()
+
+    def _go(self, zoom: float, center: Optional[QPointF] = None, glide: bool = True) -> None:
+        """To ``zoom``, with ``center`` in the middle (fit), or else keeping the point under the mouse where it is (the middle when
+        the mouse is elsewhere), as Qt's own anchor did. Glides over ``glide_ms`` (93A) unless ``glide`` is False."""
+        z0 = self.zoom
+        if center is None:
+            mouse = self.viewport().mapFromGlobal(QCursor.pos())
+            under = self.viewport().rect().contains(mouse) and self.underMouse()
+            middle = QPointF(self.viewport().rect().center())
+            m = QPointF(mouse) if under else None
+            anchor = self._center() + ((m - middle) / z0 if m is not None else QPointF())   # the scene point under the mouse
+            offset = m                                                   # where it stays (None: the middle)
+        else:
+            anchor, offset = None, None
+        plan = (z0, zoom, self._center(), center, anchor, offset)
+        self._glide.stop()
+        if not glide or self.glide_ms <= 0 or not self.isVisible() or abs(zoom - z0) < 1e-9 and center is None:
+            self._glide_plan = plan
+            self._glide_step(1.0)
+            self._glide_plan = None
+            self.changed.emit()
+            return
+        self._glide_plan = plan
+        self._glide.setDuration(self.glide_ms)
+        self._glide.start()
+
+    def _glide_step(self, t) -> None:
+        plan = self._glide_plan
+        if plan is None:
+            return
+        z0, z1, c0, center, anchor, offset = plan
+        t = float(t)
+        z = z0 * (z1 / z0) ** t if z0 > 0 and z1 > 0 else z1
+        self.setTransform(QTransform.fromScale(z, z))
+        if center is not None:
+            self.centerOn(c0 + (center - c0) * t)
+        else:                                                               # the anchor stays under the mouse all the way; the
+            middle = QPointF(self.viewport().rect().center())               # middle is taken again, as scroll bars come and go
+            self.centerOn(anchor - ((offset - middle) / z if offset is not None else QPointF()))
+        if t >= 1.0:
+            self._glide_plan = None
+        self.changed.emit()
+
+    def fit(self, glide: bool = True) -> None:
         """Show the whole picture in the window (a photo never bigger than it is; an SVG, being drawn, as big as fits)."""
         if self._item is None:
             return
         self._fit = True
-        self.resetTransform()
-        view, pic = self.viewport().size(), self._scene.sceneRect()
-        if pic.width() > 0 and pic.height() > 0:
-            scale = min(view.width() / pic.width(), view.height() / pic.height())
-            if not self._is_svg():
-                scale = min(scale, 1.0)
-            self.scale(scale, scale)
-        self.centerOn(self._item)
-        self.changed.emit()
+        self._go(self._fit_scale(), self._scene.sceneRect().center(), glide)
 
     def actual_size(self) -> None:
         if self._item is None:
             return
         self._fit = False
-        self.resetTransform()
-        self.changed.emit()
+        self._go(1.0)
 
     def zoom_by(self, factor: float) -> None:
         if self._item is None:
             return
-        target = max(MIN_ZOOM, min(MAX_ZOOM, self.zoom * factor))
+        target = max(MIN_ZOOM, min(MAX_ZOOM, self.target_zoom() * factor))   # a quick spin adds up from where it is going
         self._fit = False
-        self.scale(target / self.zoom, target / self.zoom)
-        self.changed.emit()
+        self._go(target)
 
     def turn(self, quarters: int) -> None:
         if self._image is None:
             return
         self._turn = (self._turn + quarters) % 4
         was_fit = self._fit
+        self._glide.stop()
+        self._glide_plan = None
         self._show()
         if was_fit:
-            self.fit()
+            self.fit(glide=False)
         else:
             self.centerOn(self._item)
         self.changed.emit()
+        self.turned.emit(quarters)
 
     def toggle_fit(self) -> None:
         self.actual_size() if self._fit else self.fit()
@@ -166,7 +291,7 @@ class ImageView(QGraphicsView):
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
         if self._fit:
-            self.fit()
+            self.fit(glide=False)
 
     def wheelEvent(self, event) -> None:
         """The action the owner chose for this key combination (Settings > Mouse Wheel...). By default the wheel scrolls a zoomed
@@ -217,7 +342,13 @@ class ImageView(QGraphicsView):
         forward = key in (Qt.Key.Key_Right, Qt.Key.Key_PageDown, Qt.Key.Key_Space)
         back = key in (Qt.Key.Key_Left, Qt.Key.Key_PageUp, Qt.Key.Key_Backspace)
         plain = not (event.modifiers() & ~Qt.KeyboardModifier.KeypadModifier)     # the number pad's arrows count as plain
-        if (forward or back) and plain and not self._can_scroll():
+        if key == Qt.Key.Key_Space and plain and self.is_animated():
+            self.toggle_pause()                                  # Space pauses a moving picture; it steps only past still ones (94A)
+        elif key == Qt.Key.Key_Delete and plain:
+            self.delete_requested.emit()
+        elif key == Qt.Key.Key_E and plain:
+            self.edit_requested.emit()
+        elif (forward or back) and plain and not self._can_scroll():
             self.step_requested.emit(1 if forward else -1)
         elif event.matches(QKeySequence.StandardKey.Copy):
             self.copy()
@@ -241,6 +372,14 @@ class ImageView(QGraphicsView):
         menu = QMenu(self)
         items = (("Copy Picture", "Ctrl+C", self.copy), None, ("Fit to Window", "0", self.fit), ("Actual Size", "1", self.actual_size),
                  None, ("Turn Left", "L", lambda: self.turn(-1)), ("Turn Right", "R", lambda: self.turn(1)))
+        if self.is_animated():
+            items += (None, ("Play" if self.is_paused() else "Pause", "Space", self.toggle_pause))
+        if self.can_edit or self.can_delete:
+            items += (None,)
+        if self.can_edit:
+            items += (("Edit in Another Program", "E", self.edit_requested.emit),)
+        if self.can_delete:
+            items += (("Delete", "Del", self.delete_requested.emit),)
         for item in items:
             if item is None:
                 menu.addSeparator()

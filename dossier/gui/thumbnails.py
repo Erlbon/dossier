@@ -153,6 +153,11 @@ class Thumbnails(QObject):
         self._cache.clear()
         self._bytes = 0
 
+    def forget(self, path: str) -> None:
+        """Drop the thumbnails of ``path``: the viewer turned it (its date and size may be the same) or deleted it."""
+        for key in [k for k in self._cache if k.split("|", 3)[-1] == path]:
+            self._bytes -= self._size_of(self._cache.pop(key))
+
     # results ---------------------------------------------------------------------------------------------------------------
     def _finished(self, key: str, image) -> None:
         path = self._pending.pop(key, "")

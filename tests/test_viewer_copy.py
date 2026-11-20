@@ -125,7 +125,8 @@ def test_right_click_on_the_picture_has_copy_in_both_viewers(windows, tmp_path):
     wait_for(lambda: glassy.view.has_image())
     for view, said in ((f3.image_page.view, lambda: f3.status.text()), (glassy.view, lambda: glassy.caption.text())):
         menu = view.context_menu()
-        assert menu_texts(menu) == ["Copy Picture", "Fit to Window", "Actual Size", "Turn Left", "Turn Right"]
+        assert menu_texts(menu) == ["Copy Picture", "Fit to Window", "Actual Size", "Turn Left", "Turn Right",
+                                    "Edit in Another Program", "Delete"]         # E and Delete (95B, 88A)
         assert menu.actions()[0].text().endswith(chr(9) + "Ctrl+C")         # the menu teaches the key
         QGuiApplication.clipboard().clear()
         menu.actions()[0].trigger()

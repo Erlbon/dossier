@@ -1,6 +1,6 @@
 [project]
 name = "dossier"
-version = "2026.11.20.3"
+version = "2026.11.20.4"
 description = "Multi-window file manager with a shared selection, Markdown notes and file metadata"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -41,7 +41,8 @@ windows-exe = "dist/dossier.exe"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]   # bare `pytest` finds the package without an install
-markers = ["short_nav_budget: the panel gets its real 0.15 s to list a folder before it goes pending (tests of slow folders)"]
+markers = ["short_nav_budget: the panel gets its real 0.15 s to list a folder before it goes pending (tests of slow folders)",
+           "glides: zoom, fit and 1:1 glide as in use (93A); elsewhere the tests make them jump"]
 
 [tool.setuptools.package-data]
 dossier = ["gui/icons/*/*.svg", "gui/icons/*/*.txt", "gui/icons/*/*.json", "gui/appicon/*.svg", "gui/appicon/*.ico", "gui/appicon/*.png"]

@@ -514,6 +514,7 @@ class MainWindow(FileAssociationsMixin, SidebarMixin,TypingModeMixin, RenameInPl
                 shown, first = around
             win = TextViewerWindow(shown, first, dispatch=self.dispatcher)
             win.set_wheel_map(self.wheel_map())
+            win.set_picture_services(**self.picture_viewer_services())
             self.viewers.append(win)
             win.edit_requested.connect(lambda p, replace: self.edit_file(p, replace))
             win.destroyed.connect(lambda _o=None, w=win: self.viewers.remove(w) if w in self.viewers else None)
