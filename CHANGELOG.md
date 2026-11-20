@@ -2,6 +2,13 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-20#07 -- The glass bar can be seen over a pale picture
+
+- The floating bar over a picture (View as Glass, `dossier view`, F3, the notepad) had no backdrop of its own: only a faint tint
+  of the text colour. In the dark scheme a pale picture shone through it, so the light buttons vanished and nobody could tell
+  where to click. The bar, the slider track above it, the caption and the short messages now sit on a nearly solid backdrop in
+  the scheme's card colour (dark in the dark scheme, pale in the light one), with a faint edge, so they read on any picture.
+
 ## 2026-11-20#06 -- Release 0.12
 
 - `RELEASE` is 0.12, with its notes in `docs/releases/v0.12.md` (everything since 0.11, builds 2026-11-19#28 to 2026-11-20#05:

@@ -22,6 +22,16 @@ SLIDER_GAP = 10              # between the slider and the bar below it
 CLICK_SLOP = 4               # a press and release this close together (pixels) is a click on the picture, not a drag
 
 
+BACKDROP_ALPHA = 205         # the bar's own backdrop: the theme's card colour, mostly opaque
+
+
+def backdrop() -> str:
+    """The backdrop of the bar, caption, slider and toasts: the scheme's card colour, nearly solid. A tint of the text colour alone
+    (as before 2026-11-20) let a pale picture shine through a dark-scheme bar, so the light buttons vanished on it."""
+    card = QColor(theme.current()["card"])
+    return f"rgba({card.red()}, {card.green()}, {card.blue()}, {BACKDROP_ALPHA})"
+
+
 def glass_menu(menu: QMenu) -> None:
     """Give a menu of the floating bar the bar's own look (the owner, 2026-11-19, option A): a rounded box with a faint edge in the
     bar's colours, room around each entry, and the same rounded highlight as the bar's buttons. Its submenus get it too. Called at
@@ -91,13 +101,13 @@ class FloatingBar(QObject):
             row.addWidget(b)
             self.buttons[key] = b
         self.bar.setStyleSheet(
-            f"QFrame#glassbar {{ background: {shade}; border-radius: 21px; }}"
+            f"QFrame#glassbar {{ background: {backdrop()}; border: 1px solid {shade}; border-radius: 21px; }}"
             f"QPushButton {{ color: {text}; border: 0; padding: 6px 16px; font-size: 24px; border-radius: 12px; }}"
             f"QPushButton:hover, QPushButton:checked {{ background: {shade}; }}")
         self.caption = QLabel(host)
         self.caption.setObjectName("glasscaption")
         self.caption.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.caption.setStyleSheet(f"QLabel#glasscaption {{ background: {shade}; color: {text}; border-radius: 10px; padding: 3px 12px; }}")
+        self.caption.setStyleSheet(f"QLabel#glasscaption {{ background: {backdrop()}; color: {text}; border-radius: 10px; padding: 3px 12px; }}")
         self.captioned = captioned
         self._fades: dict = {}
         for widget in self._widgets():
@@ -395,8 +405,8 @@ class GlassSlider(QWidget):
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         p.setPen(Qt.PenStyle.NoPen)
         r = self.HEIGHT / 2
-        track = QColor(fg)
-        track.setAlpha(38)
+        track = QColor(t["card"])
+        track.setAlpha(BACKDROP_ALPHA)
         p.setBrush(track)
         p.drawRoundedRect(QRectF(0, 0, self.width(), self.HEIGHT), r, r)
         x = self._x_of(self.shown_index())
@@ -465,7 +475,7 @@ class Toast(QLabel):
         super().__init__(host)
         self.host = host
         fg = QColor(theme.current()["fg"])
-        self.setStyleSheet(f"background: rgba({fg.red()}, {fg.green()}, {fg.blue()}, 38); color: {fg.name()}; border-radius: 10px; padding: 3px 12px;")
+        self.setStyleSheet(f"background: {backdrop()}; color: {fg.name()}; border-radius: 10px; padding: 3px 12px;")
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.setWordWrap(True)                     # a long message wraps inside the window instead of being cut at both ends
         self._timer = QTimer(self)
