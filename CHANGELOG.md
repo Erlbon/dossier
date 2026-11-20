@@ -2,6 +2,11 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-20#02 -- The bar's menus open just above the bar
+
+- A menu of the floating bar now opens just above the bar, with a small gap, its left edge lined up with its button, instead of
+  sitting on the bar and covering its top edge (the owner's option A). Notepad and viewer alike (`FloatingBar.menu_position`).
+
 ## 2026-11-20#01 -- The floating bar's menus look like the bar
 
 - The menus that open from the floating bar (the notepad's File, Edit, View and gear menus, and the viewer's gear menu) are now

@@ -127,10 +127,19 @@ class FloatingBar(QObject):
         return b
 
     def popup_menu(self, menu: QMenu, key: str) -> None:
-        """A menu of the bar, in the bar's own look (``glass_menu``), opened upwards from its button (the bar floats near the bottom)."""
+        """A menu of the bar, in the bar's own look (``glass_menu``), opened upwards just above the bar with a small gap and lined up
+        with its button, so the whole bar stays in sight (the owner, 2026-11-20, option A)."""
         glass_menu(menu)
+        menu.popup(self.menu_position(menu, key))
+
+    MENU_GAP = 8
+
+    def menu_position(self, menu: QMenu, key: str) -> QPoint:
+        """Where a menu opens: its left edge at the button's, its bottom ``MENU_GAP`` above the top of the bar."""
         button = self.buttons[key]
-        menu.popup(button.mapToGlobal(button.rect().topLeft()) - QPoint(0, menu.sizeHint().height()))
+        left = button.mapToGlobal(QPoint(0, 0)).x()
+        bar_top = self.bar.mapToGlobal(QPoint(0, 0)).y()
+        return QPoint(left, bar_top - self.MENU_GAP - menu.sizeHint().height())
 
     def watch(self, widget) -> None:
         """Mouse movement over ``widget`` (and its viewport) shows the bar."""

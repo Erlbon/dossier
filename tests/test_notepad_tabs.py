@@ -223,6 +223,13 @@ def test_the_bar_menus_have_the_bars_own_look_and_so_do_their_submenus(qapp, tmp
             assert "border-radius: 14px" in menu.styleSheet()
             assert menu.testAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         page.file_menu.close()
+        # option A, 2026-11-20: just above the bar with a gap, lined up with the button, never over the bar
+        from PyQt6.QtCore import QPoint
+        bar = page.floating
+        at = bar.menu_position(page.file_menu, "file")
+        bar_top = bar.bar.mapToGlobal(QPoint(0, 0)).y()
+        assert at.y() + page.file_menu.sizeHint().height() == bar_top - bar.MENU_GAP
+        assert at.x() == bar.buttons["file"].mapToGlobal(QPoint(0, 0)).x()
     finally:
         page.mark_clean()
         page.close()
