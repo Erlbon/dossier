@@ -65,6 +65,22 @@ def test_the_notepad_shows_the_file_and_names_its_subject(pad):
     assert win.encoding.currentText() == "utf-8" and win.eol.currentData() == "\n"
 
 
+def test_room_under_the_last_line_clears_the_bar_and_follows_it_but_is_not_text(pad):
+    from PyQt6.Qsci import QsciScintilla as S
+    win, _d, p = pad("".join(f"line {i}\n" for i in range(300)))
+    ed = win.editor
+    QApplication.processEvents()
+    line, rows = ed._tail
+    assert line == ed.lines() - 1 and rows * ed.SendScintilla(S.SCI_TEXTHEIGHT, line) >= ed.bottom_room() > win.floating.bar.height()
+    assert ed.SendScintilla(S.SCI_ANNOTATIONGETLINES, line) == rows
+    ed.append("one more\n")
+    QApplication.processEvents()
+    assert ed._tail[0] == ed.lines() - 1 and ed.SendScintilla(S.SCI_ANNOTATIONGETLINES, line) == 0, "the room moved down"
+    assert "one more" in ed.text() and ed.text().endswith("one more\n")
+    win.save()
+    assert p.read_text(encoding="utf-8").endswith("line 299\none more\n")
+
+
 def test_an_edit_marks_the_title_and_save_keeps_encoding_bom_and_line_breaks(pad):
     win, _d, p = pad(b"\xef\xbb\xbfcaf\xc3\xa9\r\nline2\r\n")
     assert win.eol.currentData() == "\r\n"

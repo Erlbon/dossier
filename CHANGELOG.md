@@ -2,6 +2,13 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-21#02 -- The notepad's last lines come clear of the glass bar too
+
+- The notepad gets the same room after its last line as the viewer (the owner, 2026-11-21): an empty strip under the last line, as
+  high as the bar and its gap, shaded in the line-number column's colour. It is not part of the text (never saved, copied or
+  counted), moves down when lines are added, and grows with zoom.
+- Release 0.13: `RELEASE` and `docs/releases/v0.13.md`.
+
 ## 2026-11-21#01 -- The end of a text comes clear of the glass bar
 
 - In the viewer (F3), the last lines of a text file sat under the floating bar (the owner, 2026-11-21). The text now scrolls on past its

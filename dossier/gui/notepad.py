@@ -307,7 +307,9 @@ class NotepadWindow(FrostSurface, QMainWindow):
         bar.add_button("settings", "Settings", "Word wrap, colouring, language, encoding and line break",
                        lambda: self._popup_menu(self.settings_menu, "settings"), icon="settings")
         bar.set_enabled(True)
-        self.menuBar().hide()                       # the menus live in the floating bar: one bar, not a menu bar as well (the actions keep their keys)
+        self.editor.bottom_room = lambda: bar.room_below(self.editor.viewport().height())   # the last lines scroll clear of the bar
+        self.editor.refresh_tail(force=True)
+        self.menuBar().hide()                      # the menus live in the floating bar: one bar, not a menu bar as well (the actions keep their keys)
 
     def _popup_menu(self, menu, key: str) -> None:
         """A menu of the bar, in the bar's look, opened upwards from its button."""

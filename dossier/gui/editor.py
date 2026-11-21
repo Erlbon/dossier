@@ -120,8 +120,38 @@ class EditorView(QsciScintilla):
         self.SendScintilla(S.SCI_SETADDITIONALSELECTIONTYPING, 1)                    # type into every line of it
         self.SendScintilla(S.SCI_SETMULTIPASTE, S.SC_MULTIPASTE_EACH)                # paste into every line
         self.SendScintilla(S.SCI_SETVIRTUALSPACEOPTIONS, S.SCVS_RECTANGULARSELECTION)  # a block may pass short lines
+        # Room after the last line, so the end of the text scrolls clear of the window's floating bar: an empty annotation
+        # under the last line, shaded like the margin to show that the text ends there. It is not part of the text.
+        self.bottom_room = lambda: 0                    # pixels; the notepad gives the bar's height and gap
+        self._tail_style = int(self.SendScintilla(S.SCI_ALLOCATEEXTENDEDSTYLES, 1))
+        self.SendScintilla(S.SCI_ANNOTATIONSETSTYLEOFFSET, self._tail_style)
+        self.SendScintilla(S.SCI_ANNOTATIONSETVISIBLE, S.ANNOTATION_STANDARD)
+        self._tail: tuple = (-1, 0)                     # (line, rows) of the room as it was last set
+        self.linesChanged.connect(self.refresh_tail)
+        self.SCN_ZOOM.connect(self.refresh_tail)
         self.apply_theme()
         self._fit_margin()
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        self.refresh_tail()
+
+    def refresh_tail(self, force: bool = False) -> None:
+        """Put the empty room under the last line (and only there), as many rows high as ``bottom_room`` needs."""
+        line = max(0, self.lines() - 1)
+        height = max(1, int(self.SendScintilla(S.SCI_TEXTHEIGHT, line)))
+        rows = -(-max(0, self.bottom_room()) // height)          # whole rows, rounded up
+        if not force and (line, rows) == self._tail:
+            return
+        old = self._tail[0]
+        if 0 <= old != line and old < self.lines():
+            self.SendScintilla(S.SCI_ANNOTATIONSETTEXT, old, None)
+        t = theme.current()
+        self.SendScintilla(S.SCI_STYLESETBACK, self._tail_style, QColor(t["card"]))
+        self.SendScintilla(S.SCI_STYLESETFORE, self._tail_style, QColor(t["card"]))
+        self.SendScintilla(S.SCI_ANNOTATIONSETTEXT, line, chr(10).join([" "] * rows).encode() if rows else None)
+        self.SendScintilla(S.SCI_ANNOTATIONSETSTYLE, line, 0)
+        self._tail = (line, rows)
 
     # look ------------------------------------------------------------------------------------------------------
     def apply_theme(self) -> None:
@@ -139,6 +169,8 @@ class EditorView(QsciScintilla):
         self.setFoldMarginColors(QColor(t["card"]), QColor(t["card"]))
         if self.language:
             self.set_language(self.language)                    # the lexer's colours come from the scheme too
+        if hasattr(self, "_tail"):
+            self.refresh_tail(force=True)                       # the room under the last line takes the new shade
 
     # highlighting and folding -------------------------------------------------------------------------------
     language: Optional[str] = None
@@ -152,10 +184,12 @@ class EditorView(QsciScintilla):
             self.setFolding(S.FoldStyle.NoFoldStyle)
             self.setMarginWidth(2, 0)
             self.apply_theme_colours()
+            self.refresh_tail(force=True)
             return key is None
         self.setFolding(S.FoldStyle.BoxedTreeFoldStyle, 2)
         self.setMarginWidth(2, 16)
         self.setFoldMarginColors(QColor(theme.current()["card"]), QColor(theme.current()["card"]))
+        self.refresh_tail(force=True)                           # a lexer sets its own styles; keep the room's shade
         return True
 
     def apply_theme_colours(self) -> None:
