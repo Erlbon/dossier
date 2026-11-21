@@ -2,6 +2,12 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-21#01 -- The end of a text comes clear of the glass bar
+
+- In the viewer (F3), the last lines of a text file sat under the floating bar (the owner, 2026-11-21). The text now scrolls on past its
+  last line by the height of the bar and its gap, so the end can be read above it.
+- That empty room is shaded in the line-number column's colour, so it is plain that the file ends there (the owner's idea).
+
 ## 2026-11-20#09 -- dossier quit also closes an older Dossier
 
 - `dossier quit` did not close the installed 0.12, which does not listen for it (the owner, 2026-11-20). Now, on Windows, a running

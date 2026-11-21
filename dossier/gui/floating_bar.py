@@ -274,10 +274,20 @@ class FloatingBar(QObject):
     def is_visible(self) -> bool:
         return not self.bar.isHidden()
 
+    @staticmethod
+    def _gap_below(area_height: int) -> int:
+        """How far the bar floats above the bottom of the page."""
+        return max(24, area_height // 24)
+
+    def room_below(self, area_height: int) -> int:
+        """The strip at the bottom of a page of ``area_height`` pixels that the bar covers, with a little air above it. A page that
+        scrolls adds this much empty room after its last line, so the end of a text comes clear of the bar."""
+        return self.bar.sizeHint().height() + self._gap_below(area_height) + 8
+
     def place(self) -> None:
         area = self.view.geometry() if self.view.parentWidget() is self.host else self.host.rect()
         self.bar.adjustSize()
-        self.bar.move(area.x() + (area.width() - self.bar.width()) // 2, area.y() + area.height() - self.bar.height() - max(24, area.height() // 24))
+        self.bar.move(area.x() + (area.width() - self.bar.width()) // 2, area.y() + area.height() - self.bar.height() - self._gap_below(area.height()))
         self.caption.move(area.x() + (area.width() - self.caption.width()) // 2, area.y() + max(18, area.height() // 40))
         self.bar.raise_()
         self.caption.raise_()

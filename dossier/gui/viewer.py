@@ -236,6 +236,8 @@ class TextViewerWindow(PictureActions, FrostSurface, QMainWindow):
         bar.toggle_on_click(view)                    # on a picture, a click shows the bar and keeps it; again hides it (83A)
         bar.add_slider(lambda: len(self.paths), lambda: self.index, lambda i: os.path.basename(self.paths[i]),   # 84A, pictures only
                        lambda i: self.load(i), wanted=lambda: self.mode == "image")
+        self.view.bottom_room = lambda: bar.room_below(self.stack.height())   # the last lines scroll clear of the bar
+        self.view.refresh_counts()
 
     PILL_KEYS = {"text": ("edit", "find", "goto", "copy", "follow"), "hex": ("find", "goto", "copy"), "markdown": ("edit", "find", "copy"),
                  "document": ("find", "copy", "info"), "sheet": ("find", "copy", "info"),

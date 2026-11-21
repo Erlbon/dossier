@@ -6,7 +6,7 @@ Vertical selection: Alt+drag with the mouse, or Alt+Shift+arrows. Never Ctrl+Alt
 keyboards)."""
 from __future__ import annotations
 
-from typing import Optional
+from typing import Callable, Optional
 
 from PyQt6.QtCore import QPoint, QRect, Qt, pyqtSignal
 from PyQt6.QtGui import QColor, QFontDatabase, QGuiApplication, QKeyEvent, QKeySequence, QPainter
@@ -49,6 +49,7 @@ class LineView(QAbstractScrollArea):
         self.block = False
         self.match: Optional[tuple] = None       # (line, col, length)
         self._max_vcols = 0
+        self.bottom_room: Callable[[], int] = lambda: 0   # pixels left empty after the last line (the window's floating bar sits there)
         self.setFont(QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont))
         self.viewport().setCursor(Qt.CursorShape.IBeamCursor)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
@@ -87,7 +88,8 @@ class LineView(QAbstractScrollArea):
 
     def refresh_counts(self) -> None:
         bar = self.verticalScrollBar()
-        bar.setRange(0, max(0, self.total - self.visible_lines))
+        room = -(-max(0, self.bottom_room()) // self.lh)          # whole lines, rounded up
+        bar.setRange(0, max(0, self.total - self.visible_lines + room))
         bar.setPageStep(self.visible_lines)
         bar.setSingleStep(1)
         self.viewport().update()
@@ -307,6 +309,9 @@ class LineView(QAbstractScrollArea):
         w, h = self.viewport().width(), self.viewport().height()
         p.fillRect(QRect(0, 0, gut - 6, h), QColor(t["card"]))
         longest = self._max_vcols
+        end_y = (self.total - self.top) * lh               # below the last line: the room left for the bar, a shade apart to show the end
+        if end_y < h:
+            p.fillRect(QRect(0, max(0, end_y), w, h - max(0, end_y)), QColor(t["card"]))
         for row in range(self.visible_lines + 1):
             n = self.top + row
             if n >= self.total:

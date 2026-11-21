@@ -90,6 +90,18 @@ def test_scrolling_and_goto(viewer):
     assert win.view.top == 0
 
 
+def test_the_last_line_scrolls_clear_of_the_floating_bar(viewer):
+    win = viewer({"a.txt": lines(1000)})
+    view = win.view
+    view.scroll_to_end()
+    last_line_bottom = (view.total - view.top) * view.lh
+    bar_top = win.floating.bar.mapTo(view.viewport(), QPoint(0, 0)).y()
+    assert view.bottom_room() > win.floating.bar.height()
+    assert last_line_bottom <= bar_top, "the last line ends under the bar"
+    short = viewer({"b.txt": lines(3)})
+    assert short.view.verticalScrollBar().maximum() == 0, "a file that fits with room to spare does not scroll"
+
+
 def test_a_missing_file_says_so_instead_of_crashing(app, tmp_path):
     win = TextViewerWindow([str(tmp_path / "gone.txt")])
     try:
