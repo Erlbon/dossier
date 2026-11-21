@@ -11,10 +11,12 @@ import os
 from contextlib import contextmanager
 
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QAction
+from PyQt6.QtGui import QAction, QColor, QIcon, QPainter, QPixmap
 from PyQt6.QtWidgets import QApplication, QMenu
 
 from ..core import archives, bundles, sharing, shellmenu
+from ..core.columns import LABEL_COLORS
+from ..core.filetags import TagChange
 from ..core import tools as T
 from ..core.mounting import SMB
 from ..core.platform import FILE_MANAGER_NAME, has_scheme, open_with_command
@@ -27,6 +29,19 @@ from .menus import command_keys, command_label
 from .tailnet import KINDS as TAILNET_KINDS
 
 ARCHIVE_NAMES = archives.FOLDER_EXTENSIONS
+
+
+def _dot_icon(colour: str) -> QIcon:
+    """A filled dot in ``colour``, for the Colour Label menu."""
+    pix = QPixmap(16, 16)
+    pix.fill(Qt.GlobalColor.transparent)
+    p = QPainter(pix)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    p.setPen(Qt.PenStyle.NoPen)
+    p.setBrush(QColor(colour))
+    p.drawEllipse(3, 3, 10, 10)
+    p.end()
+    return QIcon(pix)
 SHARABLE_HOME_KINDS = ("fixed", "removable", "other", "place", "pin")     # drives and folders of this computer (not network, servers)
 
 
@@ -215,6 +230,8 @@ class ContextMenuMixin:
         if convertible:
             cmd("convert_archive_to_zip", enabled=not many)
         menu.addSeparator()
+        if local:
+            self._add_label_menu(menu, paths)
         cmd("change_dates")
         cmd("move_to_quarantine")
         cmd("new_link", enabled=not many)
@@ -226,6 +243,18 @@ class ContextMenuMixin:
             menu.addSeparator()
             add("More Options (Windows Menu)...", lambda: self._windows_menu(panel, paths, False))
         return menu
+
+    def _add_label_menu(self, menu: QMenu, paths: list) -> None:
+        """Colour Label > No Label, Red, Orange...: one label for every item the menu is on, in one go (the owner, 2026-11-21:
+        labels must be set in bulk). Written as Properties > Tags writes them; the rest of the tags are left alone."""
+        sub = menu.addMenu("Colour Label")
+        sub.addAction("No Label").triggered.connect(lambda: self.set_colour_label(paths, ""))
+        sub.addSeparator()
+        for name, colour in LABEL_COLORS.items():
+            sub.addAction(_dot_icon(colour), name.capitalize()).triggered.connect(lambda _c=False, n=name: self.set_colour_label(paths, n))
+
+    def set_colour_label(self, paths: list, label: str) -> None:
+        self._write_tags(list(paths), TagChange(label=label))
 
     def _add_open_with(self, menu: QMenu, panel, paths, row: int, single_file: bool, files: bool = True) -> None:
         """Open With: the programs the system names for the type, the default first (the Mac and Linux, card 49A), then the tools

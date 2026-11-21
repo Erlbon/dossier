@@ -2,6 +2,21 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-21#06 -- Colour labels before the names (opt-in), and Colour Label for many items at once
+
+- Colour labels were only seen in the Label column, which is off by default, so they did nothing one could see (the owner,
+  2026-11-21: "why colours?"). View > Show Colour Labels puts a dot in the label's colour before each name in the list.
+  Off unless chosen (a label is set by hand, so most folders have none); kept in the settings (`view/label_dots`). Every
+  row moves right by the dot's room, labelled or not, so the names stay in one line; with it off nothing is read.
+- Right-click > Colour Label > No Label, Red, Orange, Yellow, Green, Blue, Purple, Grey sets one label on every marked item
+  (or the one under the cursor) in one go, as Properties > Tags writes it: the tags, rating and note are left alone. Only
+  on this computer's drives, like the other tag commands.
+- Not in the thumbnail view yet.
+- Tests: `test_the_colour_dots_are_off_until_chosen_and_the_choice_is_kept`,
+  `test_a_dot_in_the_label_s_colour_is_drawn_before_the_name`,
+  `test_colour_label_in_the_right_click_menu_sets_every_marked_item_at_once`. Checked at 175% with a copy of the owner's
+  settings.
+
 ## 2026-11-21#05 -- Grey examples in empty fields say "for example:"
 
 - The grey text in an empty field could be taken for a value already there (the owner, 2026-11-21, about the Tags field's

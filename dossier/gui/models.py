@@ -173,6 +173,11 @@ class FolderModel(QAbstractTableModel):
     def _tag(self, path: str) -> tuple:
         return self._tag_info.get(path, ("", 0, ""))
 
+    def label_at(self, row: int) -> str:
+        """The colour label of the item on ``row`` ("" for none, or before the tags are read)."""
+        entry = self.entry_at(row)
+        return self._tag(entry.path)[2] if entry is not None else ""
+
     def refresh_all(self) -> None:
         """Every cell is drawn again (the font or bold was changed)."""
         if self.rowCount():

@@ -222,6 +222,14 @@ class MenusMixin:
         self.act_fit_columns.toggled.connect(self.set_fit_columns)
         view_menu.addAction(self.act_fit_columns)
         self._apply_fit_columns(self.fit_columns_on())
+        self.act_label_dots = QAction("Show Colour Labels", self)
+        self.act_label_dots.setToolTip("A dot in the item's colour label before its name. Set the labels with right-click > "
+                                       "Colour Label, or in Properties > Tags")
+        self.act_label_dots.setCheckable(True)
+        self.act_label_dots.setChecked(self.label_dots_on())
+        self.act_label_dots.toggled.connect(self.set_label_dots)
+        view_menu.addAction(self.act_label_dots)
+        self._apply_label_dots(self.label_dots_on())
         self.add_layout_actions(view_menu)
         view_menu.aboutToShow.connect(self.sync_mode_actions)            # Thumbnail Size is greyed while the panel shows Details
         view_menu.addSeparator()

@@ -16,6 +16,7 @@ HIDDEN_KEY = "view/columns_hidden"
 ORDER_KEY = "view/columns_order"
 KNOWN_KEY = "view/columns_known"      # the columns that existed when the choice was saved
 FIT_KEY = "view/fit_columns"          # View > Fit Columns to Panel, "true"/"false"
+LABEL_DOTS_KEY = "view/label_dots"    # View > Show Colour Labels, "true"/"false" (off unless chosen)
 
 
 class ColumnsMixin:
@@ -103,6 +104,20 @@ class ColumnsMixin:
     def _apply_fit_columns(self, on: bool) -> None:
         for panel in (self.left, self.right):
             panel.apply_fit(on)
+
+    # View > Show Colour Labels (the owner, 2026-11-21): a dot in the label's colour before each name; off by default, as a
+    # label is something one sets by hand ------------------------------------------------------------------------------------
+    def label_dots_on(self) -> bool:
+        return str(self.settings.value(LABEL_DOTS_KEY, "false")).lower() == "true"
+
+    def set_label_dots(self, on: bool) -> None:
+        self.settings.setValue(LABEL_DOTS_KEY, "true" if on else "false")
+        self._apply_label_dots(on)
+        self._say("A dot before each name shows its colour label" if on else "Colour labels are not shown before the names")
+
+    def _apply_label_dots(self, on: bool) -> None:
+        for panel in (self.left, self.right):
+            panel.set_label_dots(on)
 
     def open_column_settings(self) -> None:
         """View > Columns...: the shared dialog, plus a Back to the Default Columns button (which closes it)."""

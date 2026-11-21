@@ -180,3 +180,58 @@ def test_the_label_column_alone_is_enough_to_read_the_tags(world, monkeypatch):
     win._column_toggled("label", True)
     pump(win, lambda: len(reads) >= 4)
     assert win.left.tag_columns_visible()
+
+
+# colour dots before the names, and Colour Label in bulk (the owner, 2026-11-21) -------------------------------------------
+def test_the_colour_dots_are_off_until_chosen_and_the_choice_is_kept(world):
+    win, d, left, *_ = world
+    assert not win.label_dots_on() and not win.act_label_dots.isChecked()
+    assert not win.left._name_delegate.dots and not win.left.tag_columns_visible()      # off: no tags are read for them
+    win.act_label_dots.setChecked(True)
+    assert win.label_dots_on() and win.left._name_delegate.dots and win.right._name_delegate.dots
+    assert win.left.tag_columns_visible()                                               # on: the tags are read
+    win.act_label_dots.setChecked(False)
+    assert not win.label_dots_on() and not win.left._name_delegate.dots
+
+
+def test_a_dot_in_the_label_s_colour_is_drawn_before_the_name(world):
+    from dossier.core.columns import LABEL_COLORS
+    win, d, left, *_ = world
+    tagged_folder(left)
+    win.resize(1000, 600)
+    win.act_label_dots.setChecked(True)
+    win.left.refresh()
+    m = win.left.model
+    pump(win, lambda: m.row_of("a.jpg") >= 0 and m.label_at(m.row_of("a.jpg")) == "green")
+    table = win.left.table
+    rect = table.visualRect(m.index(m.row_of("a.jpg"), 0))
+    image = table.viewport().grab().toImage()
+    size = table.fontMetrics().height() // 2
+    centre = image.pixelColor(rect.left() + 4 + size // 2, rect.top() + rect.height() // 2)
+    want = __import__("PyQt6.QtGui", fromlist=["QColor"]).QColor(LABEL_COLORS["green"])
+    assert abs(centre.red() - want.red()) < 30 and abs(centre.green() - want.green()) < 30 and abs(centre.blue() - want.blue()) < 30
+    plain = m.row_of("b.jpg")                                                           # no label: no dot, but the same room
+    other = image.pixelColor(rect.left() + 4 + size // 2, table.visualRect(m.index(plain, 0)).center().y())
+    assert abs(other.green() - want.green()) >= 30 or abs(other.red() - want.red()) >= 30
+
+
+def test_colour_label_in_the_right_click_menu_sets_every_marked_item_at_once(world):
+    win, d, left, *_ = world
+    tagged_folder(left)
+    win.left.refresh()
+    m = win.left.model
+    pump(win, lambda: m.row_of("d.jpg") >= 0)
+    win.selection.set([str(left / "b.jpg"), str(left / "c.jpg"), str(left / "d.jpg")])
+    menu = win.build_context_menu(win.left, m.row_of("c.jpg"))
+    sub = next(a.menu() for a in menu.actions() if a.text() == "Colour Label")
+    texts = [a.text() for a in sub.actions() if not a.isSeparator()]
+    assert texts == ["No Label", "Red", "Orange", "Yellow", "Green", "Blue", "Purple", "Grey"]
+    next(a for a in sub.actions() if a.text() == "Red").trigger()
+    pump(win, lambda: all(filetags.read_tags(str(left / n)).label == "red" for n in ("b.jpg", "c.jpg", "d.jpg")))
+    assert filetags.read_tags(str(left / "b.jpg")).tags == ["holiday"]                 # the rest of the tags are kept
+    assert filetags.read_tags(str(left / "c.jpg")).rating == 2
+    assert filetags.read_tags(str(left / "a.jpg")).label == "green"                    # not marked: not touched
+    menu = win.build_context_menu(win.left, m.row_of("b.jpg"))
+    sub = next(a.menu() for a in menu.actions() if a.text() == "Colour Label")
+    next(a for a in sub.actions() if a.text() == "No Label").trigger()
+    pump(win, lambda: all(filetags.read_tags(str(left / n)).label == "" for n in ("b.jpg", "c.jpg", "d.jpg")))

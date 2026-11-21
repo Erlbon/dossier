@@ -10,14 +10,14 @@ from typing import Optional
 from PyQt6.QtCore import QEvent, QModelIndex, QObject, QPoint, QRectF, QSize, Qt, QTimer, QUrl, pyqtSignal
 from PyQt6.QtGui import QColor, QContextMenuEvent, QDesktopServices, QDrag, QFontMetrics, QPainter, QPainterPath, QPalette, QPen, QPixmap, QTextCharFormat, QTextCursor
 from PyQt6.QtWidgets import (QAbstractItemView, QApplication, QFrame, QListView, QStackedWidget, QHBoxLayout, QHeaderView, QLabel, QLineEdit,
-                             QStyledItemDelegate, QTabBar, QToolButton,
+                             QStyle, QStyledItemDelegate, QStyleOptionViewItem, QTabBar, QToolButton,
                              QTableView, QTextBrowser, QVBoxLayout, QWidget)
 
 from ..core import archives, bundles, gitinfo, pathparts, zipfs
 from ..core.notes import compose_markdown, find_notes
 from ..core.selection import SelectionStore
 from ..core.vfs import Entry, FileSystem
-from ..core.columns import DEFAULT_HIDDEN, DEFAULT_ORDER, DEFAULT_WIDTHS, KEYS as COLUMN_KEYS, META_KEYS, PROTECTED as PROTECTED_COLUMNS
+from ..core.columns import DEFAULT_HIDDEN, DEFAULT_ORDER, DEFAULT_WIDTHS, KEYS as COLUMN_KEYS, LABEL_COLORS, META_KEYS, PROTECTED as PROTECTED_COLUMNS
 from ..core import metacolumns
 from ..core.columns import index_of as column_index
 from redactor_common.core.table_settings import is_column_visible
@@ -130,6 +130,43 @@ class _NameDelegate(QStyledItemDelegate):
         super().__init__(parent)
         self.spec = None             # (the name to start from, what to call with the finished text)
         self.editor = None
+        self.dots = False            # View > Show Colour Labels: a dot in the label's colour before each name (2026-11-21)
+
+    def dot_room(self, option) -> int:
+        """The width the dot takes at the start of the cell: the dot and a gap on each side."""
+        return option.fontMetrics.height() // 2 + 8
+
+    def sizeHint(self, option, index):
+        size = super().sizeHint(option, index)
+        if self.dots:
+            size.setWidth(size.width() + self.dot_room(option))
+        return size
+
+    def paint(self, painter, option, index) -> None:
+        if not self.dots:
+            super().paint(painter, option, index)
+            return
+        # Every row moves right by the dot's room, labelled or not, so the names stay in one line. The row's background and
+        # its selection are drawn across the whole cell first, so the strip under the dot is not left bare.
+        full = QStyleOptionViewItem(option)
+        self.initStyleOption(full, index)
+        style = full.widget.style() if full.widget is not None else QApplication.style()
+        style.drawPrimitive(QStyle.PrimitiveElement.PE_PanelItemViewItem, full, painter, full.widget)
+        room = self.dot_room(option)
+        rest = QStyleOptionViewItem(option)
+        rest.rect = option.rect.adjusted(room, 0, 0, 0)
+        super().paint(painter, rest, index)
+        model = index.model()
+        colour = LABEL_COLORS.get(model.label_at(index.row()) if hasattr(model, "label_at") else "")
+        if colour:
+            size = option.fontMetrics.height() // 2
+            r = option.rect
+            painter.save()
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QColor(colour))
+            painter.drawEllipse(r.left() + 4, r.top() + (r.height() - size) // 2, size, size)
+            painter.restore()
 
     def createEditor(self, parent, option, index):
         if self.spec is None:
@@ -1815,8 +1852,16 @@ class Panel(QFrame):
 
     # the Tags and Rating columns --------------------------------------------------------------------------------------
     def tag_columns_visible(self) -> bool:
+        """Whether the tags must be read: a Tags, Rating or Label column is on, or the colour dots before the names are."""
         header = self.table.horizontalHeader()
-        return not self.is_home and any(not header.isSectionHidden(column_index(k)) for k in ("tags", "rating", "label"))
+        return not self.is_home and (self._name_delegate.dots
+                                     or any(not header.isSectionHidden(column_index(k)) for k in ("tags", "rating", "label")))
+
+    def set_label_dots(self, on: bool) -> None:
+        """View > Show Colour Labels (opt-in, the owner 2026-11-21): a dot in each item's label colour before its name."""
+        self._name_delegate.dots = bool(on)
+        self.refresh_tags()
+        self.table.viewport().update()
 
     def refresh_tags(self) -> None:
         """Read the tags of the listed items on a thread and show them. Only when a tags column is on, and only for items on
