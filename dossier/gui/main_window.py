@@ -1225,7 +1225,7 @@ class MainWindow(FileAssociationsMixin, SidebarMixin,TypingModeMixin, RenameInPl
                 panel.restore_tabs(saved, int(self.settings.value(f"panel/{key}_tab", 0) or 0))
             state = self.settings.value(f"panel/{key}_header")
             if state is not None:
-                panel.table.horizontalHeader().restoreState(state)
+                panel.restore_header(state)
         sizes = self.settings.value("window/split")
         if sizes:
             self.panel_split.setSizes([int(s) for s in sizes])

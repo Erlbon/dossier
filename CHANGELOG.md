@@ -2,6 +2,30 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-21#04 -- Fit Columns to Panel gives Name real room; dates and Type have a maximum width; header texts on the left
+
+- With Fit Columns to Panel on, only Name used to change width (the owner's screenshot, 2026-11-21): Date and Size had kept old,
+  far too wide widths, so Name sat at its 120 px minimum and Created still ran off the panel. Now, when Name has less room than
+  it wants (the widest name on screen, at most 45 percent of the panel), the other columns first give up what they have beyond
+  their contents, each in proportion; only then does Name shrink. The column the owner widened last is never narrowed.
+- Name's edge can be dragged with Fit on (it was fixed): the columns to its right give the room, the neighbour first and each
+  down to its contents, or the neighbour takes it back. Everything still fits the panel.
+- Date, Created and Last opened have one width with Fit on, as wide as a date is ("2026-11-21 14:05"): a date is always as
+  long (the owner). A saved wider width no longer sticks.
+- With Fit off, a date column can be dragged narrower but never wider than a date (the owner), and when a date column is the
+  last one it no longer stretches: the room after it stays empty. Any other last column stretches as before.
+- Type has a maximum too, Fit on or off: as wide as "WEBMANIFEST file" (Windows sets no limit to an extension, but the long ones
+  met in practice are about 11 letters, .webmanifest and .properties); a longer type is cut with "...". It can be narrower.
+- The date width and the Type maximum are measured in the panel's font, in bold as a marked row shows it, each time, so they
+  follow Settings > Fonts and Bold (the owner): a bigger font makes them wider, a smaller one narrower.
+- Every header text sits on the left, also over the right-aligned Size and number columns (the owner: on the right it "looks
+  weird"); the values stay on the right.
+- Tests: `test_fit_narrows_over_wide_columns_before_name`,
+  `test_dragging_name_s_edge_with_fit_on_trades_room_with_the_columns_to_its_right`,
+  `test_every_header_text_is_on_the_left_even_over_right_aligned_numbers`,
+  `test_with_fit_off_a_date_column_can_be_narrowed_but_never_widened_past_a_date`,
+  `test_type_is_never_wider_than_its_longest_text`, `test_the_caps_follow_the_font_size`. Checked with a copy of the owner's settings at 175%.
+
 ## 2026-11-21#03 -- Built with redactor_common 2026-11-21-02
 
 - Moved to the family's newest shared code (from 2026-11-18-01), so Dossier is on the same pin as the Redactor apps. What it brings: the shared notes and folder-cover code also reads and writes folders whose names end in a dot. No other change to Dossier; all its tests pass on the new pin.

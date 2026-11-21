@@ -109,6 +109,7 @@ class LookMixin:
             panel.model.refresh_all()
             panel.tabs.update()
             panel.table.verticalHeader().setDefaultSectionSize(panel.fontMetrics().height() + 6)
+            panel.apply_fit(panel.fit_columns)            # the date and Type widths follow the new font (2026-11-21)
 
     def open_look_settings(self) -> None:
         dlg = LookDialog(self, read_look(self.settings))

@@ -10,19 +10,20 @@ from dossier.gui.copy_settings import CopySettingsDialog, read_settings  # noqa:
 from tests.test_gui_commander import app, pump, world  # noqa: E402,F401
 
 
-def test_the_headers_are_aligned_like_their_values(world):
+def test_every_header_text_is_on_the_left_even_over_right_aligned_numbers(world):
+    """The owner, 2026-11-21: Size's header on the right "looks weird"; the values stay on the right."""
     win, _d, left, _r, _t = world
     (left / "a.txt").write_text("x")
     win.left.refresh()
     pump(win, lambda: win.left.model.row_of("a.txt") >= 0)
     m = win.left.model
+    seen_right_cell = False
     for col in range(m.columnCount()):
         header = int(m.headerData(col, Qt.Orientation.Horizontal, Qt.ItemDataRole.TextAlignmentRole))
+        assert header & int(Qt.AlignmentFlag.AlignLeft) and not header & int(Qt.AlignmentFlag.AlignRight), (col, header)
         cell = m.data(m.index(m.row_of("a.txt"), col), Qt.ItemDataRole.TextAlignmentRole)
-        if cell is not None:
-            assert header & int(Qt.AlignmentFlag.AlignRight), (col, header)
-        else:
-            assert header & int(Qt.AlignmentFlag.AlignLeft), (col, header)
+        seen_right_cell = seen_right_cell or (cell is not None and int(cell) & int(Qt.AlignmentFlag.AlignRight))
+    assert seen_right_cell                                    # Size's value is still on the right
 
 
 def test_a_markdown_heading_in_the_note_is_only_a_little_larger_than_the_text(world):

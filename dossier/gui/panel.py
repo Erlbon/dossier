@@ -979,7 +979,11 @@ class Panel(QFrame):
         header.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)  # right-click: show or hide columns
         header.customContextMenuRequested.connect(self.column_menu_requested.emit)
         header.sectionMoved.connect(self._column_moved)
-        header.sectionResized.connect(self._fit_check_later)
+        header.sectionMoved.connect(self._update_stretch)                    # a date column moved last must not stretch
+        header.sectionResized.connect(self._section_resized)
+        self._fitting = False             # the fit itself is resizing columns: not the owner's drag
+        self._fit_keep = -1               # the column the owner widened last: the fit never narrows it (2026-11-21)
+        self._name_want_user = 0          # Name's width from the owner's own drag of its edge (0: none yet)
         self._fit_watch = _ResizeWatch(self._fit_check_later, self)      # the viewport narrows when a vertical scrollbar shows
         self.table.viewport().installEventFilter(self._fit_watch)
         self.fit_columns = False          # View > Fit Columns to Panel; the window switches it on (the default) with apply_fit
@@ -1468,39 +1472,201 @@ class Panel(QFrame):
         last column stretches and a scrollbar shows when the columns are too wide."""
         header = self.table.horizontalHeader()
         name = column_index("name")
+        if on != self.fit_columns:                         # switched: the owner's earlier drags no longer count
+            self._fit_keep, self._name_want_user = -1, 0
         self.fit_columns = on
         self._fit_squeezed = False
         if on:
             header.setStretchLastSection(False)
             # Name's width is set here, not by Qt's Stretch mode: Stretch re-spreads only on some events, and on Linux and macOS
             # widening another column left Name as it was, so the columns ran off the panel (Tests workflow, 2026-11-18).
-            header.setSectionResizeMode(name, QHeaderView.ResizeMode.Fixed)
+            # Interactive, not Fixed: the owner can drag Name's edge and the columns to its right give or take the room
+            # (_name_dragged; owner's option A, 2026-11-21).
+            header.setSectionResizeMode(name, QHeaderView.ResizeMode.Interactive)
+            for key in self.DATE_KEYS:                    # a date is always as long: its column has one width (owner, 2026-11-21)
+                header.setSectionResizeMode(column_index(key), QHeaderView.ResizeMode.Fixed)   # its width: _fit_check
         else:
+            for key in self.DATE_KEYS:
+                header.setSectionResizeMode(column_index(key), QHeaderView.ResizeMode.Interactive)
             width = header.sectionSize(name)
             header.setSectionResizeMode(name, QHeaderView.ResizeMode.Interactive)
             header.resizeSection(name, max(width, self.NAME_MIN))
-            header.setStretchLastSection(True)
+            self._clamp_capped()                          # a saved wider date or Type column comes down to its cap
+            self._update_stretch()
         self._fit_check_later()
+
+    def _update_stretch(self, *_args) -> None:
+        """Fit off: the last column stretches as before, unless it is a capped column (a date or Type), which is never wider
+        than its longest text (the owner, 2026-11-21); then the room after it stays empty."""
+        if self.fit_columns:
+            return
+        header = self.table.horizontalHeader()
+        shown = [i for i in (header.logicalIndex(v) for v in range(header.count())) if not header.isSectionHidden(i)]
+        last_capped = bool(shown) and COLUMN_KEYS[shown[-1]] in self.MAX_TEXT
+        if header.stretchLastSection() == last_capped:
+            self._fitting = True
+            try:
+                header.setStretchLastSection(not last_capped)
+            finally:
+                self._fitting = False
+            if last_capped:
+                self._clamp_capped()
 
     def _fit_check_later(self, *_args) -> None:
         if self.fit_columns and not getattr(self, "_fit_pending", False):
             self._fit_pending = True
             QTimer.singleShot(0, self._fit_check)
 
+    def restore_header(self, state) -> None:
+        """The header as the settings saved it, then the fit's own modes again (a saved state carries old resize modes)."""
+        self._fitting = True
+        try:
+            self.table.horizontalHeader().restoreState(state)
+        finally:
+            self._fitting = False
+        self.apply_fit(self.fit_columns)
+
+    def _section_resized(self, logical: int, old: int, new: int) -> None:
+        cap = self._max_width(logical) if not self._fitting and new > 0 else 0
+        if cap and new > cap:
+            self._resize_quietly(logical, cap)            # a date or Type column is never wider than its longest text (2026-11-21)
+            return
+        if not self._fitting and not getattr(self, "_laying_out", False) and old > 0 and new > 0:   # 0: shown or hidden
+            if logical == column_index("name"):
+                if self.fit_columns:
+                    self._name_dragged(old, new)
+                    return
+            else:
+                self._fit_keep = logical
+        self._fit_check_later()
+
+    def _visible_others(self) -> list:
+        """The shown columns other than Name, in the order they stand on screen."""
+        header = self.table.horizontalHeader()
+        name = column_index("name")
+        return [i for i in (header.logicalIndex(v) for v in range(header.count())) if i != name and not header.isSectionHidden(i)]
+
+    DATE_KEYS = ("modified", "created", "accessed")
+    # The columns that are never wider than their longest text (the owner, 2026-11-21), and that text. A date is always as
+    # long ("8888-88-88 88:88", core.columns.when). A type is the extension plus " file" (core.columns.type_text); Windows sets
+    # no limit to an extension, but the long ones met in practice are about 11 letters (.webmanifest, .properties), so a
+    # longer one is cut with "...".
+    MAX_TEXT = {"modified": "8888-88-88 88:88", "created": "8888-88-88 88:88", "accessed": "8888-88-88 88:88",
+                "type": "WEBMANIFEST file"}
+
+    def _max_width(self, logical: int) -> int:
+        """How wide a capped column may be (0: no cap): its longest text in the panel's font now, in bold as a marked row shows
+        it, with the cell's margins, or the header text with its sort arrow if that is wider. Measured each time, so a change
+        of the font or its size in Settings > Look is followed."""
+        text = self.MAX_TEXT.get(COLUMN_KEYS[logical])
+        if not text:
+            return 0
+        font = self.table.font()
+        font.setBold(True)
+        return max(QFontMetrics(font).horizontalAdvance(text) + 16, self.table.horizontalHeader().sectionSizeHint(logical))
+
+    def _date_width(self, logical: int) -> int:
+        """The one width of a date column with Fit on."""
+        return self._max_width(logical)
+
+    def _column_floor(self, logical: int) -> int:
+        """How narrow the fit may make a column: its header text, the widest cell on screen, and never under the default width,
+        nor over its cap. A date column has its one width."""
+        if COLUMN_KEYS[logical] in self.DATE_KEYS:
+            return self._date_width(logical)
+        header = self.table.horizontalHeader()
+        floor = max(header.sectionSizeHint(logical), self.table.sizeHintForColumn(logical))
+        floor = max(floor, DEFAULT_WIDTHS.get(COLUMN_KEYS[logical], 60))
+        cap = self._max_width(logical)
+        return min(floor, cap) if cap else floor
+
+    def _clamp_capped(self) -> None:
+        """A shown capped column wider than its cap (a saved width, a bigger font before) comes down to it."""
+        header = self.table.horizontalHeader()
+        for key in self.MAX_TEXT:
+            idx = column_index(key)
+            cap = self._max_width(idx)
+            if not header.isSectionHidden(idx) and header.sectionSize(idx) > cap:
+                self._resize_quietly(idx, cap)
+
+    def changeEvent(self, event) -> None:
+        super().changeEvent(event)
+        if event.type() == QEvent.Type.FontChange and hasattr(self, "_fit_watch"):   # Settings > Look: caps follow the font
+            self.apply_fit(self.fit_columns)
+
+    def _resize_quietly(self, logical: int, width: int) -> None:
+        self._fitting = True
+        try:
+            self.table.horizontalHeader().resizeSection(logical, width)
+        finally:
+            self._fitting = False
+
+    def _name_dragged(self, old: int, new: int) -> None:
+        """The owner dragged Name's edge with Fit on: the columns to its right give the room (each down to its floor, the
+        neighbour first) or take it back (the neighbour), so everything still fits the panel."""
+        header = self.table.horizontalHeader()
+        name = column_index("name")
+        right = [i for i in self._visible_others() if header.visualIndex(i) > header.visualIndex(name)]
+        delta = new - old
+        if not right:
+            self._resize_quietly(name, old)               # nothing to its right to trade with
+            return
+        if delta < 0:
+            self._resize_quietly(right[0], header.sectionSize(right[0]) - delta)
+        else:
+            taken = 0
+            for i in right:
+                give = min(delta - taken, max(0, header.sectionSize(i) - self._column_floor(i)))
+                if give:
+                    self._resize_quietly(i, header.sectionSize(i) - give)
+                    taken += give
+                if taken >= delta:
+                    break
+            if taken < delta:
+                self._resize_quietly(name, old + taken)   # the others are at their floors: Name stops here
+        self._name_want_user = header.sectionSize(name)
+        self._fit_check_later()
+
+    def _name_wanted(self) -> int:
+        """How wide Name should be before the fit narrows other columns: the owner's own drag if there was one, else the widest
+        name on screen, at most 45 percent of the panel, never under NAME_MIN."""
+        if self._name_want_user:
+            return max(self._name_want_user, self.NAME_MIN)
+        content = self.table.sizeHintForColumn(column_index("name"))
+        if content <= 0:
+            content = DEFAULT_WIDTHS["name"]
+        return max(self.NAME_MIN, min(content, int(self.table.viewport().width() * 0.45)))
+
     def _fit_check(self) -> None:
-        """Name gets the room the other columns leave, but never less than NAME_MIN: below that the columns are wider than the
-        panel and the scrollbar shows, until there is room again."""
+        """Name gets the room the other columns leave. When that is less than Name wants, the other columns first give up what
+        they have beyond their contents (all but the one the owner widened last), then Name shrinks, but never under NAME_MIN:
+        below that the columns are wider than the panel and the scrollbar shows, until there is room again."""
         self._fit_pending = False
         if not self.fit_columns:
             return
         header = self.table.horizontalHeader()
         name = column_index("name")
-        others = sum(header.sectionSize(i) for i in range(header.count()) if i != name and not header.isSectionHidden(i))
-        room = self.table.viewport().width() - others
+        others = self._visible_others()
+        for i in others:
+            if COLUMN_KEYS[i] in self.DATE_KEYS and header.sectionSize(i) != self._date_width(i):
+                self._resize_quietly(i, self._date_width(i))   # a saved or restored width does not stick: dates have one
+        self._clamp_capped()                                   # and Type is never wider than its cap
+        viewport = self.table.viewport().width()
+        room = viewport - sum(header.sectionSize(i) for i in others)
+        need = self._name_wanted() - room
+        if need > 0:
+            spare = {i: header.sectionSize(i) - self._column_floor(i) for i in others if i != self._fit_keep}
+            spare = {i: s for i, s in spare.items() if s > 0}
+            total = sum(spare.values())
+            if total:
+                take = min(need, total)
+                for i, s in spare.items():                # each gives in proportion to what it has beyond its contents
+                    self._resize_quietly(i, header.sectionSize(i) - min(s, -(-take * s // total)))
+                room = viewport - sum(header.sectionSize(i) for i in others)
         self._fit_squeezed = room < self.NAME_MIN
         want = max(room, self.NAME_MIN)
         if header.sectionSize(name) != want:
-            header.resizeSection(name, want)              # sectionResized comes back here once and finds nothing to change
+            self._resize_quietly(name, want)
 
     def column_keys_in_order(self) -> list:
         return visual_column_keys(self.table.horizontalHeader(), list(COLUMN_KEYS))
