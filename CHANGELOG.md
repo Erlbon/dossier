@@ -2,6 +2,10 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-21#03 -- Built with redactor_common 2026-11-21-02
+
+- Moved to the family's newest shared code (from 2026-11-18-01), so Dossier is on the same pin as the Redactor apps. What it brings: the shared notes and folder-cover code also reads and writes folders whose names end in a dot. No other change to Dossier; all its tests pass on the new pin.
+
 ## 2026-11-21#02 -- The notepad's last lines come clear of the glass bar too
 
 - The notepad gets the same room after its last line as the viewer (the owner, 2026-11-21): an empty strip under the last line, as
