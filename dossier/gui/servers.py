@@ -40,14 +40,14 @@ class ConnectionDialog(OwnedDialog):
         layout = QVBoxLayout(self)
         form = QFormLayout()
         self.name = QLineEdit(c.name)
-        self.name.setPlaceholderText("for example  The NAS")
+        self.name.setPlaceholderText("for example: The NAS")
         self.protocol = QComboBox()
         for key, text in servers.PROTOCOLS + servers.PRESETS:               # a preset (Nextcloud) is a WebDAV connection with the address filled in
             self.protocol.addItem(text, key)
         self.protocol.setCurrentIndex(max(0, self.protocol.findData(c.preset or c.protocol)))
         self._nc_prefix = servers.nextcloud_prefix(c.start_dir) if c.preset == servers.NEXTCLOUD else ""   # where a Nextcloud lives on its server
         self.host = QLineEdit(c.host)
-        self.host.setPlaceholderText("files.example.com  or  192.168.1.20")
+        self.host.setPlaceholderText("for example: files.example.com  or  192.168.1.20")
         self.port = QSpinBox()
         self.port.setRange(1, 65535)
         self.port.setValue(c.port)
@@ -71,7 +71,7 @@ class ConnectionDialog(OwnedDialog):
                                  "Without a shell or those programs it works the ordinary way.")
         self.commands.setChecked(c.allow_commands)
         self.client_id = QLineEdit(c.client_id)                              # a cloud drive: the app the owner registered with the provider
-        self.client_id.setPlaceholderText("for example  1234567890-abc.apps.googleusercontent.com")
+        self.client_id.setPlaceholderText("for example: 1234567890-abc.apps.googleusercontent.com")
         self.client_secret = QLineEdit(servers.get_secret(servers.client_secret_account(c.client_id)) if c.client_id else "")
         self.client_secret.setEchoMode(QLineEdit.EchoMode.Password)
         self.client_secret.setPlaceholderText("kept in the system's password store, not in the settings")

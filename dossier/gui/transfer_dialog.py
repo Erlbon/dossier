@@ -17,7 +17,7 @@ from PyQt6.QtWidgets import (QCheckBox, QCompleter, QDialogButtonBox, QFormLayou
 
 from .owned_dialog import OwnedDialog
 
-ONLY_HINT = "*.jpg;*.png   or  *.log !debug*   (empty: everything)"
+ONLY_HINT = "for example: *.jpg;*.png   or  *.log !debug*   (empty: everything)"
 
 
 @dataclass

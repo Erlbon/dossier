@@ -13,7 +13,7 @@ from ..core.search import BadCriteria, Criteria, validate
 from .owned_dialog import OwnedDialog
 from .search_dialog import _AttributeBox, _DateBox, _SizeBox
 
-PATTERN_HINT = "*.jpg;*.png   or  *.log !debug*   or  backup*/ for folders   (empty: every name)"
+PATTERN_HINT = "for example: *.jpg;*.png   or  *.log !debug*   or  backup*/ for folders   (empty: every name)"
 
 
 class MarkDialog(OwnedDialog):

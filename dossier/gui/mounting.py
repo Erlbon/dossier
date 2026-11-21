@@ -26,7 +26,7 @@ class MountDialog(OwnedDialog):
         for key, label in mounting.PROTOCOLS:
             self.protocol.addItem(label, key)
         self.address = QLineEdit()
-        self.address.setPlaceholderText("\\\\server\\share")
+        self.address.setPlaceholderText("for example: \\\\server\\share")
         self.letter = QComboBox()
         self.letter.addItem("Next free letter", "")
         for letter in letters:
@@ -61,7 +61,7 @@ class MountDialog(OwnedDialog):
         nfs = self.protocol.currentData() == mounting.NFS
         if not IS_WINDOWS:
             self.ok.setText("Mount")
-            self.address.setPlaceholderText("nfs://server/export   or   server:/export" if nfs else "smb://server/share")
+            self.address.setPlaceholderText("for example: " + ("nfs://server/export   or   server:/export" if nfs else "smb://server/share"))
             self.note.setText(OFF_WINDOWS_NOTE)
             return
         if nfs:                                        # Windows cannot open an NFS share by its address: it must be mounted
@@ -69,7 +69,7 @@ class MountDialog(OwnedDialog):
         self.mount.setEnabled(not nfs)
         self.letter.setEnabled(self.mount.isChecked())
         self.ok.setText("Mount" if self.mount.isChecked() else "Add")
-        self.address.setPlaceholderText("server:/export   or   \\\\server\\export" if nfs else "\\\\server\\share")
+        self.address.setPlaceholderText("for example: " + ("server:/export   or   \\\\server\\export" if nfs else "\\\\server\\share"))
         self.note.setText("Client for NFS is not switched on in Windows. You will be told how to switch it on."
                           if nfs and not self._nfs_on else
                           ("No password is typed here. A share that needs a login works when Windows already has it "

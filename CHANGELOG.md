@@ -2,6 +2,14 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-21#05 -- Grey examples in empty fields say "for example:"
+
+- The grey text in an empty field could be taken for a value already there (the owner, 2026-11-21, about the Tags field's
+  "holiday, 2019, family"). Every example now starts with "for example:": the Tags field and the search's tags, name and
+  skip fields, Mark and the copy dialog's patterns, Find Duplicates, folder rules (patterns and destination), Change Dates
+  (set and shift), Mount and Add network drive addresses, server name, host and client ID, and the sharing dialog's user.
+  Hints that only explain ("empty: the folder of the active panel", "Find") are as they were.
+
 ## 2026-11-21#04 -- Fit Columns to Panel gives Name real room; dates and Type have a maximum width; header texts on the left
 
 - With Fit Columns to Panel on, only Name used to change width (the owner's screenshot, 2026-11-21): Date and Size had kept old,

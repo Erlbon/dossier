@@ -43,7 +43,7 @@ class DuplicatesOptionsDialog(OwnedDialog):
         self.min_kb.setSpecialValueText("Every size (not empty files)")
         self.min_kb.setValue(min_kb)
         self.pattern = QLineEdit()
-        self.pattern.setPlaceholderText("every name; or for example  *.jpg;*.png")
+        self.pattern.setPlaceholderText("for example: *.jpg;*.png   (empty: every name)")
         form.addRow("Look in", self.here)
         form.addRow("", self.other)
         form.addRow("Ignore files smaller than", self.min_kb)

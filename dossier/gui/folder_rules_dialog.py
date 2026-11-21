@@ -24,7 +24,7 @@ class RuleForm(OwnedDialog):
         self.rule_id = rule.id if rule is not None else ""
         form = QFormLayout()
         self.patterns = QLineEdit(rule.patterns if rule else "")
-        self.patterns.setPlaceholderText("*.pdf;*.docx")
+        self.patterns.setPlaceholderText("for example: *.pdf;*.docx")
         self.patterns.setToolTip("Name patterns as in Mark > Mark by Pattern: *.pdf;*.docx, with !keep* to leave some out, "
                                  "and a name ending in / for folders.")
         form.addRow("Items named", self.patterns)
@@ -51,7 +51,7 @@ class RuleForm(OwnedDialog):
         form.addRow("Then", self.action)
         where = QHBoxLayout()
         self.dest = QLineEdit(rule.dest if rule else "")
-        self.dest.setPlaceholderText("Archive/<year>")
+        self.dest.setPlaceholderText("for example: Archive/<year>")
         self.dest.setToolTip("A folder. <year> and <month> are the year and month the item was last changed. A path that is not "
                              "complete is below this folder.")
         self.browse = QPushButton("Browse...")

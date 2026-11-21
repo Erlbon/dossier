@@ -157,7 +157,7 @@ class DatesDialog(OwnedDialog):
         self.now_button.setVisible(kind == ft.SET)
         self.choose_button.setVisible(kind == ft.FROM_FILE)
         self.source_field.setVisible(kind in (ft.COPY_FIELD, ft.FROM_FILE))
-        self.value.setPlaceholderText({ft.SET: "2024-05-17 10:30", ft.SHIFT: "+2h, -1d, 1d2h30m", ft.FROM_FILE: "the file or folder to take it from"}.get(kind, ""))
+        self.value.setPlaceholderText({ft.SET: "for example: 2024-05-17 10:30", ft.SHIFT: "for example: +2h, -1d, 1d2h30m", ft.FROM_FILE: "the file or folder to take it from"}.get(kind, ""))
         self.hint.setText({ft.SET: "Every item gets this moment (local time).",
                            ft.SHIFT: "Every date moves later (+) or earlier (-) by this much, each from its own value.",
                            ft.COPY_FIELD: "Each item's chosen dates become this date of the same item: for example Created from Modified.",

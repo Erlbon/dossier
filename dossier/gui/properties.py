@@ -373,7 +373,7 @@ class PropertiesDialog(OwnedDialog):
         else:
             current = records[0]
             self.tag_edit = QLineEdit(", ".join(current.tags))
-            self.tag_edit.setPlaceholderText("holiday, 2019, family")
+            self.tag_edit.setPlaceholderText("for example: holiday, 2019, family")
             form.addRow("Tags", self.tag_edit)
             self.pick = None
             if self.known_tags:

@@ -58,7 +58,7 @@ class GrantRow(QWidget):
         self.who.setEditable(True)
         self.who.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
         self.who.setMinimumWidth(230)
-        self.who.lineEdit().setPlaceholderText("User or group, e.g. PC\\name")
+        self.who.lineEdit().setPlaceholderText("User or group, for example: PC\\name")
         for text, account in choices:
             self.who.addItem(text, account)
         self.access = QComboBox()

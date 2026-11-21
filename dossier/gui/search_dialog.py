@@ -105,7 +105,7 @@ class SearchDialog(OwnedDialog):
         form = QFormLayout()
         self.root = QLineEdit(root)
         self.name = QLineEdit()
-        self.name.setPlaceholderText("*.jpg;*.png   or a part of the name   (! in front leaves a match out)")
+        self.name.setPlaceholderText("for example: *.jpg;*.png   or a part of the name   (! in front leaves a match out)")
         self.case = QCheckBox("Match case")
         self.kinds = QComboBox()
         for label, key in KINDS:
@@ -113,7 +113,7 @@ class SearchDialog(OwnedDialog):
         self.subfolders = QCheckBox("Include subfolders")
         self.subfolders.setChecked(True)
         self.skip = QLineEdit()
-        self.skip.setPlaceholderText("node_modules;.git;build*   (folders not to look in)")
+        self.skip.setPlaceholderText("for example: node_modules;.git;build*   (folders not to look in)")
         offer = QPushButton("Programmer's List")
         offer.setToolTip(DEFAULT_SKIP.replace(";", "  "))
         offer.setAutoDefault(False)
@@ -155,7 +155,7 @@ class SearchDialog(OwnedDialog):
         tagged = QGroupBox("Tags")
         tf = QFormLayout(tagged)
         self.tags = QLineEdit()
-        self.tags.setPlaceholderText("holiday, 2019   (the file needs all of them)")
+        self.tags.setPlaceholderText("for example: holiday, 2019   (the file needs all of them)")
         self.min_rating = QComboBox()
         self.min_rating.addItem("Any rating", 0)
         for n in range(1, 6):
