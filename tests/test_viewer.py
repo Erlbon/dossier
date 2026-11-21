@@ -407,7 +407,7 @@ def test_menus_view_has_modes_and_notes_while_settings_has_the_choices(commander
                                  "Drives and Sharing"] + (["Linux Desktop"] if sys.platform.startswith("linux") else []) + [
                                  "Quarantine...", "Assistant Access..."]
     look = [a for a in menus["Settings"].actions() if a.text() == "Appearance"][0].menu()
-    assert [a.text() for a in look.actions()] == ["Color Scheme", "Icon Set", "Fonts and Bold...", "File Colours...", "Thumbnails...", "Picture Viewer Glass...", "Frosted Background...", "Drive Selector"]
+    assert [a.text() for a in look.actions()] == ["Color Scheme", "Icon Set", "Fonts and Bold...", "File Colours...", "Show Colour Labels", "Thumbnails...", "Picture Viewer Glass...", "Frosted Background...", "Drive Selector"]
     win.set_sharing_allowed(True)
     menus["Network"].aboutToShow.emit()
     assert texts("Network")[4:6] == ["Share This Folder...", "Shared Folders of a Computer..."]

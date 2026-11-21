@@ -130,7 +130,7 @@ class _NameDelegate(QStyledItemDelegate):
         super().__init__(parent)
         self.spec = None             # (the name to start from, what to call with the finished text)
         self.editor = None
-        self.dots = False            # View > Show Colour Labels: a dot in the label's colour before each name (2026-11-21)
+        self.dots = False            # Settings > Appearance > Show Colour Labels: a dot in the label's colour before each name (2026-11-21)
 
     def dot_room(self, option) -> int:
         """The width the dot takes at the start of the cell: the dot and a gap on each side."""
@@ -1858,7 +1858,7 @@ class Panel(QFrame):
                                      or any(not header.isSectionHidden(column_index(k)) for k in ("tags", "rating", "label")))
 
     def set_label_dots(self, on: bool) -> None:
-        """View > Show Colour Labels (opt-in, the owner 2026-11-21): a dot in each item's label colour before its name."""
+        """Settings > Appearance > Show Colour Labels (opt-in, the owner 2026-11-21): a dot in each item's label colour before its name."""
         self._name_delegate.dots = bool(on)
         self.refresh_tags()
         self.table.viewport().update()

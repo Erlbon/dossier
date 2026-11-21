@@ -2,10 +2,18 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-22#01 -- Show Colour Labels moves to Settings > Appearance and the column header's right-click menu
+
+- In View it made 17 entries, one more than the menu rule allows, and #06 went in with that test failing. The owner's option
+  B (2026-11-22): it is a switch set once, so it sits in Settings > Appearance (after File Colours...) and, beside Fit
+  Columns to Panel, in the right-click menu on the column headers. View is back to its 16 entries, as before #06.
+- Tests: `test_show_colour_labels_sits_in_appearance_and_the_header_menu_not_in_view`; the Appearance list in
+  `test_menus_view_has_modes_and_notes_while_settings_has_the_choices`.
+
 ## 2026-11-21#06 -- Colour labels before the names (opt-in), and Colour Label for many items at once
 
 - Colour labels were only seen in the Label column, which is off by default, so they did nothing one could see (the owner,
-  2026-11-21: "why colours?"). View > Show Colour Labels puts a dot in the label's colour before each name in the list.
+  2026-11-21: "why colours?"). Show Colour Labels (in View here; moved by 2026-11-22#01) puts a dot in the label's colour before each name in the list.
   Off unless chosen (a label is set by hand, so most folders have none); kept in the settings (`view/label_dots`). Every
   row moves right by the dot's room, labelled or not, so the names stay in one line; with it off nothing is read.
 - Right-click > Colour Label > No Label, Red, Orange, Yellow, Green, Blue, Purple, Grey sets one label on every marked item

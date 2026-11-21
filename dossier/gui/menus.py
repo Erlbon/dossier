@@ -222,14 +222,6 @@ class MenusMixin:
         self.act_fit_columns.toggled.connect(self.set_fit_columns)
         view_menu.addAction(self.act_fit_columns)
         self._apply_fit_columns(self.fit_columns_on())
-        self.act_label_dots = QAction("Show Colour Labels", self)
-        self.act_label_dots.setToolTip("A dot in the item's colour label before its name. Set the labels with right-click > "
-                                       "Colour Label, or in Properties > Tags")
-        self.act_label_dots.setCheckable(True)
-        self.act_label_dots.setChecked(self.label_dots_on())
-        self.act_label_dots.toggled.connect(self.set_label_dots)
-        view_menu.addAction(self.act_label_dots)
-        self._apply_label_dots(self.label_dots_on())
         self.add_layout_actions(view_menu)
         view_menu.aboutToShow.connect(self.sync_mode_actions)            # Thumbnail Size is greyed while the panel shows Details
         view_menu.addSeparator()
@@ -419,6 +411,16 @@ class MenusMixin:
         self._rebuild_icon_menu()
         look.addAction(self._action("Fonts and Bold...", None, self.open_look_settings))
         look.addAction(self._action("File Colours...", None, self.open_file_colors))
+        # Show Colour Labels (the owner's option B, 2026-11-21): a switch set once, so it sits here and in the header's right-click
+        # menu, not in View (which is full at 16)
+        self.act_label_dots = QAction("Show Colour Labels", self)
+        self.act_label_dots.setToolTip("A dot in the item's colour label before its name. Set the labels with right-click > "
+                                       "Colour Label, or in Properties > Tags")
+        self.act_label_dots.setCheckable(True)
+        self.act_label_dots.setChecked(self.label_dots_on())
+        self.act_label_dots.toggled.connect(self.set_label_dots)
+        look.addAction(self.act_label_dots)
+        self._apply_label_dots(self.label_dots_on())
         look.addAction(self._action("Thumbnails...", None, self.open_thumbnail_settings))
         look.addAction(self._action("Picture Viewer Glass...", None, self.open_glass_settings))
         look.addAction(self._action("Frosted Background...", None, self.open_frost_settings))

@@ -16,7 +16,7 @@ HIDDEN_KEY = "view/columns_hidden"
 ORDER_KEY = "view/columns_order"
 KNOWN_KEY = "view/columns_known"      # the columns that existed when the choice was saved
 FIT_KEY = "view/fit_columns"          # View > Fit Columns to Panel, "true"/"false"
-LABEL_DOTS_KEY = "view/label_dots"    # View > Show Colour Labels, "true"/"false" (off unless chosen)
+LABEL_DOTS_KEY = "view/label_dots"    # Settings > Appearance > Show Colour Labels, "true"/"false" (off unless chosen)
 
 
 class ColumnsMixin:
@@ -89,7 +89,8 @@ class ColumnsMixin:
             self, panel.table, pos, column_order=order, label_lookup=LABELS, protected_columns=PROTECTED,
             hidden_fields=hidden, is_visible=lambda k, h: is_column_visible(k, h, PROTECTED),
             on_toggle=self._column_toggled, open_column_settings_dialog=self.open_column_settings,
-            top_actions=[("Fit Columns to Panel", self.act_fit_columns.setChecked, True, self.fit_columns_on())])
+            top_actions=[("Fit Columns to Panel", self.act_fit_columns.setChecked, True, self.fit_columns_on()),
+                         ("Show Colour Labels", self.act_label_dots.setChecked, True, self.label_dots_on())])
 
     # View > Fit Columns to Panel (the owner's option A, 2026-11-18): one choice for both panels, on by default ---------------
     def fit_columns_on(self) -> bool:
@@ -105,7 +106,7 @@ class ColumnsMixin:
         for panel in (self.left, self.right):
             panel.apply_fit(on)
 
-    # View > Show Colour Labels (the owner, 2026-11-21): a dot in the label's colour before each name; off by default, as a
+    # Settings > Appearance > Show Colour Labels, also in the header's right-click menu (the owner, 2026-11-21): a dot in the label's colour before each name; off by default, as a
     # label is something one sets by hand ------------------------------------------------------------------------------------
     def label_dots_on(self) -> bool:
         return str(self.settings.value(LABEL_DOTS_KEY, "false")).lower() == "true"

@@ -327,3 +327,21 @@ def test_the_header_menu_offers_the_switch_with_its_tick(world, monkeypatch):
     assert entry.isCheckable() and entry.isChecked()
     entry.trigger()
     assert not win.fit_columns_on() and not win.act_fit_columns.isChecked()
+
+
+def test_show_colour_labels_sits_in_appearance_and_the_header_menu_not_in_view(world, monkeypatch):
+    """The owner's option B, 2026-11-21: a switch set once; View stays at its 16 entries."""
+    from PyQt6.QtWidgets import QMenu
+    win, *_ = world
+    menus = {a.text().replace("&", ""): a.menu() for a in win.menuBar().actions() if a.menu()}
+    assert "Show Colour Labels" not in [a.text() for a in menus["View"].actions()]
+    look = next(a.menu() for a in menus["Settings"].actions() if a.text() == "Appearance")
+    assert win.act_label_dots in look.actions()
+    shown = {}
+    monkeypatch.setattr(QMenu, "exec", lambda self, *a: shown.setdefault("menu", self))
+    win._set_active(win.left)
+    win.show_column_menu(win.left, win.left.table.rect().center())
+    entry = next(a for a in shown["menu"].actions() if a.text() == "Show Colour Labels")
+    assert entry.isCheckable() and not entry.isChecked()
+    entry.trigger()
+    assert win.label_dots_on() and win.act_label_dots.isChecked() and win.left._name_delegate.dots
