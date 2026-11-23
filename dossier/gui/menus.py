@@ -28,12 +28,19 @@ def command_label(action: QAction) -> str:
     return action.text().split("\t")[0]
 
 
+def key_text(seq: QKeySequence) -> str:
+    """A key as the menus show it. Qt calls the big Enter key "Return"; the key says Enter on a PC keyboard, and so does
+    Dossier everywhere (menu check 99, 2026-11-23). The shortcut itself is unchanged."""
+    return seq.toString(QKeySequence.SequenceFormat.NativeText).replace("Return", "Enter")
+
+
 def command_keys(action: QAction) -> str:
     """The keys of a menu action as the menus show them: its shortcuts, or the hint after a tab for a key the window does not own
     (Enter belongs to the panel)."""
-    keys = [s.toString(QKeySequence.SequenceFormat.NativeText) for s in action.shortcuts()]
+    keys = [key_text(s) for s in action.shortcuts()]
     hint = action.text().split("\t", 1)[1] if "\t" in action.text() else ""
-    return ", ".join(([hint] if hint else []) + keys)        # the hint is the panel's own key (Enter, Backspace): it stays first
+    shown = ([hint] if hint else []) + keys                 # the hint is the panel's own key (Enter, Backspace): it stays first
+    return ", ".join(dict.fromkeys(shown))                  # a hint that only respells the first shortcut is not said twice
 
 
 class MenusMixin:
@@ -46,6 +53,9 @@ class MenusMixin:
         fixed = [k for k in (keys if isinstance(keys, (list, tuple)) else [keys] if keys else []) if not fkey_config.assignable(k)]
         if fixed:
             act.setShortcuts([QKeySequence(k) for k in fixed])
+            first = QKeySequence(fixed[0])
+            if "\t" not in text and key_text(first) != first.toString(QKeySequence.SequenceFormat.NativeText):
+                act.setText(f"{text}\t{key_text(first)}")  # the menu shows the text after a tab in place of Qt's "Return"
         self.__dict__.setdefault("_fixed_keys", {})[act] = fixed
         command = getattr(slot, "__name__", "")
         if command in fkeys.COMMANDS:
@@ -55,6 +65,21 @@ class MenusMixin:
         act.triggered.connect(lambda _checked=False: slot())
         self.addAction(act)
         return act
+
+    @staticmethod
+    def _tidy_palette(palette) -> None:
+        """The palette (redactor_common) takes a menu entry's whole text as its name, so "Properties<tab>Alt+Enter" would show the
+        hint in the name, and it writes the keys as Qt does ("Return"). Each time it opens, the names end at the tab and the keys
+        say Enter, as the menus do (menu check 99, 2026-11-23). Until redactor_common's plain_label cuts at the tab itself."""
+        from dataclasses import replace
+        collect = palette.refresh
+
+        def refresh() -> None:
+            collect()
+            palette._commands = [replace(c, title=c.title.split("\t")[0], shortcut=c.shortcut.replace("Return", "Enter"))
+                                 for c in palette._commands]
+            palette._apply_filter(palette.filter_edit.text())
+        palette.refresh = refresh
 
     def bar_command(self, name: str) -> QAction:
         """The menu-bar action of the window's command ``name`` ("rename")."""
@@ -249,7 +274,8 @@ class MenusMixin:
         self.act_notes.toggled.connect(self.set_notes_visible)
         notes.addAction(self.act_notes)
         notes.addAction(self._action("Edit Folder Note", "Ctrl+Shift+E", self.edit_folder_note))
-        bars = view_menu.addMenu("Bars")                  # View is full (16): the two things that show and hide share a submenu
+        bars = view_menu.addMenu("Bars")                  # which bars show, then where each sits (one submenu: View keeps to 16)
+        bars.menuAction().setToolTip("To move a bar, you can also drag the dots at its left end")
         self.act_tools_bar = QAction("Tools Bar", self)
         self.act_tools_bar.setCheckable(True)
         self.act_tools_bar.setChecked(self.tools_bar.isVisibleTo(self))
@@ -260,7 +286,7 @@ class MenusMixin:
         self.act_sidebar.setCheckable(True)
         self.act_sidebar.toggled.connect(self.set_sidebar_visible)
         bars.addAction(self.act_sidebar)
-        self.build_bar_place_menus(view_menu)
+        self.build_bar_place_menus(bars)                   # their positions in the same submenu (menu check 105)
         view_menu.addAction(self._action("Full Screen", None, self.toggle_full_screen))
 
     # Go -------------------------------------------------------------------------------------------------------------------------
@@ -327,10 +353,15 @@ class MenusMixin:
             rename_menu.addAction(self._action(text, keys, slot))
         archives = tools.addMenu("Archives")
         archives.addAction(self._action("Open as Archive", "Ctrl+PgDown", lambda: self.active.open_as_archive()))
-        archives.addAction(self._action("Compress", None, self.compress_marked))
-        archives.addAction(self._action("Extract Here", None, self.extract_here))
-        archives.addAction(self._action("Pack to Zip...", "Alt+F5", self.pack_to_zip))
-        archives.addAction(self._action("Unpack...", "Alt+F9", self.unpack_archive))
+        # one click (card 61A) vs asking where: the names stay, the tooltips say the difference (menu check 104, 2026-11-23)
+        for text, keys, slot, tip in (
+                ("Compress", None, self.compress_marked, "One click: a zip of the marked items beside them, no questions"),
+                ("Extract Here", None, self.extract_here, "One click: each archive unpacked into the folder it is in, no questions"),
+                ("Pack to Zip...", "Alt+F5", self.pack_to_zip, "Asks for the zip's name, folder and compression first"),
+                ("Unpack...", "Alt+F9", self.unpack_archive, "Asks which folder to unpack into first")):
+            act = self._action(text, keys, slot)
+            act.setToolTip(tip)
+            archives.addAction(act)
         archives.addAction(self._action("Convert Archive to Zip", None, self.convert_archive_to_zip))
         checksums = tools.addMenu("Checksums")
         checksums.addAction(self._action("Of Marked Files", None, self.show_checksums))
@@ -391,7 +422,7 @@ class MenusMixin:
     # Settings -------------------------------------------------------------------------------------------------------------------
     def _build_settings_menu(self, settings) -> None:
         look = settings.addMenu("Appearance")
-        scheme_menu = look.addMenu("Color Scheme")
+        scheme_menu = look.addMenu("Colour Scheme")      # British, as File Colours and Colour Label (menu check 100)
         group = QActionGroup(self)
         group.setExclusive(True)
         self.scheme_actions = {}
@@ -421,7 +452,7 @@ class MenusMixin:
         self.act_label_dots.toggled.connect(self.set_label_dots)
         look.addAction(self.act_label_dots)
         self._apply_label_dots(self.label_dots_on())
-        look.addAction(self._action("Thumbnails...", None, self.open_thumbnail_settings))
+        look.addAction(self._action("Thumbnail Settings...", None, self.open_thumbnail_settings))   # not View > Thumbnails (103)
         look.addAction(self._action("Picture Viewer Glass...", None, self.open_glass_settings))
         look.addAction(self._action("Frosted Background...", None, self.open_frost_settings))
         drive_menu = look.addMenu("Drive Selector")
@@ -438,7 +469,7 @@ class MenusMixin:
             drive_menu.addAction(act)
             self.drive_style_actions[key] = act
         settings.addSeparator()
-        settings.addAction(self._action("Copy and Move...", None, self.open_copy_settings))
+        settings.addAction(self._action("Copy and Move Settings...", None, self.open_copy_settings))   # not File > Copy... (103)
         self.build_open_menu(settings)
         settings.addAction(self._action("Mouse Wheel...", None, self.open_wheel_settings))
         settings.addAction(self._action("Function Keys...", None, self.open_function_keys_settings))
@@ -476,7 +507,7 @@ class MenusMixin:
         drives_menu.addAction(self.act_allow_sharing)
         self.build_linux_desktop_menu(settings)                  # Linux only: the launcher and "Open Folders with Dossier" (card 52A)
         settings.addSeparator()
-        settings.addAction(self._action("Quarantine...", None, self.open_quarantine_settings))
+        settings.addAction(self._action("Quarantine Settings...", None, self.open_quarantine_settings))   # not Tools > Quarantine (98)
         settings.addAction(self._action("Assistant Access...", None, self.open_assistant_settings))
         # these two hold the state of the choices the dialog (and the confirmation box) change; they are not in a menu
         self.act_verify = QAction("Verify Copies After Copying", self)
@@ -528,6 +559,7 @@ class MenusMixin:
         help_menu.addAction(self._action("Keyboard Shortcuts...", None, self.show_keys))
         self.act_palette = add_command_palette(self)            # Ctrl+K: type a few letters of any command (redactor_common)
         self.act_palette.setText("Command Palette...")
+        self._tidy_palette(self.command_palette)
         help_menu.addAction(self.act_palette)
         help_menu.addSeparator()
         help_menu.addAction(self._action("Documentation (Online)", None, lambda: self.open_web_page(APP_REPO_URL)))
@@ -543,7 +575,8 @@ class MenusMixin:
         help_menu.addAction(self.act_daily_update)
         help_menu.addSeparator()
         slow_menu = help_menu.addMenu("Slowness Log")
-        self.act_stall_log = QAction("Record Slow Moments (window stalls over 200 ms)", self)
+        self.act_stall_log = QAction("Record Slow Moments", self)     # the detail in the tooltip (menu check 102)
+        self.act_stall_log.setToolTip("Write down each time the window stalls for more than 200 ms. Off unless you switch it on.")
         self.act_stall_log.setCheckable(True)
         self.act_stall_log.setChecked(str(self.settings.value("debug/stall_log", "false")).lower() == "true")
         self.act_stall_log.toggled.connect(self.set_stall_log)
@@ -551,9 +584,10 @@ class MenusMixin:
         slow_menu.addAction(self._action("Open the Slowness Log", None, self.open_stall_log))
         slow_menu.addAction(self._action("Delete the Slowness Log", None, self.delete_stall_log))
         error_menu = help_menu.addMenu("Error Log")
-        self.act_error_log = QAction("Record Errors (failed copies, moves and deletes, network drops, errors in Dossier)", self)
+        self.act_error_log = QAction("Record Errors", self)            # the detail in the tooltip (menu check 102)
         self.act_error_log.setCheckable(True)
-        self.act_error_log.setToolTip("Write down what went wrong, with the file names and folders, in errors.log beside dossier.ini. "
+        self.act_error_log.setToolTip("Write down what went wrong (failed copies, moves and deletes, network drops, errors in "
+                                      "Dossier), with the file names and folders, in errors.log beside dossier.ini. "
                                       "Off unless you switch it on.")
         self.act_error_log.setChecked(str(self.settings.value("debug/error_log", "false")).lower() == "true")
         self.act_error_log.toggled.connect(self.set_error_log)

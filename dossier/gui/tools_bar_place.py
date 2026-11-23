@@ -74,13 +74,12 @@ class ToolsBarPlaceMixin:
         self.tools_bar.setVisible(str(self.settings.value("view/tools_bar", "true")).lower() == "true")
 
     def build_bar_place_menus(self, parent_menu) -> None:
-        """View > Bar Positions: one submenu with a group for each movable bar (each entry names its bar, so the groups need no titles)."""
-        menu = parent_menu.addMenu("Bar Positions")
-        menu.menuAction().setToolTip("Or drag the dots at the left end of a bar")
+        """View > Bars, under the bars' on/off switches: a group for each movable bar's position (each entry names its bar, so the
+        groups need no titles). Once a submenu of its own; merged into Bars to make room in View (menu check 105, 2026-11-23)."""
+        menu = parent_menu
         self.bar_place_actions = {}
         for name in ("tools", "fkeys", "command"):
-            if name != "tools":
-                menu.addSeparator()
+            menu.addSeparator()
             group = QActionGroup(self)
             group.setExclusive(True)
             self.bar_place_actions[name] = {}

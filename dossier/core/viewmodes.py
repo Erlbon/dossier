@@ -127,9 +127,12 @@ def text_underneath(path: str, head: Optional[bytes] = None) -> bool:
         sheet_kind(head, path) == "plist" and not head.startswith(b"bplist"))     # an XML plist is text too
 
 
-OPEN_CHOICES = (("viewer", "Pictures, text and Markdown in the viewer, the rest in the Windows program"),
-                ("system", "Always in the Windows program"),
-                ("all", "Everything in the viewer"))
+OPEN_CHOICES = (("viewer", "Viewer for Pictures and Text, Windows for the Rest"),      # short names (menu check 102,
+                ("system", "Always in the Windows Program"),                           # 2026-11-23); the detail is in
+                ("all", "Everything in the Viewer"))                                   # OPEN_TIPS
+OPEN_TIPS = {"viewer": "Pictures, text and Markdown open in Dossier's viewer; everything else in the program Windows has for it",
+             "system": "Every file opens in the program Windows has for it",
+             "all": "Every file opens in Dossier's viewer"}
 TEXT_EXTENSIONS = (".txt", ".log", ".json", ".xml", ".csv", ".tsv", ".ini", ".cfg", ".conf", ".yaml", ".yml", ".toml", ".py", ".js",
                    ".html", ".htm", ".css", ".c", ".h", ".cpp", ".cs", ".java", ".sh", ".bat", ".ps1", ".sql", ".nfo", ".srt")
 

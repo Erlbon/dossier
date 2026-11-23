@@ -148,3 +148,43 @@ def test_claude_md_names_the_question_of_every_menu():
     section = text.split("## Menus", 1)[1].split("\n## ", 1)[0]
     for heading in HEADINGS:
         assert f"**{heading}**" in section, heading
+
+
+# the menu check of 2026-11-23 (answers 98-105) ------------------------------------------------------------------------------
+def test_no_menu_says_return_for_the_enter_key(world):
+    """99: Qt calls the big Enter key "Return"; Dossier says Enter, in the menus and in the right-click hints."""
+    win, *_ = world
+    for menu in every_menu(win):
+        for act in menu.actions():
+            shown = act.text().partition("\t")[2] or command_keys(act)
+            assert "Return" not in shown and "Return" not in command_keys(act), (path_of(menu), act.text())
+    assert command_label(win.act_properties) == "Properties" and "Enter" in command_keys(win.act_properties)
+    win.command_palette.refresh()                         # the palette: names without the hint, keys with Enter
+    found = {c.title: c.shortcut for c in win.command_palette._commands}
+    assert "Properties" in found and "Alt+Enter" in found["Properties"] and "Parent Folder" in found
+    assert not any("\t" in t or "Return" in s for t, s in found.items())
+
+
+def test_bars_holds_the_switches_and_the_positions(world):
+    """105: one Bars submenu in View: which bars show, then where each sits."""
+    win, *_ = world
+    view = next(a.menu() for a in win.menuBar().actions() if a.text().replace("&", "") == "View")
+    assert "Bar Positions" not in [a.text() for a in view.actions()]
+    bars = next(a.menu() for a in view.actions() if a.text() == "Bars")
+    texts = [a.text() for a in bars.actions() if not a.isSeparator()]
+    assert texts[:2] == ["Tools Bar", "Sidebar"] and len(texts) == 9
+    assert win.bar_place_actions["command"]["top"] in bars.actions()
+
+
+def test_the_archive_entries_say_how_they_differ_in_both_menus(world):
+    """104: Compress and Extract Here are one click, Pack to Zip... and Unpack... ask; the tooltip says so, on the right-click too."""
+    win, _d, left, *_ = world
+    with zipfile.ZipFile(left / "b.zip", "w") as z:
+        z.writestr("x.txt", "x")
+    win.left.refresh()
+    pump(win, lambda: win.left.model.row_of("b.zip") >= 0)
+    menu = win.build_context_menu(win.left, win.left.model.row_of("b.zip"))
+    tips = {command_label(a): a.toolTip() for a in menu.actions()}
+    for label in ("Compress", "Extract Here", "Pack to Zip...", "Unpack..."):
+        assert label in tips and tips[label] != label, label
+    assert tips["Compress"].startswith("One click") and tips["Pack to Zip..."].startswith("Asks")

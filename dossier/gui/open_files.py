@@ -29,6 +29,7 @@ class OpenFilesMixin:
         self.open_actions = {}
         for key, label in viewmodes.OPEN_CHOICES:
             act = QAction(label, self)
+            act.setToolTip(viewmodes.OPEN_TIPS[key])
             act.setCheckable(True)
             act.setChecked(self.open_choice() == key)
             act.triggered.connect(lambda _c=False, k=key: self.set_open_choice(k))

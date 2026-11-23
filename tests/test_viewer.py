@@ -393,7 +393,7 @@ def test_menus_view_has_modes_and_notes_while_settings_has_the_choices(commander
                              "Unmark by Tag...", "Saved Marks"]
     assert texts("View") == ["Details", "Thumbnails", "Thumbnail Size", "Sort By", "Columns...", "Fit Columns to Panel", "Folder Layout", "Show Hidden and System Files",
                              "All Files Below This Folder",
-                             "Quick Filter", "Folder Sizes", "Refresh", "Folder Notes", "Bars", "Bar Positions", "Full Screen"]
+                             "Quick Filter", "Folder Sizes", "Refresh", "Folder Notes", "Bars", "Full Screen"]
     assert texts("Go") == ["Back", "Forward", "Folder History...", "Hotlist...", "Folder Tree...", "Home Page", "Parent Folder", "Root of the Drive",
                            "Edit the Path", "Pin Folder to Home Page",
                            "Open Cursor Folder in the Other Panel", "Same Folder in the Other Panel", "Swap Panels", "Tabs",
@@ -402,12 +402,12 @@ def test_menus_view_has_modes_and_notes_while_settings_has_the_choices(commander
                               "Quarantine", "Rules", "Operations", "Terminal Here", "Administrator Terminal Here", "SSH Terminal Here", "Command Line"]
     assert texts("Network") == ["Add Server...", "Disconnect This Panel's Server", "Add Network Share...", "Client for NFS",
                                 "Show Tailnet Devices on the Home Page"]
-    assert texts("Settings") == ["Appearance", "Copy and Move...", "Opening Files", "Mouse Wheel...", "Function Keys...", "Typing in a Panel", "Auto Refresh",
+    assert texts("Settings") == ["Appearance", "Copy and Move Settings...", "Opening Files", "Mouse Wheel...", "Function Keys...", "Typing in a Panel", "Auto Refresh",
                                  "Keep Cursor Position After Moving or Deleting", "Open Folders While Dragging Over Them", "Git Status on Network Drives (can be slow)",
                                  "Drives and Sharing"] + (["Linux Desktop"] if sys.platform.startswith("linux") else []) + [
-                                 "Quarantine...", "Assistant Access..."]
+                                 "Quarantine Settings...", "Assistant Access..."]
     look = [a for a in menus["Settings"].actions() if a.text() == "Appearance"][0].menu()
-    assert [a.text() for a in look.actions()] == ["Color Scheme", "Icon Set", "Fonts and Bold...", "File Colours...", "Show Colour Labels", "Thumbnails...", "Picture Viewer Glass...", "Frosted Background...", "Drive Selector"]
+    assert [a.text() for a in look.actions()] == ["Colour Scheme", "Icon Set", "Fonts and Bold...", "File Colours...", "Show Colour Labels", "Thumbnail Settings...", "Picture Viewer Glass...", "Frosted Background...", "Drive Selector"]
     win.set_sharing_allowed(True)
     menus["Network"].aboutToShow.emit()
     assert texts("Network")[4:6] == ["Share This Folder...", "Shared Folders of a Computer..."]

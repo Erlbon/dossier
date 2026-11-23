@@ -2,6 +2,31 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-23#03 -- The menu check: clearer names, Enter not Return, one Bars submenu
+
+The owner's answers to the menu check of 2026-11-23 (cards 98-107):
+- 98 Yes: Settings > "Quarantine..." is now "Quarantine Settings...", apart from Tools > Quarantine.
+- 99 Yes: the menus say "Enter" where Qt said "Return" (Properties Alt+Enter, Folder Sizes Alt+Shift+Enter, Open Folder in
+  New Tab Ctrl+Enter), in the menu bar, the right-click hints and the command palette. The keys themselves are unchanged. The
+  right-click keeps its shorter names ("Pin to the Home Page"), as the card said. The palette (redactor_common) also showed a
+  key hint inside a name ("Parent Folder" and its Backspace, before this too); Dossier now tidies its list each time it
+  opens. The real fix is in redactor_common's `plain_label` (cut at the tab), at its next release with 101.
+- 100 Yes: "Colour Scheme", so the app spells Colour one way.
+- 102 Yes: short menu names, the detail in the tooltip: Settings > Opening Files ("Viewer for Pictures and Text, Windows for
+  the Rest", "Always in the Windows Program", "Everything in the Viewer") and Help > Error Log > "Record Errors". Help >
+  Slowness Log > "Record Slow Moments" went the same way, as the like entry beside it (similar things behave alike).
+- 103 Yes: "Thumbnail Settings..." and "Copy and Move Settings..." in Settings, apart from View > Thumbnails and File > Copy...
+- 104 Yes: Compress, Extract Here, Pack to Zip... and Unpack... keep their names; a tooltip says which is one click and which
+  asks first, in Tools > Archives and on the right-click (a right-click entry now carries its menu-bar command's tooltip).
+- 105 Yes: View > "Bar Positions" is merged into View > "Bars": the switches first, then each bar's positions. View has a
+  free place again (15 entries).
+- 101 Later: "Add/Remove Columns…" (one-character ellipsis) comes from redactor_common; three dots at its next release.
+- 106 Later: a hint in Network while sharing is switched off.
+- 107 No: Open With and Client for NFS stay as they are.
+- Tests: `test_no_menu_says_return_for_the_enter_key`, `test_bars_holds_the_switches_and_the_positions`,
+  `test_the_archive_entries_say_how_they_differ_in_both_menus`; the menu lists in the older tests follow the new names.
+  Checked at 175% in a real window.
+
 ## 2026-11-23#02 -- Name's edge trades room even when Name is the last column
 
 - With Fit Columns to Panel on and Name moved to the end, its edge did not move at all: there was no column to its right

@@ -175,7 +175,7 @@ def test_menu_and_shortcuts_act_on_the_active_panel(world):
     assert win.right.tabs.count() == 1
     go = {a.text().replace("&", ""): a.menu() for a in win.menuBar().actions()}["Go"]
     tabs_menu = next(a.menu() for a in go.actions() if a.text() == "Tabs")
-    assert [a.text() for a in tabs_menu.actions()] == ["New Tab", "Close Tab", "Next Tab", "Previous Tab",
+    assert [a.text().split("\t")[0] for a in tabs_menu.actions()] == ["New Tab", "Close Tab", "Next Tab", "Previous Tab",
                                                        "Open Folder in New Tab", "Reopen Closed Tab", "", "Save Tab Set As...", "Open Tab Set",
                                                        "Add Tab Set", "Forget Tab Set"]
 

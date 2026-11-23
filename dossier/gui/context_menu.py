@@ -67,6 +67,8 @@ class ContextMenuMixin:
             text = text or command_label(bar)
             keys = command_keys(bar)
         action = menu.addAction(text + ("\t" + keys if keys else ""))
+        if isinstance(slot, str) and bar.toolTip() != command_label(bar):    # Qt's default tooltip is the label: not worth showing
+            action.setToolTip(bar.toolTip())                                 # the menu bar's explanation goes along (menu check 104)
         action.setEnabled(enabled)
 
         def run(_checked=False) -> None:

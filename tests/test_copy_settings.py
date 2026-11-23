@@ -63,5 +63,5 @@ def test_the_settings_menu_has_one_entry_and_the_old_three_are_gone(world):
     win, *_ = world
     menus = {a.text().replace("&", ""): a.menu() for a in win.menuBar().actions()}
     texts = [a.text() for a in menus["Settings"].actions()]
-    assert "Copy and Move..." in texts
+    assert "Copy and Move Settings..." in texts
     assert not {"Copy Speed Limit", "Verify Copies After Copying", "Ask When a File Cannot Be Copied"} & set(texts)

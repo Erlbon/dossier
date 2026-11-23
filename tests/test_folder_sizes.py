@@ -199,7 +199,7 @@ def test_the_menu_item_and_the_other_panels_button_work(world):
     (right / "r" / "f.bin").write_bytes(b"q" * 4096)
     win.right.refresh()
     menus = {a.text().replace("&", ""): a.menu() for a in win.menuBar().actions()}
-    assert "Folder Sizes" in [a.text() for a in menus["View"].actions()]
+    assert "Folder Sizes" in [a.text().split("\t")[0] for a in menus["View"].actions()]   # after a tab: "Alt+Shift+Enter"
     win.right.sizes_button.click()                       # the left panel is the active one; the button belongs to the right
     wait_sizes(win, win.right, "r")
     assert size_cells(win.right)["r"] == "4.0 K"
