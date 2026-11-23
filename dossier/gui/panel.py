@@ -1652,10 +1652,13 @@ class Panel(QFrame):
         neighbour first) or take it back (the neighbour), so everything still fits the panel."""
         header = self.table.horizontalHeader()
         name = column_index("name")
-        right = [i for i in self._visible_others() if header.visualIndex(i) > header.visualIndex(name)]
+        others = self._visible_others()
+        right = [i for i in others if header.visualIndex(i) > header.visualIndex(name)]
+        if not right:                                     # Name is last: the columns to its left trade instead, the nearest first
+            right = [i for i in reversed(others) if header.visualIndex(i) < header.visualIndex(name)]   # (owner's A, 2026-11-23)
         delta = new - old
         if not right:
-            self._resize_quietly(name, old)               # nothing to its right to trade with
+            self._resize_quietly(name, old)               # Name is the only column shown
             return
         if delta < 0:
             # the first column to the right that may widen takes the room: a date or Type at its cap would snap back, and the

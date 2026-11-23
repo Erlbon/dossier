@@ -2,6 +2,13 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-23#02 -- Name's edge trades room even when Name is the last column
+
+- With Fit Columns to Panel on and Name moved to the end, its edge did not move at all: there was no column to its right
+  to trade with. Now the columns to its left trade instead, the nearest first, each only up to its cap (a date passes the
+  room on). The owner's option A on review point 3, 2026-11-23.
+- Test: `test_name_s_edge_still_trades_room_when_name_is_the_last_column` (fails on the old code).
+
 ## 2026-11-23#01 -- Two column-width fixes from a code review
 
 - With Fit Columns to Panel on, narrowing Name by its edge did nothing when Type stood next to it at its maximum width:
