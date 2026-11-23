@@ -2,6 +2,15 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-23#05 -- Mac and Linux builds go on the release page
+
+- The owner's option B (2026-11-23): a colleague downloads the Mac build from the GitHub release page. The Build workflow
+  now also runs when a release is published (redactor_common's release tool creates it as a pre-release from the owner's PC)
+  and adds `dossier-mac-arm64-<build>.zip` and `dossier-linux-x86_64-<build>.tar.gz` to that release. Windows files and the
+  update manifest are unchanged; the Mac and Linux builds still do not update themselves (43A).
+- By hand for a release already out: `gh workflow run build.yml -f tag=<tag>`. With no tag it builds main for the run page
+  only, as before.
+
 ## 2026-11-23#04 -- Release 0.14
 
 - `RELEASE` is 0.14, with its notes in `docs/releases/v0.14.md` (everything since 0.13, builds 2026-11-21#04 to 2026-11-23#03:
