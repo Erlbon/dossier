@@ -206,6 +206,41 @@ def test_dragging_name_s_edge_with_fit_on_trades_room_with_the_columns_to_its_ri
     assert h.length() <= panel.table.viewport().width()
 
 
+def test_narrowing_name_next_to_a_type_at_its_cap_gives_the_room_to_the_next_column(world):
+    """Review, 2026-11-23: Type at its cap took the room, snapped back, and the fit gave it to Name again."""
+    win, *_ = world
+    win.resize(900, 600)
+    pump(win, lambda: _fits(win.left))
+    panel = win.left
+    h = panel.table.horizontalHeader()
+    name, typ = columns.index_of("name"), columns.index_of("type")
+    panel._resize_quietly(typ, panel._max_width(typ))   # Type at its cap
+    pump(win, lambda: _fits(panel))
+    name_before = h.sectionSize(name)
+    h.resizeSection(name, name_before - 40)
+    pump(win, lambda: _fits(panel))
+    assert h.sectionSize(name) == name_before - 40
+    assert h.sectionSize(typ) == panel._max_width(typ)
+
+
+def test_the_home_page_s_details_column_is_not_held_to_a_date_s_width(world):
+    """Review, 2026-11-23: Home's third place is Details, not Date: no date width and no cap there."""
+    from PyQt6.QtWidgets import QHeaderView
+    win, *_ = world
+    win.resize(1600, 600)                                # room enough that the fit has no need to narrow Details
+    panel = win.left
+    panel.go_home()
+    pump(win, lambda: panel.is_home and _fits(panel))
+    details = columns.index_of("modified")               # the place Home's Details stands in
+    h = panel.table.horizontalHeader()
+    assert panel._max_width(details) == 0
+    assert h.sectionResizeMode(details) == QHeaderView.ResizeMode.Interactive
+    wide = panel._column_floor(details) + 40             # its contents, wider than a date, and a little more
+    h.resizeSection(details, wide)                       # as the owner's drag: no cap snaps it back
+    pump(win, lambda: _fits(panel))
+    assert h.sectionSize(details) == wide
+
+
 def test_widening_a_column_narrows_name_and_name_keeps_a_minimum(world):
     win, *_ = world
     win.resize(900, 600)

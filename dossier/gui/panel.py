@@ -1521,7 +1521,9 @@ class Panel(QFrame):
             # (_name_dragged; owner's option A, 2026-11-21).
             header.setSectionResizeMode(name, QHeaderView.ResizeMode.Interactive)
             for key in self.DATE_KEYS:                    # a date is always as long: its column has one width (owner, 2026-11-21)
-                header.setSectionResizeMode(column_index(key), QHeaderView.ResizeMode.Fixed)   # its width: _fit_check
+                idx = column_index(key)                   # its width: _fit_check. On the Home page a date's place holds Details
+                header.setSectionResizeMode(idx, QHeaderView.ResizeMode.Fixed if self._key(idx) == key
+                                            else QHeaderView.ResizeMode.Interactive)
         else:
             for key in self.DATE_KEYS:
                 header.setSectionResizeMode(column_index(key), QHeaderView.ResizeMode.Interactive)
@@ -1539,7 +1541,7 @@ class Panel(QFrame):
             return
         header = self.table.horizontalHeader()
         shown = [i for i in (header.logicalIndex(v) for v in range(header.count())) if not header.isSectionHidden(i)]
-        last_capped = bool(shown) and COLUMN_KEYS[shown[-1]] in self.MAX_TEXT
+        last_capped = bool(shown) and self._key(shown[-1]) in self.MAX_TEXT
         if header.stretchLastSection() == last_capped:
             self._fitting = True
             try:
@@ -1591,11 +1593,18 @@ class Panel(QFrame):
     MAX_TEXT = {"modified": "8888-88-88 88:88", "created": "8888-88-88 88:88", "accessed": "8888-88-88 88:88",
                 "type": "WEBMANIFEST file"}
 
+    def _key(self, logical: int) -> str:
+        """The column's key for the width rules. The Home page shows Name, Type, Details in the first three places, which are
+        not the folder columns of those places (size, modified), so there only Name keeps its key (review, 2026-11-23)."""
+        if self.is_home and logical != column_index("name"):
+            return ""
+        return COLUMN_KEYS[logical]
+
     def _max_width(self, logical: int) -> int:
         """How wide a capped column may be (0: no cap): its longest text in the panel's font now, in bold as a marked row shows
         it, with the cell's margins, or the header text with its sort arrow if that is wider. Measured each time, so a change
         of the font or its size in Settings > Look is followed."""
-        text = self.MAX_TEXT.get(COLUMN_KEYS[logical])
+        text = self.MAX_TEXT.get(self._key(logical))
         if not text:
             return 0
         font = self.table.font()
@@ -1609,7 +1618,7 @@ class Panel(QFrame):
     def _column_floor(self, logical: int) -> int:
         """How narrow the fit may make a column: its header text, the widest cell on screen, and never under the default width,
         nor over its cap. A date column has its one width."""
-        if COLUMN_KEYS[logical] in self.DATE_KEYS:
+        if self._key(logical) in self.DATE_KEYS:
             return self._date_width(logical)
         header = self.table.horizontalHeader()
         floor = max(header.sectionSizeHint(logical), self.table.sizeHintForColumn(logical))
@@ -1623,7 +1632,7 @@ class Panel(QFrame):
         for key in self.MAX_TEXT:
             idx = column_index(key)
             cap = self._max_width(idx)
-            if not header.isSectionHidden(idx) and header.sectionSize(idx) > cap:
+            if cap and not header.isSectionHidden(idx) and header.sectionSize(idx) > cap:
                 self._resize_quietly(idx, cap)
 
     def changeEvent(self, event) -> None:
@@ -1649,7 +1658,20 @@ class Panel(QFrame):
             self._resize_quietly(name, old)               # nothing to its right to trade with
             return
         if delta < 0:
-            self._resize_quietly(right[0], header.sectionSize(right[0]) - delta)
+            # the first column to the right that may widen takes the room: a date or Type at its cap would snap back, and the
+            # fit would give the room to Name again (review, 2026-11-23)
+            # so each takes only up to its cap, the neighbour first, and the rest goes on to the next
+            placed = 0
+            for i in right:
+                cap = self._max_width(i)
+                take = -delta - placed if not cap else min(-delta - placed, max(0, cap - header.sectionSize(i)))
+                if take:
+                    self._resize_quietly(i, header.sectionSize(i) + take)
+                    placed += take
+                if placed >= -delta:
+                    break
+            if placed < -delta:
+                self._resize_quietly(name, old - placed)  # every column to its right is at its cap: Name stops there
         else:
             taken = 0
             for i in right:
@@ -1685,7 +1707,7 @@ class Panel(QFrame):
         name = column_index("name")
         others = self._visible_others()
         for i in others:
-            if COLUMN_KEYS[i] in self.DATE_KEYS and header.sectionSize(i) != self._date_width(i):
+            if self._key(i) in self.DATE_KEYS and header.sectionSize(i) != self._date_width(i):
                 self._resize_quietly(i, self._date_width(i))   # a saved or restored width does not stick: dates have one
         self._clamp_capped()                                   # and Type is never wider than its cap
         viewport = self.table.viewport().width()
@@ -1697,8 +1719,12 @@ class Panel(QFrame):
             total = sum(spare.values())
             if total:
                 take = min(need, total)
-                for i, s in spare.items():                # each gives in proportion to what it has beyond its contents
-                    self._resize_quietly(i, header.sectionSize(i) - min(s, -(-take * s // total)))
+                given, owed = 0, list(spare.items())
+                for n, (i, s) in enumerate(owed):         # each gives in proportion to what it has beyond its contents;
+                    part = take - given if n == len(owed) - 1 else take * s // total   # the last gives the rest, so the
+                    part = min(s, part)                                                # sum is exactly `take` (review 2026-11-23)
+                    self._resize_quietly(i, header.sectionSize(i) - part)
+                    given += part
                 room = viewport - sum(header.sectionSize(i) for i in others)
         self._fit_squeezed = room < self.NAME_MIN
         want = max(room, self.NAME_MIN)

@@ -2,6 +2,17 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-23#01 -- Two column-width fixes from a code review
+
+- With Fit Columns to Panel on, narrowing Name by its edge did nothing when Type stood next to it at its maximum width:
+  Type took the room, snapped back to its cap, and the fit gave the room to Name again. Now each column to Name's right
+  takes room only up to its own cap, the neighbour first, and the rest goes to the next one.
+- On the Home page the third column is Details, but it stands where a folder's Date does, so the new date rules held it to
+  a date's width and cut the drive details short. The width rules now leave the Home page's Type and Details alone.
+- The fit's proportional narrowing could take a pixel or two more than needed; the last column now gives exactly the rest.
+- Tests: `test_narrowing_name_next_to_a_type_at_its_cap_gives_the_room_to_the_next_column`,
+  `test_the_home_page_s_details_column_is_not_held_to_a_date_s_width` (both fail on the old code).
+
 ## 2026-11-22#01 -- Show Colour Labels moves to Settings > Appearance and the column header's right-click menu
 
 - In View it made 17 entries, one more than the menu rule allows, and #06 went in with that test failing. The owner's option
