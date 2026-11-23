@@ -2,6 +2,11 @@
 
 Build numbers have the form `YYYY-MM-DD#NN`, as in the Redactor apps. Each check-in that changes real code runs `python bump_version.py` and adds a section here.
 
+## 2026-11-23#04 -- Release 0.14
+
+- `RELEASE` is 0.14, with its notes in `docs/releases/v0.14.md` (everything since 0.13, builds 2026-11-21#04 to 2026-11-23#03:
+  the column widths, colour labels, "for example:" hints, the code-review fixes and the menu check's answers 98-105).
+
 ## 2026-11-23#03 -- The menu check: clearer names, Enter not Return, one Bars submenu
 
 The owner's answers to the menu check of 2026-11-23 (cards 98-107):
